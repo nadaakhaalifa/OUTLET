@@ -2397,6 +2397,19 @@ tables:
       - {name: week_start, pii_class: P0, encryption: none}
       - {name: demand_count, pii_class: P0, encryption: none, note: "k-anonymity: a row can only exist with demand_count >= 50 (table CHECK)."}
 
+  - name: size_demand_events
+    spec_ref: "19.1, 10 Privacy, docs/specs/sizing.md Wave 2"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [fit_sizing], lawful_basis: consent, consent_purpose: measurements, retention: personalization_data, seller_visibility: none, processors: [cloud_primary], residency: approved_region, on_erasure: delete, external_llm: never}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: product_type, pii_class: P0, encryption: none}
+      - {name: size_label, pii_class: P0, encryption: none}
+      - {name: week_start, pii_class: P0, encryption: none}
+      - {name: shopper_hash, pii_class: P2, encryption: none, note: "HMAC-SHA256 of the user id under a server-side key; never leaves the database. Purge after 8 weeks, once rolled into seller_size_demand_agg (retention job not yet scheduled)."}
+      - {name: recorded_at, pii_class: P1, encryption: none}
+
   - name: size_recommendation_log
     spec_ref: "10 Metrics (ECE)"
     source: derived
@@ -2463,9 +2476,9 @@ tables:
     fields:
       - {name: store_id, pii_class: P0, encryption: none}
       - {name: legal_name_ar, pii_class: P2, encryption: none, note: "Public by Law 181/2018 supplier-identity duty. VERIFY BEFORE LAUNCH for sole traders."}
-      - {name: legal_name_en, pii_class: P2, encryption: none}
-      - {name: commercial_register_no, pii_class: P2, encryption: none, note: "Published projection; the sellers table holds the encrypted source."}
-      - {name: tax_card_no, pii_class: P2, encryption: none, note: "Published projection; the sellers table holds the encrypted source."}
+      - {name: legal_name_en, pii_class: P2, encryption: none, note: "Public business name; P2 only because a sole trader name is a natural person name. Never carries signatory or national-id data."}
+      - {name: commercial_register_no, pii_class: P0, encryption: none, note: "Public business identifier shown on every listing (B5, Law 181/2018). Published projection; the sellers table holds the encrypted source."}
+      - {name: tax_card_no, pii_class: P0, encryption: none, note: "Public business identifier shown on every listing (B5, Law 181/2018). Published projection; the sellers table holds the encrypted source."}
       - {name: governorate, pii_class: P0, encryption: none}
       - {name: published_at, pii_class: P1, encryption: none}
 
@@ -2496,7 +2509,7 @@ tables:
   - name: wishlists
     spec_ref: "8 Data (wishlists); migration 0014"
     source: spec_named
-    data_subjects: [shopper]
+    data_subjects: [shopper, gift_recipient]
     defaults: {purpose: [catalog_browse], lawful_basis: contract, retention: browsing_state, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
     fields:
       - {name: id, pii_class: P1, encryption: none}

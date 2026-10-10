@@ -299,7 +299,8 @@ CREATE TABLE catalog_import_products (
   import_id    uuid NOT NULL,
   store_id     uuid NOT NULL,
   product_ref  text NOT NULL CHECK (product_ref ~ '^[A-Za-z0-9._-]{1,64}$'),
-  product_id   uuid NOT NULL,
+  -- NULL between the claim and the product insert (claim-first keeps the apply step idempotent).
+  product_id   uuid,
   created_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (import_id, product_ref),
   CONSTRAINT catalog_import_products_import_fk FOREIGN KEY (import_id, store_id) REFERENCES catalog_imports (id, store_id),
@@ -367,7 +368,7 @@ CREATE POLICY skus_seller_update ON skus FOR UPDATE
   WITH CHECK ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() IN ('trust_safety', 'system'));
 
 ALTER TABLE product_media ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT, UPDATE ON product_media TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON product_media TO app_user;
 CREATE POLICY product_media_select ON product_media FOR SELECT
   USING (
     store_id::text = ANY (app_store_ids())
@@ -380,7 +381,7 @@ CREATE POLICY product_media_seller_update ON product_media FOR UPDATE
   WITH CHECK ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');
 
 ALTER TABLE product_defects ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT, UPDATE ON product_defects TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON product_defects TO app_user;
 CREATE POLICY product_defects_select ON product_defects FOR SELECT
   USING (
     store_id::text = ANY (app_store_ids())
@@ -410,8 +411,18 @@ CREATE POLICY catalog_import_errors_insert ON catalog_import_errors FOR INSERT
   WITH CHECK ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');
 
 ALTER TABLE catalog_import_products ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT ON catalog_import_products TO app_user;
+GRANT SELECT, INSERT, UPDATE ON catalog_import_products TO app_user;
 CREATE POLICY catalog_import_products_select ON catalog_import_products FOR SELECT
   USING (store_id::text = ANY (app_store_ids()) OR app_role() IN ('ops', 'system'));
 CREATE POLICY catalog_import_products_insert ON catalog_import_products FOR INSERT
+  WITH CHECK ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');
+
+-- Wave 2 (persistence adapter): the gallery is replaced as a whole when a seller edits images, and an
+-- import claim is completed with the product id once the product exists.
+CREATE POLICY product_media_seller_delete ON product_media FOR DELETE
+  USING ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');
+CREATE POLICY product_defects_seller_delete ON product_defects FOR DELETE
+  USING ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');
+CREATE POLICY catalog_import_products_update ON catalog_import_products FOR UPDATE
+  USING ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system')
   WITH CHECK ((app_role() = 'seller' AND store_id::text = ANY (app_store_ids())) OR app_role() = 'system');

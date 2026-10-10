@@ -6,7 +6,7 @@ import request from "supertest";
 import { configureApp } from "../../../app.setup";
 import { loadConfig, type AppConfig } from "../../../config/env";
 import { AUTHENTICATOR, PlatformModule, createIdGenerator, nodeCsprng, type Authenticator, type Clock } from "../../../platform";
-import { CatalogModule } from "../catalog.module";
+import { CatalogModule, type CatalogPersistence } from "../catalog.module";
 import { createCatalogDevFixtures, type CatalogDevFixtures } from "../adapters/in-memory";
 
 export const START_MS = 1_800_000_000_000;
@@ -101,13 +101,13 @@ export interface CatalogHarness {
   close(): Promise<void>;
 }
 
-export async function createCatalogHarness(): Promise<CatalogHarness> {
+export async function createCatalogHarness(persistence?: CatalogPersistence): Promise<CatalogHarness> {
   const config = loadConfig({ NODE_ENV: "test" });
   const clock = new TestClock();
   const ids = createIdGenerator(clock, nodeCsprng);
   const fixtures = createCatalogDevFixtures();
   const moduleRef = await Test.createTestingModule({
-    imports: [PlatformModule.forRoot(config, { clock, ids }), TestAuthModule.register(), CatalogModule.forRoot(config, fixtures)],
+    imports: [PlatformModule.forRoot(config, { clock, ids }), TestAuthModule.register(), CatalogModule.forRoot(config, fixtures, persistence)],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, config);

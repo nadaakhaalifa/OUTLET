@@ -131,3 +131,16 @@ Save to purchase conversion by intent, cool-off regret reduction (return rate of
 3. `hide_prices_from_owner` is ambiguous (the spec says the gift-wrap flag hides prices from the recipient). Implemented as: viewers of the share link see no prices. The owner's own detail view is unaffected so budgets still work. Open question for product.
 4. `ShareLink.url` base: this module uses an injectable base URL (default `https://outletnk.invalid/w`); production config key to be added to `AppConfig`.
 5. Wishlist `visibility` has only `private` and `shared`; the data model's `LINK` maps to `shared`.
+
+## Wave 2: Postgres adapter
+- `KyselyWishlistRepository` (`apps/api/src/modules/wishlists/adapters/kysely-store.ts`) implements `WishlistRepository` over migration 0014 with raw SQL and Zod-validated rows (ADR-0020). One transaction per call under the `system` DB role; authorization stays in the policy guard, RLS still protects every other role.
+- Exact round-trips: share-token hash is 64-char lowercase hex in the domain and 32 raw bytes (`bytea`) in the table via `decode`/`encode`; budgets and `added_price` are `bigint` read as text and parsed with `BigInt` (tested above 2^53); timestamps travel as ISO strings and read back as epoch ms.
+- Cascade: `delete(list)` relies on `ON DELETE CASCADE` for items and alert dedupe keys.
+- One shared contract suite (`test/repository-contract.ts`) runs against the in-memory repository and Kysely on PGlite with the real migrations 0001-0015. Contract note: after `save`, `updated_at` is the database clock (touch trigger), so equality ignores `updatedAtMs`.
+- Wiring: `WishlistsModule.forRoot(config, { repository })` accepts the adapter; the default remains the in-memory fixture. Outbox publishing for `WishlistEvent` is not part of this wave.
+- Not verified on PGlite: concurrent claims of the same dedupe key (the PK makes it safe on Postgres; run on PG16 before relying on it).
+
+## Persistence invariants (security)
+- `save` is owner-scoped (`where id and user_id = actor`); a save for a list owned by someone else changes nothing.
+- Revocation is monotonic: a save carrying the same share token hash never clears an existing `revoked_at`, so a stale snapshot cannot resurrect a revoked link. Only a new token (share/rotate) replaces it.
+- Covered by the shared repository contract (in-memory and Kysely/PGlite).

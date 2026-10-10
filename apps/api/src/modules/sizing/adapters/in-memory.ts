@@ -22,26 +22,40 @@ import type {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-const encodeCursor = (afterId: string): string => Buffer.from(afterId, "utf8").toString("base64url");
-function decodeCursor(cursor: string | null): string | null | "invalid" {
+/** Keyset cursor: the (createdAtMs, id) of the last item served. It never references a live row. */
+const encodeCursor = (createdAtMs: number, seq: number, id: string, scope: string): string =>
+  Buffer.from(`${String(createdAtMs)}|${String(seq)}|${id}|${scope}`, "utf8").toString("base64url");
+function decodeCursor(cursor: string | null, scope: string): { ms: number; seq: number; id: string } | null | "invalid" {
   if (cursor === null) return null;
   const s = Buffer.from(cursor, "base64url").toString("utf8");
-  return UUID.test(s) ? s : "invalid";
+  const m = /^(\d{1,15})\|(\d{1,9})\|([0-9a-f-]{36})\|([0-9a-f-]{36})$/.exec(s);
+  if (m === null || !UUID.test(m[3] ?? "") || m[4] !== scope) return "invalid";
+  return { ms: Number(m[1]), seq: Number(m[2]), id: m[3] ?? "" };
 }
 
-/** Cursor pagination over an insertion ordered array of items with time ordered ids. */
-function paginate<T extends { readonly id: string }>(
-  all: readonly T[],
+/** Keyset pagination ordered by (createdAtMs, id). */
+function paginate<T extends { readonly id: string; readonly createdAtMs: number }>(
+  source: readonly T[],
+  seqOf: (x: T) => number,
   page: { cursor: string | null; limit: number },
+  scope: string,
 ): Page<T> | "invalid_cursor" {
-  const after = decodeCursor(page.cursor);
+  const after = decodeCursor(page.cursor, scope);
   if (after === "invalid") return "invalid_cursor";
-  const start = after === null ? 0 : all.findIndex((x) => x.id === after) + 1;
-  if (after !== null && start === 0) return "invalid_cursor";
-  const items = all.slice(start, start + page.limit);
-  const more = start + page.limit < all.length;
+  const cmp = (x: T, y: T): number =>
+    x.createdAtMs - y.createdAtMs || seqOf(x) - seqOf(y) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
+  const sorted = [...source].sort(cmp);
+  const rest =
+    after === null
+      ? sorted
+      : sorted.filter(
+          (x) =>
+            x.createdAtMs > after.ms ||
+            (x.createdAtMs === after.ms && (seqOf(x) > after.seq || (seqOf(x) === after.seq && x.id > after.id))),
+        );
+  const items = rest.slice(0, page.limit);
   const last = items[items.length - 1];
-  return { items, nextCursor: more && last !== undefined ? encodeCursor(last.id) : null };
+  return { items, nextCursor: rest.length > page.limit && last !== undefined ? encodeCursor(last.createdAtMs, seqOf(last), last.id, scope) : null };
 }
 
 export class InMemorySizeProfileRepository implements SizeProfileRepository {
@@ -59,7 +73,7 @@ export class InMemorySizeProfileRepository implements SizeProfileRepository {
   }
   async list(userId: string, page: { cursor: string | null; limit: number }) {
     const mine = [...this.rows.values()].filter((r) => r.userId === userId).sort((a, b) => (a.id < b.id ? -1 : 1));
-    return paginate(mine, page);
+    return paginate(mine, () => 0, page, userId);
   }
   async update(record: ProfileRecord, expectedVersion: number): Promise<"updated" | "conflict" | "not_found"> {
     const cur = this.rows.get(record.id);
@@ -95,7 +109,9 @@ export class InMemorySizeChartRepository implements SizeChartRepository {
   async listForStore(storeId: string, page: { cursor: string | null; limit: number }) {
     return paginate(
       this.rows.filter((c) => c.storeId === storeId),
+      (c) => c.chartVersion,
       page,
+      storeId,
     );
   }
   async latestValidated(storeId: string, productType: string): Promise<StoredChart | null> {

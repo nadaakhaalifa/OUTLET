@@ -27,6 +27,11 @@ const RawEnvSchema = z.object({
   /** Audience (client id) the Apple and Google ID tokens must be issued for. */
   APPLE_CLIENT_ID: z.string().min(1).max(256).default("com.outletnk.app"),
   GOOGLE_CLIENT_ID: z.string().min(1).max(256).default("outletnk-ios.apps.googleusercontent.com"),
+  /** Postgres connection string (LOGIN role that is a member of app_user). Required when DEV_FIXTURES is off. */
+  DATABASE_URL: z.string().url().optional(),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  /** HMAC key that pseudonymises shopper ids in size demand events. Required when DEV_FIXTURES is off. */
+  SIZE_DEMAND_PSEUDONYM_KEY: z.string().min(32).max(256).optional(),
   /** Version of the consent texts currently shown (applies to every purpose until texts diverge). */
   CONSENT_TEXT_VERSION: z.coerce.number().int().min(1).max(10_000).default(1),
 });
@@ -48,6 +53,9 @@ export interface AppConfig {
   readonly trustProxyHops: number;
   /** "in-memory-dev" is the only adapter set that exists. Production has none yet. */
   readonly adapters: "in-memory-dev" | "production";
+  readonly databaseUrl: string | undefined;
+  readonly databasePoolMax: number;
+  readonly sizeDemandPseudonymKey: string | undefined;
   readonly otpPepper: string | undefined;
   readonly ipHashKey: string | undefined;
   readonly consentTextVersion: number;
@@ -73,6 +81,10 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
   if (production && raw.OTP_PEPPER === undefined) issues.push("OTP_PEPPER: required in production");
   if (production && raw.IP_HASH_KEY === undefined) issues.push("IP_HASH_KEY: required in production");
   if (production && raw.AGE_BLOCK_KEY === undefined) issues.push("AGE_BLOCK_KEY: required in production");
+  if (!devFixtures && raw.DATABASE_URL === undefined) issues.push("DATABASE_URL: required when DEV_FIXTURES is off");
+  if (!devFixtures && raw.SIZE_DEMAND_PSEUDONYM_KEY === undefined) {
+    issues.push("SIZE_DEMAND_PSEUDONYM_KEY: required when DEV_FIXTURES is off");
+  }
   if (issues.length > 0) throw new ConfigError("invalid environment configuration", issues);
   return {
     env: raw.NODE_ENV,
@@ -80,6 +92,9 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     tokenIssuer: raw.TOKEN_ISSUER,
     trustProxyHops: raw.TRUST_PROXY_HOPS,
     adapters: devFixtures ? "in-memory-dev" : "production",
+    databaseUrl: raw.DATABASE_URL,
+    databasePoolMax: raw.DATABASE_POOL_MAX,
+    sizeDemandPseudonymKey: raw.SIZE_DEMAND_PSEUDONYM_KEY,
     otpPepper: raw.OTP_PEPPER,
     ipHashKey: raw.IP_HASH_KEY,
     consentTextVersion: raw.CONSENT_TEXT_VERSION,

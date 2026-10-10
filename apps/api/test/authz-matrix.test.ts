@@ -561,7 +561,7 @@ const MODULE_ENTRIES: Record<string, Entry> = {
   // ---- catalog (shopper) ----
   "GET /v1/products/:productId": {
     authz: "self", okStatus: 200,
-    okKeys: ["id", "title", "store", "image_url", "blurhash", "price", "condition", "sponsored", "description", "images", "skus", "material", "defect_photos", "return_eligibility", "seller_legal_identity_visible", "size_chart_available", "updated_at"],
+    okKeys: ["id", "title", "store", "image_url", "blurhash", "price", "condition", "sponsored", "description", "images", "skus", "material", "defect_photos", "return_eligibility", "seller_legal_identity_visible", "seller_legal_identity", "size_chart_available", "updated_at"],
     send: (c, t) => c.h.http().get(`/v1/products/${FX.product}`).set(tok(t)),
   },
 

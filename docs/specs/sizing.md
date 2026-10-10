@@ -122,3 +122,21 @@ Size-related return rate (target -10% vs control), recommendation coverage (shar
 - Given 49 units of demand no cell is returned, given 50 it is (api test).
 - Every endpoint: 401 unauthenticated, 401 wrong audience, 403 wrong brand role, 404 other owner or tenant (api negative authorization tests).
 - Mutation score on `packages/domain/src/sizing/fit.ts` at least 80%. Stryker config: `packages/domain/src/sizing/stryker.config.mjs` (run `pnpm exec stryker run src/sizing/stryker.config.mjs` from `packages/domain`). Result of the wave 1 run: Stryker's dry run passed (59 tests) but the mutation phase crashed in this sandbox with `spawn pgrep EAGAIN` (tree-kill), so the score was measured with a hand-rolled operator mutation harness (194 mutants on fit.ts: comparison, arithmetic, logical, boolean, numeric constant and Math.min/max swaps): 183 killed, 11 survived = 94.3%. All 11 survivors are equivalent mutants (comment text, string literal, return type annotation, a sentinel `-1` that is only tested with `< 0`, an unused coverage value, `gap < 0` vs `<= 0` at gap 0, a sort tie-break that the between-sizes rule symmetrises, a clamp bound that is unreachable). The official Stryker score still has to be recorded by the integrator on a machine where it can spawn processes.
+
+## Wave 2: Kysely adapters (persistence)
+
+Adapters: `apps/api/src/modules/sizing/adapters/kysely-store.ts` (`KyselySizeProfileRepository`, `KyselySizeChartRepository`, `KyselyFeedbackRepository`, `KyselyDemandRepository`). Raw SQL with Zod-parsed rows, one transaction per call under `app.role = system` (same convention as the inventory adapter, ADR-0020). The module still wires the in-memory adapters; the integrator swaps them behind the same ports.
+
+Rules decided here
+- **Demand = distinct shoppers, in SQL.** Migration 0017 only had the aggregate table (`demand_count >= 50`), which cannot hold a per-shopper ledger. 0017 gains `size_demand_events (store_id, product_type, size_label, week_start, shopper_hash)` with the whole tuple as primary key, so a repeat request is a no-op by construction. `cellsForStore` returns `count(distinct shopper_hash)`; the use case still applies k >= 50 before anything leaves the module. `materializeAggregates(week, k)` rolls a week into `seller_size_demand_agg` with `HAVING count(distinct shopper_hash) >= k` (k below 50 is refused). The weekly job and the 8 week purge of `size_demand_events` are not scheduled here.
+- **Shopper pseudonym.** `shopper_hash = HMAC-SHA256(key, userId)`, key injected into the repository (KMS in production). The plain id never reaches the table.
+- **Week key.** The module uses ISO `YYYY-Www`; the table stores the Monday date. Conversion is in the adapter (`isoWeekToMonday`, `mondayToIsoWeek`, tested across a year boundary).
+- **Delete = erase.** `SizeProfileRepository.delete` soft-deletes (so `fit_feedback.profile_id` and the 6-profile trigger keep working) and blanks `label`, `measurements`, `quick_start`.
+- **Optimistic update** is one `UPDATE ... WHERE version = expected`; a zero-row result is disambiguated into `conflict` or `not_found`.
+- **Chart versions** are immutable rows; `nextVersion` then `insert` can lose a race, in which case the unique `(store_id, product_type, chart_version)` constraint raises and the request fails (retry is the caller's choice).
+
+Tests: `test/repositories.contract.test.ts` runs one contract suite against the in-memory repositories and the Kysely adapters on PGlite with the real migrations (0001..0011, 0013, 0017). Not verified on PGlite: behaviour of the 6-profile advisory lock under real concurrent sessions.
+
+## Pagination cursors
+
+List cursors are keyset values `(created_at, [chart_version,] id)` plus the owner scope, encoded in the cursor. They never reference a live row, so deleting the last-served item does not invalidate the cursor; a cursor from another owner is `invalid_cursor`.

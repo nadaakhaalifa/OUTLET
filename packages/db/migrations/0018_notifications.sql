@@ -157,6 +157,7 @@ CREATE TABLE notification_push_tokens (
   CONSTRAINT notification_push_tokens_user_install_uq UNIQUE (user_id, install_id)
 );
 
+CREATE UNIQUE INDEX notification_push_tokens_active_token_uq ON notification_push_tokens (md5(token)) WHERE deactivated_at IS NULL;
 CREATE INDEX notification_push_tokens_user_idx ON notification_push_tokens (user_id) WHERE deactivated_at IS NULL;
 
 -- Row level security -----------------------------------------------------------------------

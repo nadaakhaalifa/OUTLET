@@ -90,3 +90,12 @@ Multi-store bag rate, free-delivery unlock rate, AOV uplift (A/B), bag read p95 
 - Threshold changed between add and checkout: quote uses the live value and reports `threshold_change`.
 - Foreign line id on PATCH or DELETE: 404 identical to a missing id. No token: 401. Seller-audience token: 401. Suspended subject: 403.
 - Property tests: totals never negative, group subtotal equals the sum of counted lines, `unlocked` is monotonic in subtotal, remaining + subtotal >= threshold when locked.
+
+## Wave 2: Postgres adapter and boot guard
+- `KyselyCartRepository` (`apps/api/src/modules/cart/adapters/kysely-store.ts`) implements `CartRepository` over migration 0015 (raw SQL, Zod rows, one `system`-role transaction per call).
+- Concurrency: `save` is a compare-and-set on `carts.version` (`update ... where version = expected`); when it matches, lines are replaced in the same transaction, so a stale writer changes nothing. `setUnavailableSince` does not bump the version. The 50-line cap trigger from 0015 surfaces as a thrown error and rolls the save back.
+- Exact values: `price_at_add` and `threshold_at_add` are `bigint` read as text and parsed with `BigInt` (tested above 2^53). A line re-added for an existing SKU under a new id replaces the old row (UNIQUE cart_id, sku_id). Lines read back in `added_at, id` order.
+- Shared contract suite (`test/repository-contract.ts`) runs against in-memory and Kysely/PGlite with the real migrations. After `save`, `updated_at` is the database clock (touch trigger), so equality ignores `updatedAtMs`.
+- Boot guard: outside `NODE_ENV=test`, `CartModule.forRoot` throws `MissingCartPortsError` unless `catalog` (pricing and stock), `membership` and `platformConfig` are supplied. No silent empty `FakeCatalog`, no implicit "nobody is Plus", no unconfigured threshold. The error names what is missing. In test mode the fixtures are still used.
+- Consequence: `AppModule` calls `CartModule.forRoot(config)` with no overrides, so a non-test boot (dev server) now fails until the catalog and membership adapters are wired there (integrator).
+- Not part of this wave: outbox publishing of `cart.line_unavailable`.

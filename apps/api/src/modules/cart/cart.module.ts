@@ -51,10 +51,34 @@ export interface CartModuleOverrides {
   readonly events?: CartEventPublisher;
 }
 
+/**
+ * Thrown at boot when a money-affecting port is not supplied outside test mode. The bag must never
+ * price from an empty fixture catalog, assume nobody is a Plus member or use a default threshold
+ * that nobody configured.
+ */
+export class MissingCartPortsError extends Error {
+  constructor(readonly missing: readonly string[]) {
+    super(
+      `CartModule requires real ${missing.join(", ")} outside test mode: ` +
+        "supply them through CartModule.forRoot(config, overrides)",
+    );
+    this.name = "MissingCartPortsError";
+  }
+}
+
 @Module({})
 export class CartModule {
   static forRoot(config: AppConfig, overrides: CartModuleOverrides = {}): DynamicModule {
-    if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
+    const production = config.adapters !== "in-memory-dev";
+    // Production needs a real repository AND real money ports; the fixtures are never a fallback.
+    if (production && overrides.repository === undefined) throw new NoProductionAdaptersError();
+    if (production || config.env !== "test") {
+      const missing: string[] = [];
+      if (overrides.catalog === undefined) missing.push("catalog (CART_CATALOG: pricing and stock)");
+      if (overrides.membership === undefined) missing.push("membership (CART_MEMBERSHIP)");
+      if (overrides.platformConfig === undefined) missing.push("platformConfig (CART_PLATFORM_CONFIG)");
+      if (missing.length > 0) throw new MissingCartPortsError(missing);
+    }
     const repo = overrides.repository ?? new InMemoryCartRepository();
     const deps = {
       inject: [CART_REPOSITORY, CART_CATALOG, CART_MEMBERSHIP, CART_PLATFORM_CONFIG, CART_EVENTS, CLOCK, ID_GENERATOR],
@@ -78,7 +102,7 @@ export class CartModule {
       controllers: [CartController],
       providers: [
         { provide: CART_REPOSITORY, useValue: repo },
-        // DEVELOPMENT FIXTURE: an empty catalog until the catalog module lands (adds answer 422 unknown_sku).
+        // Test mode only (forRoot throws otherwise): an empty fixture catalog, adds answer 422 unknown_sku.
         { provide: CART_CATALOG, useValue: overrides.catalog ?? new FakeCatalog() },
         { provide: CART_MEMBERSHIP, useValue: overrides.membership ?? new StaticMembership() },
         { provide: CART_PLATFORM_CONFIG, useValue: overrides.platformConfig ?? new StaticPlatformConfig() },

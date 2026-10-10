@@ -15,4 +15,6 @@ __pycache__/
 coverage/
 reports/
 .stryker-tmp/
+.stryker-tmp*/
+packages/domain/reports/mutation/
 !tooling/coverage/

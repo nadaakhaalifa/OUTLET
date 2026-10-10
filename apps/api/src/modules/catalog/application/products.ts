@@ -112,25 +112,24 @@ export class CreateProduct {
   async persist(storeId: string, actorId: string, draft: ProductDraft): Promise<Product> {
     const nowMs = this.deps.clock.nowMs();
     const product = createProduct(draft, { storeId, nowMs, newId: () => this.deps.ids.uuidV7() });
-    await this.deps.products.insert(product);
+    const event: CatalogEvent = {
+      name: "product.created",
+      productId: product.id,
+      storeId,
+      skuIds: product.skus.map((s) => s.id),
+      version: product.version,
+      status: product.status,
+      actorId,
+      occurredAtMs: nowMs,
+    };
+    // The event is appended to the outbox inside the insert transaction.
+    await this.deps.products.insert(product, [event]);
     // Stock is owned by inventory; creation only seeds the opening quantity.
     for (let i = 0; i < product.skus.length; i += 1) {
       const qty = draft.skus[i]?.initialStock;
       const sku = product.skus[i];
       if (qty !== undefined && qty > 0 && sku !== undefined) await this.deps.stockSeeder.seed(storeId, sku.id, qty);
     }
-    await this.deps.events.publish([
-      {
-        name: "product.created",
-        productId: product.id,
-        storeId,
-        skuIds: product.skus.map((s) => s.id),
-        version: product.version,
-        status: product.status,
-        actorId,
-        occurredAtMs: nowMs,
-      },
-    ]);
     return product;
   }
 }
@@ -258,15 +257,13 @@ export class UpdateProduct {
       }
     }
 
-    const ok = await this.deps.products.replace(next, input.expectedVersion);
-    if (!ok) return { kind: "stale" };
-
     const base = { productId: next.id, storeId: next.storeId, version: next.version, actorId: input.actorId, occurredAtMs: nowMs } as const;
     const events: CatalogEvent[] = [{ name: "product.updated", ...base, status: next.status }];
     if (next.status !== current.status) {
       events.push({ name: "product.status_changed", ...base, from: current.status, to: next.status });
     }
-    await this.deps.events.publish(events);
+    const ok = await this.deps.products.replace(next, input.expectedVersion, events);
+    if (!ok) return { kind: "stale" };
     return { kind: "ok", product: next, levels: await this.deps.stock.levels(next.skus.map((s) => s.id)) };
   }
 }

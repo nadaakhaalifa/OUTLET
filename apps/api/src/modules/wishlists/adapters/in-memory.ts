@@ -28,7 +28,16 @@ export class InMemoryWishlistRepository implements WishlistRepository {
   }
 
   async save(list: Wishlist): Promise<void> {
-    if (this.lists.has(list.id)) this.lists.set(list.id, list);
+    const cur = this.lists.get(list.id);
+    if (cur === undefined || cur.userId !== list.userId) return;
+    const keepRevoked =
+      cur.share !== null && cur.share.revokedAtMs !== null && list.share !== null && list.share.tokenHash === cur.share.tokenHash;
+    this.lists.set(
+      list.id,
+      keepRevoked && list.share !== null && cur.share !== null
+        ? { ...list, share: { ...list.share, revokedAtMs: cur.share.revokedAtMs } }
+        : list,
+    );
   }
 
   async delete(id: string): Promise<void> {

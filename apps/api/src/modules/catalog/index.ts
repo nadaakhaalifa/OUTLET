@@ -13,3 +13,10 @@ export type {
   StoreReader,
   UploadReader,
 } from "./domain/ports";
+export type { CatalogPersistence } from "./catalog.module";
+export {
+  fixedSession as fixedCatalogSession,
+  SYSTEM_SESSION as CATALOG_SYSTEM_SESSION,
+  type CatalogDb,
+  type SessionProvider as CatalogSessionProvider,
+} from "./adapters/kysely";

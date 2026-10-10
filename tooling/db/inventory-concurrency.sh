@@ -28,10 +28,17 @@
 # does not make the design "production verified".
 set -u -o pipefail
 
-PG_BIN="${PG_BIN:-/Applications/Postgres.app/Contents/Versions/16/bin}"
+# PG_BIN: explicit env wins; else the first PostgreSQL 16 bin dir found (Linux package, Postgres.app).
+if [ -z "${PG_BIN:-}" ]; then
+  for c in /usr/lib/postgresql/16/bin /Applications/Postgres.app/Contents/Versions/16/bin \
+           /opt/homebrew/opt/postgresql@16/bin /usr/local/opt/postgresql@16/bin; do
+    if [ -x "$c/initdb" ]; then PG_BIN="$c"; break; fi
+  done
+fi
+PG_BIN="${PG_BIN:-/usr/lib/postgresql/16/bin}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MIGRATIONS="$ROOT/packages/db/migrations"
-SCRATCH="${SCRATCH:-/private/tmp/claude-501/-Users-nadakhalifa-OUTLET/11a84ed5-d15e-49c9-b6ec-ccbff396064c/scratchpad}"
+SCRATCH="${SCRATCH:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}}"
 RUNS="${RUNS:-25}"
 ATTEMPTS="${ATTEMPTS:-10000}"
 CONNS="${CONNS:-100}"

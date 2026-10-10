@@ -15,6 +15,7 @@ import {
   InMemorySizingEventLog,
   SizingStoreResolver,
 } from "./adapters/in-memory";
+import type { DemandRepository, FeedbackRepository, SizeChartRepository, SizeProfileRepository } from "./domain/ports";
 import { SizingController } from "./adapters/sizing.controller";
 import {
   CREATE_SIZE_CHART,
@@ -52,18 +53,28 @@ import { RecommendFit } from "./application/recommend";
 
 const CODEC = Symbol("sizing.ProfileCodec");
 
+export interface SizingModuleOptions {
+  /** Postgres repositories (KyselySizing*). Omitted means the in-memory fixtures. */
+  readonly repositories?: {
+    readonly profiles: SizeProfileRepository;
+    readonly charts: SizeChartRepository;
+    readonly feedback: FeedbackRepository;
+    readonly demand: DemandRepository;
+  };
+}
+
 @Module({})
 export class SizingModule {
-  static forRoot(config: AppConfig): DynamicModule {
+  static forRoot(config: AppConfig, options: SizingModuleOptions = {}): DynamicModule {
     if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
     return {
       module: SizingModule,
       controllers: [SizingController],
       providers: [
-        { provide: SIZE_PROFILE_REPOSITORY, useValue: new InMemorySizeProfileRepository() },
-        { provide: SIZE_CHART_REPOSITORY, useValue: new InMemorySizeChartRepository() },
-        { provide: FIT_FEEDBACK_REPOSITORY, useValue: new InMemoryFeedbackRepository() },
-        { provide: SIZE_DEMAND_REPOSITORY, useValue: new InMemoryDemandRepository() },
+        { provide: SIZE_PROFILE_REPOSITORY, useValue: options.repositories?.profiles ?? new InMemorySizeProfileRepository() },
+        { provide: SIZE_CHART_REPOSITORY, useValue: options.repositories?.charts ?? new InMemorySizeChartRepository() },
+        { provide: FIT_FEEDBACK_REPOSITORY, useValue: options.repositories?.feedback ?? new InMemoryFeedbackRepository() },
+        { provide: SIZE_DEMAND_REPOSITORY, useValue: options.repositories?.demand ?? new InMemoryDemandRepository() },
         { provide: FIELD_CIPHER, useValue: new DevAesGcmFieldCipher() },
         { provide: MEASUREMENTS_CONSENT, useValue: new InMemoryMeasurementsConsent() },
         { provide: FIT_CATALOG, useValue: new InMemoryFitCatalog() },
@@ -75,7 +86,7 @@ export class SizingModule {
           provide: CREATE_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, CODEC, MEASUREMENTS_CONSENT, SIZING_EVENTS, CLOCK, ID_GENERATOR],
           useFactory: (
-            r: InMemorySizeProfileRepository,
+            r: SizeProfileRepository,
             c: ProfileCodec,
             consent: InMemoryMeasurementsConsent,
             ev: InMemorySizingEventLog,
@@ -86,18 +97,18 @@ export class SizingModule {
         {
           provide: LIST_SIZE_PROFILES,
           inject: [SIZE_PROFILE_REPOSITORY, CODEC],
-          useFactory: (r: InMemorySizeProfileRepository, c: ProfileCodec) => new ListSizeProfiles(r, c),
+          useFactory: (r: SizeProfileRepository, c: ProfileCodec) => new ListSizeProfiles(r, c),
         },
         {
           provide: GET_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, CODEC],
-          useFactory: (r: InMemorySizeProfileRepository, c: ProfileCodec) => new GetSizeProfile(r, c),
+          useFactory: (r: SizeProfileRepository, c: ProfileCodec) => new GetSizeProfile(r, c),
         },
         {
           provide: UPDATE_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, CODEC, MEASUREMENTS_CONSENT, SIZING_EVENTS, CLOCK],
           useFactory: (
-            r: InMemorySizeProfileRepository,
+            r: SizeProfileRepository,
             c: ProfileCodec,
             consent: InMemoryMeasurementsConsent,
             ev: InMemorySizingEventLog,
@@ -107,7 +118,7 @@ export class SizingModule {
         {
           provide: DELETE_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, FIT_FEEDBACK_REPOSITORY, SIZING_EVENTS],
-          useFactory: (r: InMemorySizeProfileRepository, f: InMemoryFeedbackRepository, ev: InMemorySizingEventLog) =>
+          useFactory: (r: SizeProfileRepository, f: FeedbackRepository, ev: InMemorySizingEventLog) =>
             new DeleteSizeProfile(r, f, ev),
         },
         {
@@ -124,13 +135,13 @@ export class SizingModule {
             CLOCK,
           ],
           useFactory: (
-            p: InMemorySizeProfileRepository,
+            p: SizeProfileRepository,
             codec: ProfileCodec,
             consent: InMemoryMeasurementsConsent,
             cat: InMemoryFitCatalog,
-            charts: InMemorySizeChartRepository,
-            fb: InMemoryFeedbackRepository,
-            demand: InMemoryDemandRepository,
+            charts: SizeChartRepository,
+            fb: FeedbackRepository,
+            demand: DemandRepository,
             ev: InMemorySizingEventLog,
             clock: Clock,
           ) => new RecommendFit(p, codec, consent, cat, charts, fb, demand, ev, clock),
@@ -140,8 +151,8 @@ export class SizingModule {
           inject: [ORDER_LINE_FIT, FIT_FEEDBACK_REPOSITORY, SIZE_PROFILE_REPOSITORY, SIZING_EVENTS, CLOCK, ID_GENERATOR],
           useFactory: (
             lines: InMemoryOrderLines,
-            fb: InMemoryFeedbackRepository,
-            p: InMemorySizeProfileRepository,
+            fb: FeedbackRepository,
+            p: SizeProfileRepository,
             ev: InMemorySizingEventLog,
             clock: Clock,
             ids: IdGenerator,
@@ -150,18 +161,18 @@ export class SizingModule {
         {
           provide: CREATE_SIZE_CHART,
           inject: [SIZE_CHART_REPOSITORY, SIZING_EVENTS, CLOCK, ID_GENERATOR],
-          useFactory: (r: InMemorySizeChartRepository, ev: InMemorySizingEventLog, clock: Clock, ids: IdGenerator) =>
+          useFactory: (r: SizeChartRepository, ev: InMemorySizingEventLog, clock: Clock, ids: IdGenerator) =>
             new CreateSizeChart(r, ev, clock, ids),
         },
         {
           provide: LIST_SIZE_CHARTS,
           inject: [SIZE_CHART_REPOSITORY],
-          useFactory: (r: InMemorySizeChartRepository) => new ListSizeCharts(r),
+          useFactory: (r: SizeChartRepository) => new ListSizeCharts(r),
         },
         {
           provide: GET_SIZE_DEMAND,
           inject: [SIZE_DEMAND_REPOSITORY],
-          useFactory: (r: InMemoryDemandRepository) => new GetSizeDemand(r),
+          useFactory: (r: DemandRepository) => new GetSizeDemand(r),
         },
       ],
     };

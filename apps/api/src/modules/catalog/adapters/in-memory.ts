@@ -25,8 +25,11 @@ import { gtinVariantKey, type PriceBlockInput, type Product, type SizeChartStatu
 export class InMemoryProductRepository implements ProductRepository {
   private readonly rows = new Map<string, Product>();
 
-  async insert(product: Product): Promise<void> {
+  constructor(private readonly sink?: CatalogEventPublisher) {}
+
+  async insert(product: Product, events: readonly CatalogEvent[] = []): Promise<void> {
     this.rows.set(product.id, product);
+    await this.sink?.publish(events);
   }
   async findInStore(storeId: string, id: string): Promise<Product | null> {
     const p = this.rows.get(id);
@@ -51,10 +54,11 @@ export class InMemoryProductRepository implements ProductRepository {
     const more = start + limit < all.length;
     return { items, nextCursor: more && last !== undefined ? `${last.createdAtMs}:${last.id}` : null };
   }
-  async replace(next: Product, expectedVersion: number): Promise<boolean> {
+  async replace(next: Product, expectedVersion: number, events: readonly CatalogEvent[] = []): Promise<boolean> {
     const cur = this.rows.get(next.id);
     if (cur === undefined || cur.version !== expectedVersion) return false;
     this.rows.set(next.id, next);
+    await this.sink?.publish(events);
     return true;
   }
   async takenGtinVariants(storeId: string): Promise<ReadonlySet<string>> {
@@ -110,6 +114,9 @@ export class InMemoryImportRepository implements ImportRepository {
     if (this.claimed.has(k)) return false;
     this.claimed.add(k);
     return true;
+  }
+  async attachProduct(_importId: string, _productRef: string, _productId: string): Promise<void> {
+    // The in-memory claim set needs no product id.
   }
 }
 
@@ -226,8 +233,9 @@ export interface CatalogDevFixtures {
 }
 
 export function createCatalogDevFixtures(): CatalogDevFixtures {
+  const events = new InMemoryCatalogEvents();
   return {
-    products: new InMemoryProductRepository(),
+    products: new InMemoryProductRepository(events),
     taxonomy: new InMemoryTaxonomy(SEED_CATEGORIES, SEED_BRANDS),
     imports: new InMemoryImportRepository(),
     uploads: new InMemoryUploads(),
@@ -236,6 +244,6 @@ export function createCatalogDevFixtures(): CatalogDevFixtures {
     stores: new InMemoryStores(),
     sizeCharts: new InMemorySizeCharts(),
     media: new InMemoryMedia(),
-    events: new InMemoryCatalogEvents(),
+    events,
   };
 }

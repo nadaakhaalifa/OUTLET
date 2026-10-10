@@ -102,3 +102,20 @@ Product: world switch rate, My Stores adoption, scoped-session conversion (§3).
 5. `stores.seller_kyc_state` is a cache of the seller KYC state until the sellers module migration exists.
 6. Store status `PAUSED` maps to the wire value `vacation`; OpenAPI has no `draft`, which is never exposed.
 7. Name sort is code-point order, not Arabic collation.
+
+## Wave 2: Postgres adapters (stores, favourites, activity feed)
+
+Status: implemented · ADR-0020 · Code: `apps/api/src/modules/stores/adapters/kysely/**` · Selected by `StoresModule.forRoot(config, { persistence: { runner, session } })`; in-memory stays the default.
+
+**Rules.**
+- Reads run under the injected identity. Policy `stores_select` is a public-read predicate: shoppers AND anonymous callers see ACTIVE/PAUSED + APPROVED stores, staff additionally their tenant, platform roles all. Application code still applies `isShopperVisible` (legal identity published) and `hiddenReason`; a module that must explain a suspended favourite has to read under a platform identity, which is why the default wiring session is the caller's choice, not hard-coded.
+- `save` is insert (ops/system) or update. Stats and legal identity are rewritten only when they changed, so a seller editing presentation fields never touches platform-written tables. The guard trigger rejects seller changes to status, KYC cache, badge, score, kind, seller and slug.
+- Favourites are class A: list/replace work for the session user (or system). `replace` is delete + insert in one transaction; the DEFERRABLE `(user_id, position)` unique constraint makes reorders safe.
+- `followerCounts` runs as `system` and returns counts only.
+- The activity feed is append-only; `record` is ops/system.
+
+**Edge cases / known limits.** `save` with `legalIdentity: null` deletes the public legal identity row (ops/system only, DELETE policy in 0013). Follower counts come from the SECURITY DEFINER aggregate `store_follower_counts()` (counts only), so the adapter keeps the caller's identity. `numeric(3,2)` rating round-trips through `toFixed(2)`.
+
+**Security.** Tests cover shopper/anonymous/foreign-seller visibility, platform-column guard, tenant-scoped edits, private favourites (read and write), aggregate-only follower counts and feed append denial.
+
+**Acceptance (executable).** `adapters/kysely/kysely.pglite.test.ts` runs `test/contract/repositories.contract.ts` on both adapters, plus RLS and column-drift checks.

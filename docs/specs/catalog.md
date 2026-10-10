@@ -160,7 +160,7 @@ OWASP API Top 10 2023 mapping: API1 (resolver + RLS), API2 (platform auth), API3
 ## 8. Failure handling
 - Ports (StockReader, PriceBlockReader, SellerIdentityReader) are called with a 2 s budget in production adapters. Failure of the price block port degrades to badge `none` (fail closed for claims). Failure of the stock port: SKU `available: false`, `units_left: null` (fail closed for purchasing) and the response is still 200. Failure of the identity reader: `seller_legal_identity_visible: false`.
 - Import: the whole file is validated before any write. The real run applies products in batches of 500 rows' worth of products; each product is one repository `createProductWithSkus` call (atomic in the Postgres adapter). A crash mid-run is resumable because creating a product with an already used `(store_id, import_id, product_ref)` is a no-op (unique key in the import-product map).
-- Outbox write is in the same transaction as the state change in production adapters; the in-memory adapter records events in order.
+- Outbox write is in the same transaction as the state change: `ProductRepository.insert/replace` take the events and the Kysely adapter appends them via the platform `tx.emit` (create, publish, pause, import apply). No outbox policy is added here: the platform outbox store appends as system (0007). A stale `replace` writes no events. The in-memory adapter records events in order.
 - Retries: none on the request path; clients retry with the same idempotency key.
 
 ## 9. Metrics
@@ -178,8 +178,33 @@ Catalog completeness (Arabic title, image, size chart, GTIN), listing-to-publish
 - Given a size chart whose measurements decrease with size order, the structure validator rejects it with `non_monotonic`; fit maths is not evaluated.
 
 ## 11. Deviations and open items (reported to the integrator)
-- D-1: `Product` has only `seller_legal_identity_visible` (boolean). B5 says every listing shows the legal identity; a `seller_legal_identity` object (legal name, register number, tax card, governorate) must be added to the schema, or a store-profile endpoint must carry it. The module already produces the four-field projection.
+- D-1 (resolved in wave 2): `Product` now carries `seller_legal_identity` (`legal_name`, `commercial_register_no`, `tax_card_no`, `governorate`) next to the boolean, built by an explicit allow-list serializer from the `publicSellerIdentity` projection. The object is omitted (boolean false) when the store is unapproved or any field is blank. Open: B5 says every listing shows identity, so the application layer should also refuse to publish/show products of stores without complete identity (needs change in `application/products.ts`; currently the product stays visible with `seller_legal_identity_visible: false`).
 - D-2: `CatalogImport.error_report_url` is a URI; there is no file store yet. The dev adapter returns a `data:text/csv;base64,...` URI (capped at 64 KiB, truncated with a final marker row). Production must publish the report to private object storage and return a signed URL of at most 15 minutes.
 - D-3: no OpenAPI parameter selects the store for multi-store staff. The module accepts an optional `X-Store-Id` header; OpenAPI should list it on the seller catalog operations.
 - D-4: `getProduct` is `shopperBearer` in OpenAPI while the A3 table says public; the module follows OpenAPI. If the PDP must be reachable by guests (not in Phase 1: guest bag is unsupported) change both.
 - D-5: Taxonomy browse endpoints (categories, brands) are not in OpenAPI. The module resolves `category_id` and `brand_id` from seeded taxonomy and exposes none.
+
+## Wave 2: Postgres adapters (products, taxonomy, imports)
+
+Status: implemented · ADR-0020 · Code: `apps/api/src/modules/catalog/adapters/kysely/**` · Selected by `CatalogModule.forRoot(config, fixtures, persistence?)`; in-memory stays the default.
+
+**Flow.** Each repository method is one transaction through `KyselyTransactionRunner` (`SET LOCAL ROLE app_user`, `app.*` identity from a `SessionProvider`). `insert` writes product, SKUs, gallery and defect photos atomically. `replace` locks the row, compares `version`, rewrites gallery and SKUs, then updates the product, so the database publish gate sees the final children.
+
+**Rules.**
+- `updated_at` belongs to the `touch_updated_at` trigger: `updatedAtMs` read back is the database time, not the domain's. Contract tests exclude it.
+- A product is inserted as `draft` only (lifecycle guard); publishing is a `replace`.
+- `replace` returns false for a stale version AND for a row the identity cannot update (foreign tenant): both look like a lost race, never an existence leak.
+- Colour `undefined` is stored as `''` (`color_code`), matching the variant unique index.
+- Import record: written before any claim; the error report is written once (append-only by grant).
+
+**Edge cases.** Seller B probing store A's draft gets `null`/empty/`false`; an insert into another tenant throws (RLS). Shoppers see `active` products only; anonymous sessions see nothing, taxonomy included.
+
+**Data / drift (migration 0012, edited in place while still unreleased).** `catalog_import_products.product_id` is nullable (claim first, `attachProduct` after the insert); `DELETE` granted with seller/system policies on `product_media` and `product_defects` (gallery replace). Port change: `ImportRepository.attachProduct`. `CreateImport` saves an `applying` record before the apply loop.
+
+**Failure handling.** Constraint or trigger violations surface as thrown errors (the use case has pre-validated, so they signal a bypassed guard). No retry here.
+
+**Security.** RLS is the second layer behind the policy guard; the adapter never elevates. Tests: foreign seller read/list/replace/insert, shopper active-only, anonymous, import tenancy, publish gate bypass.
+
+**Acceptance (executable).** `adapters/kysely/kysely.pglite.test.ts` runs `test/contract/repositories.contract.ts` against the in-memory adapter and Kysely+PGlite (migrations 1..13), plus the RLS and column-drift checks.
+
+**Not in this wave.** Stock, price blocks, uploads, size charts, media, store profile and the event publisher remain fixtures (other modules / outbox emission), so `forRoot` still refuses non-dev config.

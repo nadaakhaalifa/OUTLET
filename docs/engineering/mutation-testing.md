@@ -151,3 +151,42 @@ engine-dependent as above.
   80 for these files once the remaining domain files are covered. That file was not edited here.
 - vitest's `related` mode does not need to change, but Stryker leaves `.stryker-tmp*` directories
   behind if a run is killed; delete them, because vitest then collects the stale copies.
+
+## Wave 2: inventory and cart scopes (2026-10-10, Node 24.15, Stryker 10, ignoreStatic=false)
+
+Two focused configs live next to the whole-domain one (`packages/domain/stryker.inventory.mjs`,
+`packages/domain/stryker.cart.mjs`). Run from `packages/domain` with
+`pnpm exec stryker run stryker.inventory.mjs` (or `stryker.cart.mjs`). The CI `mutation` job runs both
+after the whole-domain run. `break` is a ratchet at the floor of the measured score (ADR-0019); the
+80 target for reservation and pricing stays, and no threshold was lowered.
+
+| Scope | Files | Score (total) | killed / timeout / survived / no cov | `break` |
+|---|---|---:|---|---:|
+| Inventory reservation, claim, pool, TTL | `src/inventory/{model,plan,pool,sync,ttl-policy,outcomes}.ts` | **71.91%** | 506 / 1 / 164 / 34 | 71 |
+| Cart pricing and free-delivery | `src/cart/{pricing,bag-rules}.ts` | **92.31%** | 144 / 0 / 11 / 1 | 92 |
+
+Per file (inventory): `model.ts` 68.35% (123 survived, 34 no coverage), `plan.ts` 92.31%, `pool.ts`
+95.65%, `sync.ts` 86.79%, `ttl-policy.ts` 50.91% (27 survived). Cart: `bag-rules.ts` 97.83%,
+`pricing.ts` 90.00%.
+
+**Gap against ADR-0019:** inventory is a critical module (reservation) and is below the 80 hard
+gate, so it runs at its measured floor with an open gap. Survivors seen in the output are mostly
+`StringLiteral` mutants in `ttl-policy.ts` (policy ids and method names in the default table are not
+asserted) and the `policy.version > best.version` tie rule; `model.ts` has 34 uncovered mutants. The
+tests are owned by the inventory module, so killing tests were not written here. Raise `break` to the
+new floor after each improvement and to 80 when reached.
+
+Not measured: `src/catalog` and `src/sizing/*` other than `fit.ts` (sizing has its own config, not
+re-run here). The `src/cart/stryker.config.mjs` and `src/sizing/stryker.config.mjs` files that
+already exist were not changed.
+
+## Inventory concurrency proof (not mutation, but the same gate family)
+
+`tooling/db/inventory-concurrency.sh` runs the row-per-unit reserve/claim storm on a real, throw-away
+PostgreSQL 16 cluster. CI job `inventory-concurrency` in `.github/workflows/ci.yml` runs it with
+RUNS=25, ATTEMPTS=10000, CONNS=100 and is **blocking**. It starts its own cluster with `initdb`
+rather than a `services:` container because it needs `pg_ctl` and the server log (to grep for
+`deadlock detected`). Local run on 2026-10-10 with RUNS=5 on Postgres.app 16: 5/5 runs exact
+(100 claimed, 0 lost, 0 deadlocks, 0 server ERROR lines, reserve p50 9.4 ms, p95 19.1 ms,
+p99 35.8 ms). The CI job has never executed on GitHub. It is single-machine evidence, not a
+production load test.

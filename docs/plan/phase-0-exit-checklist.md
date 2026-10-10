@@ -64,6 +64,8 @@ Two red gates exist today (depcruise, privacy inventory). CI would fail on both.
 | P0-19 | Ledger core | PARTIAL | `packages/domain` ledger + chart of accounts (466 tests), migration 0003 balance trigger and immutability on PGlite, `ledger-owner.test.ts` and `ledger-account-types.test.ts` cross-check domain to DB. Gaps: no Postgres adapter or posting service; not run on real Postgres; the cross-check tests violate the depcruise rule; domain mutation gate 40, not 80. |
 | P0-20 | Outbox / inbox | PARTIAL | See rule 7. |
 | P0-21 | Idempotency middleware | PARTIAL | See rule 5. |
+| P0-23 | CI inventory-concurrency job | PARTIAL | `.github/workflows/ci.yml`, blocking, RUNS=25 x 10000 attempts x 100 conns on PG16. Never run on GitHub. Local 5-run PASS on Postgres.app 16 (2026-10-10): 100 claimed each, 0 deadlocks. |
+| P0-24 | Reservation and cart mutation scores | PARTIAL | Inventory 71.91% (break 71) vs ADR-0019 target 80: OPEN GAP, survivors mostly StringLiteral in `ttl-policy.ts` and uncovered `model.ts`. Cart pricing 92.31% (break 92). |
 | P0-22 | Feature flags | PARTIAL | See rule 12. Registry done, provider/OpenFeature and consumption missing. |
 
 ## Blocking items to close before Phase 0 can be called complete

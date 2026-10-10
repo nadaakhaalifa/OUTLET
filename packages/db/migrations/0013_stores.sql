@@ -168,7 +168,7 @@ CREATE POLICY store_directory_stats_update ON store_directory_stats FOR UPDATE
   WITH CHECK (app_role() IN ('ops', 'system'));
 
 ALTER TABLE store_legal_identity_public ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT, UPDATE ON store_legal_identity_public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON store_legal_identity_public TO app_user;
 CREATE POLICY store_legal_identity_select ON store_legal_identity_public FOR SELECT
   USING (
     EXISTS (SELECT 1 FROM stores s WHERE s.id = store_legal_identity_public.store_id)
@@ -178,6 +178,9 @@ CREATE POLICY store_legal_identity_insert ON store_legal_identity_public FOR INS
 CREATE POLICY store_legal_identity_update ON store_legal_identity_public FOR UPDATE
   USING (app_role() IN ('ops', 'system'))
   WITH CHECK (app_role() IN ('ops', 'system'));
+-- Saving a store whose legal identity is null removes the public row (never leave a stale identity).
+CREATE POLICY store_legal_identity_delete ON store_legal_identity_public FOR DELETE
+  USING (app_role() IN ('ops', 'system'));
 
 -- Class A (user-owned). A store's own staff never read who favourited it; only counts.
 ALTER TABLE user_favorite_stores ENABLE ROW LEVEL SECURITY;
@@ -191,6 +194,16 @@ CREATE POLICY user_favorite_stores_update ON user_favorite_stores FOR UPDATE
   WITH CHECK (user_id = app_user_id() OR app_role() = 'system');
 CREATE POLICY user_favorite_stores_delete ON user_favorite_stores FOR DELETE
   USING (user_id = app_user_id() OR app_role() = 'system');
+
+-- Follower counts: aggregate only, never who. RLS hides other users' rows, so the count runs as the
+-- table owner via SECURITY DEFINER with a pinned search_path; callers get counts, not rows.
+CREATE FUNCTION store_follower_counts() RETURNS TABLE (store_id uuid, followers bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+AS $$
+  SELECT f.store_id, count(*)::bigint FROM user_favorite_stores f GROUP BY f.store_id
+$$;
+REVOKE ALL ON FUNCTION store_follower_counts() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION store_follower_counts() TO app_user;
 
 ALTER TABLE store_activity_events ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT ON store_activity_events TO app_user;

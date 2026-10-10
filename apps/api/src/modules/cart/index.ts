@@ -1,5 +1,5 @@
 /** Public surface of the cart module (A2.3). Other code imports only this file. */
-export { CartModule, type CartModuleOverrides } from "./cart.module";
+export { CartModule, MissingCartPortsError, type CartModuleOverrides } from "./cart.module";
 export {
   CART_CATALOG,
   CART_EVENTS,
@@ -26,3 +26,4 @@ export type {
   StoreFacts,
   SuggestionFacts,
 } from "./domain/ports";
+export { KyselyCartRepository, type CartDb } from "./adapters/kysely-store";

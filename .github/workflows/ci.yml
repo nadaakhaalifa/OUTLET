@@ -179,9 +179,44 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm mutation
+      - run: cd packages/domain && pnpm exec stryker run stryker.inventory.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.cart.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mutation-report
           path: packages/domain/reports/mutation/
           retention-days: 14
+
+  inventory-concurrency:
+    name: inventory concurrency proof (real PostgreSQL 16)
+    # Blocking. PGlite is a single backend and cannot exercise SKIP LOCKED, advisory locks or
+    # deadlock behaviour, so this is the only gate for ADR-0005 / spec 20.2 under contention.
+    # The script starts its own throw-away cluster with initdb (no `services:` container: the
+    # storm needs pg_ctl/initdb and the server log to grep for "deadlock detected").
+    # Single-runner evidence only; it is not a production load test.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Ensure PostgreSQL 16 server binaries
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/postgres --version
+      - name: Concurrency storm (RUNS x ATTEMPTS reserve/claim through CONNS connections)
+        env:
+          PG_BIN: /usr/lib/postgresql/16/bin
+          RUNS: "25"
+          ATTEMPTS: "10000"
+          CONNS: "100"
+        run: bash tooling/db/inventory-concurrency.sh

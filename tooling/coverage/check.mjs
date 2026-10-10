@@ -50,6 +50,35 @@ for (const dir of dirs.sort()) {
   } else results[dir].lines = null;
 }
 
+// Per-directory breakdown of packages/domain (src/<dir>/**), derived from coverage-final.json.
+// Lines are counted as distinct statement start lines with at least one hit; branches as hit
+// branch arms. This is an approximation of the v8 summary (the package total can differ by a few
+// tenths), so these rows ratchet against their own baseline entries, never against the gate.
+const domainFinal = join(root, DOMAIN, "coverage", "coverage-final.json");
+if (existsSync(domainFinal)) {
+  const final = JSON.parse(readFileSync(domainFinal, "utf8"));
+  const prefix = join(root, DOMAIN, "src") + "/";
+  const agg = {};
+  for (const [file, c] of Object.entries(final)) {
+    if (!file.startsWith(prefix)) continue;
+    const rel = file.slice(prefix.length);
+    const key = rel.includes("/") ? rel.split("/")[0] : null;
+    if (key === null) continue;
+    const a = (agg[key] ??= { lh: 0, lt: 0, bh: 0, bt: 0 });
+    const lines = new Map();
+    for (const [id, loc] of Object.entries(c.statementMap)) {
+      const line = loc.start.line;
+      lines.set(line, (lines.get(line) ?? 0) + (c.s[id] ?? 0));
+    }
+    for (const hits of lines.values()) { a.lt += 1; if (hits > 0) a.lh += 1; }
+    for (const arms of Object.values(c.b)) for (const h of arms) { a.bt += 1; if (h > 0) a.bh += 1; }
+  }
+  const pct = (h, t) => (t === 0 ? 100 : Math.round((10000 * h) / t) / 100);
+  for (const [key, a] of Object.entries(agg).sort()) {
+    results[`${DOMAIN}/src/${key}`] = { testsExit: null, lines: pct(a.lh, a.lt), branches: pct(a.bh, a.bt), linesTotal: a.lt };
+  }
+}
+
 const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
 let failed = false;
 console.log("\npackage".padEnd(24) + "lines".padStart(8) + "branch".padStart(8) + "  status");

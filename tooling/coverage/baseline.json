@@ -4,40 +4,40 @@
     "branches": 83.64
   },
   "packages/analytics": {
-    "lines": 98.17,
-    "branches": 98.05
+    "lines": 98.6,
+    "branches": 99.4
   },
   "packages/auth-core": {
     "lines": 97.6,
-    "branches": 80.95
+    "branches": 81.48
   },
   "packages/db": {
-    "lines": 98.69,
-    "branches": 84.45
+    "lines": 98.97,
+    "branches": 85.47
   },
   "packages/feature-flags": {
-    "lines": 94.82,
-    "branches": 94.11
+    "lines": 100,
+    "branches": 97.29
   },
   "packages/i18n": {
     "lines": 100,
     "branches": 100
   },
   "packages/idempotency": {
-    "lines": 96.42,
-    "branches": 71.81
+    "lines": 98.57,
+    "branches": 83.59
   },
   "packages/outbox": {
-    "lines": 93.9,
-    "branches": 81.15
+    "lines": 98.56,
+    "branches": 99.25
   },
   "packages/policy": {
-    "lines": 95.05,
-    "branches": 87.32
+    "lines": 98.9,
+    "branches": 99.15
   },
   "packages/privacy": {
-    "lines": 98.1,
-    "branches": 91.27
+    "lines": 99.65,
+    "branches": 99.39
   },
   "packages/ui-native": {
     "lines": 38.99,
@@ -49,6 +49,30 @@
   },
   "packages/validation": {
     "lines": 100,
-    "branches": 88.88
+    "branches": 89.28
+  },
+  "packages/domain/src/cart": {
+    "lines": 95.76,
+    "branches": 96.1
+  },
+  "packages/domain/src/catalog": {
+    "lines": 95.02,
+    "branches": 77.02
+  },
+  "packages/domain/src/chart-of-accounts": {
+    "lines": 99.38,
+    "branches": 97.9
+  },
+  "packages/domain/src/inventory": {
+    "lines": 97.5,
+    "branches": 88.94
+  },
+  "packages/domain/src/sizing": {
+    "lines": 100,
+    "branches": 98.88
+  },
+  "packages/domain/src/state-machine": {
+    "lines": 98.55,
+    "branches": 98.25
   }
 }

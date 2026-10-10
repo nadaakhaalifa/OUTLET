@@ -18,3 +18,4 @@ export type {
   WishlistEvent,
   WishlistEventPublisher,
 } from "./domain/ports";
+export { KyselyWishlistRepository, type WishlistDb } from "./adapters/kysely-store";

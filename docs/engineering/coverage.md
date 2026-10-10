@@ -48,3 +48,27 @@ Files at 0% lines are barrel re-exports (`src/index.ts`, `src/chart-of-accounts/
 All 13 state-machine definitions under `src/state-machine/machines/` and `registry.ts`/`errors.ts` are at 100%/100%.
 
 Priorities: `money.ts` (A2.4 rounding paths, 113-121) and `chart-of-accounts/spend.ts` (spend-order branches, lowest branch %) first. The tests live in packages/domain, which this task does not own.
+
+## Wave 2 update (2026-10-10, measured by `node tooling/coverage/check.mjs`)
+
+`check.mjs` now also reports `packages/domain/src/<dir>` rows from `coverage-final.json` (distinct
+statement lines hit, branch arms hit; an approximation of the v8 summary) and ratchets them in
+`baseline.json`. The domain gate (90% lines on the package total) is unchanged.
+
+| Domain directory | Lines % | Branches % |
+|---|---:|---:|
+| src/cart | 95.76 | 96.10 |
+| src/catalog | 95.02 | 77.02 |
+| src/inventory | 97.50 | 88.94 |
+| src/sizing | 100 | 98.88 |
+| src/chart-of-accounts | 99.38 | 97.90 |
+| src/state-machine | 98.55 | 98.25 |
+| packages/domain total | 97.69 | 89.20 |
+
+`src/catalog` branch coverage (77.02%) is the weakest. Other package baselines were raised to this
+run's measured values (for example analytics 98.60, outbox 98.56, policy 98.90).
+
+**apps/api: still no data.** Its vitest run ends `2 failed | 976 passed` (a store-identity leak
+assertion in `src/modules/catalog/test/catalog.http.test.ts` and one case in
+`test/authz-matrix.test.ts`), so the script reports NO DATA and apps/api is not in the baseline.
+These tests belong to the catalog owner and are in flux in this wave.

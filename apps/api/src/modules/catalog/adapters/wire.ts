@@ -1,6 +1,6 @@
 import { moneyToWire } from "@outlet/validation";
 import { sha256Hex } from "@outlet/idempotency";
-import type { Issue, PriceBlockInput, Product, PublicSku } from "../domain/catalog-domain";
+import type { Issue, PriceBlockInput, Product, PublicSellerIdentity, PublicSku } from "../domain/catalog-domain";
 import type { PublicProduct } from "../application/products";
 import type { ImportRecord, StockLevel } from "../domain/ports";
 import { errorReportDataUri } from "../application/imports";
@@ -16,6 +16,16 @@ export function priceBlockWire(sku: PublicSku) {
     discount_pct: b.discountPct,
     claim_id: b.claimId,
     installment_quote: null,
+  };
+}
+
+/** Explicit allow-list of the four B5 fields. Never spread the source record. */
+export function sellerIdentityWire(i: PublicSellerIdentity) {
+  return {
+    legal_name: i.legalName,
+    commercial_register_no: i.commercialRegisterNo,
+    tax_card_no: i.taxCardNo,
+    governorate: i.governorate,
   };
 }
 
@@ -62,6 +72,7 @@ export function publicProductWire(p: PublicProduct) {
       ...(v.returnEligibility.reasonCode !== undefined ? { reason_code: v.returnEligibility.reasonCode } : {}),
     },
     seller_legal_identity_visible: v.sellerLegalIdentityVisible,
+    ...(v.sellerIdentity !== null ? { seller_legal_identity: sellerIdentityWire(v.sellerIdentity) } : {}),
     size_chart_available: v.sizeChartAvailable,
     updated_at: iso(v.updatedAtMs),
   };

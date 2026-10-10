@@ -1,5 +1,5 @@
 /** Public surface of the sizing module. Other code imports only this file (A2.3). */
-export { SizingModule } from "./sizing.module";
+export { SizingModule, type SizingModuleOptions } from "./sizing.module";
 export {
   FIELD_CIPHER,
   FIT_CATALOG,
@@ -29,3 +29,10 @@ export type {
   SizingEvent,
   SizingEventPublisher,
 } from "./domain/ports";
+export {
+  KyselyDemandRepository,
+  KyselyFeedbackRepository,
+  KyselySizeChartRepository,
+  KyselySizeProfileRepository,
+  type SizingDb,
+} from "./adapters/kysely-store";

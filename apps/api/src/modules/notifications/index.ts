@@ -1,5 +1,5 @@
 /** Public surface of the notifications module. Other code imports only this file (A2.3). */
-export { NotificationsModule, type NotificationsModuleOptions } from "./notifications.module";
+export { NotificationsModule, type NotificationsModuleOptions, type NotificationsRepositories } from "./notifications.module";
 export {
   HANDLE_DOMAIN_EVENT,
   NOTIFICATION_CONSENT,
@@ -26,3 +26,14 @@ export type {
   SmsProvider,
   WhatsAppProvider,
 } from "./domain/ports";
+export {
+  KyselyDeliveryLogRepository,
+  KyselyFrequencyStore,
+  KyselyInboxRepository,
+  KyselyPreferenceRepository,
+  KyselyPushTokenRepository,
+  KyselyRequestRepository,
+  KyselySuppressionRepository,
+  KyselyTemplateRepository,
+  type NotificationsDb,
+} from "./adapters/kysely-store";

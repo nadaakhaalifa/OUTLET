@@ -200,7 +200,10 @@ export class InMemoryInboxRepository implements InboxRepository {
 export class InMemoryPushTokenRepository implements PushTokenRepository {
   private readonly rows = new Map<string, PushToken & { userId: string; active: boolean }>();
   async upsert(userId: string, token: PushToken): Promise<void> {
-    // Keyed by (user, install): one user can never overwrite another user's registration.
+    // A token is active for at most one user: hand-over deactivates every other active row.
+    for (const [k, r] of this.rows) {
+      if (r.active && r.token === token.token && k !== `${userId}:${token.installId}`) this.rows.set(k, { ...r, active: false });
+    }
     this.rows.set(`${userId}:${token.installId}`, { ...token, userId, active: true });
   }
   async active(userId: string): Promise<readonly PushToken[]> {

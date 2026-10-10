@@ -43,13 +43,16 @@ export interface ProductPage {
 
 /** Every method is tenant scoped by construction: there is no cross-store query except `findById` for the resolver and public read. */
 export interface ProductRepository {
-  /** Inserts the product with all its SKUs atomically. */
-  insert(product: Product): Promise<void>;
+  /**
+   * Inserts the product with all its SKUs atomically. `events` are appended to the outbox in the SAME
+   * transaction (Postgres adapter) so state and events commit or roll back together.
+   */
+  insert(product: Product, events?: readonly CatalogEvent[]): Promise<void>;
   findInStore(storeId: string, id: string): Promise<Product | null>;
   findById(id: string): Promise<Product | null>;
   listByStore(storeId: string, cursor: { readonly createdAtMs: number; readonly id: string } | null, limit: number): Promise<ProductPage>;
-  /** Compare-and-set on `version`. False when another writer won. */
-  replace(next: Product, expectedVersion: number): Promise<boolean>;
+  /** Compare-and-set on `version`. False when another writer won (no events are written then). */
+  replace(next: Product, expectedVersion: number, events?: readonly CatalogEvent[]): Promise<boolean>;
   /** `gtinVariantKey` values of every SKU the store already has. */
   takenGtinVariants(storeId: string): Promise<ReadonlySet<string>>;
 }
@@ -81,6 +84,8 @@ export interface ImportRepository {
   find(id: string): Promise<ImportRecord | null>;
   /** True the first time `(importId, productRef)` is claimed, false on replay. */
   claimProduct(importId: string, productRef: string): Promise<boolean>;
+  /** Records which product a claim produced. Called after the product insert; idempotent. */
+  attachProduct(importId: string, productRef: string, productId: string): Promise<void>;
 }
 
 /** Platform upload store. Returns only uploads that belong to the given store. */

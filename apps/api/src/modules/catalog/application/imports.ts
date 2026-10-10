@@ -67,6 +67,8 @@ export class CreateImport {
     }
 
     // Real run: only fully valid products, each atomically. Referenced taxonomy was resolved by the validator.
+    // The record must exist before any claim (claims reference it); the final save below replaces it.
+    await this.deps.imports.save({ ...base, ...counts, status: "applying" });
     let created = 0;
     for (const p of report.products) {
       if (!(await this.deps.imports.claimProduct(id, p.productRef))) continue;
@@ -74,7 +76,8 @@ export class CreateImport {
       if (refs.issues.length > 0) continue;
       const stillTaken = await this.deps.products.takenGtinVariants(input.storeId);
       if (p.draft.skus.some((s) => s.gtin !== undefined && stillTaken.has(gtinVariantKey(s.gtin, s.color, s.sizeLabel)))) continue;
-      await this.creator.persist(input.storeId, input.actorId, p.draft);
+      const product = await this.creator.persist(input.storeId, input.actorId, p.draft);
+      await this.deps.imports.attachProduct(id, p.productRef, product.id);
       created += 1;
     }
     const status = created === 0 ? "failed" : "completed";

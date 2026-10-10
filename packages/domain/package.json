@@ -7,7 +7,9 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "mutation:inventory": "stryker run stryker.inventory.mjs",
+    "mutation:cart": "stryker run stryker.cart.mjs"
   },
   "devDependencies": {
     "fast-check": "^4.0.0",

@@ -10501,10 +10501,30 @@ components:
                     - p80_history
             seller_legal_identity_visible:
               type: boolean
+            seller_legal_identity:
+              $ref: "#/components/schemas/SellerLegalIdentity"
             size_chart_available:
               type: boolean
             updated_at:
               $ref: "#/components/schemas/Timestamp"
+    SellerLegalIdentity:
+      type: object
+      additionalProperties: false
+      description: Spec B5. Present only when the store is approved and all four fields exist; absent otherwise (then seller_legal_identity_visible is false). No signatory, national id, IBAN or contact data.
+      required:
+        - legal_name
+        - commercial_register_no
+        - tax_card_no
+        - governorate
+      properties:
+        legal_name:
+          type: string
+        commercial_register_no:
+          type: string
+        tax_card_no:
+          type: string
+        governorate:
+          type: string
     PriceHistory:
       type: object
       additionalProperties: false

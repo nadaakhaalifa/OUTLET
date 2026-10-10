@@ -146,6 +146,22 @@ CREATE TABLE seller_size_demand_agg (
   PRIMARY KEY (store_id, product_type, size_label, week_start)
 );
 
+-- Wave 2: the distinct-shopper ledger behind seller_size_demand_agg. One row per (cell, shopper),
+-- so a repeat request can never raise the count (ADV-1). shopper_hash is an HMAC of the user id
+-- under a server-side key (pseudonymous, P2); it never leaves the database and is purged after
+-- 8 weeks by the retention job once the week has been rolled into seller_size_demand_agg.
+CREATE TABLE size_demand_events (
+  store_id      uuid NOT NULL REFERENCES stores (id),
+  product_type  text NOT NULL,
+  size_label    text NOT NULL,
+  week_start    date NOT NULL,
+  shopper_hash  text NOT NULL CHECK (shopper_hash ~ '^[0-9a-f]{64}$'),
+  recorded_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (store_id, product_type, size_label, week_start, shopper_hash)
+);
+CREATE INDEX size_demand_events_week_idx ON size_demand_events (week_start);
+
+
 -- Calibration log (ECE). Pseudonymous rotating id only, never user_id, so it can outlive a deletion.
 -- Monthly partitions are created by the partition job; the default partition catches the rest.
 CREATE TABLE size_recommendation_log (
@@ -167,7 +183,11 @@ CREATE INDEX size_recommendation_log_product_idx ON size_recommendation_log (pro
 
 -- RLS -------------------------------------------------------------------------
 REVOKE ALL ON size_profiles, size_chart_templates, size_charts, fit_feedback, item_fit_flags,
-  seller_size_demand_agg, size_recommendation_log, size_recommendation_log_default FROM PUBLIC;
+  seller_size_demand_agg, size_demand_events, size_recommendation_log, size_recommendation_log_default FROM PUBLIC;
+ALTER TABLE size_demand_events ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT ON size_demand_events TO app_user;
+CREATE POLICY size_demand_events_select ON size_demand_events FOR SELECT USING (app_role() IN ('ops', 'system'));
+CREATE POLICY size_demand_events_insert ON size_demand_events FOR INSERT WITH CHECK (app_role() = 'system');
 
 -- Class A. A soft-deleted profile is hidden from the app roles (RLS.md invariant 7).
 ALTER TABLE size_profiles ENABLE ROW LEVEL SECURITY;

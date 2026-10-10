@@ -120,13 +120,14 @@ describe("quiet hours 23:00 to 09:00", () => {
     expect(new Date(nextQuietEnd(second, Q)).toISOString()).toBe("2027-10-29T07:00:00.000Z");
   });
 
-  it("property: the end of quiet hours is outside quiet hours, not earlier, and within 10 hours", () => {
+  it("property: the end of quiet hours is outside quiet hours, not earlier, and within 11 hours (the repeated DST hour adds one)", () => {
     fc.assert(
       fc.property(fc.integer({ min: Date.UTC(2024, 0, 1), max: Date.UTC(2031, 0, 1) }), (ms) => {
         const end = nextQuietEnd(ms, Q);
         expect(end).toBeGreaterThanOrEqual(ms);
         expect(isInQuietHours(end, Q)).toBe(false);
-        expect(end - ms).toBeLessThanOrEqual(10 * HOUR);
+        // 10 h normally; 11 h from 23:00 EEST on the night DST ends (the 23:00 hour occurs twice).
+        expect(end - ms).toBeLessThanOrEqual(11 * HOUR);
         if (!isInQuietHours(ms, Q)) expect(end).toBe(ms);
       }),
       { numRuns: 2000 },

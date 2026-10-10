@@ -120,3 +120,21 @@ Opt-in rate, delivery rate per channel and provider, suppression reasons, quiet-
 5. `quiet_hours` in the preferences response is read-only platform configuration (the update schema has no field for it).
 6. Recipient contact (phone, email, locale) comes from a `ContactPort`; the users module adapter is not built yet (fake in this module).
 7. Real `ConsentPort` adapter over the privacy module `ConsentRepository` is not possible yet because privacy exports no repository token; the integrator binds `NOTIFICATION_CONSENT`.
+
+## Wave 2: Kysely adapters (persistence)
+
+Adapters: `apps/api/src/modules/notifications/adapters/kysely-store.ts` (templates, requests, delivery log, frequency store, preferences, suppressions, inbox, push tokens). Raw SQL, Zod-parsed rows, one transaction per call under `app.role = system` (ADR-0020). The module still wires the in-memory adapters; the integrator swaps them behind the same ports.
+
+Decisions
+- **FrequencyStore.reserve is atomic in SQL.** `pg_advisory_xact_lock(hashtextextended('notification_frequency:<user>:<channel>'))` is taken, the trailing 7 Cairo day counters are read, `admit` runs, and the counter is incremented, all in one transaction. A row lock cannot do it because the counter row for today may not exist yet; a single conditional insert cannot, because the cap rule is the caller's `admit` callback (domain policy), not a SQL constant. `release` is a guarded decrement (never below 0).
+- **Day granularity.** The table keeps one `marketing_count` per (user, channel, Cairo day). `admit` and `sentTimes` receive synthetic instants (noon UTC of each counted day), which is exact for `frequencyUsage`, the only consumer (it buckets by Cairo date key). `sentTimes(since)` includes the whole Cairo day of `since`.
+- **SMS has no counter** (table CHECK excludes it; SMS has no marketing purpose, ADR-0018). `reserve` on sms returns `admit([])` and records nothing.
+- **claimDue** is one statement: `SELECT ... FOR UPDATE SKIP LOCKED` in a CTE, `UPDATE` to ACCEPTED with `scheduled_for = NULL`, returned oldest first.
+- **insertIfAbsent** is `INSERT ... ON CONFLICT (user_id, template_key, ref) DO NOTHING`, so concurrent duplicates create exactly one request.
+- **Template activation.** The partial unique index allows one active version per (key, channel) (asserted by `migration.test.ts`), so `save` of an active version retires the previous active one in the same transaction. A future-dated `valid_from` therefore cannot be pre-staged beside a live version; scheduled rollout needs a different constraint (reported to the integrator, no migration changed).
+
+Tests: `test/repositories.contract.test.ts` runs one contract suite against the in-memory repositories and the Kysely adapters on PGlite (migrations 0001..0011 and 0018), including a 40-way concurrent reserve that must admit exactly the cap. PGlite is one backend: the concurrency test proves the logic and the cap, not lock behaviour between real sessions; run against PostgreSQL 16 before relying on it.
+
+## Push token ownership
+
+A push token is active for at most one user. Registering a token that is active for another user or install deactivates that registration in the same transaction (partial unique index `notification_push_tokens_active_token_uq` on `md5(token)` where `deactivated_at is null`).

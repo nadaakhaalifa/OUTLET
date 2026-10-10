@@ -19,14 +19,14 @@ Z-OUTLET (spec name HAUL), spec B1 and T6.
 
 | Measure | Count |
 |---|---|
-| Tables | 126 |
-| Fields | 945 |
-| P0 public | 132 |
-| P1 internal | 560 |
-| P2 personal | 224 |
+| Tables | 127 |
+| Fields | 951 |
+| P0 public | 137 |
+| P1 internal | 562 |
+| P2 personal | 223 |
 | P3 sensitive | 29 |
 | Fields flagged VERIFY BEFORE LAUNCH | 191 |
-| Tables derived from spec prose, not named columns | 72 |
+| Tables derived from spec prose, not named columns | 73 |
 | Processors in register | 17 |
 | Processors with DPA status other than signed | 17 |
 
@@ -92,7 +92,7 @@ Opt-in budgets, cycles, instalment commitments and savings goals (spec 12).
 
 Show products and stores, saved searches, favourite stores, carts and wishlists.
 
-- **Data subjects:** `seller_representative`, `shopper`
+- **Data subjects:** `gift_recipient`, `seller_representative`, `shopper`
 - **Lawful basis:** `consent`, `contract`, `legal_obligation` (consent purposes: `personalization`)
 - **PII classes:** `P0`, `P1`, `P2`, `P3` across 170 fields in 18 tables
 - **Tables:** `accessibility_preferences`, `brands`, `cart_lines`, `carts`, `categories`, `product_defects`, `product_media`, `products`, `saved_searches`, `skus`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `user_favorite_stores`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
@@ -150,8 +150,8 @@ Size profiles, measurements, fit feedback and fit model parameters (spec 10).
 
 - **Data subjects:** `minor_profile`, `seller_representative`, `shopper`
 - **Lawful basis:** `consent`, `contract` (consent purposes: `measurements`, `personalization`)
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 69 fields in 10 tables
-- **Tables:** `body_scan_capture`, `fit_feedback`, `fit_model_params`, `item_fit_flags`, `seller_size_demand_agg`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_profiles`, `size_recommendation_log`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 75 fields in 11 tables
+- **Tables:** `body_scan_capture`, `fit_feedback`, `fit_model_params`, `item_fit_flags`, `seller_size_demand_agg`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_demand_events`, `size_profiles`, `size_recommendation_log`
 - **Recipients and processors:** `cloud_primary`, `push_service`
 - **Retention:** `analytics_events` (25 months), `browsing_state` (90 days), `catalog_content` (event-driven (no fixed period)), `measurements` (event-driven (no fixed period)), `on_device_only` (event-driven (no fixed period)), `personalization_data` (24 months)
 - **Residency:** `approved_region`, `device_only`, `global_ok`, `in_country`
@@ -420,7 +420,7 @@ Closed-loop store credit, gift cards and the double-entry ledger (spec B2, T4).
 | `analytics` | 13 | `analytics_events`, `crash_reports` |
 | `personalization` | 32 | `accessibility_preferences`, `fit_model_params`, `outfit_calendar_events`, `outfits`, `style_profiles`, `stylist_feedback`, `wardrobe_items` |
 | `budget_insights` | 21 | `budget_cycles`, `budgets`, `installment_commitments`, `savings_goals` |
-| `measurements` | 35 | `body_scan_capture`, `fit_feedback`, `size_profiles`, `size_recommendation_log` |
+| `measurements` | 41 | `body_scan_capture`, `fit_feedback`, `size_demand_events`, `size_profiles`, `size_recommendation_log` |
 | `location_precise` | 2 | `addresses` |
 | `cross_border_ml` | 8 | `llm_external_calls` |
 
@@ -2148,6 +2148,19 @@ Source: named in the spec (19.1, 10 Privacy). Storage: platform_db. Data subject
 | `week_start` | P0 | fit_sizing | contract | personalization_data | cloud_primary | approved_region | none | aggregate_k50 | not_personal |  |
 | `demand_count` | P0 | fit_sizing | contract | personalization_data | cloud_primary | approved_region | none | aggregate_k50 | not_personal |  |
 
+### `size_demand_events`
+
+Source: derived (confirm when the ERD is final) (19.1, 10 Privacy, docs/specs/sizing.md Wave 2). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `product_type` | P0 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `size_label` | P0 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `week_start` | P0 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `shopper_hash` | P2 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `recorded_at` | P1 | fit_sizing | consent (measurements) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+
 ### `size_recommendation_log`
 
 Source: derived (confirm when the ERD is final) (10 Metrics (ECE)). Storage: platform_db. Data subjects: `shopper`.
@@ -2215,8 +2228,8 @@ Source: derived (confirm when the ERD is final) (B5, 19). Storage: platform_db. 
 | `store_id` | P0 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `legal_name_ar` | P2 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `legal_name_en` | P2 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
-| `commercial_register_no` | P2 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
-| `tax_card_no` | P2 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `commercial_register_no` | P0 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `tax_card_no` | P0 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `governorate` | P0 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `published_at` | P1 | catalog_browse | legal_obligation | catalog_content | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 
@@ -2246,7 +2259,7 @@ Source: derived (confirm when the ERD is final) (3 (new since last visit)). Stor
 
 ### `wishlists`
 
-Source: named in the spec (8 Data (wishlists); migration 0014). Storage: platform_db. Data subjects: `shopper`.
+Source: named in the spec (8 Data (wishlists); migration 0014). Storage: platform_db. Data subjects: `shopper`, `gift_recipient`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|

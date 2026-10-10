@@ -20,6 +20,16 @@ import {
   InMemoryTemplateRepository,
   StaticProviderRegistry,
 } from "./adapters/in-memory";
+import type {
+  DeliveryLogRepository,
+  FrequencyStore,
+  InboxRepository,
+  PreferenceRepository,
+  PushTokenRepository,
+  RequestRepository,
+  SuppressionRepository,
+  TemplateRepository,
+} from "./domain/ports";
 import { seedTemplates } from "./adapters/seed-templates";
 import { NotificationsController } from "./adapters/notifications.controller";
 import {
@@ -50,7 +60,20 @@ import { ListInbox, MarkInboxRead, RegisterPushToken } from "./application/inbox
 import { NotificationPreferences } from "./application/preferences";
 import { ProcessDue, SendNotification } from "./application/send-notification";
 
+export interface NotificationsRepositories {
+  readonly templates: TemplateRepository;
+  readonly requests: RequestRepository;
+  readonly log: DeliveryLogRepository;
+  readonly frequency: FrequencyStore;
+  readonly preferences: PreferenceRepository;
+  readonly suppressions: SuppressionRepository;
+  readonly inbox: InboxRepository;
+  readonly pushTokens: PushTokenRepository;
+}
+
 export interface NotificationsModuleOptions {
+  /** Postgres repositories (KyselyNotifications*). Omitted means the in-memory fixtures. */
+  readonly repositories?: NotificationsRepositories;
   /** Contact returned for users with no explicit entry. Development only; omitted means unknown users are gone. */
   readonly defaultContact?: { readonly locale: "ar" | "en"; readonly phone: string | null; readonly email: string | null };
 }
@@ -59,9 +82,9 @@ export interface NotificationsModuleOptions {
 export class NotificationsModule {
   static forRoot(config: AppConfig, options: NotificationsModuleOptions = {}): DynamicModule {
     if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
-    const templates = new InMemoryTemplateRepository();
-    const seeding = Promise.all(seedTemplates().map((t) => templates.save(t)));
-    void seeding;
+    const r = options.repositories;
+    const templates: TemplateRepository = r?.templates ?? new InMemoryTemplateRepository();
+    if (r === undefined) void Promise.all(seedTemplates().map((t) => templates.save(t)));
     const providers = new StaticProviderRegistry({
       push: [new FakeProvider("expo_push", "push")],
       whatsapp: [new FakeProvider("wa_bsp", "whatsapp")],
@@ -73,13 +96,13 @@ export class NotificationsModule {
       controllers: [NotificationsController],
       providers: [
         { provide: NOTIFICATION_TEMPLATES, useValue: templates },
-        { provide: NOTIFICATION_REQUESTS, useValue: new InMemoryRequestRepository() },
-        { provide: NOTIFICATION_LOG, useValue: new InMemoryDeliveryLog() },
-        { provide: NOTIFICATION_FREQUENCY, useValue: new InMemoryFrequencyStore() },
-        { provide: NOTIFICATION_PREFERENCES_REPO, useValue: new InMemoryPreferenceRepository() },
-        { provide: NOTIFICATION_SUPPRESSIONS, useValue: new InMemorySuppressionRepository() },
-        { provide: NOTIFICATION_INBOX_REPO, useValue: new InMemoryInboxRepository() },
-        { provide: NOTIFICATION_PUSH_TOKENS, useValue: new InMemoryPushTokenRepository() },
+        { provide: NOTIFICATION_REQUESTS, useValue: r?.requests ?? new InMemoryRequestRepository() },
+        { provide: NOTIFICATION_LOG, useValue: r?.log ?? new InMemoryDeliveryLog() },
+        { provide: NOTIFICATION_FREQUENCY, useValue: r?.frequency ?? new InMemoryFrequencyStore() },
+        { provide: NOTIFICATION_PREFERENCES_REPO, useValue: r?.preferences ?? new InMemoryPreferenceRepository() },
+        { provide: NOTIFICATION_SUPPRESSIONS, useValue: r?.suppressions ?? new InMemorySuppressionRepository() },
+        { provide: NOTIFICATION_INBOX_REPO, useValue: r?.inbox ?? new InMemoryInboxRepository() },
+        { provide: NOTIFICATION_PUSH_TOKENS, useValue: r?.pushTokens ?? new InMemoryPushTokenRepository() },
         { provide: NOTIFICATION_CONSENT, useValue: new InMemoryConsentPort() },
         {
           provide: NOTIFICATION_CONTACTS,
@@ -98,14 +121,14 @@ export class NotificationsModule {
             NOTIFICATION_ANALYTICS, CLOCK, ID_GENERATOR,
           ],
           useFactory: (
-            templatesRepo: InMemoryTemplateRepository,
-            requests: InMemoryRequestRepository,
+            templatesRepo: TemplateRepository,
+            requests: RequestRepository,
             log: InMemoryDeliveryLog,
-            frequency: InMemoryFrequencyStore,
-            preferences: InMemoryPreferenceRepository,
-            suppressions: InMemorySuppressionRepository,
-            inbox: InMemoryInboxRepository,
-            tokens: InMemoryPushTokenRepository,
+            frequency: FrequencyStore,
+            preferences: PreferenceRepository,
+            suppressions: SuppressionRepository,
+            inbox: InboxRepository,
+            tokens: PushTokenRepository,
             consent: InMemoryConsentPort,
             contacts: InMemoryContactPort,
             registry: StaticProviderRegistry,
@@ -122,20 +145,20 @@ export class NotificationsModule {
         {
           provide: PROCESS_DUE_NOTIFICATIONS,
           inject: [NOTIFICATION_REQUESTS, SEND_NOTIFICATION, CLOCK],
-          useFactory: (r: InMemoryRequestRepository, s: SendNotification, c: Clock) => new ProcessDue(r, s, c),
+          useFactory: (r: RequestRepository, s: SendNotification, c: Clock) => new ProcessDue(r, s, c),
         },
         {
           provide: HANDLE_DOMAIN_EVENT,
           inject: [NOTIFICATION_INBOX_PROCESSED, SEND_NOTIFICATION, NOTIFICATION_SUPPRESSIONS],
-          useFactory: (p: InMemoryInboxProcessed, s: SendNotification, sup: InMemorySuppressionRepository) =>
+          useFactory: (p: InMemoryInboxProcessed, s: SendNotification, sup: SuppressionRepository) =>
             new HandleDomainEvent(p, s, sup),
         },
         {
           provide: NOTIFICATION_PREFERENCES,
           inject: [NOTIFICATION_PREFERENCES_REPO, NOTIFICATION_SUPPRESSIONS, NOTIFICATION_CONSENT, CLOCK],
           useFactory: (
-            p: InMemoryPreferenceRepository,
-            s: InMemorySuppressionRepository,
+            p: PreferenceRepository,
+            s: SuppressionRepository,
             c: InMemoryConsentPort,
             clock: Clock,
           ) => new NotificationPreferences(p, s, c, clock),
@@ -143,17 +166,17 @@ export class NotificationsModule {
         {
           provide: LIST_INBOX,
           inject: [NOTIFICATION_INBOX_REPO, CLOCK],
-          useFactory: (i: InMemoryInboxRepository, c: Clock) => new ListInbox(i, c),
+          useFactory: (i: InboxRepository, c: Clock) => new ListInbox(i, c),
         },
         {
           provide: MARK_INBOX_READ,
           inject: [NOTIFICATION_INBOX_REPO, CLOCK],
-          useFactory: (i: InMemoryInboxRepository, c: Clock) => new MarkInboxRead(i, c),
+          useFactory: (i: InboxRepository, c: Clock) => new MarkInboxRead(i, c),
         },
         {
           provide: REGISTER_PUSH_TOKEN,
           inject: [NOTIFICATION_PUSH_TOKENS, CLOCK],
-          useFactory: (t: InMemoryPushTokenRepository, c: Clock) => new RegisterPushToken(t, c),
+          useFactory: (t: PushTokenRepository, c: Clock) => new RegisterPushToken(t, c),
         },
       ],
       exports: [SEND_NOTIFICATION, HANDLE_DOMAIN_EVENT, PROCESS_DUE_NOTIFICATIONS],

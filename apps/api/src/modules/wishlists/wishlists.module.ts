@@ -3,6 +3,7 @@ import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock } from "../../platform/ports";
 import { CLOCK, CSPRNG, ID_GENERATOR } from "../../platform/tokens";
+import type { WishlistRepository } from "./domain/ports";
 import type { Csprng } from "@outlet/auth-core";
 import type { IdGenerator } from "../../platform/ports";
 import {
@@ -47,6 +48,8 @@ import {
 export interface WishlistsModuleOptions {
   /** Public base of share links, without a trailing slash. */
   readonly shareBaseUrl?: string;
+  /** Replaces the in-memory repository (e.g. KyselyWishlistRepository) once persistence is wired. */
+  readonly repository?: WishlistRepository;
 }
 
 const DEFAULT_SHARE_BASE_URL = "https://outletnk.invalid/w";
@@ -60,70 +63,70 @@ export class WishlistsModule {
       module: WishlistsModule,
       controllers: [WishlistsController],
       providers: [
-        { provide: WISHLIST_REPOSITORY, useValue: new InMemoryWishlistRepository() },
+        { provide: WISHLIST_REPOSITORY, useValue: options.repository ?? new InMemoryWishlistRepository() },
         { provide: WISHLIST_CATALOG, useValue: new InMemoryCatalogRead() },
         { provide: WISHLIST_OWNER_PROFILES, useValue: new InMemoryOwnerProfiles() },
         { provide: WISHLIST_EVENTS, useValue: new InMemoryWishlistEventLog() },
         {
           provide: WISHLIST_RESOLVER,
           inject: [WISHLIST_REPOSITORY],
-          useFactory: (r: InMemoryWishlistRepository) => new WishlistResourceResolver(r),
+          useFactory: (r: WishlistRepository) => new WishlistResourceResolver(r),
         },
         {
           provide: CREATE_WISHLIST,
           inject: [WISHLIST_REPOSITORY, CLOCK, ID_GENERATOR],
-          useFactory: (r: InMemoryWishlistRepository, c: Clock, ids: IdGenerator) =>
+          useFactory: (r: WishlistRepository, c: Clock, ids: IdGenerator) =>
             new CreateWishlist(r, c, ids),
         },
         {
           provide: LIST_WISHLISTS,
           inject: [WISHLIST_REPOSITORY, CLOCK],
-          useFactory: (r: InMemoryWishlistRepository, c: Clock) => new ListWishlists(r, c),
+          useFactory: (r: WishlistRepository, c: Clock) => new ListWishlists(r, c),
         },
         {
           provide: WISHLIST_DETAILS,
           inject: [WISHLIST_REPOSITORY, WISHLIST_CATALOG, CLOCK],
-          useFactory: (r: InMemoryWishlistRepository, cat: InMemoryCatalogRead, c: Clock) =>
+          useFactory: (r: WishlistRepository, cat: InMemoryCatalogRead, c: Clock) =>
             new WishlistDetails(r, cat, c),
         },
         {
           provide: UPDATE_WISHLIST,
           inject: [WISHLIST_REPOSITORY, WISHLIST_DETAILS, CLOCK],
-          useFactory: (r: InMemoryWishlistRepository, d: WishlistDetails, c: Clock) => new UpdateWishlist(r, d, c),
+          useFactory: (r: WishlistRepository, d: WishlistDetails, c: Clock) => new UpdateWishlist(r, d, c),
         },
         {
           provide: DELETE_WISHLIST,
           inject: [WISHLIST_REPOSITORY],
-          useFactory: (r: InMemoryWishlistRepository) => new DeleteWishlist(r),
+          useFactory: (r: WishlistRepository) => new DeleteWishlist(r),
         },
         {
           provide: ADD_WISHLIST_ITEM,
           inject: [WISHLIST_REPOSITORY, WISHLIST_CATALOG, CLOCK, ID_GENERATOR],
-          useFactory: (r: InMemoryWishlistRepository, cat: InMemoryCatalogRead, c: Clock, ids: IdGenerator) =>
+          useFactory: (r: WishlistRepository, cat: InMemoryCatalogRead, c: Clock, ids: IdGenerator) =>
             new AddWishlistItem(r, cat, c, ids),
         },
         {
           provide: REMOVE_WISHLIST_ITEM,
           inject: [WISHLIST_REPOSITORY],
-          useFactory: (r: InMemoryWishlistRepository) => new RemoveWishlistItem(r),
+          useFactory: (r: WishlistRepository) => new RemoveWishlistItem(r),
         },
         {
           provide: CREATE_SHARE_LINK,
           inject: [WISHLIST_REPOSITORY, CLOCK, CSPRNG, WISHLIST_EVENTS],
-          useFactory: (r: InMemoryWishlistRepository, c: Clock, rng: Csprng, ev: InMemoryWishlistEventLog) =>
+          useFactory: (r: WishlistRepository, c: Clock, rng: Csprng, ev: InMemoryWishlistEventLog) =>
             new CreateShareLink(r, c, rng, ev, baseUrl),
         },
         {
           provide: REVOKE_SHARE_LINK,
           inject: [WISHLIST_REPOSITORY, CLOCK, WISHLIST_EVENTS],
-          useFactory: (r: InMemoryWishlistRepository, c: Clock, ev: InMemoryWishlistEventLog) =>
+          useFactory: (r: WishlistRepository, c: Clock, ev: InMemoryWishlistEventLog) =>
             new RevokeShareLink(r, c, ev),
         },
         {
           provide: GET_SHARED_WISHLIST,
           inject: [WISHLIST_REPOSITORY, WISHLIST_CATALOG, WISHLIST_OWNER_PROFILES, CLOCK],
           useFactory: (
-            r: InMemoryWishlistRepository,
+            r: WishlistRepository,
             cat: InMemoryCatalogRead,
             o: InMemoryOwnerProfiles,
             c: Clock,
@@ -132,12 +135,12 @@ export class WishlistsModule {
         {
           provide: HANDLE_CATALOG_SIGNAL,
           inject: [WISHLIST_REPOSITORY, WISHLIST_EVENTS],
-          useFactory: (r: InMemoryWishlistRepository, ev: InMemoryWishlistEventLog) => new HandleCatalogSignal(r, ev),
+          useFactory: (r: WishlistRepository, ev: InMemoryWishlistEventLog) => new HandleCatalogSignal(r, ev),
         },
         {
           provide: SCHEDULE_DATE_ALERTS,
           inject: [WISHLIST_REPOSITORY, WISHLIST_EVENTS, CLOCK],
-          useFactory: (r: InMemoryWishlistRepository, ev: InMemoryWishlistEventLog, c: Clock) =>
+          useFactory: (r: WishlistRepository, ev: InMemoryWishlistEventLog, c: Clock) =>
             new ScheduleDateAlerts(r, ev, c),
         },
       ],

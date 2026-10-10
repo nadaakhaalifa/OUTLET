@@ -9,3 +9,4 @@ export {
 } from "./adapters/tokens";
 export type { ApplySellerKycEvent, ChangeStoreStatus } from "./application/seller-lifecycle";
 export type { Store } from "./domain/store";
+export { SYSTEM_SESSION as STORES_SYSTEM_SESSION, type StoresDb } from "./adapters/kysely";

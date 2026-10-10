@@ -326,7 +326,14 @@ describe("GET /v1/products/{id} public read model", () => {
     expect(r.body.seller_legal_identity_visible).toBe(true);
     expect(r.body.images).toHaveLength(1);
     expect(r.body).not.toHaveProperty("defect_photos");
-    expect(JSON.stringify(r.body)).not.toMatch(/Legal store-a|CR-1|TC-1|iban/i);
+    // CPL 181/2018 (B5): the public PDP carries exactly the four legal identity fields, never bank details.
+    expect(Object.keys(r.body.seller_legal_identity as Record<string, unknown>).sort()).toEqual([
+      "commercial_register_no",
+      "governorate",
+      "legal_name",
+      "tax_card_no",
+    ]);
+    expect(JSON.stringify(r.body)).not.toMatch(/iban/i);
   });
 
   it("passes through a complete verified claim only", async () => {
@@ -406,6 +413,7 @@ describe("GET /v1/products/{id} public read model", () => {
     h.fixtures.stores.set({ ...profile, legal: { ...profile.legal, taxCardNo: "" } });
     const r = await h.http().get(`/v1/products/${p.id}`).set(bearer(PRINCIPALS.buyer));
     expect(r.body.seller_legal_identity_visible).toBe(false);
+    expect(r.body).not.toHaveProperty("seller_legal_identity");
     h.fixtures.stores.set(profile);
   });
 });
