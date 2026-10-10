@@ -165,7 +165,7 @@ All money fields are decimal strings of integer piastres (converted to `bigint` 
 | Endpoint | Auth scope | Idempotent | Rate limit | Notes |
 |---|---|---|---|---|
 | `GET /v1/products/{id}/price-evidence` | public | n/a (read) | per IP, cached | Returns tier, display kind, reference label and amount, percentage, history summary, evidence class names only. Never returns seller ids, store URLs, document content, tokens, or reason codes of violations. |
-| `GET /v1/skus/{id}/price-history` | public | read | per IP, cached | Own-platform purchasable price intervals, last 30 days only. |
+| `GET /v1/products/{id}/price-history` | public | read | per IP, cached | Own-platform purchasable price intervals, last 30 days only. |
 | `POST /v1/seller/channels` | seller, store-scoped | yes (`Idempotency-Key`) | low | Starts OAuth/API-key connection. Domain must be seller-verified. |
 | `DELETE /v1/seller/channels/{id}` | seller | yes | low | Disconnect. Evidence from it expires from claims on next evaluation. |
 | `POST /v1/seller/price-evidence` | seller | yes | low | Upload structured document evidence (file hash plus fields). Stored private. |

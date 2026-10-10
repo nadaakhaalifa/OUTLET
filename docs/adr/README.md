@@ -21,6 +21,7 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0015](0015-ci-provenance-and-signing.md) | CI provenance, signing and quality gates | Proposed | Owner approval; Sigstore residency question and the SLSA level claim |
 | [0016](0016-environments-and-iac-layout.md) | Environments and infrastructure-as-code layout | Proposed | ADR-0002 (region and provider); orchestrator choice |
 | [0017](0017-observability-stack.md) | Observability stack: OpenTelemetry with a self-hosted or managed backend | Proposed | Owner approval; ADR-0002 for telemetry residency |
+| [0018](0018-vocabulary-reconciliation.md) | Authoritative vocabularies: OrderGroup states, consent purposes, price-history path, ledger owners | Proposed | Owner confirmation; SMS marketing purpose decision |
 
 
 ## Convention

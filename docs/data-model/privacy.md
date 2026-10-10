@@ -6,7 +6,7 @@ Phase 0 (consent core) and Phase 1 (Privacy Center, DSAR, DPO console) · Spec r
 Consent is captured per purpose, versioned and withdrawable in one tap. A data export or deletion request becomes a `dsar_requests` row that runs as a saga: collect from every module's registered exporter, build the ZIP, issue a signed URL. Deletion waits 14 days (cooling), then each module erases or pseudonymizes through its registered `Eraser` port.
 
 ## Rules
-- Purposes (spec §B1): `marketing_push`, `marketing_whatsapp`, `marketing_email`, `analytics`, `personalization`, `budget_insights`, `measurements`, `location_precise`, `cross_border_ml`. SMS marketing has no purpose in the spec (I-06): added here as `marketing_sms` pending owner confirmation.
+- Purposes (spec §B1): `marketing_push`, `marketing_whatsapp`, `marketing_email`, `analytics`, `personalization`, `budget_insights`, `measurements`, `location_precise`, `cross_border_ml`. There is no SMS marketing purpose and none is added (ADR-0018, I-06): SMS is transactional only until the owner adds a purpose to spec B1.
 - Consent is never pre-ticked. SDKs initialise only after the matching consent.
 - Consent history is append-only. The current state is a projection (`consents_current`).
 - Deletion is blocked while orders, returns or disputes are open, and the UI shows the exact reasons.

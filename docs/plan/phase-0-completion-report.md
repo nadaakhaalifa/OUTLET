@@ -124,7 +124,7 @@ Each item is a recorded discrepancy. I did not fix other agents' files.
 3. Funds flow and licensing (open questions 3 and 4, VR-03, VR-22): who holds money, store credit scope, collection and payout licensing. Blocks payouts, wallet and BNPL design.
 4. Refund deadline basis and return windows (ADR-0009, VR-07, I-27, I-83). Blocks order CLOSED and payout eligibility.
 5. Age gates: majority age, 18-20 capacity, DOB-before-OTP ordering, under-18 server signal (ADR-0012, VR-08).
-6. Authoritative vocabularies: consent purposes (openapi vs B1), OrderGroup states, price-history path, ledger owner types. Needs an owner or architect ruling, then one reconciliation pass.
+6. Authoritative vocabularies: consent purposes, OrderGroup states, price-history path, ledger owner types. Reconciled in ADR-0018 (Proposed, applied as the safe default: code wins, else the master prompt). Remaining: the seller/store and shopper/user mapping has no adapter or test yet.
 7. Tax and accounting: VAT treatment for gift cards, coins, discounts, commission, credit notes; ETA flow (I-11, I-38).
 8. Dual-approval thresholds for refunds and payouts (policy package fail-closed placeholders).
 9. DPO and deputy appointment, on-call rota, breach runbook language and PDPC channel.

@@ -2320,7 +2320,7 @@ paths:
       tags:
         - Catalog
       summary: Own-platform price history, last 30 days
-      description: "Public. docs/specs/price-integrity.md names GET /v1/skus/{id}/price-history for the same data; this skeleton follows the master prompt path. OWNER DECISION: pick one."
+      description: "Public. Path fixed by master prompt section 5 and ADR-0018; docs/specs/price-integrity.md now uses the same path."
       parameters:
         - name: productId
           in: path
@@ -9626,13 +9626,14 @@ components:
               purpose:
                 type: string
                 enum:
-                  - analytics
-                  - personalization
                   - marketing_push
                   - marketing_whatsapp
-                  - marketing_sms
                   - marketing_email
+                  - analytics
+                  - personalization
+                  - budget_insights
                   - measurements
+                  - location_precise
                   - cross_border_ml
               granted:
                 type: boolean
@@ -9659,13 +9660,14 @@ components:
               purpose:
                 type: string
                 enum:
-                  - analytics
-                  - personalization
                   - marketing_push
                   - marketing_whatsapp
-                  - marketing_sms
                   - marketing_email
+                  - analytics
+                  - personalization
+                  - budget_insights
                   - measurements
+                  - location_precise
                   - cross_border_ml
               granted:
                 type: boolean
@@ -11483,12 +11485,15 @@ components:
         status:
           type: string
           enum:
-            - pending_payment
-            - awaiting_customer_action
+            - created
+            - reserved
+            - payment_pending
             - paid
             - confirmed_cod
-            - failed
+            - fulfilling
+            - completed
             - expired
+            - failed
             - cancelled
         payment_method:
           $ref: "#/components/schemas/PaymentMethodCode"
@@ -11516,7 +11521,7 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
-      description: Status values are a proposed projection of the OrderGroup state machine; reconcile with packages/domain before freezing.
+      description: Status values are the lowercase form of ORDER_GROUP_STATES in packages/domain (authoritative, ADR-0018). A pending 3-DS or redirect step is expressed by the checkout response client_action, not by a status.
     OrderCancelRequest:
       type: object
       additionalProperties: false

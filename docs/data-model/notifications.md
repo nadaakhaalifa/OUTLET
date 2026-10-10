@@ -6,7 +6,7 @@ Phase 1 (transactional, push, in-app inbox, WhatsApp templates, preferences) and
 A module emits a domain event or calls the notification port with a `trigger`, a recipient and a payload. The module resolves the template (versioned, Arabic first with EN fallback), the channel, the preference and consent, applies frequency caps and quiet hours (Africa/Cairo, 23:00 to 09:00, transactional exempt), writes a `notification_messages` row and a send job, calls the provider (Expo push, WhatsApp BSP, SMS, email), and records delivery receipts. Journeys (welcome, first purchase, win-back, trial conversion) enrol users and schedule steps.
 
 ## Rules
-- **Marketing requires consent per channel** (`marketing_push`, `marketing_whatsapp`, `marketing_email`, and SMS under the added `marketing_sms` purpose, privacy I-06). Transactional messages do not need marketing consent.
+- **Marketing requires consent per channel** (`marketing_push`, `marketing_whatsapp`, `marketing_email`; SMS is transactional only, there is no SMS marketing purpose, ADR-0018). Transactional messages do not need marketing consent.
 - Frequency caps: marketing at most 1 push per day and 3 per week. Bag reminder once. Caps are config rows.
 - Quiet hours 23:00 to 09:00 Africa/Cairo for marketing. Transactional (order lifecycle, OTP, refunds) exempt.
 - Triggers: followed-store drops, verified price drops, back in size, payday budget reset (message must not contain budget amounts in the payload to providers), stylist, waitlist turn, order lifecycle, refunds, coins expiring, monthly budget report, Plus renewal with savings.
