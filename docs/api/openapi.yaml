@@ -6277,6 +6277,53 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         default:
           $ref: "#/components/responses/Default"
+  /v1/seller/size-demand:
+    get:
+      operationId: getSellerSizeDemand
+      tags:
+        - Seller Catalog
+      summary: Aggregated size demand for my store
+      description: "Weekly size demand per product type and size label, suppressed below the k-anonymity floor (min_cell_size, 50). Derived from docs/data-model/sizing.md; sellers never see individual measurements."
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:catalog.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §10 Privacy (k >= 50), §19.1
+      x-derived: true
+      responses:
+        "200":
+          description: A page of results.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SizeDemand"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
   /v1/seller/catalog/imports:
     post:
       operationId: createSellerCatalogImport
@@ -10178,6 +10225,8 @@ components:
                   type: string
                 tax_id:
                   type: string
+                governorate:
+                  type: string
               description: "Seller legal identity shown per B5. VERIFY BEFORE LAUNCH: exact fields required by Law 181/2018."
             free_delivery_threshold:
               $ref: "#/components/schemas/Money"
@@ -10217,6 +10266,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StoreSummary"
+        hidden:
+          type: array
+          description: Favourites that are not shown (suspended or unavailable), with the reason.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - store_id
+              - reason
+              - message
+            properties:
+              store_id:
+                $ref: "#/components/schemas/Uuid"
+              reason:
+                type: string
+                enum:
+                  - suspended
+                  - unavailable
+              message:
+                $ref: "#/components/schemas/LocalizedText"
     NewCounts:
       type: object
       additionalProperties: false
@@ -14337,6 +14406,20 @@ components:
             $ref: "#/components/schemas/StoreSummary"
         page:
           $ref: "#/components/schemas/PageInfo"
+        hint:
+          type: object
+          additionalProperties: false
+          description: Present only for an empty My Stores scope; suggests widening the world.
+          required:
+            - kind
+            - suggested_world
+          properties:
+            kind:
+              type: string
+              const: widen_world
+            suggested_world:
+              type: string
+              const: everything
     SavedSearchPage:
       type: object
       additionalProperties: false
@@ -14476,6 +14559,37 @@ components:
             $ref: "#/components/schemas/SellerProduct"
         page:
           $ref: "#/components/schemas/PageInfo"
+    SizeDemand:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - min_cell_size
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - product_type
+              - size_label
+              - week
+              - demand_count
+            properties:
+              product_type:
+                type: string
+              size_label:
+                type: string
+              week:
+                type: string
+                description: ISO week start date (Africa/Cairo).
+              demand_count:
+                type: integer
+                minimum: 50
+        min_cell_size:
+          type: integer
+          description: k-anonymity floor; cells below it are never returned.
     SizeChartPage:
       type: object
       additionalProperties: false

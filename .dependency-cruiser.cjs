@@ -51,7 +51,8 @@ module.exports = {
       name: "no-api-module-deep-import-from-outside",
       severity: "error",
       comment: "Code outside apps/api/src/modules must also use a module's public index.ts only.",
-      from: { path: "^apps/api/src/", pathNot: "^apps/api/src/modules/" },
+      // Independent adversarial suites (adversarial.*.test.ts) probe module internals on purpose.
+      from: { path: "^apps/api/src/", pathNot: ["^apps/api/src/modules/", "^apps/api/src/adversarial\\.[^/]+\\.test\\.ts$"] },
       to: { path: "^apps/api/src/modules/[^/]+/", pathNot: "^apps/api/src/modules/[^/]+/index\\.ts$" },
     },
 

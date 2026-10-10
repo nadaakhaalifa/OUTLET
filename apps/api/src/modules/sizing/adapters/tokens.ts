@@ -1,0 +1,21 @@
+export const SIZE_PROFILE_REPOSITORY = Symbol("sizing.SizeProfileRepository");
+export const SIZE_CHART_REPOSITORY = Symbol("sizing.SizeChartRepository");
+export const FIT_FEEDBACK_REPOSITORY = Symbol("sizing.FeedbackRepository");
+export const SIZE_DEMAND_REPOSITORY = Symbol("sizing.DemandRepository");
+export const FIELD_CIPHER = Symbol("sizing.FieldCipherPort");
+export const MEASUREMENTS_CONSENT = Symbol("sizing.MeasurementsConsentPort");
+export const FIT_CATALOG = Symbol("sizing.FitCatalogPort");
+export const ORDER_LINE_FIT = Symbol("sizing.OrderLineFitPort");
+export const SIZING_EVENTS = Symbol("sizing.SizingEventPublisher");
+export const SIZING_STORE_RESOLVER = Symbol("sizing.StoreResourceResolver");
+
+export const CREATE_SIZE_PROFILE = Symbol("sizing.CreateSizeProfile");
+export const LIST_SIZE_PROFILES = Symbol("sizing.ListSizeProfiles");
+export const GET_SIZE_PROFILE = Symbol("sizing.GetSizeProfile");
+export const UPDATE_SIZE_PROFILE = Symbol("sizing.UpdateSizeProfile");
+export const DELETE_SIZE_PROFILE = Symbol("sizing.DeleteSizeProfile");
+export const RECOMMEND_FIT = Symbol("sizing.RecommendFit");
+export const SUBMIT_FIT_FEEDBACK = Symbol("sizing.SubmitFitFeedback");
+export const CREATE_SIZE_CHART = Symbol("sizing.CreateSizeChart");
+export const LIST_SIZE_CHARTS = Symbol("sizing.ListSizeCharts");
+export const GET_SIZE_DEMAND = Symbol("sizing.GetSizeDemand");

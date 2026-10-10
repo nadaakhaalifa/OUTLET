@@ -23,6 +23,7 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0017](0017-observability-stack.md) | Observability stack: OpenTelemetry with a self-hosted or managed backend | Proposed | Owner approval; ADR-0002 for telemetry residency |
 | [0018](0018-vocabulary-reconciliation.md) | Authoritative vocabularies: OrderGroup states, consent purposes, price-history path, ledger owners | Proposed | Owner confirmation; SMS marketing purpose decision |
 | [0019](0019-mutation-policy-and-phase-exit.md) | Mutation-testing policy (per-module floors with ratchet) and Phase 0 exit rule | Proposed | Owner confirmation |
+| [0020](0020-persistence-adapters.md) | Persistence adapters on Kysely: typing approach, unit of work, RLS session | Proposed | Tech Lead confirmation |
 
 
 ## Convention

@@ -6,10 +6,10 @@ Master prompt A2.10: every endpoint has an integration test including a negative
 
 ## Numbers
 
-- OpenAPI operations: 159
-- Implemented in `apps/api`: 16 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 18 registered routes
-- Not yet implemented: 143
-- Covered by the matrix: 18 of 18 registered routes
+- OpenAPI operations: 160
+- Implemented in `apps/api`: 61 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 63 registered routes
+- Not yet implemented: 99
+- Covered by the matrix: 63 of 63 registered routes
 
 ## What each row is checked for
 
@@ -47,6 +47,51 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/me/sessions/:sessionId` | resource: session read | yes (404 for foreign) | yes |
 | `GET /v1/health` | public (probe, not in OpenAPI) | - | yes |
 | `GET /v1/ready` | public (probe, not in OpenAPI) | - | yes |
+| `GET /v1/stores` | self | - | yes |
+| `GET /v1/stores/:storeId` | self | - (404 for hidden or missing) | yes |
+| `GET /v1/me/favorite-stores` | self | - | yes |
+| `PUT /v1/me/favorite-stores` | self (If-Match) | - | yes |
+| `GET /v1/me/favorite-stores/new-counts` | self | - | yes |
+| `POST /v1/me/favorite-stores/:storeId/seen` | self | yes (404 for a store the caller does not follow) | yes |
+| `GET /v1/me/wishlists` | self | - | yes |
+| `POST /v1/me/wishlists` | self | - | yes |
+| `GET /v1/me/wishlists/:wishlistId` | resource: wishlist read | yes (404 for foreign) | yes |
+| `PATCH /v1/me/wishlists/:wishlistId` | resource: wishlist update (If-Match) | yes (404 for foreign) | yes |
+| `DELETE /v1/me/wishlists/:wishlistId` | resource: wishlist delete | yes (404 for foreign) | yes |
+| `POST /v1/wishlists/:wishlistId/items` | resource: wishlist update | yes (404 for foreign) | yes |
+| `DELETE /v1/wishlists/:wishlistId/items/:itemId` | resource: wishlist update | yes (404 for foreign) | yes |
+| `POST /v1/me/wishlists/:wishlistId/share` | resource: wishlist update | yes (404 for foreign) | yes |
+| `DELETE /v1/me/wishlists/:wishlistId/share` | resource: wishlist update | yes (404 for foreign) | yes |
+| `GET /v1/shared/wishlists/:token` | public (unguessable token, rate limited, fails closed) | - (404 for unknown, revoked or expired) | yes |
+| `GET /v1/cart` | self | - | yes |
+| `POST /v1/cart/lines` | self (Idempotency-Key) | - | yes |
+| `PATCH /v1/cart/lines/:lineId` | resource: cart update (If-Match) | yes (404 for foreign) | yes |
+| `DELETE /v1/cart/lines/:lineId` | resource: cart delete | yes (404 for foreign) | yes |
+| `GET /v1/cart/free-delivery-suggestions` | self | - | yes |
+| `GET /v1/me/size-profiles` | self | - | yes |
+| `POST /v1/me/size-profiles` | self | - | yes |
+| `GET /v1/me/size-profiles/:profileId` | self (owner-scoped repository) | yes (404 for foreign) | yes |
+| `PATCH /v1/me/size-profiles/:profileId` | self (owner-scoped repository, If-Match) | yes (404 for foreign) | yes |
+| `DELETE /v1/me/size-profiles/:profileId` | self (owner-scoped repository) | yes (404 for foreign) | yes |
+| `GET /v1/fit/recommend` | self (owner-scoped profile) | yes (404 for another user's profile) | yes |
+| `GET /v1/products/:productId/fit` | self (owner-scoped profile) | yes (404 for another user's profile) | yes |
+| `POST /v1/orders/lines/:orderLineId/fit-feedback` | self (Idempotency-Key) | yes (404 for another user's line) | yes |
+| `GET /v1/me/notification-preferences` | self | - | yes |
+| `PATCH /v1/me/notification-preferences` | self (If-Match) | - | yes |
+| `PUT /v1/me/devices/push-token` | self | - (keyed by user and install id) | yes |
+| `GET /v1/me/notifications` | self | - | yes |
+| `POST /v1/me/notifications/read` | self | yes (404 for any foreign id, nothing marked) | yes |
+| `GET /v1/products/:productId` | self (shopper audience) | - (404 for non-active or hidden store) | yes |
+| `GET /v1/seller/products` | self + store policy `store_product:read` (seller_api) | - | yes |
+| `POST /v1/seller/products` | self + store policy `store_product:create` (seller_api, Idempotency-Key) | - | yes |
+| `GET /v1/seller/products/:productId` | resource: store_product read (seller_api) | yes (404 for another store) | yes |
+| `PATCH /v1/seller/products/:productId` | resource: store_product update (seller_api, If-Match) | yes (404 for another store) | yes |
+| `POST /v1/seller/catalog/imports` | self + store policy `store_product:create` (seller_api, Idempotency-Key) | - | yes |
+| `GET /v1/seller/catalog/imports/:importId` | resource: store_product read (seller_api) | yes (404 for another store) | yes |
+| `PUT /v1/seller/skus/:skuId/stock` | resource: store_inventory update (seller_api, Idempotency-Key) | yes (404 for another store's SKU) | yes |
+| `GET /v1/seller/size-charts` | resource: store_product read (seller_api) | - (store from the brand grant) | yes |
+| `POST /v1/seller/size-charts` | resource: store_product create (seller_api) | - (store from the brand grant) | yes |
+| `GET /v1/seller/size-demand` | resource: store_product read (seller_api) | - (store from the brand grant) | yes |
 
 ## Not yet implemented (in OpenAPI, no controller)
 
@@ -64,12 +109,6 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/me/addresses/:addressId` |
 | `PATCH /v1/me/addresses/:addressId` |
 | `DELETE /v1/me/addresses/:addressId` |
-| `GET /v1/stores` |
-| `GET /v1/stores/:storeId` |
-| `PUT /v1/me/favorite-stores` |
-| `GET /v1/me/favorite-stores` |
-| `GET /v1/me/favorite-stores/new-counts` |
-| `POST /v1/me/favorite-stores/:storeId/seen` |
 | `GET /v1/search` |
 | `GET /v1/search/suggestions` |
 | `POST /v1/search/parse` |
@@ -78,24 +117,10 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/me/saved-searches/:savedSearchId` |
 | `PATCH /v1/me/saved-searches/:savedSearchId` |
 | `DELETE /v1/me/saved-searches/:savedSearchId` |
-| `GET /v1/products/:productId` |
 | `GET /v1/products/:productId/price-history` |
 | `GET /v1/products/:productId/price-evidence` |
-| `GET /v1/products/:productId/fit` |
 | `POST /v1/products/:productId/alerts` |
 | `POST /v1/products/:productId/price-reports` |
-| `GET /v1/me/size-profiles` |
-| `POST /v1/me/size-profiles` |
-| `GET /v1/me/size-profiles/:profileId` |
-| `PATCH /v1/me/size-profiles/:profileId` |
-| `DELETE /v1/me/size-profiles/:profileId` |
-| `GET /v1/fit/recommend` |
-| `POST /v1/orders/lines/:orderLineId/fit-feedback` |
-| `GET /v1/cart` |
-| `POST /v1/cart/lines` |
-| `PATCH /v1/cart/lines/:lineId` |
-| `DELETE /v1/cart/lines/:lineId` |
-| `GET /v1/cart/free-delivery-suggestions` |
 | `POST /v1/checkout/quote` |
 | `POST /v1/checkout` |
 | `GET /v1/order-groups/:orderGroupId` |
@@ -103,16 +128,6 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `POST /v1/seller-orders/:sellerOrderId/cancel` |
 | `POST /v1/webhooks/:provider` |
 | `POST /v1/webhooks/couriers/:courier` |
-| `GET /v1/me/wishlists` |
-| `POST /v1/me/wishlists` |
-| `GET /v1/me/wishlists/:wishlistId` |
-| `PATCH /v1/me/wishlists/:wishlistId` |
-| `DELETE /v1/me/wishlists/:wishlistId` |
-| `POST /v1/wishlists/:wishlistId/items` |
-| `DELETE /v1/wishlists/:wishlistId/items/:itemId` |
-| `POST /v1/me/wishlists/:wishlistId/share` |
-| `DELETE /v1/me/wishlists/:wishlistId/share` |
-| `GET /v1/shared/wishlists/:token` |
 | `GET /v1/me/wallet` |
 | `GET /v1/me/wallet/transactions` |
 | `GET /v1/me/referral` |
@@ -137,16 +152,7 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/seller/team` |
 | `POST /v1/seller/team` |
 | `DELETE /v1/seller/team/:memberId` |
-| `GET /v1/seller/products` |
-| `POST /v1/seller/products` |
-| `GET /v1/seller/products/:productId` |
-| `PATCH /v1/seller/products/:productId` |
 | `PUT /v1/seller/skus/:skuId/price` |
-| `PUT /v1/seller/skus/:skuId/stock` |
-| `GET /v1/seller/size-charts` |
-| `POST /v1/seller/size-charts` |
-| `POST /v1/seller/catalog/imports` |
-| `GET /v1/seller/catalog/imports/:importId` |
 | `GET /v1/seller/orders` |
 | `GET /v1/seller/orders/:sellerOrderId` |
 | `POST /v1/seller/orders/:sellerOrderId/accept` |
@@ -190,10 +196,5 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/admin/privacy/requests` |
 | `POST /v1/admin/privacy/requests/:requestId/decision` |
 | `GET /v1/admin/tax/invoices` |
-| `GET /v1/me/notification-preferences` |
-| `PATCH /v1/me/notification-preferences` |
-| `PUT /v1/me/devices/push-token` |
-| `GET /v1/me/notifications` |
-| `POST /v1/me/notifications/read` |
 
 Each of these must gain a matrix row in the same change that adds its controller; the suite fails otherwise.

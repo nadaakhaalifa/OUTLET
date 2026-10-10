@@ -1,0 +1,10 @@
+export const INVENTORY_STORE = Symbol("inventory.InventoryStore");
+export const INVENTORY_SKU_DIRECTORY = Symbol("inventory.SkuDirectory");
+export const INVENTORY_RESERVE_STOCK = Symbol("inventory.ReserveStock");
+export const INVENTORY_CLAIM_RESERVATION = Symbol("inventory.ClaimReservation");
+export const INVENTORY_RELEASE_RESERVATION = Symbol("inventory.ReleaseReservation");
+export const INVENTORY_SWEEP_EXPIRED = Symbol("inventory.SweepExpiredReservations");
+export const INVENTORY_REPLENISH_POOLS = Symbol("inventory.ReplenishPools");
+export const INVENTORY_SYNC_STOCK = Symbol("inventory.SyncSellerStock");
+export const INVENTORY_TRANSFER_POOLS = Symbol("inventory.TransferBetweenPools");
+export const INVENTORY_SKU_RESOLVER = Symbol("inventory.SkuStockResolver");

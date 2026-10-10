@@ -24,6 +24,12 @@ import { AUTHZ_META, type AuthzMeta } from "../src/platform/decorators";
 import { DEV_ATTESTATION_PREFIX, JWKS_KEY_FETCHER, type JwksKeyFetcher } from "../src/modules/auth";
 import { AUTHENTICATOR, type Authenticator } from "../src/platform";
 import { createHarness, INSTALL_ID, login, type Harness } from "../src/test/harness";
+import { CART_CATALOG, type FakeCatalog } from "../src/modules/cart";
+import { CATALOG_DEV_FIXTURES, SEED, type CatalogDevFixtures } from "../src/modules/catalog";
+import { INVENTORY_SKU_DIRECTORY, type InMemorySkuDirectory } from "../src/modules/inventory";
+import { FIT_CATALOG, ORDER_LINE_FIT, type InMemoryFitCatalog, type InMemoryOrderLines } from "../src/modules/sizing";
+import { WISHLIST_CATALOG, type InMemoryCatalogRead } from "../src/modules/wishlists";
+import { NOTIFICATION_CONTACTS, SEND_NOTIFICATION, type InMemoryContactPort, type SendNotification } from "../src/modules/notifications";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
@@ -94,6 +100,8 @@ interface Entry {
   readonly prepare?: (c: Ctx, token: string) => Promise<() => Test>;
   /** The happy path revokes the caller's own session, so it runs on a throwaway user. */
   readonly consumesSession?: boolean;
+  /** Seller Center routes use a seller_api staff token instead of the shopper token. */
+  readonly aud?: "seller_api";
 }
 
 const auth = (t: string | null): Record<string, string> => (t === null ? {} : bearer(t));
@@ -271,6 +279,350 @@ const MATRIX: Record<string, Entry> = {
   },
 };
 
+// ---- Modules registered in Phase 1 wave 1 ---------------------------------------------------
+
+const uid = (n: number): string => `0192f3a4-5b6c-7d8e-9f01-${String(n).padStart(12, "0")}`;
+const SELLER_STORE_1 = uid(0x5001);
+const SELLER_STORE_2 = uid(0x5002);
+const SELLER_TOKEN = "matrix-seller-owner-store-1";
+const SELLER_TOKEN_2 = "matrix-seller-owner-store-2";
+const P_DRESS = uid(0xa1);
+const P_SHOES = uid(0xa2);
+const UP_IMG = uid(0xa0001);
+const UP_IMG_2 = uid(0xb0001);
+const UP_CSV = uid(0xc0001);
+const CSV_HEADER =
+  "product_ref,title_ar,title_en,description_ar,category_slug,brand_slug,condition,size_label,color,seller_sku,barcode_gtin,price_egp,initial_stock,image_upload_ids,defect_photo_upload_ids";
+let seq = 0x700000;
+const idem = (): Record<string, string> => ({ "Idempotency-Key": uid(++seq) });
+const EGP = (n: bigint) => ({ amount: n, currency: "EGP" as const });
+
+/** Ids prepared in beforeAll. Foreign objects belong to user b or to seller store 2. */
+const FX = {
+  wlA: "",
+  wlB: "",
+  itemA: "",
+  lineA: "",
+  lineB: "",
+  cartStore: uid(0x6001),
+  profA: "",
+  profB: "",
+  product: "",
+  productForeign: "",
+  imp: "",
+  impForeign: "",
+  sku: uid(0x8001),
+  skuForeign: uid(0x8002),
+  stores: [] as string[],
+  favStore: "",
+  foreignFavStore: "",
+  lineFeedbackA: uid(0x9001),
+  lineFeedbackB: uid(0x9002),
+  fitProduct: uid(0x9101),
+  inboxA: "",
+  inboxB: "",
+};
+
+const sellerBody = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  title: { ar: "فستان كتان أبيض", en: "White linen dress" },
+  description: { ar: "فستان صيفي خفيف" },
+  category_id: SEED.categoryDresses,
+  brand_id: SEED.brandAcme,
+  condition: "new_with_tags",
+  image_upload_ids: [UP_IMG],
+  skus: [{ size_label: "M", color: "White", price: { amount: "129900", currency: "EGP" }, initial_stock: 4, seller_sku: `LD-${seq++}` }],
+  ...over,
+});
+const PRODUCT_KEYS = [
+  "id", "status", "title", "description", "category_id", "brand_id", "condition", "material", "image_upload_ids",
+  "defect_photo_upload_ids", "size_chart_id", "skus", "price_claim_state", "updated_at",
+];
+const IMPORT_KEYS = ["id", "status", "dry_run", "rows_total", "rows_ok", "rows_failed", "error_report_url", "created_at"];
+const CART_KEYS = ["id", "groups", "line_count", "updated_at"];
+const WISHLIST_KEYS = ["id", "intent", "title", "target_date", "budget", "cool_off_enabled", "visibility", "gift_for", "items", "item_count", "price_hidden", "shared", "share", "created_at", "updated_at", "hide_prices_from_owner", "version"];
+const PROFILE_KEYS = ["id", "label", "kind", "fit_preference", "modest_fit", "measurements", "usual_size", "quick_start", "updated_at", "created_at", "version"];
+const sizeProfileBody = { label: "Me", kind: "me" };
+const TOPS_ROWS = [
+  { size_label: "S", measurements: { bust_cm: 86, waist_cm: 68 } },
+  { size_label: "M", measurements: { bust_cm: 90, waist_cm: 72 } },
+  { size_label: "L", measurements: { bust_cm: 96, waist_cm: 78 } },
+];
+
+const tok = (t: string | null) => auth(t);
+const pickId = (target: "own" | "foreign" | "missing", own: string, foreign: string): string =>
+  target === "own" ? own : target === "foreign" ? foreign : MISSING_ID;
+const etagOf = async (c: Ctx, url: string, t: string): Promise<string> =>
+  String((await c.h.http().get(url).set(tok(t))).headers["etag"]);
+
+const MODULE_ENTRIES: Record<string, Entry> = {
+  // ---- stores ----
+  "GET /v1/stores": {
+    authz: "self", okStatus: 200, okKeys: ["items", "page", "hint"],
+    send: (c, t) => c.h.http().get("/v1/stores?world=everything").set(tok(t)),
+  },
+  "GET /v1/stores/:storeId": {
+    authz: "self", okStatus: 200,
+    okKeys: ["id", "slug", "name", "kind", "logo_url", "cover_url", "verified_badge", "max_verified_discount_pct", "rating", "rating_count", "follower_count", "live_drop", "is_favorite", "description", "legal_identity", "free_delivery_threshold", "status", "health_badge"],
+    send: (c, t) => c.h.http().get(`/v1/stores/${FX.stores[0] ?? MISSING_ID}`).set(tok(t)),
+  },
+  "GET /v1/me/favorite-stores": {
+    authz: "self", okStatus: 200, okKeys: ["stores", "hidden"],
+    send: (c, t) => c.h.http().get("/v1/me/favorite-stores").set(tok(t)),
+  },
+  "PUT /v1/me/favorite-stores": {
+    authz: "self", okStatus: 200, okKeys: ["stores", "hidden"],
+    send: (c, t) => c.h.http().put("/v1/me/favorite-stores").set(tok(t)).set("If-Match", '"x"').send({ store_ids: [FX.favStore] }),
+    prepare: async (c, t) => {
+      const etag = await etagOf(c, "/v1/me/favorite-stores", t);
+      return () => c.h.http().put("/v1/me/favorite-stores").set(tok(t)).set("If-Match", etag).send({ store_ids: [FX.favStore] });
+    },
+  },
+  "GET /v1/me/favorite-stores/new-counts": {
+    authz: "self", okStatus: 200, okKeys: ["counts"],
+    send: (c, t) => c.h.http().get("/v1/me/favorite-stores/new-counts").set(tok(t)),
+  },
+  "POST /v1/me/favorite-stores/:storeId/seen": {
+    authz: "self", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") =>
+      c.h.http().post(`/v1/me/favorite-stores/${pickId(target, FX.favStore, FX.foreignFavStore)}/seen`).set(tok(t)),
+  },
+
+  // ---- wishlists ----
+  "GET /v1/me/wishlists": {
+    authz: "self", okStatus: 200, okKeys: ["items", "page"],
+    send: (c, t) => c.h.http().get("/v1/me/wishlists").set(tok(t)),
+  },
+  "POST /v1/me/wishlists": {
+    authz: "self", okStatus: 201, okKeys: WISHLIST_KEYS,
+    send: (c, t) => c.h.http().post("/v1/me/wishlists").set(tok(t)).send({ intent: "need", title: "قائمة" }),
+  },
+  "GET /v1/me/wishlists/:wishlistId": {
+    authz: "resource", objectId: true, okStatus: 200, okKeys: WISHLIST_KEYS,
+    send: (c, t, target = "own") => c.h.http().get(`/v1/me/wishlists/${pickId(target, FX.wlA, FX.wlB)}`).set(tok(t)),
+  },
+  "PATCH /v1/me/wishlists/:wishlistId": {
+    authz: "resource", objectId: true, okStatus: 200, okKeys: WISHLIST_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().patch(`/v1/me/wishlists/${pickId(target, FX.wlA, FX.wlB)}`).set(tok(t)).set("If-Match", "*").send({ title: "جديد" }),
+  },
+  "DELETE /v1/me/wishlists/:wishlistId": {
+    authz: "resource", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") => c.h.http().delete(`/v1/me/wishlists/${pickId(target, FX.wlA, FX.wlB)}`).set(tok(t)),
+    prepare: async (c, t) => {
+      const r = await c.h.http().post("/v1/me/wishlists").set(tok(t)).send({ intent: "need", title: "مؤقتة" });
+      return () => c.h.http().delete(`/v1/me/wishlists/${String(r.body.id)}`).set(tok(t));
+    },
+  },
+  "POST /v1/wishlists/:wishlistId/items": {
+    authz: "resource", objectId: true, okStatus: 201, okKeys: ["id", "product", "sku_pref", "added_price", "note", "created_at", "available", "added_at", "price_change", "sku_pref_id", "product_id", "state", "current_price", "cool_off_until"],
+    send: (c, t, target = "own") =>
+      c.h.http().post(`/v1/wishlists/${pickId(target, FX.wlA, FX.wlB)}/items`).set(tok(t)).send({ product_id: P_SHOES }),
+  },
+  "DELETE /v1/wishlists/:wishlistId/items/:itemId": {
+    authz: "resource", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") =>
+      c.h.http().delete(`/v1/wishlists/${pickId(target, FX.wlA, FX.wlB)}/items/${FX.itemA}`).set(tok(t)),
+    prepare: async (c, t) => {
+      const list = await c.h.http().post("/v1/me/wishlists").set(tok(t)).send({ intent: "need", title: "للحذف" });
+      const listId = String(list.body.id);
+      const r = await c.h.http().post(`/v1/wishlists/${listId}/items`).set(tok(t)).send({ product_id: P_DRESS });
+      return () => c.h.http().delete(`/v1/wishlists/${listId}/items/${String(r.body.id)}`).set(tok(t));
+    },
+  },
+  "POST /v1/me/wishlists/:wishlistId/share": {
+    authz: "resource", objectId: true, okStatus: 201, okKeys: ["url", "token", "expires_at", "created_at", "share_url"],
+    send: (c, t, target = "own") => c.h.http().post(`/v1/me/wishlists/${pickId(target, FX.wlA, FX.wlB)}/share`).set(tok(t)).send({}),
+  },
+  "DELETE /v1/me/wishlists/:wishlistId/share": {
+    authz: "resource", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") => c.h.http().delete(`/v1/me/wishlists/${pickId(target, FX.wlA, FX.wlB)}/share`).set(tok(t)),
+  },
+  "GET /v1/shared/wishlists/:token": {
+    authz: "public", okStatus: 404, okKeys: PROBLEM_KEYS,
+    send: (c) => c.h.http().get(`/v1/shared/wishlists/${"C".repeat(22)}`),
+  },
+
+  // ---- cart ----
+  "GET /v1/cart": {
+    authz: "self", okStatus: 200, okKeys: CART_KEYS,
+    send: (c, t) => c.h.http().get("/v1/cart").set(tok(t)),
+  },
+  "POST /v1/cart/lines": {
+    authz: "self", okStatus: 201, okKeys: CART_KEYS,
+    send: (c, t) => c.h.http().post("/v1/cart/lines").set(tok(t)).set(idem()).send({ sku_id: FX.sku, qty: 1 }),
+    prepare: async (c, t) => {
+      const sku = uid(++seq);
+      addCartSku(c, sku);
+      return () => c.h.http().post("/v1/cart/lines").set(tok(t)).set(idem()).send({ sku_id: sku, qty: 1 });
+    },
+  },
+  "PATCH /v1/cart/lines/:lineId": {
+    authz: "resource", objectId: true, okStatus: 200, okKeys: CART_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().patch(`/v1/cart/lines/${pickId(target, FX.lineA, FX.lineB)}`).set(tok(t)).set("If-Match", '"x"').send({ qty: 2 }),
+    prepare: async (c, t) => {
+      const cart = await c.h.http().get("/v1/cart").set(tok(t));
+      const etag = String(cart.headers["etag"]);
+      return () => c.h.http().patch(`/v1/cart/lines/${FX.lineA}`).set(tok(t)).set("If-Match", etag).send({ qty: 2 });
+    },
+  },
+  "DELETE /v1/cart/lines/:lineId": {
+    authz: "resource", objectId: true, okStatus: 200, okKeys: CART_KEYS,
+    send: (c, t, target = "own") => c.h.http().delete(`/v1/cart/lines/${pickId(target, FX.lineA, FX.lineB)}`).set(tok(t)),
+    prepare: async (c, t) => {
+      const sku = uid(++seq);
+      addCartSku(c, sku);
+      const r = await c.h.http().post("/v1/cart/lines").set(tok(t)).set(idem()).send({ sku_id: sku, qty: 1 });
+      const line = (r.body.groups as { lines: { id: string; sku_id?: string }[] }[]).flatMap((g) => g.lines).at(-1)?.id ?? MISSING_ID;
+      return () => c.h.http().delete(`/v1/cart/lines/${line}`).set(tok(t));
+    },
+  },
+  "GET /v1/cart/free-delivery-suggestions": {
+    authz: "self", okStatus: 200, okKeys: ["store_id", "remaining", "suggestions"],
+    send: (c, t) => c.h.http().get(`/v1/cart/free-delivery-suggestions?store_id=${FX.cartStore}`).set(tok(t)),
+  },
+
+  // ---- sizing (shopper) ----
+  "GET /v1/me/size-profiles": {
+    authz: "self", okStatus: 200, okKeys: ["items", "page"],
+    send: (c, t) => c.h.http().get("/v1/me/size-profiles").set(tok(t)),
+  },
+  "POST /v1/me/size-profiles": {
+    authz: "self", okStatus: 201, okKeys: PROFILE_KEYS,
+    send: (c, t) => c.h.http().post("/v1/me/size-profiles").set(tok(t)).send(sizeProfileBody),
+  },
+  "GET /v1/me/size-profiles/:profileId": {
+    authz: "self", objectId: true, okStatus: 200, okKeys: PROFILE_KEYS,
+    send: (c, t, target = "own") => c.h.http().get(`/v1/me/size-profiles/${pickId(target, FX.profA, FX.profB)}`).set(tok(t)),
+  },
+  "PATCH /v1/me/size-profiles/:profileId": {
+    authz: "self", objectId: true, okStatus: 200, okKeys: PROFILE_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().patch(`/v1/me/size-profiles/${pickId(target, FX.profA, FX.profB)}`).set(tok(t)).set("If-Match", '"x"').send({ label: "New" }),
+    prepare: async (c, t) => {
+      const etag = await etagOf(c, `/v1/me/size-profiles/${FX.profA}`, t);
+      return () => c.h.http().patch(`/v1/me/size-profiles/${FX.profA}`).set(tok(t)).set("If-Match", etag).send({ label: "New" });
+    },
+  },
+  "DELETE /v1/me/size-profiles/:profileId": {
+    authz: "self", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") => c.h.http().delete(`/v1/me/size-profiles/${pickId(target, FX.profA, FX.profB)}`).set(tok(t)),
+    prepare: async (c, t) => {
+      const r = await c.h.http().post("/v1/me/size-profiles").set(tok(t)).send({ label: "Temp", kind: "partner" });
+      return () => c.h.http().delete(`/v1/me/size-profiles/${String(r.body.id)}`).set(tok(t));
+    },
+  },
+  "GET /v1/fit/recommend": {
+    authz: "self", objectId: true, okStatus: 422, okKeys: PROBLEM_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().get(`/v1/fit/recommend?sku_group=${FX.fitProduct}&profile_id=${pickId(target, FX.profA, FX.profB)}`).set(tok(t)),
+  },
+  "GET /v1/products/:productId/fit": {
+    authz: "self", objectId: true, okStatus: 422, okKeys: PROBLEM_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().get(`/v1/products/${FX.fitProduct}/fit?profile_id=${pickId(target, FX.profA, FX.profB)}`).set(tok(t)),
+  },
+  "POST /v1/orders/lines/:orderLineId/fit-feedback": {
+    authz: "self", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") =>
+      c.h.http().post(`/v1/orders/lines/${pickId(target, FX.lineFeedbackA, FX.lineFeedbackB)}/fit-feedback`).set(tok(t)).set(idem()).send({ rating: "ok" }),
+  },
+
+  // ---- notifications ----
+  "GET /v1/me/notification-preferences": {
+    authz: "self", okStatus: 200,
+    okKeys: ["push_marketing", "whatsapp_marketing", "sms_marketing", "email_marketing", "quiet_hours", "types", "quiet_hours_start", "quiet_hours_end", "timezone", "locale"],
+    send: (c, t) => c.h.http().get("/v1/me/notification-preferences").set(tok(t)),
+  },
+  "PATCH /v1/me/notification-preferences": {
+    authz: "self", okStatus: 200,
+    okKeys: ["push_marketing", "whatsapp_marketing", "sms_marketing", "email_marketing", "quiet_hours", "types", "quiet_hours_start", "quiet_hours_end", "timezone", "locale"],
+    send: (c, t) => c.h.http().patch("/v1/me/notification-preferences").set(tok(t)).set("If-Match", '"x"').send({ types: [{ type: "PRICE_DROPS", enabled: false }] }),
+    prepare: async (c, t) => {
+      const etag = await etagOf(c, "/v1/me/notification-preferences", t);
+      return () =>
+        c.h.http().patch("/v1/me/notification-preferences").set(tok(t)).set("If-Match", etag).send({ types: [{ type: "PRICE_DROPS", enabled: false }] });
+    },
+  },
+  "PUT /v1/me/devices/push-token": {
+    authz: "self", okStatus: 204, okKeys: [],
+    send: (c, t) => c.h.http().put("/v1/me/devices/push-token").set(tok(t)).send({ install_id: INSTALL_ID, platform: "ios", push_token: "matrix-push-token-1" }),
+  },
+  "GET /v1/me/notifications": {
+    authz: "self", okStatus: 200, okKeys: ["items", "page", "unread_count"],
+    send: (c, t) => c.h.http().get("/v1/me/notifications").set(tok(t)),
+  },
+  "POST /v1/me/notifications/read": {
+    authz: "self", objectId: true, okStatus: 204, okKeys: [],
+    send: (c, t, target = "own") =>
+      c.h.http().post("/v1/me/notifications/read").set(tok(t)).send({ ids: [pickId(target, FX.inboxA, FX.inboxB)] }),
+  },
+
+  // ---- catalog (shopper) ----
+  "GET /v1/products/:productId": {
+    authz: "self", okStatus: 200,
+    okKeys: ["id", "title", "store", "image_url", "blurhash", "price", "condition", "sponsored", "description", "images", "skus", "material", "defect_photos", "return_eligibility", "seller_legal_identity_visible", "size_chart_available", "updated_at"],
+    send: (c, t) => c.h.http().get(`/v1/products/${FX.product}`).set(tok(t)),
+  },
+
+  // ---- Seller Center ----
+  "GET /v1/seller/products": {
+    authz: "self", aud: "seller_api", okStatus: 200, okKeys: ["items", "page"],
+    send: (c, t) => c.h.http().get("/v1/seller/products").set(tok(t)),
+  },
+  "POST /v1/seller/products": {
+    authz: "self", aud: "seller_api", okStatus: 201, okKeys: PRODUCT_KEYS,
+    send: (c, t) => c.h.http().post("/v1/seller/products").set(tok(t)).set(idem()).send(sellerBody()),
+  },
+  "GET /v1/seller/products/:productId": {
+    authz: "resource", aud: "seller_api", objectId: true, okStatus: 200, okKeys: PRODUCT_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().get(`/v1/seller/products/${pickId(target, FX.product, FX.productForeign)}`).set(tok(t)),
+  },
+  "PATCH /v1/seller/products/:productId": {
+    authz: "resource", aud: "seller_api", objectId: true, okStatus: 200, okKeys: PRODUCT_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().patch(`/v1/seller/products/${pickId(target, FX.product, FX.productForeign)}`).set(tok(t)).set("If-Match", '"x"').send({ material: "cotton" }),
+    prepare: async (c, t) => {
+      const etag = await etagOf(c, `/v1/seller/products/${FX.product}`, t);
+      return () => c.h.http().patch(`/v1/seller/products/${FX.product}`).set(tok(t)).set("If-Match", etag).send({ material: "cotton" });
+    },
+  },
+  "POST /v1/seller/catalog/imports": {
+    authz: "self", aud: "seller_api", okStatus: 202, okKeys: IMPORT_KEYS,
+    send: (c, t) => c.h.http().post("/v1/seller/catalog/imports").set(tok(t)).set(idem()).send({ upload_id: UP_CSV, dry_run: true }),
+  },
+  "GET /v1/seller/catalog/imports/:importId": {
+    authz: "resource", aud: "seller_api", objectId: true, okStatus: 200, okKeys: IMPORT_KEYS,
+    send: (c, t, target = "own") =>
+      c.h.http().get(`/v1/seller/catalog/imports/${pickId(target, FX.imp, FX.impForeign)}`).set(tok(t)),
+  },
+  "PUT /v1/seller/skus/:skuId/stock": {
+    authz: "resource", aud: "seller_api", objectId: true, okStatus: 200, okKeys: ["sku_id", "on_hand", "reserved", "available", "updated_at"],
+    send: (c, t, target = "own") =>
+      c.h.http().put(`/v1/seller/skus/${pickId(target, FX.sku, FX.skuForeign)}/stock`).set(tok(t)).set(idem()).send({ mode: "set", quantity: 10, reason: "recount" }),
+  },
+  "GET /v1/seller/size-charts": {
+    authz: "resource", aud: "seller_api", okStatus: 200, okKeys: ["items", "page"],
+    send: (c, t) => c.h.http().get("/v1/seller/size-charts").set(tok(t)),
+  },
+  "POST /v1/seller/size-charts": {
+    authz: "resource", aud: "seller_api", okStatus: 201,
+    okKeys: ["id", "product_type", "unit", "rows", "validated", "updated_at", "created_at", "version", "store_id", "issues"],
+    send: (c, t) => c.h.http().post("/v1/seller/size-charts").set(tok(t)).send({ product_type: "tops", unit: "cm", rows: TOPS_ROWS }),
+  },
+  "GET /v1/seller/size-demand": {
+    authz: "resource", aud: "seller_api", okStatus: 200, okKeys: ["items", "min_cell_size"],
+    send: (c, t) => c.h.http().get("/v1/seller/size-demand").set(tok(t)),
+  },
+};
+Object.assign(MATRIX, MODULE_ENTRIES);
+
+function addCartSku(c: Ctx, skuId: string): void {
+  const catalog = c.h.app.get<FakeCatalog>(CART_CATALOG, { strict: false });
+  catalog.addSku({ skuId, productId: uid(++seq), storeId: FX.cartStore, title: { ar: "قميص" }, unitPrice: EGP(10_000n), available: true });
+}
+
 /** Session id to address: the caller's own, a different user's, or one that does not exist. */
 function pick(c: Ctx, target: "own" | "foreign" | "missing"): string {
   return target === "own" ? c.a.sessionId : target === "foreign" ? c.b.sessionId : MISSING_ID;
@@ -339,6 +691,160 @@ function openApiOperations(): string[] {
   return ops;
 }
 
+async function prepareFixtures(c: Ctx): Promise<void> {
+  const { h } = c;
+  const authn = h.app.get<Authenticator>(AUTHENTICATOR, { strict: false });
+  const staff = (storeId: string, n: number) => ({
+    id: uid(0x7000 + n),
+    status: "active" as const,
+    assurance: "passkey" as const,
+    grants: [{ kind: "brand" as const, storeId, role: "owner" as const }],
+    tokenScopes: ["seller:read", "seller:write"],
+  });
+  const staffByToken = new Map([
+    [SELLER_TOKEN, staff(SELLER_STORE_1, 1)],
+    [SELLER_TOKEN_2, staff(SELLER_STORE_2, 2)],
+  ]);
+  const real = authn.authenticate.bind(authn);
+  authn.authenticate = async (token, nowMs) => {
+    const actor = staffByToken.get(token);
+    if (actor === undefined) return real(token, nowMs);
+    const iat = Math.floor(nowMs / 1000);
+    return {
+      actor,
+      claims: { iss: "test", sub: actor.id, aud: "seller_api", iat, exp: iat + 600, jti: `jti-${token}`, sid: `sid-${token}`, amr: ["otp_sms"] },
+    };
+  };
+  const ok = (r: { status: number; body: unknown }, want: number, what: string): void => {
+    if (r.status !== want) throw new Error(`fixture ${what}: ${r.status} ${JSON.stringify(r.body)}`);
+  };
+
+  // stores
+  const list = await h.http().get("/v1/stores?world=everything").set(bearer(c.a.token));
+  ok(list, 200, "stores");
+  FX.stores = (list.body.items as { id: string }[]).map((s) => s.id);
+  FX.favStore = FX.stores[0] ?? "";
+  FX.foreignFavStore = FX.stores[1] ?? "";
+  const putFav = async (token: string, id: string): Promise<void> => {
+    const r = await h.http().put("/v1/me/favorite-stores").set(bearer(token)).set("If-Match", "*").send({ store_ids: [id] });
+    ok(r, 200, "favorites");
+  };
+  await putFav(c.a.token, FX.favStore);
+  await putFav(c.b.token, FX.foreignFavStore);
+
+  // wishlists
+  const wl = h.app.get<InMemoryCatalogRead>(WISHLIST_CATALOG, { strict: false });
+  const summary = (id: string, title: string) => ({
+    id,
+    title: { ar: title },
+    store: { id: uid(0xc1), name: { ar: "متجر" } },
+    price: { current: { amount: "129900", currency: "EGP" } },
+    condition: "new_with_tags",
+    sponsored: false,
+  });
+  wl.seed({ id: P_DRESS, listed: true, currentPrice: EGP(129_900n), skuIds: [], summary: summary(P_DRESS, "فستان") });
+  wl.seed({ id: P_SHOES, listed: true, currentPrice: EGP(89_900n), skuIds: [], summary: summary(P_SHOES, "حذاء") });
+  const mkList = async (token: string): Promise<string> => {
+    const r = await h.http().post("/v1/me/wishlists").set(bearer(token)).send({ intent: "need", title: "قائمتي" });
+    ok(r, 201, "wishlist");
+    return String(r.body.id);
+  };
+  FX.wlA = await mkList(c.a.token);
+  FX.wlB = await mkList(c.b.token);
+  const item = await h.http().post(`/v1/wishlists/${FX.wlA}/items`).set(bearer(c.a.token)).send({ product_id: P_DRESS });
+  ok(item, 201, "wishlist item");
+  FX.itemA = String(item.body.id);
+
+  // cart
+  const cartCatalog = h.app.get<FakeCatalog>(CART_CATALOG, { strict: false });
+  cartCatalog.addStore(FX.cartStore);
+  const addLine = async (token: string): Promise<string> => {
+    const sku = uid(++seq);
+    addCartSku(c, sku);
+    const r = await h.http().post("/v1/cart/lines").set(bearer(token)).set(idem()).send({ sku_id: sku, qty: 1 });
+    ok(r, 201, "cart line");
+    return (r.body.groups as { lines: { id: string }[] }[]).flatMap((g) => g.lines).at(-1)?.id ?? "";
+  };
+  FX.lineA = await addLine(c.a.token);
+  FX.lineB = await addLine(c.b.token);
+  addCartSku(c, FX.sku);
+
+  // sizing
+  const mkProfile = async (token: string): Promise<string> => {
+    const r = await h.http().post("/v1/me/size-profiles").set(bearer(token)).send(sizeProfileBody);
+    ok(r, 201, "size profile");
+    return String(r.body.id);
+  };
+  FX.profA = await mkProfile(c.a.token);
+  FX.profB = await mkProfile(c.b.token);
+  h.app.get<InMemoryFitCatalog>(FIT_CATALOG, { strict: false }).seed({
+    productId: FX.fitProduct,
+    storeId: SELLER_STORE_1,
+    brandId: SEED.brandAcme,
+    productType: "tops",
+    stretch: "none",
+  });
+  const lines = h.app.get<InMemoryOrderLines>(ORDER_LINE_FIT, { strict: false });
+  for (const [user, line] of [[c.a.userId, FX.lineFeedbackA], [c.b.userId, FX.lineFeedbackB]] as const) {
+    lines.seed(user, line, {
+      kind: "delivered",
+      line: { orderLineId: line, productId: FX.fitProduct, brandId: SEED.brandAcme, productType: "tops", sizeLabel: "M", sizeChartId: null },
+    });
+  }
+
+  // notifications inbox
+  const contacts = h.app.get<InMemoryContactPort>(NOTIFICATION_CONTACTS, { strict: false });
+  const sender = h.app.get<SendNotification>(SEND_NOTIFICATION, { strict: false });
+  const mkInbox = async (user: Session, phone: string): Promise<string> => {
+    contacts.set(user.userId, { locale: "ar", phone, email: null });
+    const sent = await sender.execute({ userId: user.userId, templateKey: "refund_completed", ref: `matrix-${user.userId}`, payload: {} });
+    if (sent.kind !== "accepted") throw new Error(`fixture inbox: ${JSON.stringify(sent)}`);
+    const r = await h.http().get("/v1/me/notifications").set(bearer(user.token));
+    ok(r, 200, "inbox");
+    return String((r.body.items as { id: string }[])[0]?.id);
+  };
+  FX.inboxA = await mkInbox(c.a, "+201007770001");
+  FX.inboxB = await mkInbox(c.b, "+201007770002");
+
+  // catalog + seller center
+  const fx = h.app.get<CatalogDevFixtures>(CATALOG_DEV_FIXTURES, { strict: false });
+  for (const [id, slug, nameAr] of [[SELLER_STORE_1, "matrix-1", "متجر ١"], [SELLER_STORE_2, "matrix-2", "متجر ٢"]] as const) {
+    fx.stores.set({
+      id, slug, nameAr, kind: "local", verifiedBadge: false, liveDrop: false, isFavorite: false, visible: true,
+      legal: { legalName: `Legal ${slug}`, commercialRegisterNo: "CR-1", taxCardNo: "TC-1", governorate: "Cairo", approved: true },
+    });
+  }
+  fx.uploads.add(SELLER_STORE_1, UP_IMG);
+  fx.uploads.add(SELLER_STORE_2, UP_IMG_2);
+  const chart = await h.http().post("/v1/seller/size-charts").set(bearer(SELLER_TOKEN)).send({ product_type: "tops", unit: "cm", rows: TOPS_ROWS });
+  ok(chart, 201, "size chart");
+  const csv = [CSV_HEADER, `p1,فستان p1,,وصف,dresses,acme,new_with_tags,M,White,p1-M,,1299.50,5,${UP_IMG},`].join("\n");
+  fx.uploads.add(SELLER_STORE_1, UP_CSV, csv);
+  const mkProduct = async (token: string, upload: string): Promise<string> => {
+    const r = await h.http().post("/v1/seller/products").set(bearer(token)).set(idem()).send(sellerBody({ image_upload_ids: [upload] }));
+    ok(r, 201, "product");
+    return String(r.body.id);
+  };
+  FX.product = await mkProduct(SELLER_TOKEN, UP_IMG);
+  FX.productForeign = await mkProduct(SELLER_TOKEN_2, UP_IMG_2);
+  const etag = await etagOf(c, `/v1/seller/products/${FX.product}`, SELLER_TOKEN);
+  ok(await h.http().patch(`/v1/seller/products/${FX.product}`).set(bearer(SELLER_TOKEN)).set("If-Match", etag).send({ status: "active" }), 200, "activate");
+  const mkImport = async (token: string, store: string): Promise<string> => {
+    const up = uid(++seq);
+    fx.uploads.add(store, up, csv);
+    const r = await h.http().post("/v1/seller/catalog/imports").set(bearer(token)).set(idem()).send({ upload_id: up, dry_run: true });
+    ok(r, 202, "import");
+    return String(r.body.id);
+  };
+  FX.imp = await mkImport(SELLER_TOKEN, SELLER_STORE_1);
+  FX.impForeign = await mkImport(SELLER_TOKEN_2, SELLER_STORE_2);
+
+  // inventory
+  const dir = h.app.get<InMemorySkuDirectory>(INVENTORY_SKU_DIRECTORY, { strict: false });
+  dir.register(FX.sku, { storeId: SELLER_STORE_1, locationId: uid(0x8101), dropId: null });
+  dir.register(FX.skuForeign, { storeId: SELLER_STORE_2, locationId: uid(0x8102), dropId: null });
+}
+
 // ---- Suite ---------------------------------------------------------------------------------
 
 describe("authorization matrix", () => {
@@ -355,6 +861,7 @@ describe("authorization matrix", () => {
     };
     c = { h, a: await mk("+201007770001"), b: await mk("+201007770002") };
     routes = discoverRoutes(h);
+    await prepareFixtures(c);
   });
   afterAll(async () => h.close());
 
@@ -398,6 +905,7 @@ describe("authorization matrix", () => {
   });
 
   const entries = Object.entries(MATRIX);
+  const tokenFor = (e: Entry): string => (e.aud === "seller_api" ? SELLER_TOKEN : c.a.token);
   const protectedEntries = entries.filter(([, e]) => e.authz !== "public");
   const publicEntries = entries.filter(([, e]) => e.authz === "public");
 
@@ -430,7 +938,7 @@ describe("authorization matrix", () => {
   });
 
   describe("(b) wrong audience / not active", () => {
-    it.each(protectedEntries.map(([k]) => k))("%s -> 401 for a seller_api token, 403 for a suspended subject", async (key) => {
+    it.each(protectedEntries.map(([k]) => k))("%s -> 401 for a token of the other audience, 403 for a suspended subject", async (key) => {
       const e = MATRIX[key];
       if (e === undefined) throw new Error("unreachable");
       const authn = h.app.get<Authenticator>(AUTHENTICATOR, { strict: false });
@@ -438,7 +946,7 @@ describe("authorization matrix", () => {
       const claims = buildAccessClaims({
         issuer: h.config.tokenIssuer,
         userId: c.a.userId,
-        audience: "seller_api",
+        audience: e.aud === "seller_api" ? "buyer_api" : "seller_api",
         sessionId: c.a.sessionId,
         jti: `jti-matrix-${key}`,
         amr: ["otp_sms"],
@@ -454,9 +962,9 @@ describe("authorization matrix", () => {
         return p === null ? null : { ...p, actor: { ...p.actor, status: "suspended" } };
       };
       try {
-        const suspended = await e.send(c, c.a.token);
+        const suspended = await e.send(c, tokenFor(e));
         expect(suspended.status).toBe(403);
-        expect(suspended.body.code).toBe("account_not_active");
+        if (e.aud !== "seller_api") expect(suspended.body.code).toBe("account_not_active");
       } finally {
         authn.authenticate = original;
       }
@@ -472,8 +980,8 @@ describe("authorization matrix", () => {
     it.each(objectEntries.map(([k]) => k))("%s -> 404 for a foreign object, same body as a missing one", async (key) => {
       const e = MATRIX[key];
       if (e === undefined) throw new Error("unreachable");
-      const foreign = await e.send(c, c.a.token, "foreign");
-      const missing = await e.send(c, c.a.token, "missing");
+      const foreign = await e.send(c, tokenFor(e), "foreign");
+      const missing = await e.send(c, tokenFor(e), "missing");
       expect(foreign.status).toBe(404);
       expect(missing.status).toBe(404);
       const strip = (b: Record<string, unknown>) => {
@@ -539,8 +1047,8 @@ describe("authorization matrix", () => {
         const l = await login(h, `+2010077${String(Math.floor(Math.random() * 90000) + 10000)}`);
         ctx = { ...c, a: { token: l.accessToken, userId: l.userId, sessionId: l.sessionId, refresh: l.refreshToken } };
       }
-      const token = e.authz === "public" ? null : ctx.a.token;
-      const r = await e.send(ctx, token);
+      const token = e.authz === "public" ? null : e.aud === "seller_api" ? SELLER_TOKEN : ctx.a.token;
+      const r = e.prepare !== undefined && token !== null ? await (await e.prepare(ctx, token))() : await e.send(ctx, token);
       expect(r.status, `${key} -> ${JSON.stringify(r.body)}`).toBe(e.okStatus);
       if (e.okStatus === 204) {
         expect(r.text).toBe("");
