@@ -29,3 +29,4 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 ## Convention
 - File name `NNNN-short-slug.md`; header lists Status, Date, Deciders, Spec refs.
 - Every Proposed ADR carries a safe default and the owner decision required, so work can continue without silently taking a legal or irreversible decision.
+| 0021 | [F-1 money design](0021-f1-money-design.md) | Accepted (owner), legal VERIFY open |
