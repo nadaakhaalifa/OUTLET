@@ -24,9 +24,9 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0018](0018-vocabulary-reconciliation.md) | Authoritative vocabularies: OrderGroup states, consent purposes, price-history path, ledger owners | Proposed | Owner confirmation; SMS marketing purpose decision |
 | [0019](0019-mutation-policy-and-phase-exit.md) | Mutation-testing policy (per-module floors with ratchet) and Phase 0 exit rule | Proposed | Owner confirmation |
 | [0020](0020-persistence-adapters.md) | Persistence adapters on Kysely: typing approach, unit of work, RLS session | Proposed | Tech Lead confirmation |
+| [0021](0021-f1-money-design.md) | F-1 money design: ledger posting, funds flow, refunds, payouts | Accepted (owner, 2026-10-11) | Legal confirmation: VR-03, VR-04, VR-05 |
 
 
 ## Convention
 - File name `NNNN-short-slug.md`; header lists Status, Date, Deciders, Spec refs.
 - Every Proposed ADR carries a safe default and the owner decision required, so work can continue without silently taking a legal or irreversible decision.
-| 0021 | [F-1 money design](0021-f1-money-design.md) | Accepted (owner), legal VERIFY open |
