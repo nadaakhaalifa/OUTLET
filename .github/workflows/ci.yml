@@ -1,0 +1,148 @@
+# Continuous integration (spec A2, T5, T11). Every job is read-only on repo contents.
+# Actions are referenced by major version tag for readability. VERIFY BEFORE LAUNCH: pin every
+# third-party action to a full commit SHA (Renovate does this through renovate.json) before the
+# first production deploy; see docs/engineering/ci-cd.md.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+  DO_NOT_TRACK: "1"
+
+jobs:
+  verify:
+    name: install, typecheck, lint, test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+  boundaries:
+    name: architecture boundaries (dependency-cruiser)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm depcruise
+
+  i18n-parity:
+    name: Arabic and English key parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test .github/scripts/i18n-check.test.mjs
+      - run: pnpm i18n-check
+
+  secret-scan:
+    name: secret scanning (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .github/gitleaks.toml
+
+  dependency-audit:
+    name: dependency audit (pnpm audit, OSV)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high --prod
+      - name: OSV scan of the lockfile
+        uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+
+  iac:
+    name: IaC checks (terraform fmt, validate, conftest, checkov)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: fmt
+        run: terraform fmt -check -recursive infra/terraform
+      - name: validate every environment (no backend, no credentials)
+        run: |
+          set -euo pipefail
+          for env in dev staging prod; do
+            terraform -chdir="infra/terraform/environments/$env" init -backend=false -input=false
+            terraform -chdir="infra/terraform/environments/$env" validate
+          done
+      - name: policy-as-code (Conftest against the Terraform source)
+        uses: instrumenta/conftest-action@master
+        with:
+          files: infra/terraform
+          policy: infra/terraform/policy
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+          soft_fail: false
+
+  mutation:
+    name: mutation testing (domain, weekly and on demand)
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-mutation')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: packages/domain/reports/mutation/
+          retention-days: 14

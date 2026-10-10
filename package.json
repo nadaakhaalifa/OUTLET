@@ -8,8 +8,11 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
+    "lint": "eslint .",
+    "test": "turbo run test",
+    "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "mutation": "cd packages/domain && stryker run ../../stryker.config.mjs",
+    "i18n-check": "node .github/scripts/i18n-check.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",

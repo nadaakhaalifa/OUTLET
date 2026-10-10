@@ -1,0 +1,109 @@
+# Build, sign and attest the API container image (T5: cosign + SLSA provenance + SBOM).
+# Nothing here runs until a Dockerfile exists (apps/api has no deployable yet) and the registry
+# variables are set. Registry, region and cloud provider are pending ADR-0002, so the registry is
+# a repository variable and the job refuses to run when it is empty.
+# SLSA level: the generic generator below targets Build L3 only when run through the
+# slsa-github-generator reusable workflow, which GitHub pins by tag. VERIFY BEFORE LAUNCH.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+        run: |
+          if [ -z "$REGISTRY" ]; then
+            echo "CONTAINER_REGISTRY is not set (pending ADR-0002). Skipping release."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: guard
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign and OIDC to the cloud, no long-lived keys
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/setup-buildx-action@v3
+      - id: meta
+        run: echo "image=${{ vars.CONTAINER_REGISTRY }}/outlet-api" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          provenance: false # provenance comes from the SLSA generator job below
+          sbom: false # CycloneDX SBOM is attached by cosign below
+          tags: ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
+      - name: Generate CycloneDX SBOM for the image
+        run: |
+          pnpm dlx @cyclonedx/cdxgen@latest -t docker -o image.cdx.json --spec-version 1.6 \
+            "${{ steps.meta.outputs.image }}@${{ steps.push.outputs.digest }}"
+      - name: Sign the image (keyless) and attach the SBOM attestation
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign attest --yes --type cyclonedx --predicate image.cdx.json "$IMAGE@$DIGEST"
+
+  provenance:
+    needs: build
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    needs: [build, provenance]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      - name: Verify signature and provenance as a deployer would
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST"
+          cosign verify-attestation --type slsaprovenance \
+            --certificate-identity-regexp "^https://github.com/slsa-framework/slsa-github-generator/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST"

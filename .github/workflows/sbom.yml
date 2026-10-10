@@ -1,0 +1,30 @@
+# CycloneDX SBOM per build (T5). The lockfile is the input, so no install is needed.
+name: sbom
+
+on:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate CycloneDX 1.6 JSON
+        run: pnpm dlx @cyclonedx/cdxgen@latest -t pnpm -o sbom.cdx.json --spec-version 1.6 .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          retention-days: 90

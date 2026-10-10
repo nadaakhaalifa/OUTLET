@@ -1,0 +1,57 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "timezone": "Africa/Cairo",
+  "schedule": ["before 8am on monday"],
+  "prConcurrentLimit": 5,
+  "minimumReleaseAge": "3 days",
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 8am on the first day of the month"] },
+  "vulnerabilityAlerts": { "labels": ["security"], "schedule": ["at any time"], "minimumReleaseAge": null },
+  "packageRules": [
+    {
+      "description": "Expo SDK pins react-native, react and its modules. Upgrade them together through `expo install`, never one by one.",
+      "matchPackageNames": ["expo", "react-native", "react", "react-dom", "/^expo-/", "/^@expo\\//", "/^react-native-/"],
+      "matchFileNames": ["apps/mobile/package.json"],
+      "groupName": "expo sdk",
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Toolchain majors need a human: TypeScript, ESLint, Vitest, Turborepo.",
+      "matchPackageNames": ["typescript", "eslint", "typescript-eslint", "vitest", "turbo"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Money, security and ledger-adjacent libraries are never automerged.",
+      "matchPackageNames": ["zod", "fast-check", "dependency-cruiser", "@stryker-mutator/core", "@stryker-mutator/vitest-runner"],
+      "automerge": false
+    },
+    {
+      "description": "Low-risk dev tooling patches may automerge once CI is green.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "GitHub Actions: keep digest pins, group updates.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+      "pinDigests": true
+    },
+    {
+      "description": "Terraform providers and modules: human review, security team via CODEOWNERS.",
+      "matchManagers": ["terraform"],
+      "groupName": "terraform",
+      "automerge": false
+    }
+  ],
+  "labels": ["dependencies"]
+}
