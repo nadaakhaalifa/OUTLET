@@ -1,0 +1,17 @@
+import swc from "unplugin-swc";
+import { defineConfig } from "vitest/config";
+
+// NestJS needs legacy decorators and emitted decorator metadata, which esbuild does not provide.
+export default defineConfig({
+  plugins: [
+    swc.vite({
+      module: { type: "es6" },
+      jsc: {
+        target: "es2022",
+        parser: { syntax: "typescript", decorators: true },
+        transform: { legacyDecorator: true, decoratorMetadata: true },
+      },
+    }),
+  ],
+  test: { environment: "node", include: ["src/**/*.test.ts"] },
+});

@@ -1,20 +1,14 @@
-import { StyleSheet, Text } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { spacing, typography } from "@outlet/ui-tokens";
-import { useColors } from "../../theme";
+import { ListRow, Screen, Text } from "../../ui";
 
-export default function Screen() {
+export default function MeScreen() {
   const { t } = useTranslation();
-  const c = useColors();
+  const router = useRouter();
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: c.background }]}>
-      <Text style={[styles.title, { color: c.textPrimary }]}>{t("tabs.me")}</Text>
-    </SafeAreaView>
+    <Screen>
+      <Text variant="title">{t("tabs.me")}</Text>
+      <ListRow title={t("privacy.title")} onPress={() => router.push("/privacy-center")} />
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: spacing.lg },
-  title: { ...typography.title },
-});
