@@ -40,3 +40,6 @@ No behavioural difference in a guarantee was found: every constraint and trigger
 - The runner (`runner.ts`) against real Postgres. The `-- no-transaction` statement splitter is only tested on PGlite.
 - Outbox `occurred_at` ordering caveat (transaction start vs commit time) from `packages/outbox/README.md`.
 - Concurrent `CREATE INDEX CONCURRENTLY` on a populated, written-to table, and the NOT VALID then VALIDATE step of 0011 on a large `ledger_accounts` (it is small by nature).
+
+## Wave 3 addendum
+The runner now also runs `tooling/db/pg16-verify.mjs` (pg Pool storms and races). Results and the push-token finding are in `docs/plan/wave-3-postgres16.md`.

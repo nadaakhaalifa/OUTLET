@@ -68,6 +68,8 @@ tags:
     description: Seller analytics v1 (§19.1).
   - name: Admin
     description: Admin Console essentials (§23).
+  - name: Reviews
+    description: Verified-purchase reviews, product Q&A, UGC reports and the moderation queue (§5, §27).
   - name: Notifications
     description: Preferences, push token, inbox (§24).
 x-conventions:
@@ -1168,6 +1170,51 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    get:
+      operationId: getAccountDeletion
+      tags:
+        - Privacy
+      summary: Read the current account deletion request
+      description: "404 when the caller has no deletion request. Never cached."
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:privacy.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §2 Privacy Center, §B1
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyDeletion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         default:
@@ -8890,6 +8937,365 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         default:
           $ref: "#/components/responses/Default"
+  /v1/admin/privacy/breaches:
+    get:
+      operationId: listAdminPrivacyBreaches
+      tags:
+        - Admin
+      summary: "DPO console: breach register"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreachList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    post:
+      operationId: recordAdminPrivacyBreach
+      tags:
+        - Admin
+      summary: "Record a personal data breach"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrivacyBreachRecord"
+      responses:
+        "201":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreach"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/privacy/breaches/{id}/triage:
+    post:
+      operationId: triageAdminPrivacyBreach
+      tags:
+        - Admin
+      summary: "Triage a breach (notify or not)"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrivacyBreachTriage"
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreach"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/privacy/breaches/{id}/pdpc-notified:
+    post:
+      operationId: markAdminPrivacyBreachPdpcNotified
+      tags:
+        - Admin
+      summary: "Record that the PDPC was notified"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreach"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/privacy/breaches/{id}/subjects-notified:
+    post:
+      operationId: markAdminPrivacyBreachSubjectsNotified
+      tags:
+        - Admin
+      summary: "Record that affected subjects were notified"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreach"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/privacy/breaches/{id}/close:
+    post:
+      operationId: closeAdminPrivacyBreach
+      tags:
+        - Admin
+      summary: "Close a breach"
+      description: "Not named in the master prompt: DPO breach register, derived from §B1 (72 h PDPC and 3 day subject clocks) and §23."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:privacy.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P2
+      x-phase: 1
+      x-spec-ref: §B1 Breach response, §23 Admin Console
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyBreach"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
   /v1/admin/tax/invoices:
     get:
       operationId: listAdminTaxInvoices
@@ -9205,6 +9611,3217 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/approvals:
+    get:
+      operationId: getAdminApprovals
+      tags:
+        - Admin
+      summary: "List approvals"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:approvals.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    post:
+      operationId: postAdminApprovals
+      tags:
+        - Admin
+      summary: "Request approval"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:approvals.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "201":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/approvals/{id}:
+    get:
+      operationId: getAdminApprovalsById
+      tags:
+        - Admin
+      summary: "Get approval"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:approvals.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/approvals/{id}/approve:
+    post:
+      operationId: postAdminApprovalsByIdApprove
+      tags:
+        - Admin
+      summary: "Request elevation"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:approvals.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/approvals/{id}/reject:
+    post:
+      operationId: postAdminApprovalsByIdReject
+      tags:
+        - Admin
+      summary: "Request elevation"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:approvals.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/elevations:
+    get:
+      operationId: getAdminElevations
+      tags:
+        - Admin
+      summary: "Active elevations"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:elevations.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    post:
+      operationId: postAdminElevations
+      tags:
+        - Admin
+      summary: "Request elevation"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:elevations.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "201":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/elevations/{id}/activate:
+    post:
+      operationId: postAdminElevationsByIdActivate
+      tags:
+        - Admin
+      summary: "Activate"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:elevations.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/elevations/{id}/revoke:
+    post:
+      operationId: postAdminElevationsByIdRevoke
+      tags:
+        - Admin
+      summary: "Revoke"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:elevations.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/elevations/mine:
+    get:
+      operationId: getAdminElevationsMine
+      tags:
+        - Admin
+      summary: "My elevations"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:elevations.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/flags:
+    get:
+      operationId: getAdminFlags
+      tags:
+        - Admin
+      summary: "List flags"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:flags.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/flags/{key}:
+    get:
+      operationId: getAdminFlagsByKey
+      tags:
+        - Admin
+      summary: "Get flag"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:flags.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    put:
+      operationId: putAdminFlagsByKey
+      tags:
+        - Admin
+      summary: "Set flag"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:flags.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kill-switches:
+    get:
+      operationId: getAdminKillSwitches
+      tags:
+        - Admin
+      summary: "Kill switches"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kill-switches.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/queue:
+    get:
+      operationId: getAdminKycQueue
+      tags:
+        - Admin
+      summary: "Kyc queue"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/sellers/{sellerId}:
+    get:
+      operationId: getAdminKycSellersBySellerId
+      tags:
+        - Admin
+      summary: "Kyc seller"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: sellerId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/sellers/{sellerId}/reinstate:
+    post:
+      operationId: postAdminKycSellersBySellerIdReinstate
+      tags:
+        - Admin
+      summary: "Reinstate"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: sellerId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/sellers/{sellerId}/suspend:
+    post:
+      operationId: postAdminKycSellersBySellerIdSuspend
+      tags:
+        - Admin
+      summary: "Suspend"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: sellerId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/suspension-reviews:
+    get:
+      operationId: getAdminKycSuspensionReviews
+      tags:
+        - Admin
+      summary: "Reviews"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/kyc/suspension-reviews/{id}/uphold:
+    post:
+      operationId: postAdminKycSuspensionReviewsByIdUphold
+      tags:
+        - Admin
+      summary: "Uphold"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:kyc.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/moderation/{targetType}/{targetId}/decision:
+    post:
+      operationId: postAdminModerationByTargetTypeByTargetIdDecision
+      tags:
+        - Admin
+      summary: "Moderation decision"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: targetType
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - name: targetId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:moderation.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/moderation/queue:
+    get:
+      operationId: getAdminModerationQueue
+      tags:
+        - Admin
+      summary: "Moderation queue"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:moderation.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/pii-views:
+    post:
+      operationId: postAdminPiiViews
+      tags:
+        - Admin
+      summary: "Pii view"
+      description: "Implemented in apps/api (§23 Admin Console, docs/specs/admin-console.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:pii-views.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P3
+      x-phase: 1
+      x-spec-ref: §23 Admin Console, docs/specs/admin-console.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/categories:
+    get:
+      operationId: getAdminTaxCategories
+      tags:
+        - Admin
+      summary: "List categories"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/categories/{code}/exemption:
+    put:
+      operationId: putAdminTaxCategoriesByCodeExemption
+      tags:
+        - Admin
+      summary: "Set exemption"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/categories/{code}/exemption/clear:
+    post:
+      operationId: postAdminTaxCategoriesByCodeExemptionClear
+      tags:
+        - Admin
+      summary: "Clear exemption"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/documents:
+    get:
+      operationId: getAdminTaxDocuments
+      tags:
+        - Admin
+      summary: "Documents"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/documents/{documentId}:
+    get:
+      operationId: getAdminTaxDocumentsByDocumentId
+      tags:
+        - Admin
+      summary: "Document"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/exemption-audit:
+    get:
+      operationId: getAdminTaxExemptionAudit
+      tags:
+        - Admin
+      summary: "Exemption audit"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/reconciliation:
+    get:
+      operationId: getAdminTaxReconciliation
+      tags:
+        - Admin
+      summary: "Reconciliation"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/admin/tax/submissions/{documentId}/requeue:
+    post:
+      operationId: postAdminTaxSubmissionsByDocumentIdRequeue
+      tags:
+        - Admin
+      summary: "Requeue dead letter"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - adminBearer: []
+      x-scope:
+        - admin:tax.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/me/reviews:
+    get:
+      operationId: getMeReviews
+      tags:
+        - Reviews
+      summary: "Mine"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:reviews.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/me/reviews/{reviewId}:
+    delete:
+      operationId: deleteMeReviewsByReviewId
+      tags:
+        - Reviews
+      summary: "Destroy"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:reviews.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "204":
+          description: No content.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    patch:
+      operationId: updateMeReviewsByReviewId
+      tags:
+        - Reviews
+      summary: "Update"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:reviews.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/orders/lines/{orderLineId}/review:
+    post:
+      operationId: postOrdersLinesByOrderLineIdReview
+      tags:
+        - Reviews
+      summary: "Create"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: orderLineId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:orders.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 20
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "201":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/products/{productId}/questions:
+    get:
+      operationId: getProductsByProductIdQuestions
+      tags:
+        - Reviews
+      summary: "Question list"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      security: []
+      x-scope:
+        - public
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: ip
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+    post:
+      operationId: postProductsByProductIdQuestions
+      tags:
+        - Reviews
+      summary: "Ask question"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:products.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "201":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/products/{productId}/reviews:
+    get:
+      operationId: getProductsByProductIdReviews
+      tags:
+        - Reviews
+      summary: "Product list"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      security: []
+      x-scope:
+        - public
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: ip
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/invoices:
+    get:
+      operationId: getSellerInvoices
+      tags:
+        - Seller Finance
+      summary: "Invoices"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:invoices.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/invoices/{documentId}:
+    get:
+      operationId: getSellerInvoicesByDocumentId
+      tags:
+        - Seller Finance
+      summary: "Invoice"
+      description: "Implemented in apps/api (§B4 Tax, docs/specs/tax-eta.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:invoices.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §B4 Tax, docs/specs/tax-eta.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/questions:
+    get:
+      operationId: getSellerQuestions
+      tags:
+        - Reviews
+      summary: "Seller question list"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:questions.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/questions/{questionId}/answer:
+    post:
+      operationId: postSellerQuestionsByQuestionIdAnswer
+      tags:
+        - Reviews
+      summary: "Seller answer"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:questions.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/reviews:
+    get:
+      operationId: getSellerReviews
+      tags:
+        - Reviews
+      summary: "Seller review list"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:reviews.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/reviews/{reviewId}/reply:
+    post:
+      operationId: postSellerReviewsByReviewIdReply
+      tags:
+        - Reviews
+      summary: "Seller reply"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:reviews.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 30
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/aging:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsAging
+      tags:
+        - Seller Analytics
+      summary: "Aging"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/exports:
+    post:
+      operationId: postSellerStoresByStoreIdAnalyticsExports
+      tags:
+        - Seller Analytics
+      summary: "Export csv"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.write
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/funnel:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsFunnel
+      tags:
+        - Seller Analytics
+      summary: "Funnel"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/geography:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsGeography
+      tags:
+        - Seller Analytics
+      summary: "Geography"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/returns:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsReturns
+      tags:
+        - Seller Analytics
+      summary: "Returns"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/sales:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsSales
+      tags:
+        - Seller Analytics
+      summary: "Sales"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/search-terms:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsSearchTerms
+      tags:
+        - Seller Analytics
+      summary: "Search terms"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/sell-through:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsSellThrough
+      tags:
+        - Seller Analytics
+      summary: "Sell through"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/size-curve:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsSizeCurve
+      tags:
+        - Seller Analytics
+      summary: "Size curve"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/analytics/traffic:
+    get:
+      operationId: getSellerStoresByStoreIdAnalyticsTraffic
+      tags:
+        - Seller Analytics
+      summary: "Traffic"
+      description: "Implemented in apps/api (§19.1 Seller analytics, docs/specs/seller-analytics.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 120
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §19.1 Seller analytics, docs/specs/seller-analytics.md
+      x-derived: true
+      responses:
+        "200":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        default:
+          $ref: "#/components/responses/Default"
+  /v1/ugc/reports:
+    post:
+      operationId: postUgcReports
+      tags:
+        - Reviews
+      summary: "Report item"
+      description: "Implemented in apps/api (§5 Product page, §27 Trust and safety, docs/specs/reviews.md). Request and response field lists are in the module spec; the Zod schema in the controller is authoritative until the OpenAPI is generated from code (T3)."
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Closed object validated by the controller Zod schema (unknown keys are rejected).
+              additionalProperties: false
+      security:
+        - shopperBearer: []
+      x-scope:
+        - shopper:ugc.write
+      x-idempotent: true
+      x-rate-limit:
+        - limit: 10
+          window_seconds: 3600
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 1
+      x-spec-ref: §5 Product page, §27 Trust and safety, docs/specs/reviews.md
+      x-derived: true
+      responses:
+        "202":
+          description: OK.
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/Unprocessable"
         "429":
@@ -9941,6 +13558,91 @@ components:
                 type: string
           minItems: 1
           maxItems: 20
+    PrivacyBreachRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - detected_at
+        - severity
+        - summary
+        - affected_count
+      properties:
+        detected_at:
+          $ref: "#/components/schemas/Timestamp"
+        severity:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        affected_count:
+          type: integer
+          minimum: 0
+          maximum: 1000000000
+    PrivacyBreachTriage:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - notify
+            - no_notification_required
+    PrivacyBreach:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - detected_at
+        - severity
+        - summary
+        - affected_count
+        - status
+        - clocks
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        detected_at:
+          $ref: "#/components/schemas/Timestamp"
+        severity:
+          type: string
+        summary:
+          type: string
+        affected_count:
+          type: integer
+        status:
+          type: string
+        dpo_decision:
+          type: [string, "null"]
+        triaged_at:
+          type: [string, "null"]
+        pdpc_notified_at:
+          type: [string, "null"]
+        subjects_notified_at:
+          type: [string, "null"]
+        closed_at:
+          type: [string, "null"]
+        clocks:
+          type: object
+          description: "Deadline clocks (triage 4 h, PDPC 72 h, subjects 3 days)."
+          additionalProperties: true
+    PrivacyBreachList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrivacyBreach"
     PrivacyDeletion:
       type: object
       additionalProperties: false

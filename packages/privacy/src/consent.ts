@@ -74,15 +74,24 @@ export function withdrawConsent(history: ConsentHistory, input: ConsentInput, cl
   return [...history, build(input, false, clock)];
 }
 
-function latest(history: ConsentHistory, userId: string, purpose: ConsentPurpose): ConsentRecord | undefined {
+/**
+ * Latest record by monotonic APPEND ORDER (the history is append-only and returned in append
+ * order by every repository). Wall-clock `at` is never used to pick the winner: a node with a
+ * lagging clock must not make a later withdrawal lose to an earlier grant (fail safe, PDPL).
+ */
+export function latestConsent(
+  history: ConsentHistory,
+  userId: string,
+  purpose: ConsentPurpose,
+): ConsentRecord | undefined {
   let best: ConsentRecord | undefined;
   for (const r of history) {
-    if (r.userId !== userId || r.purpose !== purpose) continue;
-    // `>=` so that, at equal timestamps, the later-appended record wins.
-    if (best === undefined || Date.parse(r.at) >= Date.parse(best.at)) best = r;
+    if (r.userId === userId && r.purpose === purpose) best = r;
   }
   return best;
 }
+
+const latest = latestConsent;
 
 export type ConsentStatus = 'never_asked' | 'granted' | 'withdrawn' | 'reconsent_required';
 

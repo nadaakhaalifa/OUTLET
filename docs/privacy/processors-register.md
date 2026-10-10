@@ -8,12 +8,12 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 | Id | Category | Candidates | Role | Location | DPA | Sub-processors | TIA | Contract | Fields served |
 |---|---|---|---|---|---|---|---|---|---|
-| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 942 |
+| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 1381 |
 | `cdn_waf` | edge | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 7 |
 | `psp_primary` | psp | Paymob; Kashier | unknown | unknown | unknown | unknown | unknown | not_started | 36 |
 | `psp_failover_fawry` | psp | Fawry; second PSP | unknown | unknown | unknown | unknown | unknown | not_started | 12 |
 | `bnpl_provider` | bnpl | valU; Sympl | independent_controller | unknown | unknown | unknown | unknown | not_started | 12 |
-| `courier` | courier | Bosta; Aramex | unknown | unknown | unknown | unknown | unknown | not_started | 37 |
+| `courier` | courier | Bosta; Aramex | unknown | unknown | unknown | unknown | unknown | not_started | 97 |
 | `sms_provider` | sms | two providers required by spec section 1 failure handling | processor | unknown | unknown | unknown | unknown | not_started | 10 |
 | `whatsapp_bsp` | whatsapp_bsp | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 21 |
 | `email_provider` | email | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 2 |
@@ -24,7 +24,8 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 | `product_analytics` | analytics | PostHog | processor | unknown | unknown | unknown | unknown | not_started | 7 |
 | `error_monitoring` | error_monitoring | Sentry | processor | unknown | unknown | unknown | unknown | not_started | 6 |
 | `kyc_verifier` | kyc_verifier | to be chosen | unknown | unknown | unknown | unknown | unknown | not_started | 8 |
-| `seller_stores` | seller | every approved seller | unknown | Egypt (most), foreign sellers possible | unknown | unknown | unknown | not_started | 19 |
+| `eta_portal` | tax_authority | ETA e-invoicing and e-receipt portal (government) | unknown | unknown | unknown | unknown | unknown | not_started | 37 |
+| `seller_stores` | seller | every approved seller | unknown | Egypt (most), foreign sellers possible | unknown | unknown | unknown | not_started | 46 |
 
 ## Data each processor can see
 
@@ -32,7 +33,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** B1, T7, ADR-0002
 - **Highest class handled:** P3
-- **Tables:** `addresses`, `affiliate_clicks`, `age_attestations`, `age_block_devices`, `analytics_events`, `audit_chain_checkpoints`, `audit_log`, `brands`, `breach_affected_subjects`, `breach_register`, `budget_cycles`, `budgets`, `cart_lines`, `carts`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `categories`, `channel_providers`, `cod_refusal_history`, `cod_remittances`, `commissions`, `consent_records`, `consent_text_versions`, `corporate_accounts`, `courier_events_raw`, `creator_accounts`, `delivery_snapshots`, `device_ip_graph_edges`, `devices`, `dsar_requests`, `fit_feedback`, `fit_model_params`, `gift_card_messages`, `gift_card_redemptions`, `gift_cards`, `group_gift_pots`, `idempotency_keys`, `identities`, `inbox_messages`, `inbox_processed`, `installment_commitments`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `inventory_units`, `item_fit_flags`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `live_chat_messages`, `llm_audit_log`, `llm_external_calls`, `locations`, `notification_frequency_counters`, `notification_log`, `notification_preferences`, `notification_push_tokens`, `notification_requests`, `notification_suppressions`, `notification_templates`, `order_groups`, `order_lines`, `otp_challenges`, `outbox_events`, `outfit_calendar_events`, `outfits`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payout_instruments`, `postings`, `product_attributes`, `product_defects`, `product_embeddings`, `product_media`, `products`, `referral_codes`, `referrals`, `request_logs`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `return_evidence`, `returns`, `reviews`, `risk_assessments`, `saga_instances`, `saved_searches`, `savings_goals`, `search_queries`, `seller_delivery_access_grants`, `seller_kyc_records`, `seller_orders`, `seller_size_demand_agg`, `session_families`, `sessions`, `shipments`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_demand_events`, `size_profiles`, `size_recommendation_log`, `skus`, `staff_accounts`, `stock_pools`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `style_profiles`, `stylist_feedback`, `subscription_invoices`, `subscriptions`, `support_messages`, `support_tickets`, `transfer_register`, `user_favorite_stores`, `users`, `wardrobe_items`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
+- **Tables:** `addresses`, `admin_approval_requests`, `admin_elevations`, `affiliate_clicks`, `age_attestations`, `age_block_devices`, `analytics_events`, `answers`, `audit_chain_checkpoints`, `audit_log`, `brands`, `breach_affected_subjects`, `breach_register`, `budget_cycles`, `budgets`, `cart_lines`, `carts`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `categories`, `channel_providers`, `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `commissions`, `consent_records`, `consent_text_versions`, `corporate_accounts`, `courier_awb_jobs`, `courier_events_raw`, `creator_accounts`, `delivery_snapshots`, `device_ip_graph_edges`, `devices`, `dsar_requests`, `eta_signed_documents`, `eta_submissions`, `fit_feedback`, `fit_model_params`, `gift_card_messages`, `gift_card_redemptions`, `gift_cards`, `group_gift_pots`, `idempotency_keys`, `identities`, `inbox_messages`, `inbox_processed`, `installment_commitments`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `inventory_units`, `item_fit_flags`, `journal_entries`, `kyc_suspension_reviews`, `ledger_account_types`, `ledger_accounts`, `live_chat_messages`, `llm_audit_log`, `llm_external_calls`, `locations`, `moderation_log`, `notification_frequency_counters`, `notification_log`, `notification_preferences`, `notification_push_tokens`, `notification_requests`, `notification_suppressions`, `notification_templates`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `otp_challenges`, `outbox_events`, `outfit_calendar_events`, `outfits`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payout_instruments`, `postings`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_attributes`, `product_defects`, `product_embeddings`, `product_media`, `products`, `promotion_redemptions`, `promotions`, `questions`, `referral_codes`, `referrals`, `request_logs`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `return_disputes`, `return_evidence`, `returner_standing`, `returns`, `review_replies`, `reviews`, `risk_assessments`, `saga_instances`, `saved_searches`, `savings_goals`, `search_documents`, `search_queries`, `seller_analytics_facts`, `seller_analytics_freshness`, `seller_analytics_stock`, `seller_delivery_access_grants`, `seller_kyc_records`, `seller_orders`, `seller_size_demand_agg`, `session_families`, `sessions`, `shipment_events`, `shipments`, `signing_delegations`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_demand_events`, `size_profiles`, `size_recommendation_log`, `skus`, `staff_accounts`, `stock_pools`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `style_profiles`, `stylist_feedback`, `subscription_invoices`, `subscriptions`, `support_messages`, `support_tickets`, `tax_categories`, `tax_documents`, `tax_exemption_audit`, `transfer_register`, `ugc_reports`, `user_favorite_stores`, `users`, `wardrobe_items`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
 ### CDN, WAF and waiting-room edge (`cdn_waf`)
@@ -70,7 +71,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** 21, P1
 - **Highest class handled:** P3
-- **Tables:** `cod_refusal_history`, `cod_remittances`, `courier_events_raw`, `delivery_snapshots`, `returns`, `shipments`
+- **Tables:** `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `courier_events_raw`, `delivery_snapshots`, `returns`, `shipment_events`, `shipments`
 - **Note:** Receives name, phone and address. Controller or processor role differs per courier contract.
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
@@ -148,6 +149,14 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 - **Spec reference:** 19, 14
 - **Highest class handled:** P3
 - **Tables:** `seller_kyc_records`
+- **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
+
+### Egyptian Tax Authority (ETA) e-invoice and e-receipt portal (`eta_portal`)
+
+- **Spec reference:** B4, 19
+- **Highest class handled:** P2
+- **Tables:** `eta_signed_documents`, `eta_submissions`, `tax_documents`
+- **Note:** Statutory recipient of signed tax documents, not a commercial processor; role (independent controller or recipient) needs counsel. Production adapter not yet built (tax-eta wires FakeEtaPort in dev only).
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
 ### Sellers (merchants receiving delivery data) (`seller_stores`)

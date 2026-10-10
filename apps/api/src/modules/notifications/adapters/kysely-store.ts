@@ -548,6 +548,9 @@ export class KyselyPushTokenRepository implements PushTokenRepository {
   /** Keyed by (user, install): one user can never overwrite another user's registration. */
   async upsert(userId: string, t: PushToken, nowMs: number): Promise<void> {
     await inTx(this.db, async (trx) => {
+      // Serialise registrations of the same token: under READ COMMITTED two installs racing for one
+      // token would both pass the hand-over update and the loser would hit the unique index (23505).
+      await sql`select pg_advisory_xact_lock(hashtextextended(${t.token}, 0))`.execute(trx);
       // Hand-over: deactivate the token for any other registration in the same transaction.
       await sql`update notification_push_tokens set deactivated_at = ${ts(nowMs)}::timestamptz, updated_at = ${ts(nowMs)}::timestamptz
         where token = ${t.token} and deactivated_at is null

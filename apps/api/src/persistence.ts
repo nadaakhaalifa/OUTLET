@@ -22,7 +22,28 @@ import {
   type SizingDb,
   type SizingModuleOptions,
 } from "./modules/sizing";
+import { KyselyOrderRepository, type OrdersDb } from "./modules/orders";
+import { KyselyReturnRepository, type ReturnsDb } from "./modules/returns";
+import { KyselyPromotionRepository, type PromotionDb } from "./modules/promotions";
+import { KyselyFulfillmentRepository, type FulfillmentDb } from "./modules/fulfillment";
+import { KyselySavedSearchRepository, type SearchDb } from "./modules/search";
 import { KyselyWishlistRepository, type WishlistDb } from "./modules/wishlists";
+import {
+  PRICE_INTEGRITY_SYSTEM_SESSION,
+  type PriceIntegrityDb,
+  type PriceIntegrityPersistence,
+} from "./modules/price-integrity";
+import { KyselyReferralStore, type ReferralDb } from "./modules/referrals";
+import {
+  KyselySignedDocumentStore,
+  KyselySigningDelegations,
+  KyselyTaxConfigRepository,
+  KyselyTaxDocumentRepository,
+  type TaxEtaDb,
+} from "./modules/tax-eta";
+import { KyselySellerAnalyticsStore, type SellerAnalyticsDb } from "./modules/seller-analytics";
+import { KyselyAdminAudit, KyselyAdminStore, KyselySellerKyc, type AdminDb } from "./modules/admin";
+import { KyselyReviewStore, type ReviewDb } from "./modules/reviews";
 import { STORES_SYSTEM_SESSION, type StoresDb, type StoresModuleOptions } from "./modules/stores";
 import { CATALOG_SYSTEM_SESSION, type CatalogDb, type CatalogPersistence } from "./modules/catalog";
 import { KyselyOutboxStore, KyselyTransactionRunner, createPgDatabase } from "./platform/db";
@@ -52,6 +73,22 @@ export interface PersistenceWiring {
   readonly sizing: SizingModuleOptions;
   readonly notifications: { readonly repositories: NotificationsRepositories };
   readonly inventory: { readonly store: KyselyInventoryStore; readonly directory: LevelBackedSkuDirectory };
+  readonly orders: { readonly repository: KyselyOrderRepository };
+  readonly returns: { readonly repository: KyselyReturnRepository };
+  readonly promotions: { readonly repository: KyselyPromotionRepository };
+  readonly fulfillment: { readonly repository: KyselyFulfillmentRepository };
+  readonly search: { readonly savedSearches: KyselySavedSearchRepository };
+  readonly priceIntegrity: PriceIntegrityPersistence;
+  readonly referrals: { readonly store: KyselyReferralStore };
+  readonly tax: {
+    readonly config: KyselyTaxConfigRepository;
+    readonly documents: KyselyTaxDocumentRepository;
+    readonly signed: KyselySignedDocumentStore;
+    readonly delegations: KyselySigningDelegations;
+  };
+  readonly sellerAnalytics: { readonly store: KyselySellerAnalyticsStore };
+  readonly admin: { readonly store: KyselyAdminStore; readonly audit: KyselyAdminAudit; readonly kyc: KyselySellerKyc };
+  readonly reviews: { readonly store: KyselyReviewStore };
 }
 
 /** Builds every Postgres adapter over ONE shared pool. `db` is injectable for tests (PGlite). */
@@ -107,5 +144,25 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
       store: new KyselyInventoryStore(handle as InventoryDb),
       directory: new LevelBackedSkuDirectory(handle as InventoryDb),
     },
+    orders: { repository: new KyselyOrderRepository(handle as OrdersDb, systemClock) },
+    returns: { repository: new KyselyReturnRepository(handle as ReturnsDb) },
+    promotions: { repository: new KyselyPromotionRepository(handle as PromotionDb) },
+    fulfillment: { repository: new KyselyFulfillmentRepository(handle as FulfillmentDb) },
+    search: { savedSearches: new KyselySavedSearchRepository(handle as SearchDb) },
+    priceIntegrity: { runner: runnerOf<PriceIntegrityDb>(), session: () => PRICE_INTEGRITY_SYSTEM_SESSION },
+    referrals: { store: new KyselyReferralStore(handle as ReferralDb, ids) },
+    tax: {
+      config: new KyselyTaxConfigRepository(handle as TaxEtaDb),
+      documents: new KyselyTaxDocumentRepository(handle as TaxEtaDb),
+      signed: new KyselySignedDocumentStore(handle as TaxEtaDb),
+      delegations: new KyselySigningDelegations(handle as TaxEtaDb),
+    },
+    sellerAnalytics: { store: new KyselySellerAnalyticsStore(handle as SellerAnalyticsDb) },
+    admin: {
+      store: new KyselyAdminStore(handle as AdminDb),
+      audit: new KyselyAdminAudit(handle as AdminDb),
+      kyc: new KyselySellerKyc(handle as AdminDb),
+    },
+    reviews: { store: new KyselyReviewStore(handle as ReviewDb, ids) },
   };
 }

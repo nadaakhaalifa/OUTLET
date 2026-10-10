@@ -50,7 +50,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const requestHash = hashRequest({
       method: req.method,
       route: routePath,
-      query: queryFingerprint(req.query),
+      query: withPath(queryFingerprint(req.query), req.path ?? routePath),
       body,
     });
 
@@ -91,3 +91,9 @@ function queryFingerprint(query: unknown): CanonicalValue {
   return out;
 }
 
+
+/** Binds the concrete path (so path params such as an order line id) into the request hash. */
+function withPath(query: CanonicalValue, path: string): CanonicalValue {
+  const base = typeof query === "object" && query !== null && !Array.isArray(query) ? query : {};
+  return { ...base, "@path": path };
+}

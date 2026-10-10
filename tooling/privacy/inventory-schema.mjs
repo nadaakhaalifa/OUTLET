@@ -79,6 +79,7 @@ export const PROCESSOR_CATEGORIES = [
   'error_monitoring',
   'identity_provider',
   'kyc_verifier',
+  'tax_authority',
   'attestation',
   'seller',
 ];

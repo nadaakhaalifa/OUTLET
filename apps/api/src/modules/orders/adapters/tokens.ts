@@ -1,0 +1,11 @@
+export const ORDER_REPOSITORY = Symbol("orders.OrderRepository");
+export const ORDER_STORE_LOOKUP = Symbol("orders.StoreLookupPort");
+export const ORDER_COMMANDS = Symbol("orders.OrderCommands");
+export const ORDER_PLACE = Symbol("orders.PlaceOrders");
+export const GET_ORDER_GROUP = Symbol("orders.GetOrderGroup");
+export const GET_SELLER_ORDER = Symbol("orders.GetSellerOrder");
+export const LIST_SELLER_ORDERS = Symbol("orders.ListSellerOrders");
+export const ORDER_GROUP_RESOLVER = Symbol("orders.OrderGroupResolver");
+export const SELLER_ORDER_RESOLVER = Symbol("orders.SellerOrderResolver");
+export const SHOPPER_ORDER_RESOLVER = Symbol("orders.ShopperOrderResolver");
+export const ORDERS_NOW = Symbol("orders.Now");

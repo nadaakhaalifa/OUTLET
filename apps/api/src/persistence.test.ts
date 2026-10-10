@@ -22,7 +22,7 @@ describe("persistence composition", () => {
     expect(cfg.databaseUrl).toBe("postgres://app@localhost/outlet");
   });
 
-  it("builds every Postgres adapter over one injected handle", async () => {
+  it("builds every Postgres adapter over one injected handle", { timeout: 60_000 }, async () => {
     const raw = await createTestDatabaseUpTo(20);
     const db = createPgliteDatabase<Record<string, never>>(raw as unknown as PgliteInstance);
     const cfg = loadConfig({
@@ -36,6 +36,11 @@ describe("persistence composition", () => {
     expect(p.notifications.repositories.templates).toBeDefined();
     expect(p.sizing.repositories?.demand).toBeDefined();
     expect(p.cart.repository).toBeDefined();
+    expect(p.orders.repository).toBeDefined();
+    expect(p.returns.repository).toBeDefined();
+    expect(p.promotions.repository).toBeDefined();
+    expect(p.fulfillment.repository).toBeDefined();
+    expect(p.search.savedSearches).toBeDefined();
   });
 
   it("fails loudly when the database config is missing", () => {

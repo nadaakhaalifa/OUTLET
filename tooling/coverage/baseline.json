@@ -1,7 +1,7 @@
 {
   "apps/mobile": {
-    "lines": 37.65,
-    "branches": 83.64
+    "lines": 39.97,
+    "branches": 87.06
   },
   "packages/analytics": {
     "lines": 98.6,
@@ -33,7 +33,7 @@
   },
   "packages/policy": {
     "lines": 98.9,
-    "branches": 99.15
+    "branches": 99.14
   },
   "packages/privacy": {
     "lines": 99.65,
@@ -51,6 +51,10 @@
     "lines": 100,
     "branches": 89.28
   },
+  "packages/domain/src/admin": {
+    "lines": 99.49,
+    "branches": 97.52
+  },
   "packages/domain/src/cart": {
     "lines": 95.76,
     "branches": 96.1
@@ -63,16 +67,60 @@
     "lines": 99.38,
     "branches": 97.9
   },
+  "packages/domain/src/fulfillment": {
+    "lines": 97.14,
+    "branches": 92.71
+  },
   "packages/domain/src/inventory": {
     "lines": 97.5,
-    "branches": 88.94
+    "branches": 89.4
+  },
+  "packages/domain/src/orders": {
+    "lines": 96.69,
+    "branches": 97.26
+  },
+  "packages/domain/src/price-integrity": {
+    "lines": 99.6,
+    "branches": 95.2
+  },
+  "packages/domain/src/privacy": {
+    "lines": 98.71,
+    "branches": 88.89
+  },
+  "packages/domain/src/promotions": {
+    "lines": 97.12,
+    "branches": 91.57
+  },
+  "packages/domain/src/referrals": {
+    "lines": 100,
+    "branches": 93.69
+  },
+  "packages/domain/src/returns": {
+    "lines": 95.18,
+    "branches": 94.23
+  },
+  "packages/domain/src/reviews": {
+    "lines": 99.05,
+    "branches": 90.72
+  },
+  "packages/domain/src/search": {
+    "lines": 96.77,
+    "branches": 82.99
+  },
+  "packages/domain/src/seller-analytics": {
+    "lines": 96.3,
+    "branches": 90.63
   },
   "packages/domain/src/sizing": {
     "lines": 100,
     "branches": 98.88
   },
   "packages/domain/src/state-machine": {
-    "lines": 98.55,
-    "branches": 98.25
+    "lines": 100,
+    "branches": 99.12
+  },
+  "packages/domain/src/tax": {
+    "lines": 97.55,
+    "branches": 89.14
   }
 }

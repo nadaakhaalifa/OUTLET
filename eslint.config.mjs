@@ -16,7 +16,7 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/coverage/**",
       "**/reports/**",
-      "**/.stryker-tmp/**",
+      "**/.stryker-tmp*/**",
       "**/*.d.ts",
       "infra/terraform/**/.terraform/**",
     ],

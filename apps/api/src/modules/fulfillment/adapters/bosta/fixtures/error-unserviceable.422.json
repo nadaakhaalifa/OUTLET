@@ -1,0 +1,5 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE, NOT A LIVE CAPTURE. VERIFY BEFORE LAUNCH.",
+  "status": 422,
+  "body": { "success": false, "message": "Dropoff city is not serviceable", "code": 1043 }
+}

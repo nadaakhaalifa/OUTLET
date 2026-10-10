@@ -18,3 +18,4 @@ reports/
 .stryker-tmp*/
 packages/domain/reports/mutation/
 !tooling/coverage/
+.stryker-tmp-*/

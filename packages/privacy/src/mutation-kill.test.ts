@@ -297,16 +297,16 @@ describe('consent exact behaviour', () => {
     expect(() => grantConsent([], inp({ ipHash: 'a'.repeat(16) }), clock)).not.toThrow();
     expect(() => grantConsent([], inp({ ipHash: 'a'.repeat(128) }), clock)).not.toThrow();
   });
-  it('latest record wins by time, and by append order on equal time', () => {
+  it('latest record wins by append order, not by clock', () => {
     const g = grantConsent([], inp(), clock);
     const w = withdrawConsent(g, inp(), clock); // same timestamp, appended later
     expect(consentStatus(w, 'u1', 'analytics', 1)).toBe('withdrawn');
     const regrant = grantConsent(w, inp(), clock);
     expect(consentStatus(regrant, 'u1', 'analytics', 1)).toBe('granted');
-    // an earlier-timestamped record appended later must not override
+    // append order wins, never the wall clock: a withdrawal written by a lagging node still counts
     const early = withdrawConsent([], inp(), fixedClock('2026-03-01T00:00:00.000Z'));
     const late = grantConsent([], inp(), fixedClock('2026-03-02T00:00:00.000Z'));
-    expect(consentStatus([...late, ...early], 'u1', 'analytics', 1)).toBe('granted');
+    expect(consentStatus([...late, ...early], 'u1', 'analytics', 1)).toBe('withdrawn');
     expect(consentStatus([...early, ...late], 'u1', 'analytics', 1)).toBe('granted');
   });
   it('status per user and purpose, re-consent on version bump', () => {

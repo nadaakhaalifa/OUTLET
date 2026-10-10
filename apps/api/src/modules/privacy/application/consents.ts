@@ -1,14 +1,16 @@
 import {
   CONSENT_PURPOSES,
   consentStatus,
+  latestConsent,
   grantConsent,
   withdrawConsent,
   type Clock as PrivacyClock,
   type ConsentHistory,
   type ConsentPurpose,
-  type ConsentRecord,
   type Hasher,
 } from "@outlet/privacy";
+import type { IdGenerator } from "../../../platform/ports";
+import { privacyEvents } from "../domain/events";
 import type { ConsentRepository } from "../domain/ports";
 
 export interface ConsentEntry {
@@ -32,7 +34,8 @@ export interface ConsentChange {
 export type UpdateConsentsResult =
   | { readonly kind: "ok"; readonly state: ConsentState }
   | { readonly kind: "duplicate_purpose"; readonly purpose: ConsentPurpose }
-  | { readonly kind: "stale_version"; readonly purpose: ConsentPurpose; readonly currentVersion: number };
+  | { readonly kind: "stale_version"; readonly purpose: ConsentPurpose; readonly currentVersion: number }
+  | { readonly kind: "unknown_version"; readonly purpose: ConsentPurpose; readonly currentVersion: number };
 
 function stateOf(
   history: ConsentHistory,
@@ -41,11 +44,8 @@ function stateOf(
 ): ConsentState {
   const consents: ConsentEntry[] = [];
   for (const purpose of CONSENT_PURPOSES) {
-    let latest: ConsentRecord | undefined;
-    for (const r of history) {
-      if (r.userId !== userId || r.purpose !== purpose) continue;
-      if (latest === undefined || Date.parse(r.at) >= Date.parse(latest.at)) latest = r;
-    }
+    // Append order decides, never the wall clock (a lagging node must not resurrect a grant).
+    const latest = latestConsent(history, userId, purpose);
     if (latest === undefined) continue;
     consents.push({
       purpose,
@@ -75,6 +75,7 @@ export class UpdateConsents {
     private readonly versions: Readonly<Record<ConsentPurpose, number>>,
     private readonly clock: PrivacyClock,
     private readonly hashIp: Hasher,
+    private readonly ids: IdGenerator,
   ) {}
 
   /**
@@ -91,6 +92,9 @@ export class UpdateConsents {
       if (seen.has(c.purpose)) return { kind: "duplicate_purpose", purpose: c.purpose };
       seen.add(c.purpose);
       const current = this.versions[c.purpose];
+      if (c.granted && c.version > current) {
+        return { kind: "unknown_version", purpose: c.purpose, currentVersion: current };
+      }
       if (c.granted && c.version < current) {
         return { kind: "stale_version", purpose: c.purpose, currentVersion: current };
       }
@@ -111,7 +115,14 @@ export class UpdateConsents {
         ? grantConsent(history, consentInput, this.clock)
         : withdrawConsent(history, consentInput, this.clock);
     }
-    await this.repo.append(history.slice(before.length));
+    const appended = history.slice(before.length);
+    const at = Date.parse(appended[appended.length - 1]?.at ?? new Date(0).toISOString());
+    // consent.changed is written in the same transaction as the append-only records (spec 1 Events).
+    const events =
+      appended.length === 0
+        ? []
+        : [privacyEvents.consentChanged(this.ids.uuidV7(), input.userId, appended, at)];
+    await this.repo.append(appended, events);
     return { kind: "ok", state: stateOf(history, input.userId, this.versions) };
   }
 }

@@ -1,0 +1,32 @@
+export const REVIEW_STORE = Symbol("reviews.ReviewStore");
+export const REVIEW_PURCHASES = Symbol("reviews.PurchaseVerificationPort");
+export const REVIEW_SELLERS = Symbol("reviews.SellerIdentityPort");
+export const REVIEW_PRODUCTS = Symbol("reviews.ProductStorePort");
+export const REVIEW_PROFILES = Symbol("reviews.ReviewerProfilePort");
+export const REVIEW_PHOTOS = Symbol("reviews.PhotoUploadPort");
+export const REVIEW_TOXICITY = Symbol("reviews.ToxicityClassifierPort");
+export const REVIEW_IMAGES = Symbol("reviews.ImageClassifierPort");
+
+export const REVIEW_ORDER_LINE_RESOLVER = Symbol("reviews.OrderLineResolver");
+export const REVIEW_OWN_RESOLVER = Symbol("reviews.OwnReviewResolver");
+export const REVIEW_STORE_RESOLVER = Symbol("reviews.StoreReviewResolver");
+export const REVIEW_STORE_LIST_RESOLVER = Symbol("reviews.StoreListResolver");
+export const REVIEW_QUESTION_STORE_RESOLVER = Symbol("reviews.StoreQuestionResolver");
+export const REVIEW_MODERATION_RESOLVER = Symbol("reviews.ModerationResolver");
+
+export const SUBMIT_REVIEW = Symbol("reviews.SubmitReview");
+export const EDIT_REVIEW = Symbol("reviews.EditReview");
+export const DELETE_REVIEW = Symbol("reviews.DeleteReview");
+export const LIST_PRODUCT_REVIEWS = Symbol("reviews.ListProductReviews");
+export const LIST_MY_REVIEWS = Symbol("reviews.ListMyReviews");
+export const LIST_SELLER_REVIEWS = Symbol("reviews.ListSellerReviews");
+export const REPLY_TO_REVIEW = Symbol("reviews.ReplyToReview");
+export const ASK_QUESTION = Symbol("reviews.AskQuestion");
+export const LIST_PRODUCT_QUESTIONS = Symbol("reviews.ListProductQuestions");
+export const LIST_SELLER_QUESTIONS = Symbol("reviews.ListSellerQuestions");
+export const ANSWER_QUESTION = Symbol("reviews.AnswerQuestion");
+export const SWEEP_QA_SLA = Symbol("reviews.SweepQaSla");
+export const REPORT_CONTENT = Symbol("reviews.ReportContent");
+export const LIST_MODERATION_QUEUE = Symbol("reviews.ListModerationQueue");
+export const DECIDE_MODERATION = Symbol("reviews.DecideModeration");
+export const PROCESS_MODERATION_BACKLOG = Symbol("reviews.ProcessModerationBacklog");

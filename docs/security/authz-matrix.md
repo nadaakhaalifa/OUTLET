@@ -1,15 +1,15 @@
 # Authorization matrix
 
-Status: generated from the Nest router and `docs/api/openapi.yaml` on 2026-10-10. The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
+Status: generated from the Nest router and `docs/api/openapi.yaml` on 2026-10-10 (wave 3 integration). The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
 
 Master prompt A2.10: every endpoint has an integration test including a negative authorization test.
 
 ## Numbers
 
-- OpenAPI operations: 160
-- Implemented in `apps/api`: 61 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 63 registered routes
-- Not yet implemented: 99
-- Covered by the matrix: 63 of 63 registered routes
+- OpenAPI operations: 167
+- Implemented in `apps/api`: 109 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 111 registered routes
+- Not yet implemented: 58
+- Covered by the matrix: 111 of 111 registered routes (63 with full shared-harness cases, 48 delegated to per-module suites plus central 401/authz-mode/OpenAPI checks)
 
 ## What each row is checked for
 
@@ -93,6 +93,127 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `POST /v1/seller/size-charts` | resource: store_product create (seller_api) | - (store from the brand grant) | yes |
 | `GET /v1/seller/size-demand` | resource: store_product read (seller_api) | - (store from the brand grant) | yes |
 
+## Wave 3 operations (orders, returns, promotions, fulfillment, search, DPO breach register)
+
+These routes need module fixtures the shared harness does not seed, so their negative authorization cases (401 without credentials, 403 wrong role or audience, 404 for a non-owned or cross-tenant object) live in the named per-module suite. `apps/api/test/authz-matrix.test.ts` (DELEGATED table) still fails when one of these routes loses its declared authorization mode, its OpenAPI entry, its 401, or its suite file.
+
+| Operation | Authorization | Suite |
+|---|---|---|
+| `DELETE /v1/admin/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `DELETE /v1/me/privacy/delete` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `DELETE /v1/me/saved-searches/:savedSearchId` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `DELETE /v1/seller/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `GET /v1/admin/privacy/breaches` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `GET /v1/admin/privacy/requests` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `GET /v1/admin/promotions` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `GET /v1/admin/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `GET /v1/me/privacy/delete` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `GET /v1/me/privacy/export/:exportId` | resource | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `GET /v1/me/returns` | self | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `GET /v1/me/returns/:returnId` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `GET /v1/me/saved-searches` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `GET /v1/me/saved-searches/:savedSearchId` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `GET /v1/order-groups/:id` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `GET /v1/search` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `GET /v1/search/suggestions` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `GET /v1/seller/orders` | self | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `GET /v1/seller/orders/:id` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `GET /v1/seller/promotions` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `GET /v1/seller/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `GET /v1/seller/returns` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `GET /v1/seller/shipments/:shipmentId` | resource | `apps/api/src/modules/fulfillment/test/fulfillment.authz.test.ts` |
+| `GET /v1/seller/shipments/:shipmentId/label` | resource | `apps/api/src/modules/fulfillment/test/fulfillment.authz.test.ts` |
+| `PATCH /v1/admin/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `PATCH /v1/me/saved-searches/:savedSearchId` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `PATCH /v1/seller/promotions/:promotionId` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `POST /v1/admin/privacy/breaches` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/admin/privacy/breaches/:id/close` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/admin/privacy/breaches/:id/pdpc-notified` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/admin/privacy/breaches/:id/subjects-notified` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/admin/privacy/breaches/:id/triage` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/admin/promotions` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `POST /v1/me/privacy/delete` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/me/privacy/export` | self | `apps/api/src/modules/privacy/privacy.http.test.ts` |
+| `POST /v1/me/saved-searches` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `POST /v1/orders/lines/:orderLineId/returns` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `POST /v1/promotions/evaluate` | public | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `POST /v1/returns/:returnId/dispute` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `POST /v1/search/parse` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `POST /v1/seller-orders/:id/cancel` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `POST /v1/seller/orders/:id/accept` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `POST /v1/seller/orders/:id/pack` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `POST /v1/seller/orders/:id/reject` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
+| `POST /v1/seller/promotions` | self | `apps/api/src/modules/promotions/test/promotions.authz.test.ts` |
+| `POST /v1/seller/returns/:returnId/inspect` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
+| `POST /v1/seller/shipments` | self | `apps/api/src/modules/fulfillment/test/fulfillment.authz.test.ts` |
+| `POST /v1/webhooks/couriers/:courier` | public | `apps/api/src/modules/fulfillment/test/fulfillment.authz.test.ts` |
+
+## Wave 3b operations (admin, tax-eta, seller-analytics, reviews, referrals, price-integrity)
+
+Same delegation rule as the wave 3 table above: the negative cases live in the named per-module suite and the DELEGATED table in `apps/api/test/authz-matrix.test.ts` fails when a route loses its declared mode, its OpenAPI entry, its 401 or its suite file. Admin routes use the `admin_api` audience, seller routes `seller_api`.
+
+| Operation | Authorization | Suite |
+|---|---|---|
+| `DELETE /v1/me/reviews/:reviewId` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/admin/approvals` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/approvals/:id` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/elevations` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/elevations/mine` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/flags` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/flags/:key` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/kill-switches` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/kyc/queue` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/kyc/sellers/:sellerId` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/kyc/suspension-reviews` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `GET /v1/admin/moderation/queue` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/admin/tax/categories` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/admin/tax/documents` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/admin/tax/documents/:documentId` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/admin/tax/exemption-audit` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/admin/tax/reconciliation` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/me/referral` | self | `apps/api/src/modules/referrals/referrals.http.test.ts` |
+| `GET /v1/me/reviews` | self | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/products/:productId/price-evidence` | self | `apps/api/src/modules/price-integrity/test/http.authz.test.ts` |
+| `GET /v1/products/:productId/questions` | public | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/products/:productId/reviews` | public | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/seller/invoices` | resource | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/seller/invoices/:documentId` | resource | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/seller/price-trust` | self | `apps/api/src/modules/price-integrity/test/http.authz.test.ts` |
+| `GET /v1/seller/questions` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/seller/reviews` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/aging` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/funnel` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/geography` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/returns` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/sales` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/search-terms` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/sell-through` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/size-curve` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/analytics/traffic` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `PATCH /v1/me/reviews/:reviewId` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/admin/approvals` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/approvals/:id/approve` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/approvals/:id/reject` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/elevations` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/elevations/:id/activate` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/elevations/:id/revoke` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/kyc/sellers/:sellerId/reinstate` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/kyc/sellers/:sellerId/suspend` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/kyc/suspension-reviews/:id/uphold` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/moderation/:targetType/:targetId/decision` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/admin/pii-views` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `POST /v1/admin/tax/categories/:code/exemption/clear` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `POST /v1/admin/tax/submissions/:documentId/requeue` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `POST /v1/orders/lines/:orderLineId/review` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/products/:productId/questions` | self | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/referrals/attribute` | self | `apps/api/src/modules/referrals/referrals.http.test.ts` |
+| `POST /v1/seller/questions/:questionId/answer` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/seller/reviews/:reviewId/reply` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `POST /v1/seller/stores/:storeId/analytics/exports` | resource | `apps/api/src/modules/seller-analytics/test/analytics.http.test.ts` |
+| `POST /v1/ugc/reports` | self | `apps/api/src/modules/reviews/reviews.http.test.ts` |
+| `PUT /v1/admin/flags/:key` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
+| `PUT /v1/admin/tax/categories/:code/exemption` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+
 ## Not yet implemented (in OpenAPI, no controller)
 
 | Operation |
@@ -100,49 +221,23 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/me` |
 | `PATCH /v1/me` |
 | `POST /v1/me/age-attestation` |
-| `POST /v1/me/privacy/delete` |
-| `DELETE /v1/me/privacy/delete` |
-| `POST /v1/me/privacy/export` |
-| `GET /v1/me/privacy/export/:exportId` |
 | `GET /v1/me/addresses` |
 | `POST /v1/me/addresses` |
 | `GET /v1/me/addresses/:addressId` |
 | `PATCH /v1/me/addresses/:addressId` |
 | `DELETE /v1/me/addresses/:addressId` |
-| `GET /v1/search` |
-| `GET /v1/search/suggestions` |
-| `POST /v1/search/parse` |
-| `GET /v1/me/saved-searches` |
-| `POST /v1/me/saved-searches` |
-| `GET /v1/me/saved-searches/:savedSearchId` |
-| `PATCH /v1/me/saved-searches/:savedSearchId` |
-| `DELETE /v1/me/saved-searches/:savedSearchId` |
 | `GET /v1/products/:productId/price-history` |
 | `GET /v1/products/:productId/price-evidence` |
 | `POST /v1/products/:productId/alerts` |
 | `POST /v1/products/:productId/price-reports` |
 | `POST /v1/checkout/quote` |
 | `POST /v1/checkout` |
-| `GET /v1/order-groups/:orderGroupId` |
 | `GET /v1/me/orders` |
-| `POST /v1/seller-orders/:sellerOrderId/cancel` |
 | `POST /v1/webhooks/:provider` |
-| `POST /v1/webhooks/couriers/:courier` |
 | `GET /v1/me/wallet` |
 | `GET /v1/me/wallet/transactions` |
 | `GET /v1/me/referral` |
 | `POST /v1/referrals/attribute` |
-| `POST /v1/promotions/evaluate` |
-| `GET /v1/admin/promotions` |
-| `POST /v1/admin/promotions` |
-| `GET /v1/admin/promotions/:promotionId` |
-| `PATCH /v1/admin/promotions/:promotionId` |
-| `DELETE /v1/admin/promotions/:promotionId` |
-| `GET /v1/seller/promotions` |
-| `POST /v1/seller/promotions` |
-| `GET /v1/seller/promotions/:promotionId` |
-| `PATCH /v1/seller/promotions/:promotionId` |
-| `DELETE /v1/seller/promotions/:promotionId` |
 | `GET /v1/seller/kyc` |
 | `PATCH /v1/seller/kyc` |
 | `POST /v1/seller/kyc/documents` |
@@ -153,16 +248,6 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `POST /v1/seller/team` |
 | `DELETE /v1/seller/team/:memberId` |
 | `PUT /v1/seller/skus/:skuId/price` |
-| `GET /v1/seller/orders` |
-| `GET /v1/seller/orders/:sellerOrderId` |
-| `POST /v1/seller/orders/:sellerOrderId/accept` |
-| `POST /v1/seller/orders/:sellerOrderId/reject` |
-| `POST /v1/seller/orders/:sellerOrderId/pack` |
-| `POST /v1/seller/shipments` |
-| `GET /v1/seller/shipments/:shipmentId` |
-| `GET /v1/seller/shipments/:shipmentId/label` |
-| `GET /v1/seller/returns` |
-| `POST /v1/seller/returns/:returnId/inspect` |
 | `POST /v1/seller/channels` |
 | `GET /v1/seller/channels` |
 | `DELETE /v1/seller/channels/:channelId` |
@@ -174,10 +259,6 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/seller/payouts` |
 | `GET /v1/seller/statements` |
 | `GET /v1/seller/analytics/summary` |
-| `POST /v1/orders/lines/:orderLineId/returns` |
-| `GET /v1/me/returns` |
-| `GET /v1/me/returns/:returnId` |
-| `POST /v1/returns/:returnId/dispute` |
 | `GET /v1/admin/sellers` |
 | `GET /v1/admin/sellers/:storeId/kyc` |
 | `POST /v1/admin/sellers/:storeId/kyc-decision` |
@@ -193,7 +274,6 @@ No admin or seller route exists yet, so a dedicated shopper-on-admin 403 row can
 | `GET /v1/admin/price-integrity/actions` |
 | `GET /v1/admin/price-integrity/config` |
 | `PUT /v1/admin/price-integrity/config` |
-| `GET /v1/admin/privacy/requests` |
 | `POST /v1/admin/privacy/requests/:requestId/decision` |
 | `GET /v1/admin/tax/invoices` |
 

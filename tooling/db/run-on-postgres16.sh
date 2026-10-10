@@ -49,7 +49,7 @@ expect_value() {
 
 echo "== cluster =="
 "$PG_BIN/initdb" -D "$DATA" -U postgres --auth=trust --encoding=UTF8 --locale=C >/dev/null || exit 2
-"$PG_BIN/pg_ctl" -D "$DATA" -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=''" -w -l "$WORK_DIR/pg.log" start >/dev/null || { cat "$WORK_DIR/pg.log"; exit 2; }
+"$PG_BIN/pg_ctl" -D "$DATA" -o "-p $PORT -c listen_addresses=127.0.0.1 -c max_connections=300 -c unix_socket_directories=''" -w -l "$WORK_DIR/pg.log" start >/dev/null || { cat "$WORK_DIR/pg.log"; exit 2; }
 P -d postgres -c 'CREATE DATABASE outlet' >/dev/null || exit 2
 echo "server: $(PA -c 'SHOW server_version')  port $PORT"
 case "$(PA -c 'SHOW server_version_num')" in 16*) ;; *) echo "not PostgreSQL 16"; exit 2 ;; esac
@@ -169,6 +169,18 @@ printf '%s' "$OUT" | grep -qi "permission denied" && ok "app_user cannot UPDATE 
 OUT="$(rls 00000000-0000-4000-8000-000000000a20 customer "INSERT INTO ledger_accounts (type, owner_type, currency) VALUES ('psp_clearing','platform','EGP')")"
 printf '%s' "$OUT" | grep -qi "row-level security" && ok "customer cannot insert ledger accounts (RLS WITH CHECK)" || bad "ledger insert rls"
 
+echo "== concurrency and cross-module races (node-postgres Pool, real connections) =="
+if command -v node >/dev/null 2>&1 && [ -f "$ROOT/apps/api/package.json" ] && [ "${SKIP_NODE_CHECKS:-0}" != "1" ]; then
+  NODE_OUT="$(PGPORT_X="$PORT" API_PKG="$ROOT/apps/api/package.json" node "$ROOT/tooling/db/pg16-verify.mjs" 2>&1)"; NODE_RC=$?
+  printf '%s\n' "$NODE_OUT"
+  NP="$(printf '%s\n' "$NODE_OUT" | grep -c '^PASS')"; NF="$(printf '%s\n' "$NODE_OUT" | grep -c '^FAIL')"
+  PASS=$((PASS + NP)); FAIL=$((FAIL + NF))
+  [ "$NODE_RC" -ne 0 ] && [ "$NF" -eq 0 ] && bad "node checks exited $NODE_RC without a FAIL line"
+else
+  echo "skipped (node or apps/api missing, or SKIP_NODE_CHECKS=1)"
+fi
+
 echo
+echo "migrations applied: $(PA -c 'SELECT count(*) FROM schema_migrations') (files present: $(ls "$MIGRATIONS"/*.sql | wc -l | tr -d ' '), last: $(PA -c 'SELECT max(name) FROM schema_migrations'))"
 echo "passed=$PASS failed=$FAIL"
 [ "$FAIL" -eq 0 ]

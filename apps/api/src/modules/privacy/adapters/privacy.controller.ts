@@ -98,6 +98,11 @@ export class PrivacyController {
           code: "duplicate_purpose",
           extensions: { purpose: result.purpose },
         });
+      case "unknown_version":
+        throw new ProblemError(422, "consent-version-unknown", "That consent text version does not exist", {
+          code: "consent_version_unknown",
+          extensions: { purpose: result.purpose, current_policy_version: String(result.currentVersion) },
+        });
       case "stale_version":
         throw new ProblemError(422, "consent-version-stale", "The consent text has changed; show the current version", {
           code: "consent_version_stale",
