@@ -171,6 +171,7 @@ module.exports = {
         pathNot: [
           "(^|/)\\.[^/]+\\.(js|cjs|mjs|ts|json)$",
           "\\.d\\.ts$",
+          "(^|/)stryker\\.config\\.mjs$",
           "^(packages|apps)/[^/]+/src/index\\.ts$", // public entry points
           "(^|/)tsconfig\\.json$",
           "(^|/)(babel|webpack|metro|vitest|vite|jest)\\.config\\.(js|cjs|mjs|ts)$",

@@ -19,9 +19,10 @@ resource "aws_security_group" "this" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "from_compute" {
-  for_each                     = toset(var.allowed_security_group_ids)
+  # count, not for_each: the security group ids are unknown until apply, and for_each keys must be known at plan time.
+  count                        = length(var.allowed_security_group_ids)
   security_group_id            = aws_security_group.this.id
-  referenced_security_group_id = each.value
+  referenced_security_group_id = var.allowed_security_group_ids[count.index]
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
@@ -73,5 +74,6 @@ resource "aws_db_instance" "this" {
   auto_minor_version_upgrade          = true
   performance_insights_enabled        = true
   performance_insights_kms_key_id     = var.kms_key_arn
+  enabled_cloudwatch_logs_exports     = ["postgresql", "upgrade"]
   tags                                = var.tags
 }

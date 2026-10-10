@@ -4,19 +4,22 @@ import { canConfirmDeletion, deletionView } from "./deletion";
 import { formatPiastres } from "./format";
 
 describe("onboarding flow", () => {
-  it("makes every step after the DOB skippable and nothing before it", () => {
-    const dobIndex = ONBOARDING_STEPS.indexOf("dob");
-    ONBOARDING_STEPS.forEach((s, i) => {
-      if (s === "done") return;
-      expect(isSkippable(s)).toBe(i > dobIndex);
-    });
+  it("only the steps after identity (language, consents) are skippable", () => {
+    for (const s of ["dob", "phone", "otp"] as const) expect(isSkippable(s)).toBe(false);
+    for (const s of ["language", "consents"] as const) expect(isSkippable(s)).toBe(true);
   });
   it("advances in order and stops at done", () => {
+    expect(nextStep("dob")).toBe("phone");
     expect(nextStep("phone")).toBe("otp");
-    expect(nextStep("dob")).toBe("language");
+    expect(nextStep("otp")).toBe("language");
     expect(nextStep("consents")).toBe("done");
     expect(nextStep("done")).toBe("done");
-    expect(stepProgress("dob")).toEqual({ current: 3, total: 5 });
+    expect(stepProgress("dob")).toEqual({ current: 1, total: 5 });
+    expect(stepProgress("otp")).toEqual({ current: 3, total: 5 });
+  });
+  it("asks for the date of birth before the phone number (spec 1)", () => {
+    expect(ONBOARDING_STEPS.indexOf("dob")).toBeLessThan(ONBOARDING_STEPS.indexOf("phone"));
+    expect(ONBOARDING_STEPS.indexOf("dob")).toBe(0);
   });
   it("maps steps to catalog step names", () => {
     expect(analyticsStepFor("otp")).toBe("auth");

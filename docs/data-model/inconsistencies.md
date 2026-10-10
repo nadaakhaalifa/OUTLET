@@ -1,6 +1,6 @@
 # Inconsistencies, gaps and unknowns found in the spec's data blocks
 
-Status: Draft for review · Source: `docs/haul-master-prompt-v3.md` (read HAUL as Outlet NK) · Scope: the Data blocks of Part C, §T3, §T4, §A2 and §B, compared with each other, with the migrations in `packages/db/migrations` (0001 to 0007) and with `docs/privacy/data_inventory.yaml`. Conventions: [../data-model.md](../data-model.md).
+Status: Draft for review · Source: `docs/haul-master-prompt-v3.md` (read HAUL as Z-OUTLET) · Scope: the Data blocks of Part C, §T3, §T4, §A2 and §B, compared with each other, with the migrations in `packages/db/migrations` (0001 to 0007) and with `docs/privacy/data_inventory.yaml`. Conventions: [../data-model.md](../data-model.md).
 
 How to read this file. Each row has an id (`I-nn`) that the module documents cite. "Resolution" is what the data model does today. "Decision" says who must confirm. Nothing here changes the spec. Items that touch law or provider behaviour are tagged **VERIFY BEFORE LAUNCH** and also appear in decisionsForOwner of the ERD handover.
 

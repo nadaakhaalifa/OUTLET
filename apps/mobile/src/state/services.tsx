@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { createApi, type OutletApi } from "../api";
+import { createAgeGate, createApi, type OutletApi } from "../api";
+import type { AgeGatePort } from "../api/age-gate";
 import { ClientAnalytics } from "../features/analytics";
 import { CONSENT_VERSIONS, ConsentController, PersistedConsentSchema } from "../features/consent";
 import { expoSecureStoreBackend } from "../platform/expo-secure-store-backend";
@@ -10,6 +11,7 @@ import {
   createRecordingTransport,
   isDeviceBlocked,
   sha256Hex,
+  type CivilDate,
   type DeviceSoftBlock,
   type Transport,
 } from "../workspace";
@@ -19,10 +21,13 @@ export interface OnboardingSession {
   phoneE164: string | null;
   sendsSoFar: number;
   lastSentAtMs: number;
+  /** Date of birth accepted by the age gate, held in memory only until it is submitted after OTP. */
+  pendingDob: CivilDate | null;
 }
 
 export interface AppServices {
   readonly api: OutletApi;
+  readonly ageGate: AgeGatePort;
   readonly storage: SecureStorage;
   readonly tokens: TokenStorage;
   readonly consent: ConsentController;
@@ -35,12 +40,12 @@ export interface AppServices {
   isThisDeviceBlocked(): Promise<boolean>;
   isOnboardingDone(): Promise<boolean>;
   markOnboardingDone(): Promise<void>;
-  /** Where to continue after an app restart mid-onboarding (only steps after DOB are ever stored). */
+  /** Where to continue after an app restart mid-onboarding (only steps after the age gate are ever stored). */
   setResume(step: ResumableStep): Promise<void>;
   getResume(): Promise<ResumableStep | null>;
 }
 
-export type ResumableStep = "language" | "consents";
+export type ResumableStep = "phone" | "language" | "consents";
 
 const systemClock = { now: () => new Date() };
 
@@ -54,7 +59,9 @@ function makeTransport(): Transport {
 export function createServices(): AppServices {
   const clock = systemClock;
   const storage = new SecureStorage(expoSecureStoreBackend);
-  const api = createApi(clock, typeof __DEV__ !== "undefined" && __DEV__);
+  const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+  const api = createApi(clock, isDev);
+  const ageGate = createAgeGate(clock, isDev);
   const consent = new ConsentController({
     clock,
     api,
@@ -82,11 +89,12 @@ export function createServices(): AppServices {
   const loadSoftBlock = () => storage.getJson(STORAGE_KEYS.deviceSoftBlock, SoftBlockSchema);
   return {
     api,
+    ageGate,
     storage,
     tokens: new TokenStorage(storage),
     consent,
     analytics,
-    session: { phoneE164: null, sendsSoFar: 0, lastSentAtMs: 0 },
+    session: { phoneE164: null, sendsSoFar: 0, lastSentAtMs: 0, pendingDob: null },
     clock,
     installId,
     loadSoftBlock,
@@ -101,7 +109,7 @@ export function createServices(): AppServices {
     setResume: (step) => storage.setString(STORAGE_KEYS.onboardingResume, step),
     getResume: async () => {
       const v = await storage.getString(STORAGE_KEYS.onboardingResume);
-      return v === "language" || v === "consents" ? v : null;
+      return v === "phone" || v === "language" || v === "consents" ? v : null;
     },
   };
 }

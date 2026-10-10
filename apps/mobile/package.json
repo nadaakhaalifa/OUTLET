@@ -11,7 +11,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@outlet/analytics": "workspace:*",
+    "@outlet/auth-core": "workspace:*",
     "@outlet/i18n": "workspace:*",
+    "@outlet/privacy": "workspace:*",
+    "@outlet/ui-native": "workspace:*",
     "@outlet/ui-tokens": "workspace:*",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",

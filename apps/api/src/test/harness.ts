@@ -5,7 +5,17 @@ import request from "supertest";
 import { AppModule } from "../app.module";
 import { configureApp } from "../app.setup";
 import { loadConfig, type AppConfig } from "../config/env";
-import { DEV_ATTESTATION_PREFIX, DEV_OTP_MAILBOX, type DevOtpMailbox } from "../modules/auth";
+import {
+  AGE_GATE,
+  AGE_GATE_STORE,
+  AUTH_EVENTS,
+  DEV_ATTESTATION_PREFIX,
+  DEV_OTP_MAILBOX,
+  type AgeGate,
+  type DevOtpMailbox,
+  type InMemoryAgeGateStore,
+  type InMemoryAuthEventPublisher,
+} from "../modules/auth";
 import {
   AUDIT_SINK,
   AUTHENTICATOR,
@@ -34,6 +44,10 @@ export interface Harness {
   readonly mailbox: DevOtpMailbox;
   readonly audit: InMemoryAuditSink;
   readonly config: AppConfig;
+  readonly events: InMemoryAuthEventPublisher;
+  readonly ageGateStore: InMemoryAgeGateStore;
+  /** Marks an attested device key (the part after the attestation prefix) as having passed the age gate. */
+  grantAgeGate(attestKeyId: string): void;
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -59,10 +73,19 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, config);
   await app.init();
+  const ageGate = app.get<AgeGate>(AGE_GATE, { strict: false });
+  const ageGateStore = app.get<InMemoryAgeGateStore>(AGE_GATE_STORE, { strict: false });
+  const grantAgeGate = (attestKeyId: string): void =>
+    ageGateStore.grantPassForTest(ageGate.passKeyFor(attestKeyId), clock.nowMs() + 365 * 86_400_000);
+  // The default fixture device used by ATTEST_HEADERS has always "passed" so existing flows keep their shape.
+  grantAgeGate("key-device-1");
   return {
     app,
     clock,
     config,
+    events: app.get<InMemoryAuthEventPublisher>(AUTH_EVENTS, { strict: false }),
+    ageGateStore,
+    grantAgeGate,
     mailbox: app.get<DevOtpMailbox>(DEV_OTP_MAILBOX, { strict: false }),
     audit: app.get<InMemoryAuditSink>(AUDIT_SINK, { strict: false }),
     http: () => request(app.getHttpServer()),
@@ -97,6 +120,8 @@ export async function login(
   },
   installId = INSTALL_ID,
 ): Promise<LoggedIn> {
+  const attestKey = attest["X-App-Attest"]?.slice(DEV_ATTESTATION_PREFIX.length);
+  if (attestKey !== undefined) h.grantAgeGate(attestKey);
   const sent = await h.http().post("/v1/auth/otp/request").set(attest).send({ phone_e164: phone });
   if (sent.status !== 202) throw new Error(`otp request failed: ${sent.status} ${JSON.stringify(sent.body)}`);
   const code = h.mailbox.last(phone)?.code;

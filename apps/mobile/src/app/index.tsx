@@ -10,17 +10,22 @@ export default function Index() {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      let next: Href = "/onboarding/phone";
+      let next: Href = "/onboarding/dob";
       try {
         if (await services.isThisDeviceBlocked()) {
           next = "/onboarding/blocked";
         } else {
           const tokens = await services.tokens.load();
-          if (tokens !== null) {
+          if (tokens === null) {
+            // No account yet: the age gate always comes first. Resume at the phone step only after
+            // it passed on this install; the server re-checks regardless.
+            if ((await services.getResume()) === "phone") next = "/onboarding/phone";
+          } else {
             if (await services.isOnboardingDone()) next = "/(tabs)";
             else {
               const resume = await services.getResume();
-              next = resume === "consents" ? "/onboarding/consents" : resume === "language" ? "/onboarding/language" : "/onboarding/dob";
+              next =
+                resume === "consents" ? "/onboarding/consents" : resume === "language" ? "/onboarding/language" : "/onboarding/dob";
             }
           }
         }

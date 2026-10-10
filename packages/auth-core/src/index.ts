@@ -9,3 +9,5 @@ export * from "./access-token";
 export * from "./session";
 export * from "./recycled-number";
 export * from "./account-merge";
+export * from "./age-gate";
+export * from "./passkey-counter";

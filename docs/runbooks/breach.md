@@ -4,7 +4,7 @@ Owner: DPO. Backup: CTO. Status: draft for owner review. Not legal advice; every
 
 ## Clock
 
-The spec (B1) requires notice to the PDPC within **72 hours**, then to affected individuals within **3 days**. VERIFY BEFORE LAUNCH with counsel: when the clock starts (awareness versus confirmation), whether the 3 days run from the PDPC notice or from awareness, and the exact content the PDPC requires. Until confirmed, treat the clock as starting at the moment anyone at Outlet NK has reasonable grounds to believe a breach occurred. Record that timestamp as T0.
+The spec (B1) requires notice to the PDPC within **72 hours**, then to affected individuals within **3 days**. VERIFY BEFORE LAUNCH with counsel: when the clock starts (awareness versus confirmation), whether the 3 days run from the PDPC notice or from awareness, and the exact content the PDPC requires. Until confirmed, treat the clock as starting at the moment anyone at Z-OUTLET has reasonable grounds to believe a breach occurred. Record that timestamp as T0.
 
 | Step | Target | Owner |
 |---|---|---|
@@ -68,7 +68,7 @@ Channels: in-app message and the shopper's verified channel (SMS or email, trans
 >
 > عزيزي/عزيزتي {{first_name}}،
 >
-> نكتب إليك لنبلغك بحادث أمني أثّر على بعض بياناتك الشخصية لدى Outlet NK.
+> نكتب إليك لنبلغك بحادث أمني أثّر على بعض بياناتك الشخصية لدى Z-OUTLET.
 >
 > **ما الذي حدث:** {{what_happened}}
 > **تاريخ الحادث واكتشافه:** {{date_occurred}} / {{date_discovered}}
@@ -78,7 +78,7 @@ Channels: in-app message and the shopper's verified channel (SMS or email, trans
 >
 > للاستفسار يمكنك التواصل مع مسؤول حماية البيانات على {{dpo_contact}}. نعتذر عن هذا الحادث.
 >
-> فريق Outlet NK
+> فريق Z-OUTLET
 
 ### Template, English
 
@@ -86,7 +86,7 @@ Channels: in-app message and the shopper's verified channel (SMS or email, trans
 >
 > Dear {{first_name}},
 >
-> We are writing to tell you about a security incident that affected some of your personal data held by Outlet NK.
+> We are writing to tell you about a security incident that affected some of your personal data held by Z-OUTLET.
 >
 > **What happened:** {{what_happened}}
 > **When it happened and when we found it:** {{date_occurred}} / {{date_discovered}}
@@ -96,7 +96,7 @@ Channels: in-app message and the shopper's verified channel (SMS or email, trans
 >
 > You can contact our Data Protection Officer at {{dpo_contact}}. We apologise for this incident.
 >
-> The Outlet NK team
+> The Z-OUTLET team
 
 Template rules: plain language, no speculation, no blame, no marketing, state only facts confirmed at send time, and do not include the affected data itself. Arabic text must be reviewed by a native speaker and counsel before first use. Placeholders in double braces are filled from the register.
 

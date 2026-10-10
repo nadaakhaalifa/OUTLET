@@ -44,7 +44,7 @@ export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
 
 export type IdentityVerification =
   | { readonly ok: true; readonly identity: VerifiedIdentity }
-  | { readonly ok: false; readonly reason: "invalid_token" | "expired" | "nonce_mismatch" | "audience_mismatch" | "provider_unavailable" };
+  | { readonly ok: false; readonly reason: "invalid_token" | "expired" | "nonce_mismatch" | "audience_mismatch" | "issuer_mismatch" | "provider_unavailable" };
 
 export interface AppleIdentityVerifier {
   verify(input: { identityToken: string; expectedNonce: string }): Promise<IdentityVerification>;

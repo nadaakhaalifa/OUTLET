@@ -100,7 +100,7 @@ export const ACCOUNT_TYPES: Readonly<Record<AccountTypeName, AccountTypeDefiniti
     inSpecT4: false,
     status: "active",
     verify:
-      "VERIFY BEFORE LAUNCH: not in spec T4. Whether Outlet NK ever holds funds in its own account depends on open question 4 (flow of funds, CBE and PSP licensing).",
+      "VERIFY BEFORE LAUNCH: not in spec T4. Whether Z-OUTLET ever holds funds in its own account depends on open question 4 (flow of funds, CBE and PSP licensing).",
   },
   seller_payable: {
     type: "seller_payable",
@@ -168,7 +168,7 @@ export const ACCOUNT_TYPES: Readonly<Record<AccountTypeName, AccountTypeDefiniti
     normalBalance: "credit",
     owner: "platform",
     parameters: [],
-    purpose: "Output VAT owed on Outlet NK's own supplies: commission, shipping fees and Plus.",
+    purpose: "Output VAT owed on Z-OUTLET's own supplies: commission, shipping fees and Plus.",
     lifecycle: "Credited when a taxable supply is invoiced. Cleared by the periodic VAT return, outside this ledger for now.",
     reconciledAgainst: "ETA e-invoice and e-receipt submissions",
     inSpecT4: true,
@@ -226,7 +226,7 @@ export const ACCOUNT_TYPES: Readonly<Record<AccountTypeName, AccountTypeDefiniti
     normalBalance: "debit",
     owner: "seller",
     parameters: ["store"],
-    purpose: "Discount value Outlet NK fronted to shoppers that a seller agreed to fund, recovered by netting from seller_payable.",
+    purpose: "Discount value Z-OUTLET fronted to shoppers that a seller agreed to fund, recovered by netting from seller_payable.",
     lifecycle: "Debited when a seller-funded discount is applied, credited when netted against the seller payable.",
     inSpecT4: true,
     status: "active",

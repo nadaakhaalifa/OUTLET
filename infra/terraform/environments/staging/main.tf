@@ -52,13 +52,14 @@ module "secrets" {
 }
 
 module "compute" {
-  source             = "../../modules/compute"
-  name               = local.name
-  vpc_id             = module.network.vpc_id
-  kms_key_arn        = module.kms.key_arns["logs"]
-  log_retention_days = 30
-  secret_arns        = values(module.secrets.secret_arns)
-  tags               = local.tags
+  source              = "../../modules/compute"
+  name                = local.name
+  vpc_id              = module.network.vpc_id
+  kms_key_arn         = module.kms.key_arns["logs"]
+  log_retention_days  = 30
+  secret_arns         = values(module.secrets.secret_arns)
+  secrets_kms_key_arn = module.kms.key_arns["secrets"]
+  tags                = local.tags
 }
 
 module "postgres" {
@@ -117,7 +118,7 @@ data "aws_iam_policy_document" "ci" {
   statement {
     sid       = "DescribeOwnCluster"
     actions   = ["ecs:DescribeClusters", "ecs:DescribeServices"]
-    resources = ["*"]
+    resources = [module.compute.cluster_arn, "${replace(module.compute.cluster_arn, ":cluster/", ":service/")}/*"]
   }
 }
 

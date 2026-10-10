@@ -69,13 +69,13 @@ export function renderRopa(inv, resolved) {
   const out = [];
   out.push(BANNER('ropa.md'), '');
   out.push('# Record of processing activities (RoPA)', '');
-  out.push('Outlet NK (spec name HAUL), spec B1 and T6.', '');
+  out.push('Z-OUTLET (spec name HAUL), spec B1 and T6.', '');
   out.push(STATUS_NOTE(inv), '');
   out.push('## 1. Controller', '');
   out.push(
     '| Item | Value |',
     '|---|---|',
-    '| Controller | Outlet NK operating entity: **not yet incorporated or named. VERIFY BEFORE LAUNCH** |',
+    '| Controller | Z-OUTLET operating entity: **not yet incorporated or named. VERIFY BEFORE LAUNCH** |',
     '| DPO | **Not yet appointed. VERIFY BEFORE LAUNCH** (admin role `dpo` exists in the spec) |',
     '| PDPC licence or registration | **Category and fee unverified. VERIFY BEFORE LAUNCH** |',
     '| Data plane location | **Undecided** (ADR-0002 not accepted) |',

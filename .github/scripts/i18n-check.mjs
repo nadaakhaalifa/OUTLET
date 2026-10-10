@@ -25,7 +25,7 @@ const PAIRS = [
 ];
 
 /** Leaves that may legitimately be identical in both languages (brand names, symbols). */
-const SAME_VALUE_ALLOWED = new Set(["Outlet NK"]);
+const SAME_VALUE_ALLOWED = new Set(["Z-OUTLET"]);
 
 async function loadExport(file, exportName, workDir) {
   const abs = join(root, file);

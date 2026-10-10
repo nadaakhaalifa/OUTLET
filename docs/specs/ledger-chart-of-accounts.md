@@ -26,7 +26,7 @@ Sign convention is that of `ledger.ts`: a positive posting is a debit and a nega
 | `gift_card_liability` | Liability | Credit | Platform | Credited at sale, debited at redemption. | Gift-card table |
 | `refund_reserve` | Liability | Credit | Platform | **Reserved.** No builder posts to it. Stays zero until a spec defines its use. | n/a |
 | `deferred_plus_revenue` | Liability | Credit | Platform | Credited at charge net of VAT, debited per period. Zero after the last period. | Subscription schedule |
-| `platform_vat_output` | Liability | Credit | Platform | Credited on each taxable supply by Outlet NK. Cleared by the VAT return (outside this ledger for now). | ETA submissions |
+| `platform_vat_output` | Liability | Credit | Platform | Credited on each taxable supply by Z-OUTLET. Cleared by the VAT return (outside this ledger for now). | ETA submissions |
 | `platform_commission` | Revenue | Credit | Platform | Credited per order, debited on refunds. | Seller invoices |
 | `shipping_revenue` | Revenue | Credit | Platform | Credited with the order, debited when a fee is refunded. | n/a |
 | `plus_revenue` | Revenue | Credit | Platform | Credited from deferred revenue once per period. | n/a |
@@ -49,11 +49,11 @@ Sign convention is that of `ledger.ts`: a positive posting is a debit and a nega
 Per seller order, with `commission = percentOfBps(merchandise, commissionBps)` and `commissionVat = percentOfBps(commission, vatBps)`:
 - Cr `seller_payable` = merchandise − commission − commissionVat.
 - Cr `platform_commission` = commission. Cr `platform_vat_output` = commissionVat.
-- Shipping (a supply by Outlet NK, VAT-inclusive): VAT = gross × vatBps / (10,000 + vatBps), net = gross − VAT. Cr `shipping_revenue` net, Cr `platform_vat_output` VAT.
+- Shipping (a supply by Z-OUTLET, VAT-inclusive): VAT = gross × vatBps / (10,000 + vatBps), net = gross − VAT. Cr `shipping_revenue` net, Cr `platform_vat_output` VAT.
 - Platform-funded discount: Dr `promo_expense_platform`. Seller-funded discount: Dr `promo_receivable_seller:{store}`. Neither changes what the seller is owed.
 - Debit side is the tenders: `psp_clearing`, `cod_clearing`, `bnpl_clearing`, or `store_credit` sub-balances. Tenders must equal merchandise + shipping − discounts, otherwise `TenderMismatchError`.
 - Commission base is merchandise after item-level discounts and before vouchers, VAT-inclusive (matches the free-delivery threshold base in §6). **VERIFY BEFORE LAUNCH.**
-- Marketplace-agent model assumed: the seller is the supplier of goods and issues the shopper e-receipt, so Outlet NK books VAT only on its own supplies (open question 10).
+- Marketplace-agent model assumed: the seller is the supplier of goods and issues the shopper e-receipt, so Z-OUTLET books VAT only on its own supplies (open question 10).
 
 ### R4. Refunds
 A refund is the mirror of the order components for the refunded portion, paid to one or more destinations (original PSP, `store_credit` sub-balance, BNPL provider).
@@ -173,5 +173,5 @@ Trial balance equals zero (integrity job). Unmatched lines older than 3 days in 
 4. Whether commission and VAT are returned to the seller, and platform-funded discounts reversed, on refund.
 5. VAT timing on Plus charges (at receipt or at period).
 6. Who bears PSP, BNPL and courier fees, and their VAT.
-7. Whether Outlet NK ever holds funds in its own bank account (open question 4). `bank_settlement` assumes a settlement account exists.
+7. Whether Z-OUTLET ever holds funds in its own bank account (open question 4). `bank_settlement` assumes a settlement account exists.
 8. Marketplace-agent model and withholding or reporting duties (open question 10).

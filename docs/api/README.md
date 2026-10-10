@@ -1,12 +1,12 @@
-# Outlet NK API contract (Phase 1 skeleton)
+# Z-OUTLET API contract (Phase 1 skeleton)
 
 Status: Draft for review · Date: 2026-10-10 · Spec refs: master prompt §T3, §A2.4, §A2.5, §A2.11, Part C sections 1-8, 14-15, 19-24, §9, §10 · File: `docs/api/openapi.yaml` (OpenAPI 3.1.0)
 
-Naming: the master prompt says HAUL, the product is Outlet NK.
+Naming: the master prompt says HAUL, the product is Z-OUTLET.
 
 ## What this is
 
-A contract-first skeleton of the Phase 1 (MVP) REST API: 156 operations on 122 paths, 184 component schemas. No server implements it yet and no backend is deployed (owner decision 2026-10-10). The intended end state per §T3 is OpenAPI generated from the NestJS code; until then this file is the contract that Zod schemas, the generated mobile client and the Pact tests are written against.
+A contract-first skeleton of the Phase 1 (MVP) REST API: 159 operations on 125 paths, 187 component schemas. No server implements it yet and no backend is deployed (owner decision 2026-10-10). The intended end state per §T3 is OpenAPI generated from the NestJS code; until then this file is the contract that Zod schemas, the generated mobile client and the Pact tests are written against.
 
 The file is hand-maintained YAML. Re-validate after every edit:
 

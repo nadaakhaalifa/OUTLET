@@ -1,0 +1,54 @@
+{
+  "apps/mobile": {
+    "lines": 37.65,
+    "branches": 83.64
+  },
+  "packages/analytics": {
+    "lines": 98.17,
+    "branches": 98.05
+  },
+  "packages/auth-core": {
+    "lines": 97.6,
+    "branches": 80.95
+  },
+  "packages/db": {
+    "lines": 98.69,
+    "branches": 84.45
+  },
+  "packages/feature-flags": {
+    "lines": 94.82,
+    "branches": 94.11
+  },
+  "packages/i18n": {
+    "lines": 100,
+    "branches": 100
+  },
+  "packages/idempotency": {
+    "lines": 96.42,
+    "branches": 71.81
+  },
+  "packages/outbox": {
+    "lines": 93.9,
+    "branches": 81.15
+  },
+  "packages/policy": {
+    "lines": 95.05,
+    "branches": 87.32
+  },
+  "packages/privacy": {
+    "lines": 98.1,
+    "branches": 91.27
+  },
+  "packages/ui-native": {
+    "lines": 38.99,
+    "branches": 91.13
+  },
+  "packages/ui-tokens": {
+    "lines": 100,
+    "branches": 100
+  },
+  "packages/validation": {
+    "lines": 100,
+    "branches": 88.88
+  }
+}

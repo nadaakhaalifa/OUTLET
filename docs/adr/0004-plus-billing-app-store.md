@@ -7,7 +7,7 @@
 
 ## Context and problem statement
 
-Outlet NK Plus is an auto-renewing subscription (default 200 EGP/month, 800 EGP/year, admin-configurable). Apple requires in-app purchase (IAP) for subscriptions that unlock app features or content (3.1.1), but allows non-IAP payment for physical goods and services consumed outside the app (3.1.5(a)). Plus is designed as physical-commerce perks, yet the draft spec also lists in-app premium features that could pull it into 3.1.1.
+Z-OUTLET Plus is an auto-renewing subscription (default 200 EGP/month, 800 EGP/year, admin-configurable). Apple requires in-app purchase (IAP) for subscriptions that unlock app features or content (3.1.1), but allows non-IAP payment for physical goods and services consumed outside the app (3.1.5(a)). Plus is designed as physical-commerce perks, yet the draft spec also lists in-app premium features that could pull it into 3.1.1.
 
 ## Decision drivers
 
@@ -27,7 +27,7 @@ Outlet NK Plus is an auto-renewing subscription (default 200 EGP/month, 800 EGP/
 **Plan A, with Plan B designed in.**
 
 1. **Plus benefits are commerce-only:** free delivery with no minimum, 24h early access to drops, +5% coin cashback, free returns, monthly voucher/sale, priority support. The stylist stays **free with fair-use limits for everyone** and is never gated by Plus.
-2. **Billing via PSP tokenized recurring charges.** The paywall carries full auto-renew disclosure before purchase and in receipts, and cites 3.1.5(a) in App Review notes. Cancellation is ≤ 2 taps from Me → Outlet NK Plus.
+2. **Billing via PSP tokenized recurring charges.** The paywall carries full auto-renew disclosure before purchase and in receipts, and cites 3.1.5(a) in App Review notes. Cancellation is ≤ 2 taps from Me → Z-OUTLET Plus.
 3. **Entitlements are modelled in two groups** (`commerce_benefits`, `app_features`). Plan B then moves `app_features` to a "Stylist Pro" IAP SKU (StoreKit 2, optionally RevenueCat) by configuration.
 4. **Early App Review exposure:** submit a TestFlight build that includes the Plus paywall and ask App Review in advance. Track the outcome in the verify register (row 10).
 5. **Storefront:** Egypt and all non-US storefronts get no anti-steering relief. US link-out is out of scope for launch and, if ever enabled, sits behind a flag that reads `Storefront.current`.

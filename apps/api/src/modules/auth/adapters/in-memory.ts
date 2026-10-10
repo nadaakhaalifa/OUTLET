@@ -104,12 +104,39 @@ export class InMemoryUserDirectory implements UserDirectory {
     const user: User = {
       id: input.newId,
       phoneE164: input.phoneE164,
+      email: null,
       language: input.language,
       status: "active",
       createdAtMs: input.nowMs,
     };
     this.byId.set(user.id, user);
-    this.byPhone.set(user.phoneE164, user.id);
+    this.byPhone.set(input.phoneE164, user.id);
+    return user;
+  }
+  private readonly byIdentity = new Map<string, string>();
+
+  async findOrCreateByIdentity(input: {
+    provider: "apple" | "google";
+    subject: string;
+    email: string | null;
+    language: UserLanguage;
+    newId: string;
+    nowMs: number;
+  }): Promise<User> {
+    const key = `${input.provider}:${input.subject}`;
+    const existingId = this.byIdentity.get(key);
+    const existing = existingId === undefined ? undefined : this.byId.get(existingId);
+    if (existing !== undefined) return existing;
+    const user: User = {
+      id: input.newId,
+      phoneE164: null,
+      email: input.email,
+      language: input.language,
+      status: "active",
+      createdAtMs: input.nowMs,
+    };
+    this.byId.set(user.id, user);
+    this.byIdentity.set(key, user.id);
     return user;
   }
   async findById(id: string): Promise<User | null> {
@@ -127,6 +154,28 @@ export class InMemorySessionRepository implements SessionRepository {
   }
   async save(stored: StoredSession): Promise<void> {
     this.rows.set(stored.session.id, stored);
+  }
+  async compareAndSave(previous: StoredSession, next: StoredSession): Promise<boolean> {
+    const cur = this.rows.get(previous.session.id);
+    if (
+      cur === undefined ||
+      cur.family.records.length !== previous.family.records.length ||
+      cur.family.revokedAtMs !== previous.family.revokedAtMs ||
+      cur.session.revokedAtMs !== previous.session.revokedAtMs
+    ) {
+      return false;
+    }
+    this.rows.set(next.session.id, next);
+    return true;
+  }
+  async findByRefreshHash(tokenHash: string): Promise<StoredSession | null> {
+    for (const row of this.rows.values()) {
+      if (row.family.records.some((r) => r.tokenHash === tokenHash)) return row;
+    }
+    return null;
+  }
+  async listByUser(userId: string): Promise<readonly StoredSession[]> {
+    return [...this.rows.values()].filter((r) => r.session.userId === userId);
   }
 }
 

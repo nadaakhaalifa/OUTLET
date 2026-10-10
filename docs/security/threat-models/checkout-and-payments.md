@@ -5,7 +5,7 @@ Status: Draft for review · Date: 2026-10-10 · Method: STRIDE per element · Sp
 No checkout or payment code exists. The only related code in the repo is the money arithmetic in `packages/domain/src/money.ts`, which the checkout totals will depend on.
 
 ## Scope and assets
-Payment intents, webhook endpoint, order-group state, saved-card tokens (`psp_token`, brand, last4, expiry, fingerprint), COD risk decisions, client-supplied totals (never trusted). Card data never touches Outlet NK (SAQ A path, §B8).
+Payment intents, webhook endpoint, order-group state, saved-card tokens (`psp_token`, brand, last4, expiry, fingerprint), COD risk decisions, client-supplied totals (never trusted). Card data never touches Z-OUTLET (SAQ A path, §B8).
 
 ## Trust boundaries and actors
 Mobile app / web to API · API to PSP (hosted page, native SDK, webhooks) · API to courier (COD). Adversaries: price tamperers, card testers, webhook forgers, replay attackers, double-spend racers, COD abusers, malicious script injectors on any payment-adjacent web page.
@@ -35,4 +35,4 @@ Mobile app / web to API · API to PSP (hosted page, native SDK, webhooks) · API
 - Webhook IP allow-lists depend on PSP-published ranges; none are assumed here.
 
 ## Residual risk
-PSP-side compromise and hosted-page compromise are outside Outlet NK control; mitigated by reconciliation (see ledger-and-payouts) and by failover.
+PSP-side compromise and hosted-page compromise are outside Z-OUTLET control; mitigated by reconciliation (see ledger-and-payouts) and by failover.

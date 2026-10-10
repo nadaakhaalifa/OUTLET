@@ -13,18 +13,12 @@
     "@nestjs/platform-express": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.0",
-    "@opentelemetry/api": "^1.9.0",
     "zod": "^4.0.0",
-    "@outlet/domain": "workspace:*",
     "@outlet/validation": "workspace:*",
     "@outlet/policy": "workspace:*",
     "@outlet/idempotency": "workspace:*",
-    "@outlet/outbox": "workspace:*",
-    "@outlet/feature-flags": "workspace:*",
     "@outlet/auth-core": "workspace:*",
-    "@outlet/privacy": "workspace:*",
-    "@outlet/analytics": "workspace:*",
-    "@outlet/db": "workspace:*"
+    "@outlet/privacy": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",

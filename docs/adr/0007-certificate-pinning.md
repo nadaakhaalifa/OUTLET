@@ -8,7 +8,7 @@
 
 ## Context and problem statement
 
-The mobile app talks to the Outlet NK API over TLS. A network attacker who can present a certificate that the device trusts (a mis-issued public CA certificate, a user-installed or enterprise root, a malicious Wi-Fi captive proxy with an installed profile) can read or alter traffic unless the client constrains which keys it accepts. Traffic carries session tokens, addresses, order data and, later, payment redirects.
+The mobile app talks to the Z-OUTLET API over TLS. A network attacker who can present a certificate that the device trusts (a mis-issued public CA certificate, a user-installed or enterprise root, a malicious Wi-Fi captive proxy with an installed profile) can read or alter traffic unless the client constrains which keys it accepts. Traffic carries session tokens, addresses, order data and, later, payment redirects.
 
 The decision is whether the app should pin the server's public key (SPKI pinning) or rely on the platform default trust store plus Certificate Transparency (CT) enforcement and App Attest or Play Integrity at the application layer.
 

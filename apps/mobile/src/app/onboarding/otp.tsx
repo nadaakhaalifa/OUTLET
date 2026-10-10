@@ -49,7 +49,26 @@ export default function OtpStep() {
         return;
       }
       await services.tokens.save(result.value.tokens);
-      router.replace("/onboarding/dob");
+      const dob = services.session.pendingDob;
+      if (dob === null) {
+        // The date lived in memory only and the app restarted: ask again rather than trust nothing.
+        router.replace("/onboarding/dob");
+        return;
+      }
+      const age = await services.api.submitAge({ dob, attestedAtLeast18: true });
+      if (!age.ok) {
+        if (age.error.code === "age_not_eligible") {
+          await services.tokens.clear();
+          services.session.pendingDob = null;
+          router.replace("/onboarding/blocked");
+          return;
+        }
+        setErrorKey(errorKeyFor(age.error.code));
+        return;
+      }
+      services.session.pendingDob = null;
+      await services.setResume("language");
+      router.replace("/onboarding/language");
     } catch {
       setErrorKey("errors.generic");
     } finally {

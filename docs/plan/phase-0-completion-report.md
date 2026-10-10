@@ -7,32 +7,42 @@ Legend: DONE = artefact exists and what it claims is proven by a check I ran. PA
 
 ## 1. Headline
 
-- Phase 0 is not complete. The documentation and pure-domain parts are largely in place and consistent. Runtime proof is thin: nothing has run on real Postgres, a device, a simulator, GitHub Actions or a cloud account.
-- Typecheck is green everywhere. Tests are green everywhere. Lint is red (2 errors). The privacy inventory gate is red (12 errors), which contradicts the agent claim that it passed.
+- Phase 0 is not complete. Documentation, pure-domain code and the migrations are in place and, since the first audit pass, verified more deeply (real Postgres 16 run, whole-domain mutation score, measured coverage). Nothing has run on a device, simulator, GitHub Actions or a cloud account.
+- Re-audit of 2026-10-10 (second pass): typecheck, lint, all tests, coverage gate, Postgres 16 script and the mutation scores I re-ran match their claims. Two gates are RED: the privacy inventory gate (7 untagged `ledger_account_types` columns, 3 failing tests) and `pnpm depcruise` (2 errors, deep imports from `packages/db` tests into `packages/domain/src`).
 - No real personal data and no backend deployment exist, in line with the owner decisions. ADR-0002 is not accepted, so residency, key custody and every production adapter remain design intent.
 
 ## 2. Real check results
 
-Environment: Node v25.9.0 default; Node v24.15.0 (/usr/local/bin) used where tools reject 25. Target is Node 24.
+Environment: Node v25.9.0 default; Node v24.15.0 (/usr/local/bin) used for everything below (target is Node 24). Postgres.app 16 binaries via `PG_BIN`.
 
-| Command | Result |
+| Command | Result (re-run by the second audit) |
 |---|---|
-| `pnpm -r typecheck` | PASS. 15 of 16 workspace projects (root excluded), 0 errors. |
-| `pnpm -r test` | PASS. 15 projects, 662 tests, 0 failures. |
-| `pnpm lint` | FAIL, 2 errors: `packages/idempotency/src/idempotency.test.ts:141` ('calls' unused), `packages/policy/src/property.test.ts:2` ('expect' unused). |
-| `pnpm depcruise` (Node 24) | PASS. 255 modules, 728 dependencies, 0 violations. |
-| `pnpm i18n-check` | PASS, 117 keys, parity OK, 1 warning (`language.english` identical in AR and EN, plausibly intended). |
-| `node tooling/privacy/check-inventory.mjs` | FAIL. 92 tables, 582 fields, 12 errors, 1 warning. Untagged columns: `consent_records.seq`, `outbox_events.dead_lettered_at`, `outbox_events.next_attempt_at`, 9 columns of `saga_instances` (added by migration 0008). |
-| `node --test 'tooling/privacy/test/*.test.mjs'` | FAIL. One test asserts the checker has no errors and fails on the same 12 errors. Agent claim "31 of 31 pass" is stale. |
-| `node tooling/api/validate-openapi.mjs` | PASS. 156 operations, 87 writes, 184 schemas. |
-| `node tooling/observability/generate.mjs --check` and its 22 tests | PASS. |
-| terraform, conftest, opa, promtool | NOT INSTALLED. Terraform, Rego and Prometheus rules are unvalidated. |
-| Stryker mutation | NOT RE-RUN by me. Devops agent reports 45.08% (committed config) against the A2.10 floor of 80%. Treat as reported, unverified. |
-| Simulator, device, Metro bundle, `main.ts` boot, GitHub Actions run, real Postgres 16 | NOT RUN anywhere. |
+| `pnpm -r typecheck` | PASS, exit 0. |
+| `pnpm lint` | PASS, exit 0. (First audit's 2 errors are gone.) |
+| `pnpm -r test` | PASS. 15 projects, 1299 tests, 0 failures. |
+| `pnpm depcruise` | FAIL. 301 modules, 898 dependencies, 9 violations: 2 errors (`no-deep-import-into-shared-package`: `packages/db/src/ledger-owner.test.ts` and `packages/db/src/ledger-account-types.test.ts` import `packages/domain/src/chart-of-accounts/accounts.ts`), 7 `no-orphans` warnings (`stryker.config.mjs` in 7 packages). |
+| `pnpm i18n-check` | PASS, 119 keys, parity OK, 3 warnings (placeholder and the two language names identical in AR and EN). |
+| `node tooling/privacy/check-inventory.mjs` | FAIL. 93 tables, 594 fields, 7 errors, 1 warning: all 7 columns of `ledger_account_types` (migration 0011) untagged. |
+| `node --test tooling/privacy/test/*.test.mjs` | FAIL. 31 tests, 28 pass, 3 fail (consent purposes/spec fields, every migration column tagged, generator matches files on disk). |
+| `node tooling/api/validate-openapi.mjs` | PASS. 159 operations, 90 writes, 187 schemas. |
+| `node tooling/observability/generate.mjs --check` and tests | PASS, 15 generated files in sync; 22 of 22 tests. |
+| `node tooling/coverage/check.mjs` | PASS, all packages ok. Lines %: api 96.7, mobile 37.65, analytics 98.6, auth-core 97.6, db 98.69, domain 98.69 (branch 97.14), feature-flags 100, i18n 100, idempotency 98.57, outbox 98.56, policy 98.9, privacy 99.65, ui-native 38.99, ui-tokens 100, validation 100. Domain gate (>= 90) passes. Mobile and ui-native remain weak. |
+| `tooling/db/run-on-postgres16.sh` (PostgreSQL 16, Postgres.app) | PASS, `passed=44 failed=0`, migrations 0001-0011. Matches docs/plan/postgres16-run.md. pg_cron is absent on that server, so its jobs are unverified. |
+| Stryker `src/money.ts` | 94.52% (138 killed, 8 survived) when run alone; 93.84% (137 killed, 9 survived) inside the whole-domain run. |
+| Stryker `src/ledger.ts` | 100% (57 killed, 0 survived). |
+| Stryker whole `packages/domain` (committed config, ignoreStatic false) | 97.69% (1642 killed, 7 timeout, 37 survived, 2 no coverage), about 3m24s. Builders 93.75, spend 90.77, accounts 97.63, machines 100. |
+| terraform, conftest, opa, promtool, actionlint | NOT INSTALLED (docker binary exists but was not used). Terraform, Rego and Prometheus rules are unvalidated. |
+| Simulator, device, Metro bundle, `main.ts` boot, GitHub Actions run, managed Postgres, PgBouncer | NOT RUN anywhere. |
 
-Per-package test counts: analytics 100, auth-core 25, db 36, domain 195, feature-flags 10, i18n 4, idempotency 18, outbox 30, policy 78, privacy 33, ui-tokens 12, ui-native 18, validation 14, apps/mobile 36, apps/api 53. Total 662.
+Per-package test counts: analytics 138, auth-core 31, db 48, domain 466, feature-flags 25, i18n 6, idempotency 42, outbox 79, policy 119, privacy 70, ui-tokens 12, ui-native 18, validation 29, apps/mobile 49, apps/api 167. Total 1299.
 
-Note: the earlier claims of "419 tests in domain" included a stale `.stryker-tmp` sandbox that no longer exists. The correct domain count is 195 (state-machine 127, chart-of-accounts 36, money 23, ledger 9).
+Stale claims found in the audited documents (all proven by the re-run above):
+- `docs/plan/verification-run.md` row 8: "893 tests (domain 390 ...)" is stale (now 1299, domain 466). Row 13: "29 of 31 tests pass" is stale (28 of 31, 3 failures). Row 11: "117 keys, 7/7 tests, 3 warnings" keys now 119. Row 12: "156 operations, 87 writes, 184 schemas" is stale (159, 90, 187). Row 7 (lint 140 errors from a Stryker sandbox) and row 10 (depcruise not verified) are superseded: lint passes, depcruise runs and fails with 2 errors. Row 9 is still true (no package defines `build`; not re-checked).
+- `docs/engineering/coverage.md`: domain 97.65 / 90.29 is stale (98.69 / 97.14); every other package row changed; "apps/api no data, 16 of 54 tests fail" is false now (96.7 / 84.93, 167 pass). The "Uncovered in packages/domain" table was not re-verified.
+- `docs/engineering/mutation-testing.md`: "domain tests: 195 passing" is stale (466). The "45.08% committed config" headline and the per-file "Before" table are historical; current committed-config whole-domain score is 97.69%. The per-file "After" numbers I re-ran (money 94.52, ledger 100) are accurate; the machines (100) and "all together 97.75% (1642 killed, 7 timeout, 36 survived, 2 no coverage)" are within one survivor of my run (37 survived, 97.69%). `stryker.config.mjs` comment still cites 45.08% and `break: 40`, far below the real score; other packages carry their own ratchets (feature-flags 63, idempotency 71, analytics 63, outbox 52, policy 51, privacy 77, validation 76), none at 80, and mutation scores for those packages were not re-run by me.
+- `docs/plan/postgres16-run.md`: no false claim found. Caveats: the outbox claim query is a transcription, not shipped code; the TS runner was not exercised.
+
+Note: the first audit's "419 tests in domain" claim and its 662 total were already stale before this pass.
 
 ## 3. Phase 0 list (spec P3), item by item
 
@@ -54,10 +64,10 @@ Note: the earlier claims of "419 tests in domain" included a stale `.stryker-tmp
 | 14 | Observability + SLO dashboards | PARTIAL | `infra/observability` SLOs, 8 rule files, 7 dashboards generated and drift-checked. Nothing emits a metric; rules not loaded in Prometheus; dashboards not imported. OTel SDK not wired in API. |
 | 15 | Event taxonomy | DONE | `docs/analytics/event-taxonomy.md`, `@outlet/analytics` 100 tests. Caveats: no doc-drift CI check, no schema registry, spec path `docs/analytics/events.md` not created, no real SDK. |
 | 16 | STRIDE threat models | DONE (docs) | 13 models under `docs/security/threat-models`. Not line-by-line verified by author of the agent claim; I sampled. |
-| 17 | ADRs | PARTIAL | 0001-0017 exist. Only 0006 is Accepted. 0001 to 0005 and 0007 to 0017 are Proposed. `docs/adr/README.md` is stale: rows 0015-0017 still say "Pending, file not present" though the files exist. |
+| 17 | ADRs | PARTIAL | 0001-0019 exist. Only 0006 is Accepted; all others Proposed. `docs/adr/README.md` now lists 0015-0019 (fixed since the first pass). ADR-0018 and 0019 are Proposed. |
 | 18 | ERD | DONE (docs) | `docs/data-model.md` + 27 module files, 379 entities. Mermaid only syntax-linted, not rendered. Contains 87 flagged inconsistencies; several drift items point at code (see section 5). |
 | 19 | `data_inventory.yaml` | PARTIAL | File, RoPA, processors, retention, 4 DPIA skeletons, and checker exist. Checker FAILS today (section 2). 457 of 582 fields have no migration column yet (expected). DPIA risk ratings and sign-off blank (correct: DPO). |
-| 20 | Ledger core | PARTIAL | `@outlet/domain` money and ledger plus chart of accounts (17 types, 11 worked examples) tested; migration 0003 enforces balance and immutability on PGlite. Mismatches in section 5 (owner types, missing `ledger_account_types`). Mutation score below floor (reported). |
+| 20 | Ledger core | PARTIAL | `@outlet/domain` money and ledger plus chart of accounts (17 types, 11 worked examples) tested; migration 0003 enforces balance and immutability on PGlite. Migration 0010 added the `bank` owner type and 0011 added `ledger_account_types` (Postgres 16 run passes); inventory not yet tagged (section 2). Mutation score 97.69% on whole domain (re-run); other packages unmeasured by this audit. |
 | 21 | Outbox / inbox | PARTIAL | `@outlet/outbox` 30 tests, migrations 0004, 0008, 0009. Concurrency (SKIP LOCKED, multi-relay) never exercised; out-of-order commit risk documented not closed; no saga runtime; no Postgres adapter; hand-written validation (no Zod). |
 | 22 | Idempotency middleware | PARTIAL | `@outlet/idempotency` 18 tests plus Nest interceptor tested over HTTP with in-memory store. No Postgres adapter. OTP verify intentionally not idempotent. |
 | 23 | Feature flags | DONE | `@outlet/feature-flags` 10 tests, 14 kill switches default off. In-memory provider only; no provider timeout. |
@@ -83,16 +93,16 @@ Note: the earlier claims of "419 tests in domain" included a stale `.stryker-tmp
 
 Each item is a recorded discrepancy. I did not fix other agents' files.
 
-1. Privacy gate red. Agent claim "PASS, 0 errors, 31 of 31 tests" is false now. Cause: migration 0008 (saga_instances, outbox bookkeeping) and `consent_records.seq` are not tagged in `data_inventory.yaml`. This is also a demonstration that the gate works.
-2. Ledger owner types. Code `AccountOwner` is platform, psp, courier, bnpl_provider, bank, seller, shopper (`packages/domain/src/chart-of-accounts/accounts.ts`). Migration 0003 `ledger_accounts.owner_type` allows platform, store, user, psp, courier, bnpl_provider. `bank` (for `bank_settlement`) is not permitted by the DB; seller/shopper vs store/user naming differs. Posting `bank_settlement` would violate the CHECK.
-3. `ledger_account_types`. `docs/data-model/ledger.md` says it is a generated seed table mirroring `ACCOUNT_TYPES` (to prevent typo accounts). No migration creates it; `ledger_accounts.type` only has a regex check.
+1. Privacy gate red (re-confirmed). The earlier cause (migration 0008, `consent_records.seq`) is fixed; the gate is now red because the 7 columns of `ledger_account_types` (migration 0011) are untagged: 7 errors, 3 failing tests of 31. The gate works; the inventory lags the migrations again.
+2. Ledger owner types: partly resolved. Migration 0010 adds `bank` to the `owner_type` CHECK (verified on Postgres 16). The seller/shopper (domain) vs store/user (DB) naming difference remains with no adapter test proven by me.
+3. `ledger_account_types`: resolved. Migration 0011 creates and seeds it (17 types) with an FK; checked on Postgres 16 (typo type rejected). Not yet tagged in `data_inventory.yaml` (item 1).
 4. OrderGroup states. Code (`packages/domain/src/state-machine/machines/order-group.ts`): CREATED, RESERVED, PAYMENT_PENDING, PAID, CONFIRMED_COD, FULFILLING, COMPLETED, EXPIRED, FAILED, CANCELLED. `docs/data-model/orders.md`: PENDING_PAYMENT, PAID, CONFIRMED_COD, PARTIALLY_FULFILLED, COMPLETED, CANCELLED, FAILED. OpenAPI `OrderGroup.status` (lowercase): pending_payment, awaiting_customer_action, paid, confirmed_cod, ... Three vocabularies for one machine. OpenAPI also states a "proposed projection, not reconciled" for Return, Dispute, Refund statuses.
 5. Consent purposes. OpenAPI `ConsentState` lists `marketing_sms` and omits `location_precise` and `budget_insights`; B1, `@outlet/privacy`, migration 0006 and the API use nine purposes with no `marketing_sms`. The API rejects `marketing_sms` with 400 though the published contract lists it. The register also flags missing SMS purpose (I-06).
 6. Price-history path. OpenAPI `GET /v1/products/{productId}/price-history` vs `docs/specs/price-integrity.md` `GET /v1/skus/{id}/price-history`. Owner decision needed.
 7. Users status values. Migration 0006 `users.status` is pending, active, suspended, deleted; the data model (D-01) and API (`age_pending`, `age_band`) differ. No `push_token` column (D-03).
 8. Outbox migration vs data model. Migration 0004 outbox unpartitioned with PK(id) (D-02); data model expects partitioning.
 9. Data inventory vs data model naming (D-05, D-06): table names differ. Policy RLS names and session variables differ from data model (D-07) and RLS.md lists roles/variables not in 0002.
-10. ADR README stale for 0015 to 0017 (see item 17), and the devops report asks for an update to it.
+10. ADR README: fixed; lists 0015 to 0019.
 11. CLAUDE.md "Current phase" says "Do not write application code until that is approved" while apps/api, apps/mobile features and 13 packages exist. The master prompt P5.3 says "Wait for approval, then implement Phase 0". The owner decisions of 2026-10-10 may be that approval, but it is not recorded in CLAUDE.md or an ADR. Record it.
 12. CLAUDE.md contains no model-tier strategy (no mention of Fable, Opus, Sonnet or Haiku, and no "strategy" section). The task referred to "the CLAUDE.md strategy". The breakdown uses the tier names given in the task and flags this.
 13. ADR-0006 is Accepted and says "Expo SDK 57, no backend", with an owner approval note about "iOS-only start". The owner decision text for this run says one Expo codebase for iOS and Android with a spec Phase 2 Android launch. Not a conflict, but the Android timing needs to be stated once.
@@ -103,7 +113,7 @@ Each item is a recorded discrepancy. I did not fix other agents' files.
 18. "implemented" claims in security docs are limited to money and ledger rows; the migrations are labelled partial. I found no other control claimed as implemented that the code does not back. Controls that are described in docs but have no code: certificate pinning (deferred), JWT signing with KMS, App Attest and Play Integrity verification, rate limiting in shared storage, WORM audit shipping, DAST, Semgrep, pre-commit secret scan, SBOM signing.
 19. Fakes: all adapters inspected are labelled development fixtures (dev OTP `000000`, in-memory stores, fake API). No fake stock, reviews, timers or discounts were found in the files I sampled. Release builds refuse the fake API (reported; not exercised).
 20. Placeholder files presented as finished: none found as empty `export {}` after the reruns. Residual stubs by design: `packages/domain` state-machine README states design choices for owner review; Terraform skeleton is not a deployable stack; Grafana dashboards are skeletons; `RLS.md` is a spec, not enforcement.
-21. Mutation score: reported 45.08% with an enforced break threshold of 40 (ratchet). The A2.10 floor is 80% for critical modules and domain coverage >= 90% (CLAUDE.md). Coverage was not measured at all by anyone. Critical modules are therefore below the stated Definition of Done.
+21. Mutation score: whole `packages/domain` re-run at 97.69% (committed config, ignoreStatic false), so the earlier 45.08% is stale. Domain line coverage 98.69%, measured. Remaining gaps: `stryker.config.mjs` break is still 40 and its comment cites 45.08%; other packages carry ratchets of 51 to 77, below 80; mobile and ui-native line coverage are 37.65 and 38.99. Also new: `pnpm depcruise` is red (2 deep-import errors in `packages/db` tests).
 22. Node: `engines >=24.3.0` but the default shell node is 25.9; privacy and observability suites passed on 24.15.0 here; the agents ran some checks on 25.9. Not an inconsistency of the repo, but CI must pin 24.
 23. Generated artefacts: OpenAPI YAML is now hand-maintained (generator not committed); event taxonomy tables were generated once with no drift check.
 

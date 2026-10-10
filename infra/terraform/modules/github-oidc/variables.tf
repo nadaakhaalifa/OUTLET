@@ -16,8 +16,8 @@ variable "allowed_subjects" {
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_subjects) > 0 && alltrue([for s in var.allowed_subjects : !can(regex("^repo:\\*", s))])
-    error_message = "allowed_subjects must be non-empty and must not wildcard the repository."
+    condition     = length(var.allowed_subjects) > 0 && alltrue([for s in var.allowed_subjects : startswith(s, "repo:${var.github_repository}:") && !strcontains(s, "*")])
+    error_message = "allowed_subjects must be non-empty, belong to github_repository, and contain no wildcard."
   }
 }
 

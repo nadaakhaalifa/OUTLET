@@ -10,7 +10,7 @@ Templates (AR/EN, versioned), recipient contact data (P2/P3), push tokens, conse
 ## Threats and controls
 | ID | STRIDE | Threat | Control | Proving test | Status |
 |---|---|---|---|---|---|
-| NOTIF-S1 | S | Phishing that imitates Outlet NK messages, or a spoofed sender | Fixed sender IDs, message templates that never ask for OTP, payment or password, links only to verified domains, universal links only | NOTIF-T01 template lint rejects URLs outside the allow-list and shortened links | planned |
+| NOTIF-S1 | S | Phishing that imitates Z-OUTLET messages, or a spoofed sender | Fixed sender IDs, message templates that never ask for OTP, payment or password, links only to verified domains, universal links only | NOTIF-T01 template lint rejects URLs outside the allow-list and shortened links | planned |
 | NOTIF-T1 | T | Template or recipient list tampering by an insider to send scams | Templates versioned with admin dual approval for marketing and any template containing links; audit log; per-send recipient source recorded | NOTIF-T02 template publish without second approver fails | planned |
 | NOTIF-T2 | T | Deep link parameters tamper with navigation or state | Parameters validated by Zod and never trusted for auth; a link opens a screen, authorization still enforced on the API | NOTIF-T03 forged deep link parameters cannot expose another user's order | planned |
 | NOTIF-R1 | R | Dispute that a user consented to marketing or was notified | Consent record version checked at send time and stored on the log row; provider message ID stored | NOTIF-T04 marketing send without current channel consent is blocked and logged | planned |

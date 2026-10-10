@@ -4,7 +4,7 @@ Status: Draft for review · Date: 2026-10-10 · Spec refs: §T5 (crypto, post-qu
 
 ## Purpose and state
 
-This is the single list of every place Outlet NK uses cryptography, the algorithm chosen, where the key lives, who owns it, how it rotates and what proves it. It also holds the post-quantum migration plan that spec §T5 requires at ASVS Level 3.
+This is the single list of every place Z-OUTLET uses cryptography, the algorithm chosen, where the key lives, who owns it, how it rotates and what proves it. It also holds the post-quantum migration plan that spec §T5 requires at ASVS Level 3.
 
 **State on 2026-10-10.** Almost nothing is implemented. No KMS, no key registry table and no envelope-encryption code exist. What exists in the repository:
 
@@ -52,7 +52,7 @@ Status values: `planned`, `partial`, `implemented` with the same meaning as `asv
 | CR-20 | Release signing (iOS distribution, Android upload and app signing keys) | Platform defined | Apple and Google programs, EAS credentials service | On compromise; Play upload key reset procedure | Integrity of binaries | planned |
 | CR-21 | Container and artifact signing, provenance | Sigstore cosign (keyless OIDC identity or KMS key), SLSA provenance attestations | CI identity; transparency log | Keyless: per signature | Supply chain | planned |
 | CR-22 | Certificate pinning material (if ADR-0007 chooses pinning) | SHA-256 SPKI hashes of two or more CA intermediates or keys, plus backup pins; signed remote pin configuration | Pin set in the app and in a signed remote config; signing key in KMS | Pin set reviewed at every CA or certificate change and at least twice a year; rehearsed rotation | Transport integrity | planned (ADR-0007 Proposed) |
-| CR-23 | ETA e-receipt signing (if the delegated signing adapter is built) | Seller's ETA signing token or HSM; Outlet NK does not hold the seller's private key unless the delegation rules allow it | Seller HSM or token | Seller-driven | Tax documents | planned, **VERIFY BEFORE LAUNCH** (delegation rules) |
+| CR-23 | ETA e-receipt signing (if the delegated signing adapter is built) | Seller's ETA signing token or HSM; Z-OUTLET does not hold the seller's private key unless the delegation rules allow it | Seller HSM or token | Seller-driven | Tax documents | planned, **VERIFY BEFORE LAUNCH** (delegation rules) |
 | CR-24 | Seller channel OAuth tokens | Stored by reference: encrypted with CR-04 class key, KMS ARN in `channel_connections.oauth_token_ref` | KMS | On reconnect; yearly re-wrap | P2 | planned |
 | CR-25 | LLM and third-party provider API keys | Provider secrets | Secret manager, gateway scope only | 90 days or on staff change | Secrets | planned |
 
@@ -91,7 +91,7 @@ Compromise response: disable the version, rotate immediately, re-encrypt affecte
 | TLS key exchange (CR-01, CR-02) | Recorded traffic decrypted later | Enable hybrid post-quantum key exchange at the edge when the chosen edge and mobile OS TLS stacks support it; no application change needed | Edge provider support; mobile OS support (**VERIFY**) |
 | Signatures: JWT, checkpoints, OTA, release, cosign (CR-08, CR-15, CR-19, CR-21) | Forgery by a future quantum adversary; short-lived tokens are low risk, long-lived checkpoints and release signatures are higher | Algorithm agility via `kid` and a `alg` allow-list; keep signing behind the wrapper; for long-lived artifacts, plan dual signatures (classical plus post-quantum) once KMS and platform tooling support it | KMS and platform support for ML-DSA or SLH-DSA |
 | Envelope encryption (CR-04) | AES-256 acceptable | No change; KEK wrapping may move to a post-quantum or hybrid KEM when KMS offers one | KMS support |
-| Passkeys, App Attest, Play Integrity, Apple and Google JWKS | Controlled by third parties | Track provider roadmaps; Outlet NK cannot migrate these alone | Provider announcements |
+| Passkeys, App Attest, Play Integrity, Apple and Google JWKS | Controlled by third parties | Track provider roadmaps; Z-OUTLET cannot migrate these alone | Provider announcements |
 | Data retained for years (P3 backups, audit log, ledger snapshots) | Longest confidentiality horizon | Prefer minimization and shorter retention; ensure backups are encrypted with CR-03 and CR-04 only (symmetric) | Retention review yearly |
 
 **Concrete engineering steps, in order.**

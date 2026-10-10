@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Body } from "@nestjs/common";
-import { EgyptE164Schema, LocaleSchema, UuidSchema, maskPhone, toLanguage, DEFAULT_LOCALE } from "@outlet/validation";
+import { EgyptE164Schema, LocaleSchema, UuidSchema, toLanguage, DEFAULT_LOCALE } from "@outlet/validation";
 import { z } from "zod";
 import {
   Authorize,
@@ -8,9 +8,17 @@ import {
   RateLimit,
 } from "../../../platform/decorators";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
+import {
+  ageBlockedProblem,
+  ageGateRequiredProblem,
+  attestationFrom,
+  attestationProblem,
+  DeviceSchema,
+  iso,
+  tokenPair,
+} from "./http-common";
 import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
-import type { Attestation } from "../application/common";
 import type { GetSession, RevokeSession } from "../application/sessions";
 import type { RequestOtp } from "../application/request-otp";
 import type { VerifyOtp } from "../application/verify-otp";
@@ -24,15 +32,6 @@ const OtpRequestSchema = z
   })
   .strict();
 
-const DeviceSchema = z
-  .object({
-    platform: z.enum(["ios", "android"]),
-    install_id: UuidSchema,
-    app_version: z.string().max(32).optional(),
-    push_token: z.string().max(4096).optional(),
-  })
-  .strict();
-
 const OtpVerifySchema = z
   .object({
     challenge_id: UuidSchema,
@@ -40,25 +39,6 @@ const OtpVerifySchema = z
     device: DeviceSchema,
   })
   .strict();
-
-const iso = (ms: number): string => new Date(ms).toISOString();
-
-/**
- * Attestation travels in X-App-Attest (OpenAPI `appAttest`). The client platform header is NOT in
- * the OpenAPI skeleton yet (proposed: X-Client-Platform); without it attestation cannot be
- * routed to App Attest or Play Integrity.
- */
-function attestationFrom(req: ApiRequest, platformHint?: "ios" | "android"): Attestation | null {
-  const token = headerValue(req, "x-app-attest");
-  const platform = platformHint ?? headerValue(req, "x-client-platform");
-  if (token === undefined || token.length === 0 || token.length > 8192) return null;
-  if (platform !== "ios" && platform !== "android") return null;
-  return { token, platform };
-}
-
-function attestationProblem(): ProblemError {
-  return new ProblemError(403, "attestation-failed", "Device attestation failed", { code: "attestation_failed" });
-}
 
 @Controller()
 export class AuthController {
@@ -101,6 +81,10 @@ export class AuthController {
         };
       case "attestation_failed":
         throw attestationProblem();
+      case "age_gate_required":
+        throw ageGateRequiredProblem();
+      case "age_blocked":
+        throw ageBlockedProblem(result.blockedUntilMs);
       case "country_not_allowed":
         throw new ProblemError(422, "country-not-allowed", "Phone numbers from this country are not supported", {
           code: "country_not_allowed",
@@ -134,24 +118,7 @@ export class AuthController {
     });
     switch (result.kind) {
       case "ok":
-        return {
-          access_token: result.accessToken,
-          access_expires_at: iso(result.accessExpiresAtMs),
-          refresh_token: result.refreshToken,
-          refresh_expires_at: iso(result.refreshExpiresAtMs),
-          second_factor_required: false,
-          user: {
-            id: result.user.id,
-            phone_masked: maskPhone(result.user.phoneE164),
-            email: null,
-            locale: result.user.language === "ar" ? "ar-EG" : "en",
-            age_band: "unverified",
-            limited_capacity: false,
-            phone_verified: true,
-            status: "active",
-            created_at: iso(result.user.createdAtMs),
-          },
-        };
+        return tokenPair(result);
       case "attestation_failed":
         throw attestationProblem();
       case "expired":
@@ -186,7 +153,7 @@ export class AuthController {
   @Authorize({ action: "delete", resourceType: "session", resolver: SESSION_RESOLVER, idParam: "sessionId" })
   @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
   async revokeSessionRoute(@Param("sessionId") sessionId: string): Promise<void> {
-    const revoked = await this.revokeSession.execute(sessionId);
+    const revoked = await this.revokeSession.execute(sessionId, "user_revoked");
     if (!revoked) throw Problems.notFound();
   }
 }

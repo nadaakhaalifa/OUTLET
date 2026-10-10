@@ -19,6 +19,14 @@ const RawEnvSchema = z.object({
   OTP_PEPPER: z.string().min(32).max(256).optional(),
   /** HMAC key for IP hashes stored with consent records. */
   IP_HASH_KEY: z.string().min(32).max(256).optional(),
+  /** HMAC key for age-gate block identifiers (device and DOB). Required in production. */
+  AGE_BLOCK_KEY: z.string().min(32).max(256).optional(),
+  /** WebAuthn relying party id and the exact origin passkey responses must come from. */
+  PASSKEY_RP_ID: z.string().min(1).max(253).default("outletnk.invalid"),
+  PASSKEY_ORIGIN: z.string().url().default("https://outletnk.invalid"),
+  /** Audience (client id) the Apple and Google ID tokens must be issued for. */
+  APPLE_CLIENT_ID: z.string().min(1).max(256).default("com.outletnk.app"),
+  GOOGLE_CLIENT_ID: z.string().min(1).max(256).default("outletnk-ios.apps.googleusercontent.com"),
   /** Version of the consent texts currently shown (applies to every purpose until texts diverge). */
   CONSENT_TEXT_VERSION: z.coerce.number().int().min(1).max(10_000).default(1),
 });
@@ -43,6 +51,11 @@ export interface AppConfig {
   readonly otpPepper: string | undefined;
   readonly ipHashKey: string | undefined;
   readonly consentTextVersion: number;
+  readonly ageBlockKey: string | undefined;
+  readonly passkeyRpId: string;
+  readonly passkeyOrigin: string;
+  readonly appleClientId: string;
+  readonly googleClientId: string;
 }
 
 export function loadConfig(env: Readonly<Record<string, string | undefined>>): AppConfig {
@@ -59,6 +72,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
   if (production && devFixtures) issues.push("DEV_FIXTURES: in-memory fixtures are refused in production");
   if (production && raw.OTP_PEPPER === undefined) issues.push("OTP_PEPPER: required in production");
   if (production && raw.IP_HASH_KEY === undefined) issues.push("IP_HASH_KEY: required in production");
+  if (production && raw.AGE_BLOCK_KEY === undefined) issues.push("AGE_BLOCK_KEY: required in production");
   if (issues.length > 0) throw new ConfigError("invalid environment configuration", issues);
   return {
     env: raw.NODE_ENV,
@@ -69,5 +83,10 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     otpPepper: raw.OTP_PEPPER,
     ipHashKey: raw.IP_HASH_KEY,
     consentTextVersion: raw.CONSENT_TEXT_VERSION,
+    ageBlockKey: raw.AGE_BLOCK_KEY,
+    passkeyRpId: raw.PASSKEY_RP_ID,
+    passkeyOrigin: raw.PASSKEY_ORIGIN,
+    appleClientId: raw.APPLE_CLIENT_ID,
+    googleClientId: raw.GOOGLE_CLIENT_ID,
   };
 }

@@ -42,6 +42,13 @@ resource "aws_iam_role" "ci" {
   assume_role_policy   = data.aws_iam_policy_document.trust.json
   max_session_duration = 3600
   tags                 = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = var.create_provider || var.existing_provider_arn != null
+      error_message = "Set existing_provider_arn when create_provider is false, otherwise the trust policy has no federated principal."
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "ci" {

@@ -7,7 +7,7 @@
 
 ## Context and problem statement
 
-Outlet NK handles money, stock and personal data across about 30 backend modules (auth, catalog, inventory, checkout, ledger, payouts, tax-eta, returns and so on), three web/mobile clients and a few ML services. The priority order in the spec is correctness, then security and privacy, then compliance, reliability, performance and delight. The team is small. We need a structure that keeps money and stock transactional and keeps module boundaries honest, without the operational cost of distributed services.
+Z-OUTLET handles money, stock and personal data across about 30 backend modules (auth, catalog, inventory, checkout, ledger, payouts, tax-eta, returns and so on), three web/mobile clients and a few ML services. The priority order in the spec is correctness, then security and privacy, then compliance, reliability, performance and delight. The team is small. We need a structure that keeps money and stock transactional and keeps module boundaries honest, without the operational cost of distributed services.
 
 ## Decision drivers
 

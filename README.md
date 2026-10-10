@@ -1,9 +1,9 @@
-# Outlet NK (spec name: HAUL)
+# Z-OUTLET (spec name: HAUL)
 
 Egypt-first, multi-vendor outlet marketplace: local and global brands sell clearance stock at real, machine-verified discounts.
 
 - **Platforms:** iOS (Expo / React Native) first, then Android; Seller Center and Admin Console on the web.
-- **Source of truth:** "HAUL master prompt v3" (kept in the Outlet NK Claude Project). Where it says HAUL, read Outlet NK.
+- **Source of truth:** "HAUL master prompt v3" (kept in the Z-OUTLET Claude Project). Where it says HAUL, read Z-OUTLET.
 - **Current phase:** Phase 0, Foundations.
 
 ## Repository layout (target, per spec §T1)

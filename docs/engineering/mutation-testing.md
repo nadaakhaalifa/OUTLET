@@ -1,5 +1,7 @@
 # Mutation testing
 
+> **Update 2026-10-10:** the 45.08% baseline below is historical. After targeted tests, per-file Stryker runs on Node 24 give 97.69% for the whole domain (re-measured by the independent re-audit) and 96-99% for idempotency, outbox, policy and feature-flags (agent-reported, not re-run). Policy: ADR-0019 (per-module floors, ratchet, 80% hard gate on critical modules). Per-package `break` values are ratchets at the measured baseline and should be raised to 80 for the critical modules. Stryker does not exit cleanly on Node 25; run on Node 24.
+
 Target (A2.10): mutation score >= 80% on ledger, pricing/VRP, promotions, reservation, refunds and
 subscription billing. Tool: StrykerJS 10 with the Vitest runner. Scope today: `packages/domain`.
 
@@ -73,3 +75,79 @@ PATH=/usr/bin:$PATH pnpm mutation
 ```
 
 This does not affect Linux CI runners.
+
+## Per-file results after targeted killing tests (2026-10-10, ignoreStatic=false, Node 24)
+
+Run per file group with `cd packages/domain && stryker run ../../stryker.config.mjs --mutate <files>`
+(the `pnpm mutation -- --mutate` form is rejected by the CLI wrapper; pass `--mutate` after the
+config path, with paths relative to `packages/domain`). Scores are `total` (killed + timeout over all
+mutants).
+
+| File group | Before | After |
+|---|---|---|
+| `money.ts` | 73.97% | 94.52% |
+| `ledger.ts` | 78.95% | 100% |
+| `state-machine/machine.ts` | 72.73% (89.09% once import-time crashes are counted as kills) | 100% |
+| `state-machine/errors.ts` | 0% | 100% |
+| `state-machine/machines/*.ts` (13 files) | 23.01% | 100% |
+| `chart-of-accounts/accounts.ts` | 60.87% | 97.63% |
+| `chart-of-accounts/builders.ts` | 49.65% | 93.75% |
+| `chart-of-accounts/spend.ts` | 43.08% | 90.77% |
+| All of the above together | n/a | 97.75% (1642 killed, 7 timeout, 36 survived, 2 no coverage) |
+
+New test files: `src/money.mutation.test.ts`, `src/ledger.mutation.test.ts`,
+`src/state-machine/machines.table.test.ts`, `src/chart-of-accounts/mutation.test.ts`.
+
+### Why the machine tables scored 23%
+
+Transition tables are module-level object literals. A mutant that breaks one (for example
+`initial: ""`) makes `defineMachine` throw while the module is imported. When the importing test
+file loads that module statically, vitest reports a collection error with zero tests, and Stryker's
+vitest runner records the mutant as **Survived**. The fix is in the tests, not the source:
+`machines.table.test.ts` imports the registry dynamically inside `beforeAll`/`it`, so the same crash
+becomes a failing test and the mutant is Killed. Keep it that way: do not add a top-level static
+import of `registry` or any `machines/*.ts` module to that file, and do not build machines at
+module level in it.
+
+### Equivalent or engine-dependent survivors (not killable, listed honestly)
+
+`money.ts` (8):
+- `abs`: `n < 0n` to `n <= 0n` (-0n is 0n).
+- `divideRoundHalfEven`: `remainder === 0n` to `false` (a zero remainder never rounds away anyway);
+  `numerator < 0n` to `<= 0n` and `denominator < 0n` to `<= 0n` in `sign` (zero numerator returns
+  earlier, zero denominator throws earlier).
+- `allocate`: `total.amount < 0n` to `<= 0n` (negating zero); `ra > rb` to `>=` (guarded by
+  `ra !== rb`); `index === undefined` break (leftover is always smaller than the number of positive
+  weights, so the index exists).
+- Sort comparator tie-break mutants `if (ra !== rb)` to `true` and `a - b` to `a + b` survive under
+  V8's TimSort because it only ever calls the comparator with the later element first; they are
+  engine-dependent, not covered by the language contract.
+
+`accounts.ts` (4 survived, 2 no coverage), `describeAccount`: the `?? ""` and `?? "Stryker was here!"`
+fallbacks are unreachable because `split` always yields index 0; `typeName === "store_credit" &&
+rest.length >= 2` mutants (`||`, `true`, `> 2`) produce the same parameters or the same error
+because no other type has two parameters.
+
+`builders.ts` (18): 14 are `side: "credit"` to `side: ""` (the posting code treats any non-`"debit"`
+side as credit, so the string is unobservable); `base * direction` to `base / direction`
+(direction is always 1n or -1n); `shipping.amount > 0n` to `true` or `>= 0n` (zero components are
+skipped by `toPostings`). Making `Side` a closed union and testing `toPostings` with an invalid
+side would remove the first group; that is a source change outside this task.
+
+`spend.ts` (6): `.slice()` removal (`filter` already returns a copy); `compare(...) <= 0` to `< 0`
+(equal balance and remaining produce the same take); four comparator tie mutants on equal keys,
+engine-dependent as above.
+
+### Known limits of this measurement
+
+- Everything pinned in `machines.table.test.ts` and `ACCOUNT_TYPES` is a characterization of the
+  current tables, reviewed against the spec only at the level of "is a plausible transition". They
+  detect change, they do not prove the tables match spec A2.6 and T4. Domain review of the tables
+  is still owed.
+- `ACCOUNT_TYPES` prose (`purpose`, `lifecycle`, `verify`) is pinned verbatim so doc edits require a
+  test edit. That is deliberate but noisy.
+- Not run: the other `packages/domain/src` files (this task covered money, ledger, state machines
+  and the chart of accounts only). `stryker.config.mjs` still has `break: 40`; it can be raised to
+  80 for these files once the remaining domain files are covered. That file was not edited here.
+- vitest's `related` mode does not need to change, but Stryker leaves `.stryker-tmp*` directories
+  behind if a run is killed; delete them, because vitest then collects the stale copies.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Button, TextField } from "../../ui";
@@ -15,6 +15,18 @@ export default function PhoneStep() {
   const [raw, setRaw] = useState("");
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The age gate comes first. Without an accepted date of birth in this session, go back to it.
+  useEffect(() => {
+    if (services.session.pendingDob === null) {
+      void services.getResume().then(
+        (r) => {
+          if (r !== "phone") router.replace("/onboarding/dob");
+        },
+        () => router.replace("/onboarding/dob"),
+      );
+    }
+  }, [router, services]);
 
   const send = async () => {
     const phone = normalizeEgyptianPhone(raw);

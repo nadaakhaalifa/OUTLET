@@ -1,5 +1,5 @@
 export const en = {
-  app: { name: "Outlet NK" },
+  app: { name: "{{product}}" },
   tabs: { home: "Home", explore: "Explore", stylist: "Stylist", bag: "Bag", me: "Me" },
   home: {
     title: "Real deals, verified",
@@ -51,8 +51,9 @@ export const en = {
       changeNumber: "Use a different number",
     },
     dob: {
+      checking: "Checking your age",
       title: "Your date of birth",
-      body: "Outlet NK is for people aged 18 and over. We use your date of birth only to check your age.",
+      body: "{{product}} is for people aged 18 and over. We use your date of birth only to check your age.",
       day: "Day",
       month: "Month",
       year: "Year",
@@ -75,12 +76,13 @@ export const en = {
       save: "Save my choices",
       skipNote: "If you skip, all of these stay off.",
     },
-    welcome: { title: "You are all set", body: "Welcome to Outlet NK.", start: "Start browsing" },
+    welcome: { title: "You are all set", body: "Welcome to {{product}}.", start: "Start browsing" },
   },
   age: {
     blocked: {
+      until: "You can try again after {{date}}.",
       title: "We cannot create an account right now",
-      body: "Outlet NK is only for people aged 18 and over, so we cannot set up an account for you. We have not kept the date of birth you entered.",
+      body: "{{product}} is only for people aged 18 and over, so we cannot set up an account for you. We have not kept the date of birth you entered.",
       later: "Thank you for understanding. You are welcome to come back once you are 18.",
       deviceBlockedBody: "We cannot continue on this device at the moment. Please try again later.",
       close: "Back to the start",

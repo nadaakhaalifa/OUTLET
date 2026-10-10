@@ -17,6 +17,7 @@ permissions:
 jobs:
   guard:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       enabled: ${{ steps.check.outputs.enabled }}
     steps:
@@ -45,6 +46,11 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+      # The runner image has no pnpm; the SBOM step below uses `pnpm dlx`.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
       - uses: sigstore/cosign-installer@v3
       - uses: docker/setup-buildx-action@v3
       - id: meta
@@ -92,6 +98,7 @@ jobs:
   verify:
     needs: [build, provenance]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: sigstore/cosign-installer@v3
       - name: Verify signature and provenance as a deployer would

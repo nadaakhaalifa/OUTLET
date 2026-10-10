@@ -29,7 +29,7 @@ Option 1 for Phases 1–2, with Option 3 kept open as a Phase 3 add-on behind a 
 **Store credit rules**
 - **No top-up** by cash or card. Value enters only as: refund the customer chose to take as credit, gift-card redemption, cashback coins, referral credit, goodwill.
 - **No withdrawal** and **no P2P transfer.** The only cash-out is a legally required refund to the original payment method, and that goes through the PSP, never out of the wallet.
-- **Spendable only on Outlet NK**, on goods sold there. Not usable for gift cards or Plus (anti-laundering).
+- **Spendable only on Z-OUTLET**, on goods sold there. Not usable for gift cards or Plus (anti-laundering).
 - UI copy says "credit", never "cash" or "money".
 - **Sub-balances** with their own expiry: `refund_credit` (none), `gift_card` (per card, default 3 y), `cashback_coins` (12 months), `referral_credit` (6 months), `goodwill` (90 days). Spend soonest-expiring first, refund credit last.
 
@@ -43,8 +43,8 @@ Option 1 for Phases 1–2, with Option 3 kept open as a Phase 3 add-on behind a 
 - A `store_credit` ledger account is held per user and sub-balance.
 
 **Seller money**
-- Merchant-of-record funds are **never pooled in an Outlet NK account.** Collections go through a licensed PSP/aggregator, and the ledger records allocations (`seller_payable:{store}`).
-- Whether Outlet NK may collect as an aggregator and pay sellers out, or must use the PSP's sub-merchant/split product, is **undecided** (question 4). The ledger is built so either works. The payout adapter stays unimplemented until it is answered.
+- Merchant-of-record funds are **never pooled in a Z-OUTLET account.** Collections go through a licensed PSP/aggregator, and the ledger records allocations (`seller_payable:{store}`).
+- Whether Z-OUTLET may collect as an aggregator and pay sellers out, or must use the PSP's sub-merchant/split product, is **undecided** (question 4). The ledger is built so either works. The payout adapter stays unimplemented until it is answered.
 
 **Refund routing (`RefundRouter`)**
 - Card / Apple Pay / Meeza → PSP refund to original.
@@ -70,3 +70,13 @@ Option 1 for Phases 1–2, with Option 3 kept open as a Phase 3 add-on behind a 
 ## Needed to finalize
 
 Written opinion on closed-loop status (question 3), the aggregator versus sub-merchant flow-of-funds decision (question 4), and gift-card expiry limits (row 9).
+
+## Research update (2026-10-10, deep-research run, secondary sources only)
+
+- No verified source settles whether closed-loop store credit or gift cards sit outside CBE e-money rules. A secondary summary points at CBE Regulation Book 12.7, which reportedly treats closed-loop prepaid cards such as gift cards as a regulated category issuable by contracted banks. This was not checked against the primary text and raises the risk for gift cards in particular.
+- No verified source describes Paymob, Kashier or Fawry sub-merchant/split payout products for marketplaces. This is an evidence gap, not a finding.
+
+**Consequences for the build (Proposed):**
+1. Gift-card sale and redemption ship behind a kill switch that is **off by default** until written counsel/CBE confirmation exists (register row 3). Refund-origin store credit is lower risk and may proceed behind the same flag discipline.
+2. Seller payouts sit behind a `PayoutPort`/marketplace-split port. No seller funds ever rest in an Outlet-owned account; the ledger records allocations only. The adapter is chosen after the PSP contract is read.
+3. Domain and ledger already separate store credit from a partner wallet, so a licensed-partner path needs no domain change.

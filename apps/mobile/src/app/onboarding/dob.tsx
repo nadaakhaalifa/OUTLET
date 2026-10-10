@@ -6,7 +6,7 @@ import { spacing } from "@outlet/ui-tokens";
 import { Banner, Button, Checkbox, Text, TextField } from "../../ui";
 import { StepScaffold } from "../../components/Scaffold";
 import { errorKeyFor } from "../../features/api-errors";
-import { assessAge } from "../../features/dob";
+import { ageGateErrorKey, runAgeGate } from "../../features/age-gate";
 import { sha256Hex } from "../../workspace";
 import { useServices } from "../../state/services";
 
@@ -21,44 +21,58 @@ export default function DobStep() {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [limited, setLimited] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   const submit = async () => {
     setBusy(true);
     setErrorKey(null);
     try {
       const deviceId = await services.installId();
-      const existing = (await services.loadSoftBlock()) ?? undefined;
-      const outcome = assessAge({ day, month, year }, attested, deviceId, existing, {
+      const outcome = await runAgeGate({ day, month, year }, attested, deviceId, {
+        port: services.ageGate,
         hasher: sha256Hex,
         clock: services.clock,
+        loadBlock: services.loadSoftBlock,
+        saveBlock: services.saveSoftBlock,
       });
       switch (outcome.kind) {
         case "invalid_date":
-          setErrorKey(day === "" || month === "" || year === "" ? "onboarding.dob.errorIncomplete" : "onboarding.dob.errorInvalid");
+          setErrorKey(outcome.incomplete ? "onboarding.dob.errorIncomplete" : "onboarding.dob.errorInvalid");
           return;
         case "needs_attestation":
           setErrorKey("onboarding.dob.errorAttest");
           return;
-        case "blocked_under_18":
-          // Keep only the hashed device block. Drop the half-created session; the DOB is never sent or stored.
-          await services.saveSoftBlock(outcome.block);
+        case "blocked":
+          // Only the hashed device block is kept. The date typed here is dropped, never stored.
           await services.tokens.clear();
+          services.session.pendingDob = null;
           router.replace("/onboarding/blocked");
           return;
-        case "blocked_device":
-          await services.tokens.clear();
-          router.replace("/onboarding/blocked");
+        case "error":
+          setErrorKey(ageGateErrorKey(outcome.reason));
+          setOffline(outcome.reason === "network");
           return;
-        case "accepted": {
-          const result = await services.api.submitAge({ dob: outcome.dob, attestedAtLeast18: true });
-          if (!result.ok) {
-            setErrorKey(errorKeyFor(result.error.code));
+        case "allowed": {
+          setOffline(false);
+          setLimited(outcome.limitedCapacity);
+          const tokens = await services.tokens.load();
+          if (tokens !== null) {
+            // Signed in on this install already (restart or existing account): submit now.
+            const result = await services.api.submitAge({ dob: outcome.dob, attestedAtLeast18: true });
+            if (!result.ok) {
+              setErrorKey(errorKeyFor(result.error.code));
+              return;
+            }
+            await services.setResume("language");
+            await services.analytics.trackOnboardingStep("dob", false);
+            router.replace("/onboarding/language");
             return;
           }
-          setLimited(outcome.limitedCapacity);
-          await services.setResume("language");
+          // First pass: keep the date in memory only; it is sent once after the phone is verified.
+          services.session.pendingDob = outcome.dob;
+          await services.setResume("phone");
           await services.analytics.trackOnboardingStep("dob", false);
-          router.replace("/onboarding/language");
+          router.replace("/onboarding/phone");
           return;
         }
       }
@@ -90,7 +104,13 @@ export default function DobStep() {
       <Checkbox label={t("onboarding.dob.attest")} value={attested} onValueChange={setAttested} />
       {errorKey === "onboarding.dob.errorAttest" ? <Banner tone="error" message={t(errorKey)} /> : null}
       {limited ? <Banner tone="info" message={t("onboarding.dob.limitedCapacity")} /> : null}
-      <Button title={t("onboarding.dob.submit")} onPress={() => void submit()} loading={busy} />
+      {busy ? <Text variant="caption" secondary>{t("onboarding.dob.checking")}</Text> : null}
+      <Button
+        title={offline ? t("common.retry") : t("onboarding.dob.submit")}
+        onPress={() => void submit()}
+        loading={busy}
+        disabled={busy}
+      />
     </StepScaffold>
   );
 }

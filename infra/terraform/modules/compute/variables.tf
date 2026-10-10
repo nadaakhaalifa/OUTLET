@@ -22,6 +22,12 @@ variable "secret_arns" {
   default     = []
 }
 
+variable "secrets_kms_key_arn" {
+  description = "CMK that encrypts the secrets in secret_arns. The execution role gets kms:Decrypt on it."
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

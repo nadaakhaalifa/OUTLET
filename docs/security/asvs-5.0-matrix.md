@@ -83,9 +83,9 @@ Status: Draft for review · Date: 2026-10-10 · Spec refs: §T5, §B8, §A2.9 ·
 
 | Area | Level | Module | Control | Proving test | Status |
 |---|---|---|---|---|---|
-| Passkeys (WebAuthn) mandatory for sellers and admins, offered to shoppers | L2, L3 admin | auth | Fixed RP ID, single-use challenge, counter and clone detection | AUTH-T09, AUTH-T21 | planned |
+| Passkeys (WebAuthn) mandatory for sellers and admins, offered to shoppers | L2, L3 admin | auth | Fixed RP ID, single-use challenge, counter and clone detection | AUTH-T09, AUTH-T21 | partial (challenge, origin and counter checks tested with a fake verifier; no real WebAuthn adapter) |
 | OTP lifecycle: length, TTL, attempt cap, keyed hash storage, constant-time compare | L2 | auth | 6 digits, 5 min, 5 attempts, HMAC at rest | AUTH-T03, AUTH-T04 | planned |
-| Federated sign-in token verification (Apple, Google) | L2 | auth | JWKS verification, `iss`, `aud`, `exp`, nonce | AUTH-T06 | planned |
+| Federated sign-in token verification (Apple, Google) | L2 | auth | JWKS verification, `iss`, `aud`, `exp`, nonce | AUTH-T06 | partial (Apple and Google ID-token verifier tested against local keys; no JWKS fetch adapter) |
 | Credential recovery and account merge without bypass | L2 | auth | Step-up on merge; no knowledge-based recovery | AUTH-T14 | planned |
 | Anti-enumeration and brute-force defences | L2 | auth | Identical responses, per phone and device limits | AUTH-T16, AUTH-T18 | planned |
 | Multi-factor and step-up for sensitive actions | L3 admin, payments | auth, payouts | Step-up for IBAN change, store credit use, export | AUTH-T05, LED-T13 | planned |
@@ -94,8 +94,8 @@ Status: Draft for review · Date: 2026-10-10 · Spec refs: §T5, §B8, §A2.9 ·
 
 | Area | Level | Module | Control | Proving test | Status |
 |---|---|---|---|---|---|
-| Refresh token rotation, reuse detection, family revocation | L2 | auth | Opaque, hashed at rest, rotated on every use | AUTH-T07 | partial (hash-only column and family tables in `packages/db/migrations/0006_identity_consent.sql`; logic not written) |
-| Session termination and listing by the user | L2 | auth, users | `DELETE /v1/me/sessions/{id}` scoped by user | AUTH-T22 | planned |
+| Refresh token rotation, reuse detection, family revocation | L2 | auth | Opaque, hashed at rest, rotated on every use | AUTH-T07 | partial (rotation, reuse detection, device binding implemented and tested in `apps/api/src/auth.identity.http.test.ts` over in-memory fixtures; hash-only column and family tables in `packages/db/migrations/0006_identity_consent.sql`; no Postgres adapter) |
+| Session termination and listing by the user | L2 | auth, users | `DELETE /v1/me/sessions/{id}` scoped by user | AUTH-T22 | partial (listing and revocation scoped to the caller, 404 for foreign ids, tested over HTTP; in-memory only) |
 | Re-authentication for sensitive actions; admin session lifetime | L3 admin | auth, admin | Short admin sessions; IP restriction for Finance and Super-admin | ADM-T01, ADM-T02 | planned |
 | Device binding and attestation | L2 | auth, mobile | App Attest and Play Integrity as risk signal | AUTH-T10, AUTH-T11 | planned |
 
@@ -113,7 +113,7 @@ Status: Draft for review · Date: 2026-10-10 · Spec refs: §T5, §B8, §A2.9 ·
 
 | Area | Level | Module | Control | Proving test | Status |
 |---|---|---|---|---|---|
-| Algorithm allow-list, signature verification, `kid` handling, no `none` | L2 | auth-core | Pinned algorithm in verifier config, asymmetric keys | AUTH-T08 | planned |
+| Algorithm allow-list, signature verification, `kid` handling, no `none` | L2 | auth-core | Pinned algorithm in verifier config, asymmetric keys | AUTH-T08 | partial (ID-token verifier pins RS256; access tokens are still opaque dev strings) |
 | Claim validation: `iss`, `aud`, `exp`, `nbf`, `amr`; short lifetime | L2 | auth-core | 10 minute access tokens, audience-scoped | AUTH-T08 | planned |
 
 ## V10 OAuth and OIDC
@@ -121,7 +121,7 @@ Status: Draft for review · Date: 2026-10-10 · Spec refs: §T5, §B8, §A2.9 ·
 | Area | Level | Module | Control | Proving test | Status |
 |---|---|---|---|---|---|
 | OAuth client behaviour toward Apple, Google and seller channel providers (state, PKCE, redirect URI exact match, token storage in KMS) | L2 | auth, sellers | PKCE, exact redirect match, tokens by reference | SELL-T09 | planned |
-| Authorization server requirements (V10.4 area) | L2 conditional | none | Applies only if Outlet NK issues tokens to third parties; not in scope now. Reopen the auth threat model if that changes | n/a | planned (conditional, not applicable today) |
+| Authorization server requirements (V10.4 area) | L2 conditional | none | Applies only if Z-OUTLET issues tokens to third parties; not in scope now. Reopen the auth threat model if that changes | n/a | planned (conditional, not applicable today) |
 
 ## V11 Cryptography
 

@@ -2,7 +2,7 @@
 
 Phase 0 spec for Phase 1 "lite" and Phase 2 "full" engines · Spec refs: master prompt §9, §B5, §A2.4, §A3, §Phase 1/2 scope · Status: Draft for review
 
-Naming: the master prompt says HAUL, the product is Outlet NK. Internal identifiers keep the neutral prefix `price_` and never the brand.
+Naming: the master prompt says HAUL, the product is Z-OUTLET. Internal identifiers keep the neutral prefix `price_` and never the brand.
 
 Legal status of this document: it is an engineering spec, not legal advice. Every item tagged **VERIFY BEFORE LAUNCH** must be confirmed by Egyptian counsel before the related behaviour ships. The text of Law 181/2018 Art. 9 has not been verified by us. The EU 30-day prior-price rule is used only as a design model, not as Egyptian law.
 
@@ -10,7 +10,7 @@ Legal status of this document: it is an engineering spec, not legal advice. Ever
 
 The engine exists for one reason: a shopper must never see a "% off" that the platform cannot defend with evidence. Sellers never type a "was" price that is displayed blindly.
 
-**Central finding.** Outlet NK sells clearance, end-of-season, overstock and sample stock. A large share of listings are one-off or short-run SKUs listed once at their final price. Such a SKU has no 30-day price history on the platform, so an own-history engine alone produces no verified discount for exactly the inventory the product is about. (How large the share is, is unmeasured; the tier mix metric in section 14 measures it.) The spec therefore does three things:
+**Central finding.** Z-OUTLET sells clearance, end-of-season, overstock and sample stock. A large share of listings are one-off or short-run SKUs listed once at their final price. Such a SKU has no 30-day price history on the platform, so an own-history engine alone produces no verified discount for exactly the inventory the product is about. (How large the share is, is unmeasured; the tier mix metric in section 14 measures it.) The spec therefore does three things:
 
 1. Defines **evidence tiers** (E0 to E5) and states for every tier exactly what the shopper sees, including "no percentage off" as a first-class outcome.
 2. Defines a **lite mode** for the Phase 1 MVP: deterministic rules only, no ML, no crawler, no image matching. Evidence is own price history plus seller-channel OAuth integrations (Shopify, WooCommerce) mapped by exact keys.
@@ -56,7 +56,7 @@ Re-evaluate a SKU on: `price.changed`; new or revoked evidence; channel snapshot
 | `BRAND_RRP` | Official brand price, separate class, never mixed | No | Yes |
 | `DOCUMENT` | Seller-uploaded document, structured fields | Yes, behind flag, display capped | Yes, OCR + extraction scoring |
 
-Key mapping in lite mode (no ML, no images): a channel product maps to an Outlet NK SKU only by exact GTIN/EAN, or exact seller SKU plus exact variant id, supplied through the integration import and attested by the seller. Anything fuzzy is unmapped and produces no evidence. A mapped item whose attributes disagree on a hard field (brand, colour, size) is rejected deterministically.
+Key mapping in lite mode (no ML, no images): a channel product maps to a Z-OUTLET SKU only by exact GTIN/EAN, or exact seller SKU plus exact variant id, supplied through the integration import and attested by the seller. Anything fuzzy is unmapped and produces no evidence. A mapped item whose attributes disagree on a hard field (brand, colour, size) is rejected deterministically.
 
 ### 2.3 Algorithm (deterministic, integer math)
 Inputs: `now`, `P`, price events, availability intervals, channel snapshots, document evidence, config.
@@ -128,11 +128,11 @@ Tier is a property of the claim, computed from the evidence that actually produc
 | E0 | Unverified | No qualifying history or evidence, listing older than `history_days` or evidence stale | No | **No** | None. Plain price. |
 | E1 | First listed | Listing younger than 30 days, no other evidence | No | **No** | "First listed price" (optional label, never a discount word) |
 | E2 | Seller-declared (document) | Only a document candidate, flag on, checks pass, `pct <= 30` | Yes, labelled "as stated by the seller" | Yes, capped, labelled declared | "Original price as stated by seller" |
-| E3 | Own price history | `INTERNAL` produced the reference, `pct >= 5` | Yes, labelled "previous price on Outlet NK" | Yes | "Verified discount" + history sheet |
+| E3 | Own price history | `INTERNAL` produced the reference, `pct >= 5` | Yes, labelled "previous price on Z-OUTLET" | Yes | "Verified discount" + history sheet |
 | E4 | Seller-channel history | `CHANNEL` produced or co-produced the reference | Yes, labelled "seller's online store price" | Yes | "Verified discount" + history sheet |
 | E5 | External / brand RRP (Phase 2) | `EXTERNAL` or `BRAND_RRP`. RRP is displayed as its own label, never merged into the min above | Yes | Yes | "Brand price" or "Verified discount" |
 
-Additional label: **"Lowest price on the app in 30 days"**, allowed only when a reduction occurred in the last 30 days, history covers 30 days, and `P` is at most every purchasable price of the trailing 30 days. It is a statement about Outlet NK only and says so.
+Additional label: **"Lowest price on the app in 30 days"**, allowed only when a reduction occurred in the last 30 days, history covers 30 days, and `P` is at most every purchasable price of the trailing 30 days. It is a statement about Z-OUTLET only and says so.
 
 Display rules per tier:
 - E0 and E1 never render a strikethrough, a percentage, a "sale" ribbon, or any discount color treatment. E1 is a fact about the listing, not a promotion.

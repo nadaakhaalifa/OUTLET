@@ -40,7 +40,7 @@ These are not exploitable yet because no adapter exists, but each must be closed
 5. `trialBalance` is a pure check over supplied entries; the hash chain and signed snapshot do not exist.
 
 ## Decisions and open items
-- Flow of funds (aggregator versus PSP split) is undecided (open question 4, register rows 3-4). Controls LED-E1 and LED-E2 assume Outlet NK instructs payouts; if the PSP splits at source, the payout module shrinks and reconciliation grows. VERIFY BEFORE LAUNCH.
+- Flow of funds (aggregator versus PSP split) is undecided (open question 4, register rows 3-4). Controls LED-E1 and LED-E2 assume Z-OUTLET instructs payouts; if the PSP splits at source, the payout module shrinks and reconciliation grows. VERIFY BEFORE LAUNCH.
 - Payout approval threshold values are a Finance decision; none assumed.
 - Third-party audit of the ledger before the first real payout (spec §T5 pen test before each major money feature).
 

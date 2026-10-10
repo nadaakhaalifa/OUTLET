@@ -9,6 +9,7 @@ import {
   type OtpSender,
 } from "@outlet/auth-core";
 import type { OtpChallengeRepository, OtpSendLog, UserLanguage } from "../domain/ports";
+import type { AgeGate } from "./age-gate";
 import { attestDevice, type Attestation, type Clock } from "./common";
 
 export interface RequestOtpDeps {
@@ -20,6 +21,7 @@ export interface RequestOtpDeps {
   readonly rng: Csprng;
   readonly newId: () => string;
   readonly pepper: Uint8Array;
+  readonly ageGate: AgeGate;
 }
 
 export interface RequestOtpInput {
@@ -41,6 +43,9 @@ export type RequestOtpResult =
       readonly channel: OtpChannel;
     }
   | { readonly kind: "attestation_failed" }
+  /** No passed age gate for this device: nothing is sent. */
+  | { readonly kind: "age_gate_required" }
+  | { readonly kind: "age_blocked"; readonly blockedUntilMs: number }
   | { readonly kind: "country_not_allowed" }
   | { readonly kind: "rate_limited"; readonly retryAfterMs: number | null }
   | { readonly kind: "delivery_failed" };
@@ -52,6 +57,10 @@ export class RequestOtp {
     const d = this.deps;
     const deviceKey = await attestDevice(d.attestation, input.attestation);
     if (deviceKey === null) return { kind: "attestation_failed" };
+
+    const gate = await d.ageGate.status(deviceKey);
+    if (gate.kind === "required") return { kind: "age_gate_required" };
+    if (gate.kind === "blocked") return { kind: "age_blocked", blockedUntilMs: gate.blockedUntilMs };
 
     const nowMs = d.clock.nowMs();
     const history = await d.sendLog.history(input.phoneE164, deviceKey, nowMs);

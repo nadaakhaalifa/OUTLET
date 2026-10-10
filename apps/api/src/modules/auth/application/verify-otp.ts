@@ -1,31 +1,26 @@
 import {
-  buildAccessClaims,
-  issueFamily,
   verifyOtp,
   type AttestationVerifier,
   type Csprng,
 } from "@outlet/auth-core";
 import type {
-  AccessTokenIssuer,
   OtpChallengeRepository,
-  SessionRepository,
   User,
   UserDirectory,
   UserLanguage,
 } from "../domain/ports";
 import { attestDevice, type Attestation, type Clock } from "./common";
+import type { SessionIssuer } from "./session-issuer";
 
 export interface VerifyOtpDeps {
   readonly attestation: AttestationVerifier;
   readonly challenges: OtpChallengeRepository;
   readonly users: UserDirectory;
-  readonly sessions: SessionRepository;
-  readonly tokens: AccessTokenIssuer;
+  readonly issuer: SessionIssuer;
   readonly clock: Clock;
   readonly rng: Csprng;
   readonly newId: () => string;
   readonly pepper: Uint8Array;
-  readonly issuer: string;
 }
 
 export interface VerifyOtpInput {
@@ -81,48 +76,12 @@ export class VerifyOtp {
       newId: d.newId(),
       nowMs,
     });
-    const sessionId = d.newId();
-    const { family, token: refreshToken } = issueFamily({
-      familyId: d.newId(),
-      userId: user.id,
-      deviceId: input.installId,
-      recordId: d.newId(),
-      rng: d.rng,
-      nowMs,
-    });
-    const claims = buildAccessClaims({
-      issuer: d.issuer,
-      userId: user.id,
-      audience: "buyer_api",
-      sessionId,
-      jti: d.newId(),
-      amr: [record.channel === "sms" ? "otp_sms" : "otp_whatsapp", "attestation"],
-      nowMs,
-    });
-    await d.sessions.insert({
-      session: {
-        id: sessionId,
-        userId: user.id,
-        deviceId: input.installId,
-        familyId: family.familyId,
-        amr: claims.amr,
-        createdAtMs: nowMs,
-        lastUsedAtMs: nowMs,
-        revokedAtMs: null,
-      },
-      family,
-      platform: input.platform,
-    });
-    const accessToken = await d.tokens.issue(claims);
-    const refreshExpiresAtMs = family.records[0]?.expiresAtMs ?? nowMs;
-    return {
-      kind: "ok",
+    const issued = await d.issuer.open({
       user,
-      sessionId,
-      accessToken,
-      accessExpiresAtMs: claims.exp * 1000,
-      refreshToken,
-      refreshExpiresAtMs,
-    };
+      installId: input.installId,
+      platform: input.platform,
+      amr: [record.channel === "sms" ? "otp_sms" : "otp_whatsapp", "attestation"],
+    });
+    return { kind: "ok", user, ...issued };
   }
 }

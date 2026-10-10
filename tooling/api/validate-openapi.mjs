@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Validates docs/api/openapi.yaml: structural validity (swagger-parser, which
-// resolves every $ref) plus Outlet NK contract rules from docs/api/README.md.
+// resolves every $ref) plus Z-OUTLET contract rules from docs/api/README.md.
 // Usage: node tooling/api/validate-openapi.mjs [path-to-openapi.yaml]
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

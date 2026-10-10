@@ -1,5 +1,5 @@
 /**
- * Authorization model for Outlet NK (spec T3, A2.10, section 0).
+ * Authorization model for Z-OUTLET (spec T3, A2.10, section 0).
  *
  * Pure data types. No I/O, no clock (time is injected as epoch milliseconds),
  * no randomness. Everything is deny by default: access exists only when an

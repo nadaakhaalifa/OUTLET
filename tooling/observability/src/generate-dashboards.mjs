@@ -4,7 +4,7 @@ import { resolveTiers, windowToHours, errorBudget } from './burn-rate.mjs';
 
 export const DASHBOARDS = {
   checkout: {
-    title: 'Outlet NK / Checkout',
+    title: 'Z-OUTLET / Checkout',
     extra: [
       ['Attempts by outcome', 'sum by (outcome) (rate(outlet_checkout_attempts_total[5m]))', 'ops'],
       ['Failures by reason', 'sum by (failure_reason) (rate(outlet_checkout_attempts_total{outcome="failed"}[15m]))', 'ops'],
@@ -13,7 +13,7 @@ export const DASHBOARDS = {
     ],
   },
   reservation: {
-    title: 'Outlet NK / Reservation',
+    title: 'Z-OUTLET / Reservation',
     extra: [
       ['Reserve latency p50/p95/p99', 'histogram_quantile(0.95, sum by (le) (rate(outlet_reserve_duration_seconds_bucket[5m])))', 's'],
       ['Reserve outcomes', 'sum by (outcome) (rate(outlet_reserve_total[5m]))', 'ops'],
@@ -23,7 +23,7 @@ export const DASHBOARDS = {
     ],
   },
   payments: {
-    title: 'Outlet NK / Payments',
+    title: 'Z-OUTLET / Payments',
     extra: [
       ['Webhook to PAID p95', 'histogram_quantile(0.95, sum by (le) (rate(outlet_payment_confirmation_duration_seconds_bucket[5m])))', 's'],
       ['PSP call errors by provider', 'sum by (provider) (rate(outlet_psp_request_errors_total[5m]))', 'ops'],
@@ -34,7 +34,7 @@ export const DASHBOARDS = {
     ],
   },
   api: {
-    title: 'Outlet NK / API',
+    title: 'Z-OUTLET / API',
     extra: [
       ['Requests per second by status class', 'sum by (http_response_status_class) (rate(http_server_request_duration_seconds_count[1m]))', 'reqps'],
       ['p95 latency by route', 'histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket[5m])))', 's'],
@@ -43,7 +43,7 @@ export const DASHBOARDS = {
     ],
   },
   search: {
-    title: 'Outlet NK / Search',
+    title: 'Z-OUTLET / Search',
     extra: [
       ['Search latency p95', 'histogram_quantile(0.95, sum by (le) (rate(outlet_search_duration_seconds_bucket[5m])))', 's'],
       ['Postgres fallback share', 'sum(rate(outlet_search_total{backend="postgres"}[5m])) / sum(rate(outlet_search_total[5m]))', 'percentunit'],
@@ -52,7 +52,7 @@ export const DASHBOARDS = {
     ],
   },
   mobile: {
-    title: 'Outlet NK / Mobile',
+    title: 'Z-OUTLET / Mobile',
     extra: [
       ['Crash-free sessions by app version', '1 - (sum by (app_version) (rate(outlet_mobile_sessions_total{crashed="true"}[1h])) / sum by (app_version) (rate(outlet_mobile_sessions_total[1h])))', 'percentunit'],
       ['Crash-free by platform', '1 - (sum by (platform) (rate(outlet_mobile_sessions_total{crashed="true"}[1h])) / sum by (platform) (rate(outlet_mobile_sessions_total[1h])))', 'percentunit'],
@@ -61,7 +61,7 @@ export const DASHBOARDS = {
     ],
   },
   reconciliation: {
-    title: 'Outlet NK / Reconciliation and refunds',
+    title: 'Z-OUTLET / Reconciliation and refunds',
     extra: [
       ['Unmatched lines by age bucket', 'max by (age_bucket) (outlet_reconciliation_unmatched_lines)', 'short'],
       ['Unmatched amount (EGP minor units)', 'sum(outlet_reconciliation_unmatched_amount_minor)', 'short'],

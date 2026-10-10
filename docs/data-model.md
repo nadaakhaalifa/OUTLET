@@ -1,4 +1,4 @@
-# Outlet NK data model (spec name HAUL)
+# Z-OUTLET data model (spec name HAUL)
 
 Status: Draft for review, 2026-10-10 · Source of truth: `docs/haul-master-prompt-v3.md` (T1 module list, Part C Data blocks, T4 ledger) · Not legal advice. Anything legal, regulatory or provider-specific is tagged **VERIFY BEFORE LAUNCH** and also listed in `docs/compliance/verify-register.md`.
 

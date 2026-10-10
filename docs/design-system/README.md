@@ -1,4 +1,4 @@
-# Outlet NK design system (@outlet/ui-native)
+# Z-OUTLET design system (@outlet/ui-native)
 
 Core React Native components built on `@outlet/ui-tokens`. Arabic-first, RTL-safe, light and dark from tokens.
 

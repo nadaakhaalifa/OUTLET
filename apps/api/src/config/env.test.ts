@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "./env";
 
-const PROD_SECRETS = { OTP_PEPPER: "p".repeat(32), IP_HASH_KEY: "k".repeat(32) };
+const PROD_SECRETS = { OTP_PEPPER: "p".repeat(32), IP_HASH_KEY: "k".repeat(32), AGE_BLOCK_KEY: "a".repeat(32) };
 
 describe("loadConfig", () => {
   it("applies development defaults with in-memory fixtures", () => {
@@ -34,6 +34,11 @@ describe("loadConfig", () => {
     } catch (e) {
       expect((e as ConfigError).issues.join(" ")).not.toContain("too-short-secret-value");
     }
+  });
+
+  it("requires AGE_BLOCK_KEY in production", () => {
+    const { AGE_BLOCK_KEY: _omit, ...without } = PROD_SECRETS;
+    expect(() => loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...without })).toThrow(/AGE_BLOCK_KEY/);
   });
 
   it("production with secrets and fixtures off selects the (not yet existing) production adapter set", () => {

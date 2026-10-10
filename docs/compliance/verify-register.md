@@ -1,6 +1,6 @@
 # VERIFY BEFORE LAUNCH register
 
-Source: master prompt v3 section P2 (rows VR-01 to VR-18, same order as the seed table) plus rows VR-19 to VR-24 raised from the Phase 0 research context. Read "HAUL" as "Outlet NK".
+Source: master prompt v3 section P2 (rows VR-01 to VR-18, same order as the seed table) plus rows VR-19 to VR-24 raised from the Phase 0 research context. Read "HAUL" as "Z-OUTLET".
 
 Rules for this file
 - One row per unverified legal, regulatory or provider-specific assumption. Nothing here is a verified fact.
@@ -33,9 +33,9 @@ Rules for this file
 | VR-19 | Foreign-seller import structure: who is importer of record, customs duty and VAT on cross-border parcels, customs clearance, and returns of imported goods (Global world) | Legal / Tax / Ops | none yet | Open | Global world launch; seller agreement for foreign sellers; landed-cost display; hub consolidation | 2026-10-10 |
 | VR-20 | PDPC review lead time: how long licence or registration review takes in practice, and whether the 1 Nov 2026 full-compliance date has any grace for applicants | Legal / DPO | none yet | Open | Date of first real user; ADR-0002 timeline; VR-21 | 2026-10-10 |
 | VR-21 | Whether launching or running a beta before the PDPC licence is issued is tolerated, and under what conditions (filed application, DPO appointed, synthetic data only) | Legal / DPO | none yet | Open | Any TestFlight beta with real people; go-to-market date | 2026-10-10 |
-| VR-22 | Marketplace collection and payout licensing model: if Outlet NK collects the full basket and pays sellers out, is a PSP or payment-facilitator licence needed, or must the PSP's marketplace or sub-merchant product be used (narrows VR-03 and VR-04) | Legal / Finance | none yet (open question 4) | Open | Payout adapter implementation; Seller Agreement payout clauses; ledger account design confirmation | 2026-10-10 |
+| VR-22 | Marketplace collection and payout licensing model: if Z-OUTLET collects the full basket and pays sellers out, is a PSP or payment-facilitator licence needed, or must the PSP's marketplace or sub-merchant product be used (narrows VR-03 and VR-04) | Legal / Finance | none yet (open question 4) | Open | Payout adapter implementation; Seller Agreement payout clauses; ledger account design confirmation | 2026-10-10 |
 | VR-23 | App Review outcome on Plus under Plan A (commerce-only perks via PSP); result of the early consultation on a TestFlight build | Product | none yet | Open | Plus launch path (Plan A or Plan B); ADR-0004 acceptance | 2026-10-10 |
-| VR-24 | Outlet NK's own COD refusal and return-to-origin baseline, measured after launch (distinct from the courier-data baseline in VR-12); needed to tune risk controls | Ops / Data | none yet (cannot exist before launch) | Open | COD limits and deposit rules tuning; ADR-0011 review after first 8 weeks | 2026-10-10 |
+| VR-24 | Z-OUTLET's own COD refusal and return-to-origin baseline, measured after launch (distinct from the courier-data baseline in VR-12); needed to tune risk controls | Ops / Data | none yet (cannot exist before launch) | Open | COD limits and deposit rules tuning; ADR-0011 review after first 8 weeks | 2026-10-10 |
 
 ## Notes
 - VR-14 is the only row with filed evidence: ADR-0006 records the SDK choice. It still needs a Hermes v1 stability check before adoption.

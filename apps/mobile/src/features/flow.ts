@@ -1,5 +1,5 @@
-/** Onboarding flow (spec 1, B6). Everything after the DOB step is skippable. */
-export const ONBOARDING_STEPS = ["phone", "otp", "dob", "language", "consents", "done"] as const;
+/** Onboarding flow (spec 1, B6). DOB + 18+ attestation come first, before any phone number is collected. Everything after OTP that is not identity is skippable. */
+export const ONBOARDING_STEPS = ["dob", "phone", "otp", "language", "consents", "done"] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
 export const SKIPPABLE_STEPS: readonly OnboardingStep[] = ["language", "consents"];

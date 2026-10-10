@@ -121,7 +121,7 @@ export interface SellerOrderInput {
 
 export interface OrderRecognisedInput {
   readonly sellerOrders: readonly SellerOrderInput[];
-  /** Delivery fee charged to the shopper, VAT-inclusive, a supply by Outlet NK. */
+  /** Delivery fee charged to the shopper, VAT-inclusive, a supply by Z-OUTLET. */
   readonly shippingGross: Money;
   readonly vatBps: bigint;
   /** How the shopper paid. Must sum to merchandise + shipping - all discounts. */

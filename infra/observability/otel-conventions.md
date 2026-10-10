@@ -1,4 +1,4 @@
-# OpenTelemetry conventions (Outlet NK)
+# OpenTelemetry conventions (Z-OUTLET)
 
 Status: proposed, implements spec T8. No service emits any of this yet (no backend exists, ADR-0006), so every name below is a contract to build to, not a description of running systems. The SLO metric names in `slos/slos.yaml` come from section 3.
 

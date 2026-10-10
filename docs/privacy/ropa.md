@@ -2,7 +2,7 @@
 
 # Record of processing activities (RoPA)
 
-Outlet NK (spec name HAUL), spec B1 and T6.
+Z-OUTLET (spec name HAUL), spec B1 and T6.
 
 > **Status: DRAFT_NOT_REVIEWED_BY_COUNSEL.** Last reviewed 2026-10-10. This is an engineering draft, not legal advice. Every lawful basis, retention period and residency value is a proposal until counsel and the DPO review it. Entries marked **VERIFY BEFORE LAUNCH** are tracked in the verify register. No real personal data may be processed until ADR-0002 is accepted.
 
@@ -10,7 +10,7 @@ Outlet NK (spec name HAUL), spec B1 and T6.
 
 | Item | Value |
 |---|---|
-| Controller | Outlet NK operating entity: **not yet incorporated or named. VERIFY BEFORE LAUNCH** |
+| Controller | Z-OUTLET operating entity: **not yet incorporated or named. VERIFY BEFORE LAUNCH** |
 | DPO | **Not yet appointed. VERIFY BEFORE LAUNCH** (admin role `dpo` exists in the spec) |
 | PDPC licence or registration | **Category and fee unverified. VERIFY BEFORE LAUNCH** |
 | Data plane location | **Undecided** (ADR-0002 not accepted) |
@@ -19,14 +19,14 @@ Outlet NK (spec name HAUL), spec B1 and T6.
 
 | Measure | Count |
 |---|---|
-| Tables | 93 |
-| Fields | 594 |
-| P0 public | 24 |
+| Tables | 94 |
+| Fields | 601 |
+| P0 public | 31 |
 | P1 internal | 347 |
 | P2 personal | 195 |
 | P3 sensitive | 28 |
 | Fields flagged VERIFY BEFORE LAUNCH | 184 |
-| Tables derived from spec prose, not named columns | 46 |
+| Tables derived from spec prose, not named columns | 47 |
 | Processors in register | 17 |
 | Processors with DPA status other than signed | 17 |
 
@@ -374,8 +374,8 @@ Keep order, invoice and financial records for the legal retention period (spec B
 
 - **Data subjects:** `courier_agent`, `creator`, `seller_representative`, `shopper`
 - **Lawful basis:** `contract`, `legal_obligation`
-- **PII classes:** `P1`, `P2`, `P3` across 78 fields in 12 tables
-- **Tables:** `cod_remittances`, `commissions`, `corporate_accounts`, `journal_entries`, `ledger_accounts`, `order_groups`, `order_lines`, `payment_events_raw`, `payment_intents`, `postings`, `seller_orders`, `subscription_invoices`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 85 fields in 13 tables
+- **Tables:** `cod_remittances`, `commissions`, `corporate_accounts`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `order_groups`, `order_lines`, `payment_events_raw`, `payment_intents`, `postings`, `seller_orders`, `subscription_invoices`
 - **Recipients and processors:** `bnpl_provider`, `cloud_primary`, `courier`, `psp_failover_fawry`, `psp_primary`
 - **Retention:** `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years)
 - **Residency:** `approved_region`, `in_country`
@@ -402,8 +402,8 @@ Closed-loop store credit, gift cards and the double-entry ledger (spec B2, T4).
 
 - **Data subjects:** `gift_recipient`, `seller_representative`, `shopper`
 - **Lawful basis:** `contract`, `legal_obligation`
-- **PII classes:** `P1`, `P2` across 40 fields in 5 tables
-- **Tables:** `gift_card_redemptions`, `gift_cards`, `journal_entries`, `ledger_accounts`, `postings`
+- **PII classes:** `P0`, `P1`, `P2` across 47 fields in 6 tables
+- **Tables:** `gift_card_redemptions`, `gift_cards`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `postings`
 - **Recipients and processors:** `cloud_primary`, `email_provider`, `sms_provider`, `whatsapp_bsp`
 - **Retention:** `gift_recipient_contact` (30 days), `orders_tax_records` (7 years)
 - **Residency:** `approved_region`
@@ -893,6 +893,20 @@ Source: derived (confirm when the ERD is final) (B8 (saved cards are PSP tokens 
 | `exp_month` | P2 | payment_processing | contract | account_active | cloud_primary, psp_primary | approved_region | none | none | delete |  |
 | `exp_year` | P2 | payment_processing | contract | account_active | cloud_primary, psp_primary | approved_region | none | none | delete |  |
 | `fingerprint` | P2 | payment_processing, fraud_prevention | contract | account_active | cloud_primary, psp_primary | approved_region | none | none | delete |  |
+
+### `ledger_account_types`
+
+Source: derived (confirm when the ERD is final) (T4 Tables). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `code` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `category` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `normal_side` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `owner_type` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `in_spec_t4` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `status` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `created_at` | P0 | wallet_ledger, tax_accounting | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
 
 ### `ledger_accounts`
 

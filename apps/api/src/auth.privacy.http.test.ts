@@ -37,10 +37,14 @@ const refundResolver: ResourceResolver = {
   },
 };
 
-const att = (phone: string) => ({
-  "X-App-Attest": `${DEV_ATTESTATION_PREFIX}key-${phone.slice(-8)}`,
-  "X-Client-Platform": "ios",
-});
+let currentHarness: Harness | undefined;
+
+const att = (phone: string) => {
+  const keyId = `key-${phone.slice(-8)}`;
+  // These tests exercise OTP, not the age gate (covered in auth.identity.http.test.ts).
+  currentHarness?.grantAgeGate(keyId);
+  return { "X-App-Attest": `${DEV_ATTESTATION_PREFIX}${keyId}`, "X-Client-Platform": "ios" };
+};
 
 describe("auth, sessions and privacy over HTTP", () => {
   let h: Harness;
@@ -49,6 +53,7 @@ describe("auth, sessions and privacy over HTTP", () => {
       controllers: [AdminProbeController],
       providers: [{ provide: REFUND_RESOLVER, useValue: refundResolver }],
     });
+    currentHarness = h;
   });
   afterAll(async () => h.close());
 

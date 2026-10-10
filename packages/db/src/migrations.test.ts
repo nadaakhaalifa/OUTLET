@@ -12,9 +12,9 @@ const rejects = async (p: Promise<unknown>, re: RegExp): Promise<void> => {
 
 const mkAccounts = async (tag: string): Promise<{ a: string; b: string }> => {
   const a = await db.query<{ id: string }>(
-    `INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('cash','platform','EGP',$1) RETURNING id`, [`a-${tag}`]);
+    `INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('psp_clearing','platform','EGP',$1) RETURNING id`, [`a-${tag}`]);
   const b = await db.query<{ id: string }>(
-    `INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('revenue','platform','EGP',$1) RETURNING id`, [`b-${tag}`]);
+    `INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('platform_commission','platform','EGP',$1) RETURNING id`, [`b-${tag}`]);
   return { a: a.rows[0]?.id ?? '', b: b.rows[0]?.id ?? '' };
 };
 
@@ -108,7 +108,7 @@ describe('ledger', () => {
 
   it('rejects per-currency imbalance even when the grand total is zero', async () => {
     const { a, b } = await mkAccounts('cur');
-    const usd = await db.query<{ id: string }>(`INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('cash','platform','USD','u') RETURNING id`);
+    const usd = await db.query<{ id: string }>(`INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('psp_clearing','platform','USD','u') RETURNING id`);
     const u = usd.rows[0]?.id;
     await rejects(db.transaction(async (tx) => {
       const e = await tx.query<{ id: string }>(`INSERT INTO journal_entries (kind, idempotency_key, occurred_at, ref_type, ref_id) VALUES ('t','cur-1',now(),'o','1') RETURNING id`);

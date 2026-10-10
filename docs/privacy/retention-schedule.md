@@ -9,7 +9,7 @@ Source `spec` means the period comes from spec B1. Source `proposed` means engin
 | Rule | Period | Starts at | Then | Purge job | Metric | Source | Fields | Verify |
 |---|---|---|---|---|---|---|---|---|
 | `account_active`<br>Profile and account data while the account exists. After a deletion request and the 14-day cooling period, PII is erased or pseudonymized. | event-driven (no fixed period) | account_deletion | erase_or_pseudonymize | `purge_deleted_accounts` | `privacy_accounts_purged_total` | spec | 52 |  |
-| `orders_tax_records`<br>Orders, invoices, ledger and financial records kept under legal retention, in pseudonymized form after account deletion. | 7 years | order_close | pseudonymize | `purge_expired_tax_records` | `privacy_tax_records_purged_total` | spec | 111 | VERIFY |
+| `orders_tax_records`<br>Orders, invoices, ledger and financial records kept under legal retention, in pseudonymized form after account deletion. | 7 years | order_close | pseudonymize | `purge_expired_tax_records` | `privacy_tax_records_purged_total` | spec | 118 | VERIFY |
 | `kyc_records`<br>Seller and creator KYC documents and results, kept for the contract plus five years. | 5 years | contract_end | delete | `purge_expired_kyc` | `privacy_kyc_purged_total` | spec | 13 | VERIFY |
 | `analytics_events`<br>Pseudonymous analytics events, then aggregated. | 25 months | collection | aggregate | `aggregate_analytics_events` | `privacy_analytics_events_aggregated_total` | spec | 13 |  |
 | `measurements`<br>Body measurements and size profiles stay until the user deletes them or the account. | event-driven (no fixed period) | user_deletes | delete | `purge_deleted_measurements` | `privacy_measurements_purged_total` | spec | 6 |  |

@@ -6,7 +6,7 @@
 |---|---|
 | Spec references | section 12, B1 |
 | Purposes in inventory | budget_insights (consent `budget_insights`) |
-| Controller | Outlet NK operating entity, not yet named. **VERIFY BEFORE LAUNCH** |
+| Controller | Z-OUTLET operating entity, not yet named. **VERIFY BEFORE LAUNCH** |
 | DPO | Not yet appointed. **VERIFY BEFORE LAUNCH** |
 | Assessment owner | to be assigned |
 | Version | 0.1 skeleton, 2026-10-10 |

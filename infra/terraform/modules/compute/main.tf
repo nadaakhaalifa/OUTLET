@@ -84,6 +84,16 @@ data "aws_iam_policy_document" "read_secrets" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = var.secret_arns
   }
+
+  # Secrets are encrypted with a customer-managed key, so reading them also needs Decrypt on that key.
+  dynamic "statement" {
+    for_each = var.secrets_kms_key_arn == null ? [] : [1]
+
+    content {
+      actions   = ["kms:Decrypt"]
+      resources = [var.secrets_kms_key_arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "read_secrets" {

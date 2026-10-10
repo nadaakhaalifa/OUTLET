@@ -1,4 +1,4 @@
-# Outlet NK data inventory (spec name HAUL), spec B1 and T6.
+# Z-OUTLET data inventory (spec name HAUL), spec B1 and T6.
 #
 # Single source of truth for personal-data tagging. Generated from this file:
 #   docs/privacy/ropa.md, docs/privacy/processors-register.md, docs/privacy/retention-schedule.md
@@ -1084,6 +1084,19 @@ tables:
       - {name: fingerprint, pii_class: P2, encryption: none, purpose: [payment_processing, fraud_prevention], note: "PSP card fingerprint, also used for one-trial-per-person checks."}
 
   # ---------------------------------------------------------------- ledger, wallet, gift cards (T4, 15.1, 15.2)
+  - name: ledger_account_types
+    spec_ref: "T4 Tables"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [wallet_ledger, tax_accounting], lawful_basis: legal_obligation, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: code, pii_class: P0, encryption: none, note: "Static chart-of-accounts reference data, no personal data."}
+      - {name: category, pii_class: P0, encryption: none}
+      - {name: normal_side, pii_class: P0, encryption: none}
+      - {name: owner_type, pii_class: P0, encryption: none}
+      - {name: in_spec_t4, pii_class: P0, encryption: none}
+      - {name: status, pii_class: P0, encryption: none}
+      - {name: created_at, pii_class: P0, encryption: none}
   - name: ledger_accounts
     spec_ref: "T4 Tables"
     source: spec_named
