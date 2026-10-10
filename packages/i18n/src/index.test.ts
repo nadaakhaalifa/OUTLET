@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRtl, resources } from "./index";
+import { isRtl, resolveLocale, resources } from "./index";
 
 function keys(obj: unknown, prefix = ""): string[] {
   if (typeof obj === "string") return [prefix];
@@ -25,5 +25,12 @@ describe("i18n resources", () => {
   it("treats Arabic as RTL and English as LTR", () => {
     expect(isRtl("ar")).toBe(true);
     expect(isRtl("en")).toBe(false);
+  });
+  it("resolves device language, defaulting to Arabic", () => {
+    expect(resolveLocale("en")).toBe("en");
+    expect(resolveLocale("ar")).toBe("ar");
+    expect(resolveLocale("fr")).toBe("ar");
+    expect(resolveLocale(null)).toBe("ar");
+    expect(resolveLocale(undefined)).toBe("ar");
   });
 });
