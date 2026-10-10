@@ -1230,6 +1230,18 @@ tables:
       - {name: amount, pii_class: P1, encryption: none}
       - {name: currency, pii_class: P1, encryption: none}
 
+  - name: ledger_entry_chain
+    spec_ref: "T4 Integrity job (hash chain over journal entries); migration 0031"
+    source: derived
+    data_subjects: [shopper, seller_representative]
+    defaults: {purpose: [wallet_ledger, tax_accounting], lawful_basis: legal_obligation, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region}
+    fields:
+      - {name: seq, pii_class: P1, encryption: none}
+      - {name: entry_id, pii_class: P1, encryption: none}
+      - {name: prev_hash, pii_class: P1, encryption: none}
+      - {name: entry_hash, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
   - name: gift_cards
     spec_ref: "15.1 Data"
     source: spec_named

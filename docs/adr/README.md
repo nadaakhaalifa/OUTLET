@@ -25,6 +25,12 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0019](0019-mutation-policy-and-phase-exit.md) | Mutation-testing policy (per-module floors with ratchet) and Phase 0 exit rule | Proposed | Owner confirmation |
 | [0020](0020-persistence-adapters.md) | Persistence adapters on Kysely: typing approach, unit of work, RLS session | Proposed | Tech Lead confirmation |
 | [0021](0021-f1-money-design.md) | F-1 money design: ledger posting, funds flow, refunds, payouts | Accepted (owner, 2026-10-11) | Legal confirmation: VR-03, VR-04, VR-05 |
+| [0022](0022-search-engine-primary.md) | Search engine primary: Typesense vs Postgres FTS | Proposed | Owner confirmation; see the file |
+| [0023](0023-recommendation-retrieval-store.md) | Recommendation retrieval store: pgvector vs Typesense vectors | Proposed | Owner confirmation; see the file |
+| [0024](0024-waiting-room-vendor.md) | Waiting-room vendor | Proposed | Owner confirmation; see the file |
+| [0025](0025-llm-provider-and-residency.md) | LLM provider and residency | Proposed | Owner confirmation; see the file |
+| [0026](0026-android-push-and-attestation.md) | Android push and attestation differences | Proposed | Owner confirmation; see the file |
+| [0027](0027-crawler-egress-isolation.md) | Crawler egress isolation | Proposed | Owner confirmation; see the file |
 
 
 ## Convention
