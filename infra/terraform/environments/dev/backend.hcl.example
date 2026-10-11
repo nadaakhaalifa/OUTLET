@@ -1,0 +1,7 @@
+# Copy to backend.hcl (git-ignored by convention, contains account-specific names) and fill in.
+bucket         = "REPLACE-with-state-bucket"
+key            = "outlet-nk/dev/terraform.tfstate"
+region         = "REPLACE-with-region-from-ADR-0002"
+dynamodb_table = "REPLACE-with-lock-table"
+encrypt        = true
+kms_key_id     = "REPLACE-with-state-kms-key"

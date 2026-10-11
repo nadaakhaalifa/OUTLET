@@ -1,0 +1,10 @@
+export const CHECKOUT_CONTEXT = Symbol("checkout.Context");
+export const CHECKOUT_QUOTE = Symbol("checkout.QuoteCheckout");
+export const CHECKOUT_PLACE = Symbol("checkout.PlaceCheckout");
+export const CHECKOUT_WEBHOOK = Symbol("checkout.HandlePaymentWebhook");
+export const CHECKOUT_CANCEL = Symbol("checkout.CancelCheckout");
+export const CHECKOUT_CONFIRM_COD = Symbol("checkout.ConfirmCodOrder");
+export const CHECKOUT_STATUS = Symbol("checkout.GetCheckoutStatus");
+export const CHECKOUT_RECOVER = Symbol("checkout.RecoverSagas");
+export const CHECKOUT_REPOSITORY = Symbol("checkout.SagaRepository");
+export const CHECKOUT_RESOLVER = Symbol("checkout.GroupResolver");

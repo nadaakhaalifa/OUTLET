@@ -1,0 +1,11 @@
+export const U = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+export const STORE_A = U(0xa01);
+export const STORE_B = U(0xb01);
+export const LOC_A = U(0xa10);
+export const LOC_B = U(0xb10);
+export const USER_1 = U(0x701);
+export const SKU_A1 = U(0x1a1);
+export const SKU_A2 = U(0x1a2);
+export const SKU_B1 = U(0x1b1);
+export const DROP_1 = U(0xd01);
+export const DROP_POOL_1 = U(0x503);

@@ -1,0 +1,10 @@
+export const STORE_CREDIT_STORE = Symbol("storeCredit.StoreCreditStore");
+export const CREDIT_LEDGER = Symbol("storeCredit.CreditLedgerPort");
+export const GET_WALLET = Symbol("storeCredit.GetWallet");
+export const LIST_WALLET_TRANSACTIONS = Symbol("storeCredit.ListWalletTransactions");
+export const CREDIT_HOLDS = Symbol("storeCredit.CreditHolds");
+export const GRANT_CREDIT = Symbol("storeCredit.GrantCredit");
+export const RESTORE_REFUND_CREDIT = Symbol("storeCredit.RestoreRefundCredit");
+export const SWEEP_EXPIRED_CREDIT = Symbol("storeCredit.SweepExpiredCredit");
+export const RECONCILE_WALLETS = Symbol("storeCredit.ReconcileWallets");
+export const GIFT_CARD_SALES_GATE = Symbol("storeCredit.GiftCardSalesGate");

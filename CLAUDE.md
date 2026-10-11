@@ -1,8 +1,8 @@
-# Outlet NK (spec name: HAUL)
+# Z-OUTLET (spec name: HAUL)
 
 Egypt-first, multi-vendor outlet marketplace. iOS first (React Native/Expo), then Android, plus a Seller Center and an Admin Console on the web.
 
-The single source of truth is the master prompt. Read it before every task and follow it exactly. Where it says HAUL, use Outlet NK.
+The single source of truth is the master prompt. Read it before every task and follow it exactly. Where it says HAUL, use Z-OUTLET.
 
 @docs/haul-master-prompt-v3.md
 
@@ -21,4 +21,4 @@ The single source of truth is the master prompt. Read it before every task and f
 - Never show fake stock, timers, reviews or discounts. Arabic-first with RTL. Comply with PDPL and Consumer Protection Law 181/2018.
 
 ## Current phase
-Phase 0, Foundations. First task: the P5 list in the master prompt (open questions, ADRs 0001-0005, ERD, data inventory, verify register). Do not write application code until that is approved.
+Phase 0, Foundations: engineering gates are green and the exit checklist is `docs/plan/phase-0-exit-checklist.md`. Legal, residency and funds-flow decisions stay Proposed ADRs (0002, 0003, 0019) and gate real data and launch, not Phase 1 engineering on synthetic data. Honest status and gaps: `docs/plan/phase-0-completion-report.md`. Next: Phase 1, starting from the checklist's open items.

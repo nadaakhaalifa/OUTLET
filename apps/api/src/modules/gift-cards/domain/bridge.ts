@@ -1,0 +1,41 @@
+/** Single seam to the pure gift card domain (@outlet/domain namespace `giftCards`). Aliases only; no behaviour. */
+import { giftCards as g } from "@outlet/domain";
+
+export type GiftCardState = g.GiftCardState;
+export type GiftCardEvent = g.GiftCardEvent;
+export type GiftCardDesign = g.GiftCardDesign;
+export type DeliveryChannel = g.DeliveryChannel;
+export type PotState = g.PotState;
+export type PotEvent = g.PotEvent;
+export type ContributionStatus = g.ContributionStatus;
+export type RedemptionView = g.RedemptionView;
+export type ThrottleDecision = g.ThrottleDecision;
+export type SpendKind = g.SpendKind;
+
+export import GIFT_CARD_LIMITS = g.GIFT_CARD_LIMITS;
+export import GIFT_CARD_DESIGNS = g.GIFT_CARD_DESIGNS;
+export import DELIVERY_CHANNELS = g.DELIVERY_CHANNELS;
+export import PURCHASE_PAYMENT_METHODS = g.PURCHASE_PAYMENT_METHODS;
+export import REDEMPTION_THROTTLE = g.REDEMPTION_THROTTLE;
+export import giftCardMachine = g.giftCardMachine;
+export import potMachine = g.potMachine;
+export import generateCode = g.generateCode;
+export import normalizeCode = g.normalizeCode;
+export import formatCode = g.formatCode;
+export import last4 = g.last4;
+export import checkAmount = g.checkAmount;
+export import checkContribution = g.checkContribution;
+export import closeOutcome = g.closeOutcome;
+export import refundPlan = g.refundPlan;
+export import paidTotal = g.paidTotal;
+export import requiredMinimumAge = g.requiredMinimumAge;
+export import requiresThreeDs = g.requiresThreeDs;
+export import expiryFrom = g.expiryFrom;
+export import expiryReached = g.expiryReached;
+export import planRedemption = g.planRedemption;
+export import redemptionView = g.redemptionView;
+export import evaluateThrottle = g.evaluateThrottle;
+export import isPurchaseMethod = g.isPurchaseMethod;
+export import canVoid = g.canVoid;
+export import next = g.next;
+export import violatesWording = g.COPY_VIOLATES_WORDING;

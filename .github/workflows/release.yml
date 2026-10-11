@@ -1,0 +1,123 @@
+# Build, sign and attest the API container image (T5: cosign + SLSA provenance + SBOM).
+# apps/api/Dockerfile exists but has never been built (no docker in the authoring environment), and
+# nothing here runs until the registry variable is set. Registry, region and cloud provider are pending ADR-0002, so the registry is
+# a repository variable and the job refuses to run when it is empty.
+# SLSA: the reusable generator workflow MUST be referenced by tag (v2.1.0), not by SHA; the
+# generator's own signing/verification rejects SHA refs. This is the single intentional tag ref.
+# Actions are SHA-pinned. VERIFY BEFORE LAUNCH.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+        run: |
+          if [ -z "$REGISTRY" ]; then
+            echo "CONTAINER_REGISTRY is not set (pending ADR-0002). Skipping release."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: guard
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign and OIDC to the cloud, no long-lived keys
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      # The runner image has no pnpm; the SBOM step below uses `pnpm dlx`.
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - id: meta
+        run: echo "image=${{ vars.CONTAINER_REGISTRY }}/outlet-api" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ vars.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          provenance: false # provenance comes from the SLSA generator job below
+          sbom: false # CycloneDX SBOM is attached by cosign below
+          tags: ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
+      - name: Generate CycloneDX SBOM for the image
+        run: |
+          pnpm dlx @cyclonedx/cdxgen@12.8.5 -t docker -o image.cdx.json --spec-version 1.6 \
+            "${{ steps.meta.outputs.image }}@${{ steps.push.outputs.digest }}"
+      - name: Sign the image (keyless) and attach the SBOM attestation
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign attest --yes --type cyclonedx --predicate image.cdx.json "$IMAGE@$DIGEST"
+
+  provenance:
+    needs: build
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    needs: [build, provenance]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - name: Verify signature and provenance as a deployer would
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST"
+          cosign verify-attestation --type slsaprovenance \
+            --certificate-identity-regexp "^https://github.com/slsa-framework/slsa-github-generator/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE@$DIGEST"

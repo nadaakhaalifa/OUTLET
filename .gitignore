@@ -10,3 +10,24 @@ build/
 .DS_Store
 __pycache__/
 .venv/
+
+# test and mutation output
+coverage/
+reports/
+.stryker-tmp/
+.stryker-tmp*/
+packages/domain/reports/mutation/
+!tooling/coverage/
+.stryker-tmp-*/
+
+# Next.js generated
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Terraform provider cache and local state (the lock files .terraform.lock.hcl are committed)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.data/

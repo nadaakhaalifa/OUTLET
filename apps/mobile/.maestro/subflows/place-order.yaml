@@ -1,0 +1,6 @@
+# Opens checkout. Address and payment are pre-seeded on the test account (see needs).
+appId: ${APP_ID}
+---
+- openLink: ${SCHEME}://checkout
+- assertVisible:
+    id: "checkout-place-order"

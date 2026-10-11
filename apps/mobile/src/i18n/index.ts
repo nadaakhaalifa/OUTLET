@@ -3,7 +3,7 @@ import { initReactI18next } from "react-i18next";
 import { getLocales } from "expo-localization";
 import * as Updates from "expo-updates";
 import { I18nManager } from "react-native";
-import { isRtl, resolveLocale, resources, type Locale } from "@outlet/i18n";
+import { DEFAULT_INTERPOLATION, isRtl, resolveLocale, resources, type Locale } from "@outlet/i18n";
 
 export function initialLocale(): Locale {
   return resolveLocale(getLocales()[0]?.languageCode);
@@ -35,7 +35,7 @@ export function setupI18n(locale: Locale): typeof i18n {
         ar: { translation: resources.ar },
         en: { translation: resources.en },
       },
-      interpolation: { escapeValue: false },
+      interpolation: { escapeValue: false, defaultVariables: { ...DEFAULT_INTERPOLATION } },
       returnNull: false,
     });
   }

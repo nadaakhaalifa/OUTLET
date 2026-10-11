@@ -1,8 +1,12 @@
 import { Tabs } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { TABS } from "../../features/navigation/model";
 import { useColors } from "../../theme";
 
-/** Phase 1 tabs. The Stylist tab arrives with the stylist in Phase 2 (spec §P3). */
+/**
+ * Home / Explore / Stylist / Bag / Me (spec Part C). Order is logical: the platform mirrors the bar
+ * in RTL, so no manual reversal. Selected state comes from the navigator's tab buttons.
+ */
 export default function TabsLayout() {
   const { t } = useTranslation();
   const c = useColors();
@@ -13,12 +17,16 @@ export default function TabsLayout() {
         tabBarActiveTintColor: c.accent,
         tabBarInactiveTintColor: c.textSecondary,
         tabBarStyle: { backgroundColor: c.background, borderTopColor: c.border },
+        tabBarLabelStyle: { fontSize: 12 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: t("tabs.home") }} />
-      <Tabs.Screen name="explore" options={{ title: t("tabs.explore") }} />
-      <Tabs.Screen name="bag" options={{ title: t("tabs.bag") }} />
-      <Tabs.Screen name="me" options={{ title: t("tabs.me") }} />
+      {TABS.map((tab) => (
+        <Tabs.Screen
+          key={tab.id}
+          name={tab.route}
+          options={{ title: t(tab.titleKey), tabBarAccessibilityLabel: t(tab.titleKey), tabBarButtonTestID: tab.testID }}
+        />
+      ))}
     </Tabs>
   );
 }

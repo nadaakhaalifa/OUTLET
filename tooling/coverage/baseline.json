@@ -1,0 +1,126 @@
+{
+  "apps/mobile": {
+    "lines": 39.97,
+    "branches": 87.06
+  },
+  "packages/analytics": {
+    "lines": 98.6,
+    "branches": 99.4
+  },
+  "packages/auth-core": {
+    "lines": 97.6,
+    "branches": 81.48
+  },
+  "packages/db": {
+    "lines": 98.97,
+    "branches": 85.47
+  },
+  "packages/feature-flags": {
+    "lines": 100,
+    "branches": 97.29
+  },
+  "packages/i18n": {
+    "lines": 100,
+    "branches": 100
+  },
+  "packages/idempotency": {
+    "lines": 98.57,
+    "branches": 83.59
+  },
+  "packages/outbox": {
+    "lines": 98.56,
+    "branches": 99.25
+  },
+  "packages/policy": {
+    "lines": 98.9,
+    "branches": 99.14
+  },
+  "packages/privacy": {
+    "lines": 99.65,
+    "branches": 99.39
+  },
+  "packages/ui-native": {
+    "lines": 38.99,
+    "branches": 91.13
+  },
+  "packages/ui-tokens": {
+    "lines": 100,
+    "branches": 100
+  },
+  "packages/validation": {
+    "lines": 100,
+    "branches": 89.28
+  },
+  "packages/domain/src/admin": {
+    "lines": 99.49,
+    "branches": 97.52
+  },
+  "packages/domain/src/cart": {
+    "lines": 95.76,
+    "branches": 96.1
+  },
+  "packages/domain/src/catalog": {
+    "lines": 95.02,
+    "branches": 77.02
+  },
+  "packages/domain/src/chart-of-accounts": {
+    "lines": 99.38,
+    "branches": 97.9
+  },
+  "packages/domain/src/fulfillment": {
+    "lines": 97.14,
+    "branches": 92.71
+  },
+  "packages/domain/src/inventory": {
+    "lines": 97.5,
+    "branches": 89.4
+  },
+  "packages/domain/src/orders": {
+    "lines": 96.69,
+    "branches": 97.26
+  },
+  "packages/domain/src/price-integrity": {
+    "lines": 99.6,
+    "branches": 95.2
+  },
+  "packages/domain/src/privacy": {
+    "lines": 98.71,
+    "branches": 88.89
+  },
+  "packages/domain/src/promotions": {
+    "lines": 97.12,
+    "branches": 91.57
+  },
+  "packages/domain/src/referrals": {
+    "lines": 100,
+    "branches": 93.69
+  },
+  "packages/domain/src/returns": {
+    "lines": 95.18,
+    "branches": 94.23
+  },
+  "packages/domain/src/reviews": {
+    "lines": 99.05,
+    "branches": 90.72
+  },
+  "packages/domain/src/search": {
+    "lines": 96.77,
+    "branches": 82.99
+  },
+  "packages/domain/src/seller-analytics": {
+    "lines": 96.3,
+    "branches": 90.63
+  },
+  "packages/domain/src/sizing": {
+    "lines": 100,
+    "branches": 98.88
+  },
+  "packages/domain/src/state-machine": {
+    "lines": 100,
+    "branches": 99.12
+  },
+  "packages/domain/src/tax": {
+    "lines": 97.55,
+    "branches": 89.14
+  }
+}

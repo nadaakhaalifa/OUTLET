@@ -1,0 +1,22 @@
+# Spec: A2.15 Arabic-first. Critical path in Arabic (run with env/ar.env): onboarding, search, PDP, bag.
+# Also asserts the app is laid out RTL by checking the Arabic tab titles render.
+appId: ${APP_ID}
+name: RTL Arabic critical path
+tags: [critical, rtl, locale-ar]
+---
+- runFlow: ../subflows/onboard-adult.yaml
+- assertVisible: ${TAB_HOME}
+- openLink: ${SCHEME}://search
+- tapOn: ${SEARCH_QUERY_LABEL}
+- inputText: فستان
+- tapOn: ${SEARCH_SUBMIT}
+- tapOn:
+    text: ${SEARCH_OPEN}
+    index: 0
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn: ${PDP_ADD}
+- assertVisible: ${PDP_ADDED}
+- runFlow: ../subflows/open-bag.yaml
+- takeScreenshot: rtl-bag-${LOCALE}-${DEVICE}

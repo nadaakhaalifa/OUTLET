@@ -1,0 +1,29 @@
+export const RETURNS_REPOSITORY = Symbol("returns.ReturnRepository");
+export const RETURNS_LINES = Symbol("returns.ReturnableLinePort");
+export const RETURNS_MEMBERSHIP = Symbol("returns.MembershipPort");
+export const RETURNS_HISTORY = Symbol("returns.ReturnerHistoryPort");
+export const RETURNS_EVIDENCE = Symbol("returns.EvidencePort");
+export const RETURNS_EXCHANGE_STOCK = Symbol("returns.ExchangeStockPort");
+export const RETURNS_EVENTS = Symbol("returns.ReturnEventPublisher");
+
+export const REQUEST_RETURN = Symbol("returns.RequestReturn");
+export const INSPECT_RETURN = Symbol("returns.InspectReturn");
+export const DISPUTE_RETURN = Symbol("returns.DisputeReturn");
+export const LIST_MY_RETURNS = Symbol("returns.ListMyReturns");
+export const GET_MY_RETURN = Symbol("returns.GetMyReturn");
+export const LIST_SELLER_RETURNS = Symbol("returns.ListSellerReturns");
+export const SCHEDULE_RETURN_PICKUP = Symbol("returns.ScheduleReturnPickup");
+export const RECORD_RETURN_PICKED_UP = Symbol("returns.RecordReturnPickedUp");
+export const RECORD_RETURN_PICKUP_FAILED = Symbol("returns.RecordReturnPickupFailed");
+export const RECORD_RETURN_RECEIVED = Symbol("returns.RecordReturnReceived");
+export const AUTO_APPROVE_OVERDUE = Symbol("returns.AutoApproveOverdueInspections");
+export const CLOSE_ELAPSED_DISPUTES = Symbol("returns.CloseElapsedDisputeWindows");
+export const RESOLVE_RETURN_DISPUTE = Symbol("returns.ResolveReturnDispute");
+export const COMPLETE_RETURN_REFUND = Symbol("returns.CompleteReturnRefund");
+export const COMPLETE_RETURN_EXCHANGE = Symbol("returns.CompleteReturnExchange");
+export const PUBLISH_PENDING_INTENTS = Symbol("returns.PublishPendingIntents");
+
+export const RETURNS_LINE_RESOLVER = Symbol("returns.LineResolver");
+export const RETURNS_OWN_RESOLVER = Symbol("returns.OwnReturnResolver");
+export const RETURNS_STORE_RETURN_RESOLVER = Symbol("returns.StoreReturnResolver");
+export const RETURNS_STORE_LIST_RESOLVER = Symbol("returns.StoreListResolver");

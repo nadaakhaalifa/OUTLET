@@ -1,0 +1,16 @@
+export const REQUEST_OTP = Symbol("auth.RequestOtp");
+export const VERIFY_OTP = Symbol("auth.VerifyOtp");
+export const GET_SESSION = Symbol("auth.GetSession");
+export const REVOKE_SESSION = Symbol("auth.RevokeSession");
+export const SESSION_RESOLVER = Symbol("auth.SessionResolver");
+export const DEV_OTP_MAILBOX = Symbol("auth.DevOtpMailbox");
+export const AGE_GATE = Symbol("auth.AgeGate");
+export const SOCIAL_LOGIN = Symbol("auth.SocialLogin");
+export const PASSKEYS = Symbol("auth.Passkeys");
+export const REFRESH_SESSION = Symbol("auth.RefreshSession");
+export const LIST_SESSIONS = Symbol("auth.ListSessions");
+export const AUTH_EVENTS = Symbol("auth.EventPublisher");
+export const AGE_GATE_STORE = Symbol("auth.AgeGateStore");
+export const JWKS_KEY_FETCHER = Symbol("auth.JwksKeyFetcher");
+export const PASSKEY_VERIFIER = Symbol("auth.PasskeyVerifier");
+export const SESSION_ISSUER = Symbol("auth.SessionIssuer");

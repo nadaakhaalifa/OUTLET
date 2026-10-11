@@ -1,0 +1,11 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE, NOT A LIVE CAPTURE. Shape modelled on the public Aramex Shipping Services API (CreateShipments); every field is an ASSUMPTION. VERIFY BEFORE LAUNCH (register: Aramex API spec, contract, sandbox).",
+  "status": 200,
+  "body": {
+    "HasErrors": false,
+    "Notifications": [],
+    "Shipments": [
+      { "ID": "{{AWB}}", "Reference1": "{{REFERENCE}}", "HasErrors": false, "Notifications": [] }
+    ]
+  }
+}

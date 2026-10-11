@@ -1,0 +1,38 @@
+# Required reviews: two approvals for money and security paths (T11). Branch protection must
+# enable "Require review from Code Owners" and "Required approvals: 2" for these paths via a
+# ruleset (GitHub cannot express per-path counts in CODEOWNERS itself; see docs/engineering/ci-cd.md).
+# Team handles below are placeholders: create the teams in the GitHub org, then this file is live.
+# Until then every line resolves to nobody and GitHub reports the owners as invalid.
+
+*                                   @outlet-nk/engineering
+
+# Money, ledger, pricing, refunds, payments, wallet
+/packages/domain/                   @outlet-nk/money-owners @outlet-nk/security
+/packages/idempotency/              @outlet-nk/money-owners @outlet-nk/security
+/packages/outbox/                   @outlet-nk/money-owners
+/apps/api/src/modules/ledger/       @outlet-nk/money-owners @outlet-nk/security
+/apps/api/src/modules/payments/     @outlet-nk/money-owners @outlet-nk/security
+/apps/api/src/modules/wallet/       @outlet-nk/money-owners @outlet-nk/security
+/apps/api/src/modules/refunds/      @outlet-nk/money-owners @outlet-nk/security
+/apps/api/src/modules/pricing/      @outlet-nk/money-owners @outlet-nk/security
+/docs/specs/money-and-ledger.md     @outlet-nk/money-owners
+/docs/specs/ledger-chart-of-accounts.md @outlet-nk/money-owners
+
+# Security, identity, authorization, privacy
+/packages/auth-core/                @outlet-nk/security
+/packages/policy/                   @outlet-nk/security
+/packages/privacy/                  @outlet-nk/security @outlet-nk/dpo
+/packages/db/                       @outlet-nk/security @outlet-nk/engineering
+/docs/security/                     @outlet-nk/security
+/docs/privacy/                      @outlet-nk/dpo @outlet-nk/security
+
+# Delivery pipeline, supply chain, infrastructure
+/.github/                           @outlet-nk/security @outlet-nk/platform
+/infra/                             @outlet-nk/platform @outlet-nk/security
+/renovate.json                      @outlet-nk/platform
+/.dependency-cruiser.cjs            @outlet-nk/platform
+/eslint.config.mjs                  @outlet-nk/platform
+/stryker.config.mjs                 @outlet-nk/platform
+
+# Decisions
+/docs/adr/                          @outlet-nk/engineering @outlet-nk/security

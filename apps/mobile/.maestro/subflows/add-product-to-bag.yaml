@@ -1,0 +1,11 @@
+# Opens a product by deep link, picks a size and adds it to the bag.
+# Inputs: PRODUCT (product id), SIZE_LABEL.
+appId: ${APP_ID}
+---
+- openLink: ${SCHEME}://product/${PRODUCT}
+- assertVisible: ${PDP_ADD}
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn: ${PDP_ADD}
+- assertVisible: ${PDP_ADDED}

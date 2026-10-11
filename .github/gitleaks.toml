@@ -1,0 +1,11 @@
+title = "Z-OUTLET gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders and lockfile hashes"
+paths = [
+  '''pnpm-lock\.yaml''',
+  '''docs/.*\.md''',
+]

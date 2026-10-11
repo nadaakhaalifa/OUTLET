@@ -34,3 +34,16 @@ describe("i18n resources", () => {
     expect(resolveLocale(undefined)).toBe("ar");
   });
 });
+
+describe("product name", () => {
+  it("is Z-OUTLET and no catalog hard-codes a legacy name", async () => {
+    const { PRODUCT_NAME } = await import("./index");
+    expect(PRODUCT_NAME).toBe("Z-OUTLET");
+    const all = [...leaves(resources.ar), ...leaves(resources.en)].join("\n");
+    expect(all).not.toMatch(/Z-OUTLET|HAUL|أوتلت/);
+  });
+  it("uses the same placeholders in both languages for the new age keys", () => {
+    expect(resources.en.age.blocked.until).toContain("{{date}}");
+    expect(resources.ar.age.blocked.until).toContain("{{date}}");
+  });
+});

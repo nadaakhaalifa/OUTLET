@@ -1,0 +1,5 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE. A minimal one-page PDF, not a real Aramex label. VERIFY BEFORE LAUNCH.",
+  "status": 200,
+  "body": { "HasErrors": false, "ShipmentLabel": { "LabelFileContents": "JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgMjk4IDQyMF0+PmVuZG9iagp0cmFpbGVyPDwvUm9vdCAxIDAgUj4+CiUlRU9G" } }
+}

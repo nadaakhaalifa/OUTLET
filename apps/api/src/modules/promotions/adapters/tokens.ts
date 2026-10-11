@@ -1,0 +1,11 @@
+export const PROMOTION_REPOSITORY = Symbol("promotions.PromotionRepository");
+export const PROMOTION_EVENTS = Symbol("promotions.PromotionEventPublisher");
+export const PROMOTION_SERVICE_AUTH = Symbol("promotions.ServiceAuthenticator");
+export const EVALUATE_PROMOTIONS = Symbol("promotions.EvaluatePromotions");
+export const CREATE_PROMOTION = Symbol("promotions.CreatePromotion");
+export const GET_PROMOTION = Symbol("promotions.GetPromotion");
+export const LIST_PROMOTIONS = Symbol("promotions.ListPromotions");
+export const UPDATE_PROMOTION = Symbol("promotions.UpdatePromotion");
+export const RECORD_REDEMPTIONS = Symbol("promotions.RecordRedemptions");
+export const REINSTATE_REDEMPTIONS = Symbol("promotions.ReinstateRedemptions");
+export const PROMOTION_AUTHORIZER = Symbol("promotions.PromotionAuthorizer");

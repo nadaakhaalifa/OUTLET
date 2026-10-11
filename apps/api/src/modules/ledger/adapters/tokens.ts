@@ -1,0 +1,9 @@
+export const LEDGER_STORE = Symbol("ledger.LedgerStore");
+export const LEDGER_READ_MODEL = Symbol("ledger.LedgerReadModel");
+export const LEDGER_SNAPSHOTS = Symbol("ledger.IntegritySnapshots");
+export const LEDGER_PROJECTION = Symbol("ledger.ProjectionSource");
+export const LEDGER_FLAGS = Symbol("ledger.PostingFlags");
+export const POSTING_SERVICE = Symbol("ledger.PostingService");
+export const INTEGRITY_JOB = Symbol("ledger.IntegrityJob");
+export const LIST_BALANCES = Symbol("ledger.ListBalances");
+export const GET_ENTRY = Symbol("ledger.GetEntry");

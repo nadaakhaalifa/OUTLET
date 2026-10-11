@@ -1,0 +1,5 @@
+# Maestro workspace config. Run with tags: maestro test -e ... --include-tags=smoke .maestro/flows
+flows:
+  - flows/*
+includeTags: []
+excludeTags: []

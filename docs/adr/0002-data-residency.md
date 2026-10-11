@@ -55,3 +55,17 @@ Concretely, independent of which option is approved:
 ## Needed to finalize
 
 Answers to open questions 1, 2 and 8, plus register row 1 (PDPC category/fees) and row 18 (grid carbon intensity for the chosen region).
+
+## Research update (2026-10-10, deep-research run, secondary sources only)
+
+- Decision 816/2025 has a dedicated cross-border transfer regime; transfers to non-Egyptian locations, explicitly including cloud environments, need prior PDPC licensing. Hosting in the UAE or EU is therefore a licensed transfer, not a way around one. Medium confidence: no primary Arabic text was read.
+- Processors, not only controllers, appear to need licences and a DPO. Offshore SaaS (Sentry, PostHog, LLM APIs) is probably in scope whenever it receives personal data.
+- No hyperscaler runs a general-purpose region in Egypt (AWS has only a Cairo CloudFront edge location). Claims about a Huawei Cairo region and Microsoft sovereign cloud were refuted. Egypt-hosted therefore means local data centres, none verified for managed Postgres, KMS or SLAs.
+
+**Recommended direction (still Proposed, owner and counsel decide):** residency as configuration, hybrid by default.
+1. P2/P3 data plane is addressed through a region setting and an adapter boundary, so moving it is a config and migration job, not a rewrite.
+2. Catalog, media and CDN may be global; they hold no P2/P3.
+3. Third-party telemetry, analytics and LLM vendors receive no P2/P3 (already enforced by the privacy and analytics packages); anything that must receive personal data is registered as a licensed transfer.
+4. Start the PDPC licence/TIA process early, since neither lead time nor fees are known.
+
+Open: which Egyptian provider can host managed Postgres + KMS to the required controls (needs a provider shortlist and counsel). Nothing is deployed and only synthetic data is used until this is accepted.

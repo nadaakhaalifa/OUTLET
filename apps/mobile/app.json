@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Outlet NK",
+    "name": "Z-OUTLET",
     "slug": "outlet-nk",
-    "scheme": "outletnk",
+    "scheme": "zoutlet",
     "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +23,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-localization"
+      "expo-localization",
+      "expo-secure-store"
     ]
   }
 }
