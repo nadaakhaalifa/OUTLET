@@ -6,6 +6,7 @@ import {
   type ClaimOutcome,
   type LevelView,
   type ReleaseOutcome,
+  type UnclaimOutcome,
   type ReleaseReason,
   type ReserveOutcome,
   type SweepResult,
@@ -206,6 +207,52 @@ export class KyselyInventoryStore implements InventoryStore {
     });
     const res = ReleaseResult.parse(raw);
     return res.status === "noop" ? { status: "noop", reservationStatus: res.reservation_status } : { status: res.status };
+  }
+
+  /**
+   * R-2. One transaction, same lock order as inventory_claim (reservation row, unit rows, then
+   * level rows): CLAIMED units go back to AVAILABLE, `committed` falls by the claimed quantity,
+   * the reservation becomes RELEASED and an inventory.released event is emitted, then the pool is
+   * rebalanced. A second call sees RELEASED and is a noop.
+   */
+  async unclaim(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<UnclaimOutcome> {
+    if (reason === "expired") throw new Error("expiry is released by sweepExpired only");
+    return this.tx(async (trx) => {
+      const found = await sql<{ id: string; status: string }>`
+        select id, status from reservations where order_group_id = ${orderGroupId}::uuid for no key update`.execute(trx);
+      const r = found.rows[0];
+      if (r === undefined) return { status: "not_found" as const };
+      if (r.status !== "CLAIMED") {
+        return { status: "noop" as const, reservationStatus: r.status as "ACTIVE" | "RELEASED" | "EXPIRED" };
+      }
+      const lines = await sql<{ sku_id: string; location_id: string; pool_id: string; qty: number }>`
+        select sku_id, location_id, pool_id, qty from reservation_lines
+         where reservation_id = ${r.id}::uuid order by sku_id, location_id, pool_id`.execute(trx);
+      for (const l of lines.rows) {
+        await sql`select pg_advisory_xact_lock(inventory_advisory_key(${l.sku_id}::uuid, ${l.location_id}::uuid, ${l.pool_id}::uuid))`.execute(trx);
+      }
+      await sql`
+        update inventory_units
+           set state = 'AVAILABLE', reservation_id = null, expires_at = null, state_changed_at = ${iso(nowMs)}::timestamptz
+         where reservation_id = ${r.id}::uuid and state = 'CLAIMED'`.execute(trx);
+      for (const l of lines.rows) {
+        await sql`
+          update inventory_levels
+             set committed = greatest(0, committed - ${l.qty}::int), updated_at = ${iso(nowMs)}::timestamptz
+           where sku_id = ${l.sku_id}::uuid and location_id = ${l.location_id}::uuid and pool_id = ${l.pool_id}::uuid`.execute(trx);
+      }
+      await sql`update reservations set status = 'RELEASED', resolved_at = ${iso(nowMs)}::timestamptz where id = ${r.id}::uuid`.execute(trx);
+      for (const l of lines.rows) {
+        await sql`
+          select inventory_emit('inventory.released', 'reservation', ${r.id}::uuid,
+            jsonb_build_object('reservation_id', ${r.id}::uuid, 'sku_id', ${l.sku_id}::uuid, 'quantity', ${l.qty}::int, 'reason', ${reason}::text),
+            jsonb_build_object('unclaimed', true), ${iso(nowMs)}::timestamptz)`.execute(trx);
+      }
+      for (const l of lines.rows) {
+        await sql`select inventory_rebalance_core(${l.sku_id}::uuid, ${l.location_id}::uuid, ${l.pool_id}::uuid)`.execute(trx);
+      }
+      return { status: "unclaimed" as const };
+    });
   }
 
   async sweepExpired(nowMs: number, batch: number): Promise<SweepResult> {

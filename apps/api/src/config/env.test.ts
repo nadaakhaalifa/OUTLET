@@ -55,7 +55,24 @@ describe("loadConfig", () => {
     );
   });
 
-  it("production with secrets and fixtures off selects the (not yet existing) production adapter set", () => {
+  it("production with secrets and fixtures off selects the production adapter set (Postgres stores plus Unconfigured providers)", () => {
     expect(loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS }).adapters).toBe("production");
+  });
+
+  it("validates CHECKOUT_LOCK_SECRET when given and leaves it optional", () => {
+    expect(loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS }).checkoutLockSecret).toBeUndefined();
+    expect(loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS, CHECKOUT_LOCK_SECRET: "c".repeat(32) }).checkoutLockSecret).toBe("c".repeat(32));
+    expect(() => loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS, CHECKOUT_LOCK_SECRET: "short" })).toThrow(ConfigError);
+  });
+
+  it("rejects a malformed DATABASE_URL and pool size without echoing them", () => {
+    try {
+      loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS, DATABASE_URL: "not a url with secret-token" });
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ConfigError);
+      expect((e as ConfigError).message).not.toContain("secret-token");
+    }
+    expect(() => loadConfig({ NODE_ENV: "production", DEV_FIXTURES: "false", ...PROD_SECRETS, DATABASE_POOL_MAX: "0" })).toThrow(ConfigError);
   });
 });

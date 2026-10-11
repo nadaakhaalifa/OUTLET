@@ -8,15 +8,15 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 | Id | Category | Candidates | Role | Location | DPA | Sub-processors | TIA | Contract | Fields served |
 |---|---|---|---|---|---|---|---|---|---|
-| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 1381 |
+| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 2188 |
 | `cdn_waf` | edge | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 7 |
-| `psp_primary` | psp | Paymob; Kashier | unknown | unknown | unknown | unknown | unknown | not_started | 36 |
-| `psp_failover_fawry` | psp | Fawry; second PSP | unknown | unknown | unknown | unknown | unknown | not_started | 12 |
-| `bnpl_provider` | bnpl | valU; Sympl | independent_controller | unknown | unknown | unknown | unknown | not_started | 12 |
-| `courier` | courier | Bosta; Aramex | unknown | unknown | unknown | unknown | unknown | not_started | 97 |
-| `sms_provider` | sms | two providers required by spec section 1 failure handling | processor | unknown | unknown | unknown | unknown | not_started | 10 |
-| `whatsapp_bsp` | whatsapp_bsp | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 21 |
-| `email_provider` | email | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 2 |
+| `psp_primary` | psp | Paymob; Kashier | unknown | unknown | unknown | unknown | unknown | not_started | 195 |
+| `psp_failover_fawry` | psp | Fawry; second PSP | unknown | unknown | unknown | unknown | unknown | not_started | 49 |
+| `bnpl_provider` | bnpl | valU; Sympl | independent_controller | unknown | unknown | unknown | unknown | not_started | 96 |
+| `courier` | courier | Bosta; Aramex | unknown | unknown | unknown | unknown | unknown | not_started | 130 |
+| `sms_provider` | sms | two providers required by spec section 1 failure handling | processor | unknown | unknown | unknown | unknown | not_started | 11 |
+| `whatsapp_bsp` | whatsapp_bsp | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 22 |
+| `email_provider` | email | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 3 |
 | `push_service` | push | Apple APNs; Google FCM | independent_controller | unknown | unknown | unknown | unknown | not_started | 12 |
 | `identity_providers` | identity_provider | Apple; Google | independent_controller | unknown | unknown | unknown | unknown | not_started | 15 |
 | `app_attestation` | attestation | Apple App Attest; Google Play Integrity | independent_controller | unknown | unknown | unknown | unknown | not_started | 9 |
@@ -33,7 +33,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** B1, T7, ADR-0002
 - **Highest class handled:** P3
-- **Tables:** `addresses`, `admin_approval_requests`, `admin_elevations`, `affiliate_clicks`, `age_attestations`, `age_block_devices`, `analytics_events`, `answers`, `audit_chain_checkpoints`, `audit_log`, `brands`, `breach_affected_subjects`, `breach_register`, `budget_cycles`, `budgets`, `cart_lines`, `carts`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `categories`, `channel_providers`, `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `commissions`, `consent_records`, `consent_text_versions`, `corporate_accounts`, `courier_awb_jobs`, `courier_events_raw`, `creator_accounts`, `delivery_snapshots`, `device_ip_graph_edges`, `devices`, `dsar_requests`, `eta_signed_documents`, `eta_submissions`, `fit_feedback`, `fit_model_params`, `gift_card_messages`, `gift_card_redemptions`, `gift_cards`, `group_gift_pots`, `idempotency_keys`, `identities`, `inbox_messages`, `inbox_processed`, `installment_commitments`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `inventory_units`, `item_fit_flags`, `journal_entries`, `kyc_suspension_reviews`, `ledger_account_types`, `ledger_accounts`, `live_chat_messages`, `llm_audit_log`, `llm_external_calls`, `locations`, `moderation_log`, `notification_frequency_counters`, `notification_log`, `notification_preferences`, `notification_push_tokens`, `notification_requests`, `notification_suppressions`, `notification_templates`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `otp_challenges`, `outbox_events`, `outfit_calendar_events`, `outfits`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payout_instruments`, `postings`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_attributes`, `product_defects`, `product_embeddings`, `product_media`, `products`, `promotion_redemptions`, `promotions`, `questions`, `referral_codes`, `referrals`, `request_logs`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `return_disputes`, `return_evidence`, `returner_standing`, `returns`, `review_replies`, `reviews`, `risk_assessments`, `saga_instances`, `saved_searches`, `savings_goals`, `search_documents`, `search_queries`, `seller_analytics_facts`, `seller_analytics_freshness`, `seller_analytics_stock`, `seller_delivery_access_grants`, `seller_kyc_records`, `seller_orders`, `seller_size_demand_agg`, `session_families`, `sessions`, `shipment_events`, `shipments`, `signing_delegations`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_demand_events`, `size_profiles`, `size_recommendation_log`, `skus`, `staff_accounts`, `stock_pools`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `style_profiles`, `stylist_feedback`, `subscription_invoices`, `subscriptions`, `support_messages`, `support_tickets`, `tax_categories`, `tax_documents`, `tax_exemption_audit`, `transfer_register`, `ugc_reports`, `user_favorite_stores`, `users`, `wardrobe_items`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
+- **Tables:** `ad_balances`, `ad_campaigns`, `ad_clicks`, `ad_config`, `ad_daily_spend`, `ad_impressions`, `ad_product_bids`, `ad_topups`, `addresses`, `admin_approval_requests`, `admin_elevations`, `admission_tokens`, `affiliate_clicks`, `age_attestations`, `age_block_devices`, `analytics_events`, `answers`, `audit_chain_checkpoints`, `audit_log`, `brands`, `breach_affected_subjects`, `breach_register`, `budget_cycles`, `budget_spend_events`, `budget_unlock_requests`, `budgets`, `cart_lines`, `carts`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `categories`, `challenges`, `channel_connections`, `channel_providers`, `channel_snapshots`, `checkout_payment_events`, `checkout_sagas`, `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `coin_debts`, `coin_events`, `commissions`, `consent_records`, `consent_text_versions`, `consolidated_shipments`, `corporate_accounts`, `courier_awb_jobs`, `courier_events_raw`, `crawl_incidents`, `crawl_targets`, `creator_accounts`, `credit_hold_lines`, `credit_holds`, `credit_lots`, `credit_transactions`, `delivery_snapshots`, `device_ip_graph_edges`, `devices`, `drop_items`, `drop_purchases`, `drop_waitlist`, `drops`, `dsar_requests`, `entitlements`, `eta_signed_documents`, `eta_submissions`, `fit_feedback`, `fit_model_params`, `game_entitlements`, `game_odds_versions`, `game_plays`, `gift_card_attempts`, `gift_card_messages`, `gift_card_redemptions`, `gift_cards`, `gift_pot_contributions`, `gift_pots`, `group_gift_pots`, `history_clear_requests`, `hub_legs`, `hub_order_groups`, `hub_receipts`, `hubs`, `idempotency_keys`, `identities`, `inbox_messages`, `inbox_processed`, `installment_commitments`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `inventory_units`, `item_cooccurrence`, `item_fit_flags`, `journal_entries`, `kyc_suspension_reviews`, `ledger_account_types`, `ledger_accounts`, `ledger_entry_chain`, `live_chat_messages`, `llm_audit_log`, `llm_external_calls`, `llm_token_usage`, `locations`, `match_labels`, `matching_config`, `matching_config_changes`, `moderation_log`, `notification_frequency_counters`, `notification_log`, `notification_preferences`, `notification_push_tokens`, `notification_requests`, `notification_suppressions`, `notification_templates`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `otp_challenges`, `outbox_events`, `outfit_calendar_events`, `outfits`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payment_refunds`, `payout_attempts`, `payout_instruments`, `payout_lines`, `payout_status_history`, `payouts`, `personalization_settings`, `plans`, `plus_savings_ledger`, `plus_signups`, `postings`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_attributes`, `product_defects`, `product_embeddings`, `product_matches`, `product_media`, `products`, `promotion_redemptions`, `promotions`, `questions`, `queue_tickets`, `ranking_models`, `recently_viewed`, `recommendation_item_stats`, `recon_runs`, `recon_tickets`, `referral_codes`, `referrals`, `refund_attempts`, `refund_legs`, `refunds`, `request_logs`, `resale_listings`, `resale_proceeds`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `retention_legal_holds`, `retention_purge_runs`, `return_disputes`, `return_evidence`, `returner_standing`, `returns`, `review_replies`, `reviews`, `reward_config_versions`, `risk_assessments`, `saga_instances`, `saved_searches`, `savings_goals`, `search_documents`, `search_queries`, `seller_analytics_facts`, `seller_analytics_freshness`, `seller_analytics_stock`, `seller_delivery_access_grants`, `seller_kyc_records`, `seller_orders`, `seller_size_demand_agg`, `session_families`, `sessions`, `settlement_file_lines`, `settlement_files`, `shipment_events`, `shipments`, `signing_delegations`, `size_alerts`, `size_chart_templates`, `size_charts`, `size_demand_events`, `size_profiles`, `size_recommendation_log`, `skus`, `spend_events`, `staff_accounts`, `stock_pools`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `style_profiles`, `stylist_feedback`, `subscription_invoices`, `subscription_webhook_events`, `subscriptions`, `support_messages`, `support_tickets`, `tax_categories`, `tax_documents`, `tax_exemption_audit`, `tier_status`, `transfer_register`, `trial_claims`, `ugc_reports`, `user_events`, `user_favorite_stores`, `user_features`, `user_style_vectors`, `users`, `wardrobe_items`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
 ### CDN, WAF and waiting-room edge (`cdn_waf`)
@@ -48,7 +48,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** B8, P1
 - **Highest class handled:** P2
-- **Tables:** `group_gift_pots`, `payment_events_raw`, `payment_intents`, `payment_methods`, `subscriptions`
+- **Tables:** `ad_topups`, `checkout_payment_events`, `gift_pot_contributions`, `group_gift_pots`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payment_refunds`, `plus_signups`, `refund_attempts`, `refund_legs`, `refunds`, `settlement_file_lines`, `settlement_files`, `subscription_webhook_events`, `subscriptions`
 - **Note:** Candidates named in the spec, none contracted. Likely an independent controller for card data and a processor for tokens; counsel to confirm.
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
@@ -56,14 +56,14 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** B8, P1
 - **Highest class handled:** P2
-- **Tables:** `payment_events_raw`, `payment_intents`
+- **Tables:** `checkout_payment_events`, `payment_events_raw`, `payment_intents`, `payment_refunds`
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
 ### BNPL and instalment providers (`bnpl_provider`)
 
 - **Spec reference:** B3, P1
 - **Highest class handled:** P2
-- **Tables:** `payment_events_raw`, `payment_intents`
+- **Tables:** `payment_events_raw`, `payment_intents`, `refund_attempts`, `refund_legs`, `refunds`, `settlement_file_lines`, `settlement_files`
 - **Note:** Runs its own KYC and credit decision. Role is assumed, not confirmed.
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 
@@ -71,7 +71,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 - **Spec reference:** 21, P1
 - **Highest class handled:** P3
-- **Tables:** `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `courier_events_raw`, `delivery_snapshots`, `returns`, `shipment_events`, `shipments`
+- **Tables:** `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `consolidated_shipments`, `courier_events_raw`, `delivery_snapshots`, `returns`, `settlement_file_lines`, `settlement_files`, `shipment_events`, `shipments`
 - **Note:** Receives name, phone and address. Controller or processor role differs per courier contract.
 - **Open:** DPA, sub-processor list, transfer assessment (see [TIA template](tia-template.md)). **VERIFY BEFORE LAUNCH**
 

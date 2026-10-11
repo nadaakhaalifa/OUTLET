@@ -11,3 +11,4 @@ export * from "./ports";
 export * from "./pseudonym";
 export * from "./tracker";
 export * from "./taxonomy";
+export * from "./events-doc";

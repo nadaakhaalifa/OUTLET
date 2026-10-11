@@ -23,3 +23,24 @@ export * as sellerAnalytics from "./seller-analytics";
 export * as admin from "./admin";
 export * as reviews from "./reviews";
 export * as privacy from "./privacy";
+// Phase 1 wave 4 (money core), namespaced to avoid symbol collisions.
+export * as ledgerPosting from "./ledger-posting";
+export * as payments from "./payments";
+export * as checkout from "./checkout";
+export * as refunds from "./refunds";
+export * as storeCredit from "./store-credit";
+export * as payouts from "./payouts";
+export * as reconciliation from "./reconciliation";
+// Phase 2 domains, namespaced (their symbol names collide with each other and with Phase 1).
+export * as subscriptions from "./subscriptions";
+export * as giftCards from "./gift-cards";
+export * as budget from "./budget";
+export * as stylist from "./stylist";
+export * as recommendations from "./recommendations";
+export * as rewards from "./rewards";
+export * as drops from "./drops";
+export * as priceMatching from "./price-matching";
+export * as hub from "./hub";
+export * as resale from "./resale";
+export * as ads from "./ads";
+export * as retention from "./retention";

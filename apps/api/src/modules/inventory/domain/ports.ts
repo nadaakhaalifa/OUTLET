@@ -3,6 +3,7 @@ import type {
   LevelView,
   ReleaseOutcome,
   ReleaseReason,
+  UnclaimOutcome,
   ReserveOutcome,
   ReservePlan,
   SweepResult,
@@ -49,6 +50,8 @@ export interface InventoryStore {
   reserve(cmd: ReserveCommand): Promise<ReserveOutcome>;
   claim(orderGroupId: string, nowMs: number): Promise<ClaimOutcome>;
   release(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<ReleaseOutcome>;
+  /** R-2: returns CLAIMED stock for a group whose orders will never be placed. Idempotent. */
+  unclaim(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<UnclaimOutcome>;
   sweepExpired(nowMs: number, batch: number): Promise<SweepResult>;
   /** Tops up and trims pools that drifted. Returns the number of pools examined. */
   replenishDue(limit: number): Promise<number>;

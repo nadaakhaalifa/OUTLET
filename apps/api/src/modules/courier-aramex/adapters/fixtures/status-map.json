@@ -1,0 +1,18 @@
+{
+  "_comment": "Assumed Aramex update-code vocabulary -> Z-OUTLET tracking kind. NOT confirmed. VERIFY BEFORE LAUNCH.",
+  "version": "2026-10-assumed-1",
+  "map": {
+    "SH001": "label_created",
+    "SH014": "picked_up",
+    "SH022": "in_transit",
+    "SH005": "in_transit",
+    "SH003": "out_for_delivery",
+    "SH006": "delivered",
+    "SH007": "delivery_failed",
+    "SH008": "customer_refused",
+    "SH011": "rto_initiated",
+    "SH012": "rto_delivered",
+    "SH010": "cancelled",
+    "SH099": "lost"
+  }
+}

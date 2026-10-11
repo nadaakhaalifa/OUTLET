@@ -9,6 +9,8 @@ import type { OrderGroupState } from "../domain/bridge";
 import type {
   ApplyResult,
   ListPage,
+  GroupPage,
+  ListGroupsQuery,
   ListQuery,
   NewOrderGroup,
   OrderGroupRecord,
@@ -166,6 +168,24 @@ export class InMemoryOrderRepository implements OrderRepository {
     const row = this.groups.get(groupId);
     if (row === undefined || row.base.userId !== userId) return null;
     return this.groupOf(row, { kind: "shopper", userId });
+  }
+
+  async listGroupsForUser(q: ListGroupsQuery): Promise<GroupPage> {
+    const rows = [...this.groups.values()]
+      .filter((g) => g.base.userId === q.userId)
+      .sort((a, b) => b.base.createdAtMs - a.base.createdAtMs || (a.base.id < b.base.id ? 1 : a.base.id > b.base.id ? -1 : 0))
+      .filter(
+        (g) =>
+          q.after === null ||
+          g.base.createdAtMs < q.after.createdAtMs ||
+          (g.base.createdAtMs === q.after.createdAtMs && g.base.id < q.after.id),
+      );
+    const page = rows.slice(0, q.limit);
+    const last = page[page.length - 1];
+    return {
+      items: page.map((g) => this.groupOf(g, { kind: "shopper", userId: q.userId })),
+      next: rows.length > q.limit && last !== undefined ? { createdAtMs: last.base.createdAtMs, id: last.base.id } : null,
+    };
   }
 
   async locate(id: string): Promise<{ storeId: string; userId: string } | null> {

@@ -15,6 +15,7 @@ import type {
   ClaimOutcome,
   LevelView,
   ReleaseOutcome,
+  UnclaimOutcome,
   ReleaseReason,
   ReserveOutcome,
   SweepResult,
@@ -294,6 +295,42 @@ export class StockModel {
     if (r.status !== "ACTIVE") return { status: "noop", reservationStatus: r.status };
     this.returnUnits(r, "RELEASED", reason, nowMs);
     return { status: "released" };
+  }
+
+  /**
+   * R-2: returns CLAIMED stock to the pool for a saga that claimed but will never place orders
+   * (late credit loss after a successful claim). Ledger-safe by construction: `committed` falls by
+   * exactly what `claim` added, and the caller must only use it while no order exists for the group.
+   * Idempotent: a second call finds RELEASED and is a noop.
+   */
+  unclaim(orderGroupId: string, reason: ReleaseReason, nowMs: number): UnclaimOutcome {
+    const rid = this.byOrderGroup.get(orderGroupId);
+    const r = rid === undefined ? undefined : this.reservations.get(rid);
+    if (r === undefined) return { status: "not_found" };
+    if (r.status !== "CLAIMED") return { status: "noop", reservationStatus: r.status };
+    for (const u of this.units.values()) {
+      if (u.reservationId === r.id && u.state === "CLAIMED") {
+        u.state = "AVAILABLE";
+        u.reservationId = null;
+      }
+    }
+    for (const line of r.lines) {
+      const l = this.levels.get(levelKey(line.skuId, line.locationId, line.poolId));
+      if (l === undefined) continue;
+      l.committed = Math.max(0, l.committed - line.qty);
+      l.updatedAtMs = nowMs;
+      this.events.push({
+        type: "inventory.released",
+        aggregateId: r.id,
+        payload: { reservation_id: r.id, sku_id: line.skuId, quantity: line.qty, reason },
+        headers: { unclaimed: true },
+      });
+    }
+    r.status = "RELEASED";
+    r.resolvedAtMs = nowMs;
+    const keys = [...new Set(r.lines.map((l) => levelKey(l.skuId, l.locationId, l.poolId)))].sort();
+    for (const k of keys) this.rebalanceKey(k);
+    return { status: "unclaimed" };
   }
 
   private returnUnits(r: Reservation, status: "RELEASED" | "EXPIRED", reason: ReleaseReason, nowMs: number): number {

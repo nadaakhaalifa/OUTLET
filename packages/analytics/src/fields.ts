@@ -93,3 +93,11 @@ export const coinSource = z.enum([
 ]);
 
 export const notificationChannel = z.enum(["push", "in_app", "whatsapp", "sms", "email"]);
+
+export const gameKind = z.enum(["daily_spin", "scratch_card"]);
+export const gameOutcomeKind = z.enum(["coins", "voucher", "nothing"]);
+export const stylistSource = z.enum(["llm", "rules"]);
+export const recommendationModule = z.enum([
+  "because_you_bought", "similar_viewed", "similar_for_less", "goes_with", "restock", "price_dropped",
+]);
+export const adSurface = z.enum(["search", "category"]);

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
 import { ConfigError, loadConfig } from "./config/env";
 import { MissingDatabaseConfigError, createPersistence } from "./persistence";
-import { NoProductionAdaptersError } from "./platform";
 import { createPgliteDatabase, type PgliteInstance } from "./platform/db";
 import { createTestDatabaseUpTo } from "@outlet/db";
 
@@ -41,6 +40,14 @@ describe("persistence composition", () => {
     expect(p.promotions.repository).toBeDefined();
     expect(p.fulfillment.repository).toBeDefined();
     expect(p.search.savedSearches).toBeDefined();
+    expect(p.money.ledger.store).toBeDefined();
+    expect(p.money.ledger.uow.run).toBeTypeOf("function");
+    expect(p.money.payments.store).toBeDefined();
+    expect(p.money.checkout.repository).toBeDefined();
+    expect(p.money.refunds.store).toBeDefined();
+    expect(p.money.storeCredit.store).toBeDefined();
+    expect(p.money.payouts.store).toBeDefined();
+    expect(p.money.reconciliation.store).toBeDefined();
   });
 
   it("fails loudly when the database config is missing", () => {
@@ -48,7 +55,7 @@ describe("persistence composition", () => {
     expect(() => createPersistence(cfg)).toThrow(MissingDatabaseConfigError);
   });
 
-  it("dev boot composes with explicit fixtures; production stays refused by the platform until its adapters exist", async () => {
+  it("dev boot composes with explicit fixtures; the production composition now replaces the old refusal", async () => {
     expect(() => AppModule.register(loadConfig({ NODE_ENV: "development" }))).not.toThrow();
     const raw = await createTestDatabaseUpTo(20);
     const db = createPgliteDatabase<Record<string, never>>(raw as unknown as PgliteInstance);
@@ -59,7 +66,7 @@ describe("persistence composition", () => {
       SIZE_DEMAND_PSEUDONYM_KEY: KEY,
     });
     expect(createPersistence(cfg, db)).toBeDefined();
-    // Platform (idempotency store, rate limiter, auth) has no production adapters yet: loud, not silent.
-    expect(() => AppModule.register(cfg)).toThrow(NoProductionAdaptersError);
+    // The production composition (Postgres stores plus Unconfigured providers) replaces the refusal.
+    expect(() => AppModule.register(cfg, {}, { production: { db } })).not.toThrow();
   });
 });

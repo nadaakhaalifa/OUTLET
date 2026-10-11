@@ -82,6 +82,17 @@ export function describeOrderRepositoryContract(name: string, make: () => Promis
       expect(await c.repo.groupOwner("not-a-uuid")).toBeNull();
     });
 
+    it("lists a shopper's own groups with their seller orders and never another user's", async () => {
+      await placeTwoStoreGroup(k);
+      const mine = await c.repo.listGroupsForUser({ userId: SHOPPER_A, after: null, limit: 10 });
+      expect(mine.items.map((g) => g.id)).toEqual([GROUP_1]);
+      expect(mine.items[0]?.sellerOrders).toHaveLength(2);
+      expect(mine.items[0]?.sellerOrders.every((o) => o.buyer === null)).toBe(true);
+      expect(mine.next).toBeNull();
+      expect((await c.repo.listGroupsForUser({ userId: SHOPPER_B, after: null, limit: 10 })).items).toEqual([]);
+      expect((await c.repo.listGroupsForUser({ userId: "not-a-uuid", after: null, limit: 10 })).items).toEqual([]);
+    });
+
     it("enforces tenant scope on reads: another store's order is invisible", async () => {
       await placeTwoStoreGroup(k);
       expect((await c.repo.getSellerOrder(ORDER_A, sellerScope(STAFF_A, STORE_A)))?.id).toBe(ORDER_A);

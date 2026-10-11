@@ -5,9 +5,11 @@ import { radius, spacing } from "@outlet/ui-tokens";
 import { Banner, Button, Card, Divider, EmptyState, ErrorState, LoadingState, Screen, Text, useTheme } from "../../ui";
 import { formatMoney, type DisplayLocale } from "../money-display";
 import {
-  InMemoryBagPort, applySaved, bagFailureState, buildBag, rankSuggestions,
+  applySaved, bagFailureState, buildBag, rankSuggestions,
   type BagPort, type BagScreenState, type LineView, type StoreGroup, type Suggestion,
 } from "./model";
+import { TestId } from "../../components/TestId";
+import { getFeaturePorts } from "../../state/ports";
 
 type Money = (minor: bigint) => string;
 
@@ -81,14 +83,16 @@ function GroupCard(props: { g: StoreGroup; money: Money; port: BagPort; locale: 
       {!g.locked ? (
         <>
           <Text>{t("bag.storeSubtotal", { amount: money(g.subtotal) })}</Text>
-          <ProgressBar
+          <TestId id="bag-free-delivery-bar"><ProgressBar
             pct={fd.progressPct}
             name={t("bag.freeProgressName", { store: g.store.name })}
             value={t("bag.freeProgressValue", { current: money(g.subtotal), threshold: money(fd.threshold) })}
-          />
-          <Text secondary>
-            {fd.viaPlus ? t("bag.freePlus") : fd.unlocked ? t("bag.freeUnlocked") : t("bag.freeProgress", { amount: money(fd.remaining), store: g.store.name })}
-          </Text>
+          /></TestId>
+          <TestId id={fd.viaPlus || fd.unlocked ? "bag-free-delivery-unlocked" : "bag-free-delivery-progress"}>
+            <Text secondary>
+              {fd.viaPlus ? t("bag.freePlus") : fd.unlocked ? t("bag.freeUnlocked") : t("bag.freeProgress", { amount: money(fd.remaining), store: g.store.name })}
+            </Text>
+          </TestId>
           <Text variant="caption" secondary>{t("bag.thresholdNote", { amount: money(fd.threshold) })}</Text>
           {suggestions.length > 0 ? (
             <View style={{ gap: spacing.xs }}>
@@ -114,10 +118,10 @@ function GroupCard(props: { g: StoreGroup; money: Money; port: BagPort; locale: 
 }
 
 /** Dev fixtures only; production wiring replaces the port when the API client lands. */
-export function BagScreen(props: { port?: BagPort }) {
+export function BagScreen(props: { port?: BagPort; onCheckout?: () => void }) {
   const { t, i18n } = useTranslation();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
-  const port = useMemo<BagPort>(() => props.port ?? new InMemoryBagPort(), [props.port]);
+  const port = useMemo<BagPort>(() => props.port ?? getFeaturePorts().bag, [props.port]);
   const [state, setState] = useState<BagScreenState>({ status: "loading" });
   const [saveFailed, setSaveFailed] = useState(false);
   const currency = t("common.currency");
@@ -166,6 +170,11 @@ export function BagScreen(props: { port?: BagPort }) {
             <GroupCard key={g.store.id} g={g} money={money} port={port} locale={locale} onToggle={(id, s) => void toggle(id, s)} />
           ))}
           <Text variant="heading">{t("bag.total", { amount: money(view.total) })}</Text>
+          {props.onCheckout !== undefined ? (
+            <TestId id="bag-checkout">
+              <Button title={t("nav.goToCheckout")} disabled={view.total <= 0n} onPress={props.onCheckout} />
+            </TestId>
+          ) : null}
         </>
       ) : null}
       {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}

@@ -7,12 +7,13 @@ import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import { REJECT_REASONS, SELLER_ORDER_STATES, SHOPPER_CANCEL_REASONS } from "../domain/bridge";
 import type { CommandResult, OrderCommands } from "../application/commands";
-import type { GetOrderGroup, GetSellerOrder, ListSellerOrders } from "../application/queries";
+import type { GetOrderGroup, GetSellerOrder, ListMyOrders, ListSellerOrders } from "../application/queries";
 import type { OrderScope, StoreLookupPort } from "../domain/ports";
 import { OrderStoreAccess } from "./store-access";
 import {
   GET_ORDER_GROUP,
   GET_SELLER_ORDER,
+  LIST_MY_ORDERS,
   LIST_SELLER_ORDERS,
   ORDER_COMMANDS,
   ORDER_GROUP_RESOLVER,
@@ -36,6 +37,9 @@ const ListQuery = z
     cursor: z.string().max(512).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
+  .strict();
+const MyListQuery = z
+  .object({ cursor: z.string().max(512).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) })
   .strict();
 const CursorBody = z.object({ c: z.number().int().nonnegative().max(8.64e15), i: z.uuid() }).strict();
 
@@ -95,7 +99,27 @@ export class ShopperOrdersController {
     @Inject(GET_ORDER_GROUP) private readonly getGroup: GetOrderGroup,
     @Inject(ORDER_COMMANDS) private readonly commands: OrderCommands,
     @Inject(ORDER_STORE_LOOKUP) private readonly storeLookup: StoreLookupPort,
+    @Inject(LIST_MY_ORDERS) private readonly listMine: ListMyOrders,
   ) {}
+
+  /** The Orders tab. The subject comes from the token only; another user's groups never appear. */
+  @Get("me/orders")
+  @AuthenticatedSelf()
+  @RateLimit([{ dimension: "user", limit: 120, windowSeconds: 60 }])
+  async mine(@Req() req: ApiRequest, @Query(new ZodPipe(MyListQuery, "/query")) q: z.output<typeof MyListQuery>) {
+    const page = await this.listMine.execute({
+      userId: principalOf(req).actor.id,
+      after: decodeCursor(q.cursor),
+      limit: q.limit,
+    });
+    const stores = await this.storeLookup.summaries([
+      ...new Set(page.items.flatMap((g) => g.sellerOrders.map((o) => o.storeId))),
+    ]);
+    return {
+      items: page.items.map((g) => orderGroupWire(g, stores)),
+      page: { next_cursor: page.next === null ? null : encodeCursor(page.next), has_more: page.next !== null },
+    };
+  }
 
   @Get("order-groups/:id")
   @Authorize({ action: "read", resourceType: "order", resolver: ORDER_GROUP_RESOLVER, idParam: "id" })

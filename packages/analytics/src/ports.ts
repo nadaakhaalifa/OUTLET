@@ -19,7 +19,10 @@ export interface EventEnvelope {
   readonly pseudonymous_id: string;
   readonly origin: EventOrigin;
   readonly purpose: EventPurpose;
-  readonly schema_version: 1;
+  /** Per-event schema version from the catalog. */
+  readonly schema_version: number;
+  /** Client platform, when known (Android launch, phase2/11). */
+  readonly platform?: "ios" | "android" | "web" | "server";
   readonly properties: Readonly<Record<string, unknown>>;
 }
 

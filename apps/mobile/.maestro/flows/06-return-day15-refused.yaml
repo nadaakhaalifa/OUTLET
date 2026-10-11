@@ -1,0 +1,15 @@
+# Spec: Part C section 22 acceptance. Change of mind on day 15 after delivered_at is refused with a reason.
+# Requires seed: delivered order line RETURN_LINE_DAY15 with delivered_at = now - 15 days.
+appId: ${APP_ID}
+name: Return on day 15 refused
+tags: [critical, returns]
+env:
+  RETURN_LINE_DAY15: e2e-line-delivered-15d
+---
+- runFlow: ../subflows/onboard-adult.yaml
+- openLink: ${SCHEME}://returns?line=${RETURN_LINE_DAY15}
+- tapOn:
+    id: "returns-reason-changed_mind"
+- assertVisible: ${RETURN_WINDOW_CLOSED}
+- tapOn: ${RETURN_SUBMIT}
+- assertVisible: ${RETURN_BLOCKER_WINDOW}

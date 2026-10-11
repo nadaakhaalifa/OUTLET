@@ -1,0 +1,22 @@
+# Spec: Part C section 2. Deletion is blocked while orders/returns/disputes are open and the UI says why.
+# Requires seed: account with open order, open return and open dispute.
+appId: ${APP_ID}
+name: Privacy deletion blockers
+tags: [critical, privacy]
+---
+- runFlow: ../subflows/onboard-adult.yaml
+- tapOn:
+    id: "tab-me"
+- tapOn:
+    id: "me-row-privacy"
+- assertVisible: ${PRIVACY_TITLE}
+- scrollUntilVisible:
+    element:
+      id: "privacy-delete-blocker-orders"
+- assertVisible: ${DELETE_BLOCKED}
+- assertVisible:
+    id: "privacy-delete-blocker-orders"
+- assertVisible:
+    id: "privacy-delete-blocker-returns"
+- assertVisible:
+    id: "privacy-delete-blocker-disputes"

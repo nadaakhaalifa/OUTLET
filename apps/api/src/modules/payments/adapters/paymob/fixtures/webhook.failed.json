@@ -1,0 +1,31 @@
+{
+  "_provenance": "HAND-AUTHORED shape, NOT recorded from Paymob (Paymob is not contracted). Every field name, status code and value is an assumption: VERIFY BEFORE LAUNCH, see docs/compliance/verify-register.md VR-PAY-01..VR-PAY-12.",
+  "status": 200,
+  "body": {
+    "type": "TRANSACTION",
+    "obj": {
+      "id": 7001,
+      "success": false,
+      "pending": false,
+      "is_voided": false,
+      "is_refunded": false,
+      "is_capture": false,
+      "is_auth": false,
+      "amount_cents": 125000,
+      "currency": "EGP",
+      "created_at_ms": 1760000000000,
+      "order": {
+        "id": 900001,
+        "merchant_order_id": "00000000-0000-4000-8000-000000000001"
+      },
+      "data": {
+        "message": "Insufficient funds"
+      },
+      "source_data": {
+        "type": "card",
+        "sub_type": "Visa",
+        "pan": "2346"
+      }
+    }
+  }
+}

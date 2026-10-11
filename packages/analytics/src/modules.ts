@@ -25,6 +25,9 @@ export const OWNER_MODULES = [
   "returns",
   "refunds",
   "notifications",
+  "recommendations",
+  "ads",
+  "reviews",
 ] as const;
 
 export type OwnerModule = (typeof OWNER_MODULES)[number];

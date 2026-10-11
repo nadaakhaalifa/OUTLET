@@ -46,6 +46,16 @@ export interface BagPort {
   /** Candidates already filtered to the shopper's size and in stock; ranking is done in the view model. */
   inSizeSuggestions(storeId: string): Promise<readonly Suggestion[]>;
   setSavedForLater(lineId: string, saved: boolean): Promise<void>;
+  /** Adds one unit of a SKU. The real API prices server-side; the hint only feeds the in-memory fake. */
+  addLine(skuId: string, hint: AddLineHint): Promise<void>;
+}
+
+export interface AddLineHint {
+  readonly storeId: string;
+  readonly storeName: string;
+  readonly title: string;
+  readonly sizeLabel: string | null;
+  readonly unitPrice: bigint;
 }
 
 export type PriceChange = { readonly kind: "same" } | { readonly kind: "dropped" | "rose"; readonly delta: bigint };
@@ -212,5 +222,17 @@ export class InMemoryBagPort implements BagPort {
   async setSavedForLater(lineId: string, saved: boolean): Promise<void> {
     this.check();
     this.snapshot = applySaved(this.snapshot, lineId, saved);
+  }
+  async addLine(skuId: string, hint: AddLineHint): Promise<void> {
+    this.check();
+    const id = `sku-${skuId}`;
+    const stores = this.snapshot.stores.some((s) => s.id === hint.storeId)
+      ? this.snapshot.stores
+      : [...this.snapshot.stores, { id: hint.storeId, name: hint.storeName, status: "active" as const, freeDeliveryThreshold: DEFAULT_FREE_DELIVERY_THRESHOLD }];
+    const existing = this.snapshot.lines.find((l) => l.id === id);
+    const lines = existing !== undefined
+      ? this.snapshot.lines.map((l) => (l.id === id ? { ...l, qty: l.qty + 1, savedForLater: false } : l))
+      : [...this.snapshot.lines, { id, storeId: hint.storeId, title: hint.title, sizeLabel: hint.sizeLabel, qty: 1, unitPrice: hint.unitPrice, priceAtAdd: hint.unitPrice, availability: "available" as const, savedForLater: false }];
+    this.snapshot = { ...this.snapshot, stores, lines };
   }
 }

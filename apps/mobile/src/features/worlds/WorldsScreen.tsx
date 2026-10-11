@@ -4,19 +4,20 @@ import { useTranslation } from "react-i18next";
 import { minTouchTarget, radius, spacing } from "@outlet/ui-tokens";
 import { Banner, Card, EmptyState, ErrorState, ListRow, LoadingState, Screen, Text, useTheme, Badge } from "../../ui";
 import { useServices } from "../../state/services";
+import { getFeaturePorts } from "../../state/ports";
 import { formatAmount, type DisplayLocale } from "../money-display";
 import {
   DEFAULT_SORT, DEFAULT_WORLD, STORE_SORTS, WORLDS, buildDirectory, decodePreference, encodePreference, failureState,
   worldAfterWiden, type StoreSort, type StoreSummary, type World, type WorldsPort, type WorldsScreenState, type WorldPreferencePort,
-  InMemoryWorldsPort,
-} from "./model";
+  } from "./model";
 
 const PREF_KEY = "worlds.selection";
 
-function Chip(props: { label: string; selected: boolean; onPress: () => void; role: "radio" | "button" }) {
+function Chip(props: { label: string; selected: boolean; onPress: () => void; role: "radio" | "button"; testID?: string }) {
   const { colors } = useTheme();
   return (
     <Pressable
+      testID={props.testID}
       accessibilityRole={props.role}
       accessibilityLabel={props.label}
       accessibilityState={{ selected: props.selected }}
@@ -62,7 +63,7 @@ export function WorldsScreen(props: { port?: WorldsPort }) {
   const { t, i18n } = useTranslation();
   const services = useServices();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
-  const port = useMemo<WorldsPort>(() => props.port ?? new InMemoryWorldsPort(), [props.port]);
+  const port = useMemo<WorldsPort>(() => props.port ?? getFeaturePorts().worlds, [props.port]);
   const prefs = useMemo<WorldPreferencePort>(() => ({
     load: async () => decodePreference(await services.storage.getString(PREF_KEY)),
     save: (p) => services.storage.setString(PREF_KEY, encodePreference(p)),
@@ -108,7 +109,7 @@ export function WorldsScreen(props: { port?: WorldsPort }) {
       <Text variant="title">{t("worlds.title")}</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={t("worlds.pickerLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {WORLDS.map((w) => (
-          <Chip key={w} role="radio" label={t(`worlds.${w}`)} selected={w === world} onPress={() => choose(w, sort)} />
+          <Chip key={w} testID={`world-${w}`} role="radio" label={t(`worlds.${w}`)} selected={w === world} onPress={() => choose(w, sort)} />
         ))}
       </View>
       <View accessibilityLabel={t("worlds.sortLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>

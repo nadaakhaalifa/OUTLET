@@ -1,0 +1,36 @@
+# Spec: Part C section 1 acceptance. Under-18 DOB refused; 18+ succeeds.
+appId: ${APP_ID}
+name: Onboarding age gate
+tags: [smoke, critical, onboarding]
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "phone-input"
+- inputText: ${ADULT_PHONE}
+- tapOn: ${PHONE_SEND}
+- tapOn:
+    id: "otp-input"
+- inputText: ${OTP_CODE}
+- tapOn: ${OTP_VERIFY}
+# Under 18: refused, and no account is created.
+- tapOn:
+    id: "dob-day"
+- inputText: ${MINOR_DOB_DAY}
+- tapOn:
+    id: "dob-month"
+- inputText: ${MINOR_DOB_MONTH}
+- tapOn:
+    id: "dob-year"
+- inputText: ${MINOR_DOB_YEAR}
+- hideKeyboard
+- tapOn:
+    id: "dob-attest"
+- tapOn: ${DOB_SUBMIT}
+- assertVisible: ${BLOCKED_TITLE}
+- assertNotVisible:
+    id: "tab-home"
+# Fresh device state, then the adult path.
+- runFlow: ../subflows/onboard-adult.yaml
+- assertVisible:
+    id: "tab-bag"

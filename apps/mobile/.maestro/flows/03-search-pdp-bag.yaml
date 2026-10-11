@@ -1,0 +1,23 @@
+# Spec: Part C sections 4, 5, 6. Search, open product, add to bag, see it in bag.
+appId: ${APP_ID}
+name: Search to PDP to bag
+tags: [smoke, critical, shopping]
+env:
+  QUERY: linen dress
+---
+- runFlow: ../subflows/onboard-adult.yaml
+- openLink: ${SCHEME}://search
+- tapOn: ${SEARCH_QUERY_LABEL}
+- inputText: ${QUERY}
+- tapOn: ${SEARCH_SUBMIT}
+- tapOn:
+    text: ${SEARCH_OPEN}
+    index: 0
+- assertVisible: ${PDP_ADD}
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn: ${PDP_ADD}
+- assertVisible: ${PDP_ADDED}
+- runFlow: ../subflows/open-bag.yaml
+- assertNotVisible: ".*(empty|فارغة).*"

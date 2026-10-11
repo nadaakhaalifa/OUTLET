@@ -46,6 +46,36 @@ import { KyselyAdminAudit, KyselyAdminStore, KyselySellerKyc, type AdminDb } fro
 import { KyselyReviewStore, type ReviewDb } from "./modules/reviews";
 import { STORES_SYSTEM_SESSION, type StoresDb, type StoresModuleOptions } from "./modules/stores";
 import { CATALOG_SYSTEM_SESSION, type CatalogDb, type CatalogPersistence } from "./modules/catalog";
+import {
+  KyselyIntegritySnapshots,
+  KyselyLedgerReadModel,
+  KyselyLedgerStore,
+  ledgerTxOf,
+  type LedgerDb,
+  type LedgerDbTx,
+} from "./modules/ledger";
+import { KyselyPaymentStore, type PaymentsDb } from "./modules/payments";
+import { KyselySagaRepository, type CheckoutDb } from "./modules/checkout";
+import { KyselyRefundStore, type RefundsDb } from "./modules/refunds";
+import { KyselyStoreCredit, type StoreCreditDb } from "./modules/store-credit";
+import { KyselyPayoutStore, type PayoutsDb } from "./modules/payouts";
+import { KyselyReconStore, type ReconDb } from "./modules/reconciliation";
+import { KyselySubscriptionStore, type PlusDb } from "./modules/subscriptions";
+import { KyselyGiftCardStore, type GiftCardDb } from "./modules/gift-cards";
+import { KyselyBudgetStore, type BudgetDb } from "./modules/budget";
+import { KyselyStylistStore, type StylistDb } from "./modules/stylist";
+import { KyselyAuditStore, KyselyTokenUsage, type GatewayDb } from "./modules/llm-gateway";
+import { KyselyRecoStore, PgVectorIndex, type RecoDb } from "./modules/recommendations";
+import { KyselyHistoryStore, type HistoryDb } from "./modules/history";
+import { KyselyPurgeExecutor, KyselyPurgeRunStore, UnconfiguredBlobDelete, type RetentionDb } from "./modules/retention";
+import { KyselyRewardsStore, type RewardsDb } from "./modules/rewards";
+import { KyselyDropStore, type DropDb } from "./modules/drops";
+import { KyselyAdmissionStore, type WaitingRoomDb } from "./modules/waiting-room";
+import { KyselyCrawlStore, type CrawlDb } from "./modules/price-crawler";
+import { KyselyHubStore, type HubDb } from "./modules/hub-consolidation";
+import { KyselyResaleStore, type ResaleDb } from "./modules/resale-lane";
+import { KyselyAdsStore, type AdsDb } from "./modules/ads";
+import type { LedgerUnitOfWork } from "./composition/ledger-gateway";
 import { KyselyOutboxStore, KyselyTransactionRunner, createPgDatabase } from "./platform/db";
 import type { PlatformTables } from "./platform/db";
 import { createIdGenerator, nodeCsprng, systemClock } from "./platform/system-adapters";
@@ -66,6 +96,10 @@ export class MissingDatabaseConfigError extends Error {
 }
 
 export interface PersistenceWiring {
+  /** The shared Kysely handle (readiness, platform adapters, the worker relays). Closed by the owner of the pool. */
+  readonly db: Kysely<Record<string, never>>;
+  /** True when createPersistence built the pool itself (and so the caller must destroy it on shutdown). */
+  readonly ownsPool: boolean;
   readonly stores: StoresModuleOptions;
   readonly catalog: CatalogPersistence;
   readonly wishlists: { readonly repository: KyselyWishlistRepository };
@@ -89,6 +123,39 @@ export interface PersistenceWiring {
   readonly sellerAnalytics: { readonly store: KyselySellerAnalyticsStore };
   readonly admin: { readonly store: KyselyAdminStore; readonly audit: KyselyAdminAudit; readonly kyc: KyselySellerKyc };
   readonly reviews: { readonly store: KyselyReviewStore };
+  /** Wave 4 money core. One shared pool, system role (see the identity note above). */
+  readonly money: {
+    readonly ledger: {
+      readonly store: KyselyLedgerStore<LedgerDbTx>;
+      readonly reads: KyselyLedgerReadModel;
+      readonly snapshots: KyselyIntegritySnapshots;
+      readonly uow: LedgerUnitOfWork;
+    };
+    readonly payments: { readonly store: KyselyPaymentStore };
+    readonly checkout: { readonly repository: KyselySagaRepository };
+    readonly refunds: { readonly store: KyselyRefundStore };
+    readonly storeCredit: { readonly store: KyselyStoreCredit };
+    readonly payouts: { readonly store: KyselyPayoutStore };
+    readonly reconciliation: { readonly store: KyselyReconStore };
+  };
+  readonly retention: { readonly executor: KyselyPurgeExecutor; readonly runs: KyselyPurgeRunStore };
+  /** Phase 2 stores (system role, same identity note as above). Non-store ports stay with the module's real adapters. */
+  readonly phase2: {
+    readonly subscriptions: { readonly store: KyselySubscriptionStore };
+    readonly giftCards: { readonly store: KyselyGiftCardStore };
+    readonly budget: { readonly store: KyselyBudgetStore };
+    readonly stylist: { readonly store: KyselyStylistStore };
+    readonly llmGateway: { readonly audit: KyselyAuditStore; readonly usage: KyselyTokenUsage };
+    readonly recommendations: { readonly store: KyselyRecoStore; readonly vectors: PgVectorIndex };
+    readonly history: { readonly store: KyselyHistoryStore };
+    readonly rewards: { readonly store: KyselyRewardsStore };
+    readonly drops: { readonly store: KyselyDropStore };
+    readonly waitingRoom: { readonly store: KyselyAdmissionStore };
+    readonly priceCrawler: { readonly store: KyselyCrawlStore };
+    readonly hub: { readonly store: KyselyHubStore };
+    readonly resale: { readonly store: KyselyResaleStore };
+    readonly ads: { readonly store: KyselyAdsStore };
+  };
 }
 
 /** Builds every Postgres adapter over ONE shared pool. `db` is injectable for tests (PGlite). */
@@ -116,6 +183,8 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
   };
   const notificationsDb: NotificationsDb = handle;
   return {
+    db: handle,
+    ownsPool: db === undefined,
     stores: { persistence: { runner: runnerOf<StoresDb>(), session: () => STORES_SYSTEM_SESSION } },
     catalog: { runner: runnerOf<CatalogDb>(), session: () => CATALOG_SYSTEM_SESSION },
     wishlists: { repository: new KyselyWishlistRepository(handle as WishlistDb) },
@@ -164,5 +233,43 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
       kyc: new KyselySellerKyc(handle as AdminDb),
     },
     reviews: { store: new KyselyReviewStore(handle as ReviewDb, ids) },
+    retention: { executor: new KyselyPurgeExecutor(handle as RetentionDb, new UnconfiguredBlobDelete()), runs: new KyselyPurgeRunStore(handle as RetentionDb) },
+    phase2: {
+      subscriptions: { store: new KyselySubscriptionStore(handle as PlusDb, ids) },
+      giftCards: { store: new KyselyGiftCardStore(handle as GiftCardDb, ids) },
+      budget: { store: new KyselyBudgetStore(handle as BudgetDb, ids) },
+      stylist: { store: new KyselyStylistStore(handle as StylistDb, ids) },
+      llmGateway: { audit: new KyselyAuditStore(handle as GatewayDb), usage: new KyselyTokenUsage(handle as GatewayDb) },
+      recommendations: { store: new KyselyRecoStore(handle as RecoDb, ids), vectors: new PgVectorIndex(handle as RecoDb) },
+      history: { store: new KyselyHistoryStore(handle as HistoryDb, ids) },
+      rewards: { store: new KyselyRewardsStore(handle as RewardsDb, ids) },
+      drops: { store: new KyselyDropStore(handle as DropDb, ids) },
+      waitingRoom: { store: new KyselyAdmissionStore(handle as WaitingRoomDb, ids) },
+      priceCrawler: { store: new KyselyCrawlStore(handle as CrawlDb, ids) },
+      hub: { store: new KyselyHubStore(handle as HubDb, ids) },
+      resale: { store: new KyselyResaleStore(handle as ResaleDb, ids) },
+      ads: { store: new KyselyAdsStore(handle as AdsDb, ids) },
+    },
+    money: {
+      ledger: {
+        store: new KyselyLedgerStore<LedgerDbTx>(),
+        reads: new KyselyLedgerReadModel(handle as LedgerDb),
+        snapshots: new KyselyIntegritySnapshots(handle as LedgerDb),
+        // The posting joins this transaction; the system role is the one the chain lock runs under.
+        uow: {
+          run: (fn) =>
+            runnerOf<PlatformTables>().run(
+              { session: { userId: null, role: "system" }, process: "ledger.post", profile: "default" },
+              (tx) => fn(ledgerTxOf(tx)),
+            ),
+        },
+      },
+      payments: { store: new KyselyPaymentStore(handle as PaymentsDb, systemClock, () => ids.uuidV7()) },
+      checkout: { repository: new KyselySagaRepository(handle as CheckoutDb) },
+      refunds: { store: new KyselyRefundStore(handle as RefundsDb, { uuidV7: () => ids.uuidV7() }) },
+      storeCredit: { store: new KyselyStoreCredit(handle as StoreCreditDb) },
+      payouts: { store: new KyselyPayoutStore(handle as PayoutsDb, systemClock) },
+      reconciliation: { store: new KyselyReconStore(handle as ReconDb) },
+    },
   };
 }

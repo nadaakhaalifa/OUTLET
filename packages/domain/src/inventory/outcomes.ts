@@ -25,6 +25,11 @@ export type ReleaseOutcome =
   | { readonly status: "noop"; readonly reservationStatus: ReservationStatus }
   | { readonly status: "not_found" };
 
+export type UnclaimOutcome =
+  | { readonly status: "unclaimed" }
+  | { readonly status: "noop"; readonly reservationStatus: ReservationStatus }
+  | { readonly status: "not_found" };
+
 export interface SweepResult {
   readonly expiredReservations: number;
   readonly releasedUnits: number;

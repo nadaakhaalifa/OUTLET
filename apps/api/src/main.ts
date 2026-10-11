@@ -6,7 +6,7 @@ import { ConfigError, loadConfig } from "./config/env";
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig(process.env);
-  const app = await NestFactory.create(AppModule.register(config), { bufferLogs: false });
+  const app = await NestFactory.create(AppModule.register(config), { bufferLogs: false, rawBody: true });
   configureApp(app, config);
   app.enableShutdownHooks();
   await app.listen(config.port);

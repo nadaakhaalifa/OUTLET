@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node build/build.mjs",
+    "start": "node dist/apps/api/src/main.js",
     "typecheck": "tsc --noEmit",
+    "worker": "node dist/main.worker.js",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

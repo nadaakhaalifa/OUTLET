@@ -208,7 +208,20 @@ export interface ListPage {
   readonly next: { readonly createdAtMs: number; readonly id: string } | null;
 }
 
+export interface ListGroupsQuery {
+  readonly userId: string;
+  readonly after: { readonly createdAtMs: number; readonly id: string } | null;
+  readonly limit: number;
+}
+
+export interface GroupPage {
+  readonly items: readonly OrderGroupRecord[];
+  readonly next: { readonly createdAtMs: number; readonly id: string } | null;
+}
+
 export interface OrderRepository extends OrderIntake {
+  /** The shopper's own groups, newest first (created_at desc, id desc). Never another user's. */
+  listGroupsForUser(q: ListGroupsQuery): Promise<GroupPage>;
   /** Group with its seller orders, visible to the owner only (RLS and filter). Others get null. */
   getGroupForUser(groupId: string, userId: string): Promise<OrderGroupRecord | null>;
   /** Owner and store of an order, for resolvers. System scope; reveals nothing to callers by itself. */

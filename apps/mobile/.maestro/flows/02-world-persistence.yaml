@@ -1,0 +1,31 @@
+# Spec: Part C section 3 acceptance. World selection persists across app restarts.
+appId: ${APP_ID}
+name: World switch persistence
+tags: [smoke, worlds]
+---
+- runFlow: ../subflows/onboard-adult.yaml
+- tapOn:
+    id: "tab-explore"
+- tapOn:
+    id: "world-global"
+- assertVisible:
+    id: "world-global"
+    selected: true
+- stopApp
+- launchApp:
+    clearState: false
+- tapOn:
+    id: "tab-explore"
+- assertVisible:
+    id: "world-global"
+    selected: true
+- tapOn:
+    id: "world-local"
+- stopApp
+- launchApp:
+    clearState: false
+- tapOn:
+    id: "tab-explore"
+- assertVisible:
+    id: "world-local"
+    selected: true

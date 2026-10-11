@@ -1,4 +1,4 @@
-import { FLAG_REGISTRY, isKnownFlag, paymentKillSwitch, type FlagKey, type PaymentMethod } from "./registry";
+import { FLAG_REGISTRY, describeFlagState, isKnownFlag, paymentKillSwitch, type FlagKey, type FlagState, type PaymentMethod } from "./registry";
 import type { EvaluationContext, FlagProvider, ResolutionDetails } from "./provider";
 
 export interface FlagDecision {
@@ -29,6 +29,11 @@ export class FlagClient {
 
   async isPaymentMethodEnabled(method: PaymentMethod, context: EvaluationContext = {}): Promise<boolean> {
     return this.isEnabled(paymentKillSwitch(method), context);
+  }
+
+  /** "allowed" when the capability may run, "blocked" otherwise (including every fail-closed path). */
+  async describeState(key: FlagKey, context: EvaluationContext = {}): Promise<FlagState> {
+    return describeFlagState((await this.evaluate(key, context)).enabled);
   }
 
   async evaluate(key: string, context: EvaluationContext = {}): Promise<FlagDecision> {

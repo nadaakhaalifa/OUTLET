@@ -13,5 +13,7 @@ export default defineConfig({
       },
     }),
   ],
-  test: { environment: "node", include: ["src/**/*.test.ts"] },
+  // PGlite suites boot a WASM Postgres and apply ~46 migrations; under `pnpm -r test` the machine
+  // runs every package at once, which made a few of them miss the 5 s / 10 s defaults.
+  test: { environment: "node", include: ["src/**/*.test.ts"], testTimeout: 30_000, hookTimeout: 60_000 },
 });

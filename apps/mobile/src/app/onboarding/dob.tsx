@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 import { spacing } from "@outlet/ui-tokens";
 import { Banner, Button, Checkbox, Text, TextField } from "../../ui";
+import { TestId } from "../../components/TestId";
 import { StepScaffold } from "../../components/Scaffold";
 import { errorKeyFor } from "../../features/api-errors";
 import { ageGateErrorKey, runAgeGate } from "../../features/age-gate";
@@ -90,18 +91,18 @@ export default function DobStep() {
       {/* Order is day, month, year in both languages; the row follows layout direction. */}
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}>
-          <TextField label={t("onboarding.dob.day")} value={day} onChangeText={(v) => setDay(v.slice(0, 2))} keyboardType="numeric" />
+          <TestId id="dob-day"><TextField label={t("onboarding.dob.day")} value={day} onChangeText={(v) => setDay(v.slice(0, 2))} keyboardType="numeric" /></TestId>
         </View>
         <View style={{ flex: 1 }}>
-          <TextField label={t("onboarding.dob.month")} value={month} onChangeText={(v) => setMonth(v.slice(0, 2))} keyboardType="numeric" />
+          <TestId id="dob-month"><TextField label={t("onboarding.dob.month")} value={month} onChangeText={(v) => setMonth(v.slice(0, 2))} keyboardType="numeric" /></TestId>
         </View>
         <View style={{ flex: 1.4 }}>
-          <TextField label={t("onboarding.dob.year")} value={year} onChangeText={(v) => setYear(v.slice(0, 4))} keyboardType="numeric" />
+          <TestId id="dob-year"><TextField label={t("onboarding.dob.year")} value={year} onChangeText={(v) => setYear(v.slice(0, 4))} keyboardType="numeric" /></TestId>
         </View>
       </View>
       {fieldError !== undefined ? <Banner tone="error" message={fieldError} /> : null}
       <Text variant="caption" secondary>{t("onboarding.dob.privacyNote")}</Text>
-      <Checkbox label={t("onboarding.dob.attest")} value={attested} onValueChange={setAttested} />
+      <TestId id="dob-attest"><Checkbox label={t("onboarding.dob.attest")} value={attested} onValueChange={setAttested} /></TestId>
       {errorKey === "onboarding.dob.errorAttest" ? <Banner tone="error" message={t(errorKey)} /> : null}
       {limited ? <Banner tone="info" message={t("onboarding.dob.limitedCapacity")} /> : null}
       {busy ? <Text variant="caption" secondary>{t("onboarding.dob.checking")}</Text> : null}

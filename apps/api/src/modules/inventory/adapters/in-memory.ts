@@ -6,6 +6,7 @@ import {
   type LevelView,
   type ReleaseOutcome,
   type ReleaseReason,
+  type UnclaimOutcome,
   type ReserveOutcome,
   type SweepResult,
   type SyncCommand,
@@ -68,6 +69,10 @@ export class InMemoryInventoryStore implements InventoryStore {
 
   async release(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<ReleaseOutcome> {
     return this.model.release(orderGroupId, reason, nowMs);
+  }
+
+  async unclaim(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<UnclaimOutcome> {
+    return this.model.unclaim(orderGroupId, reason, nowMs);
   }
 
   async sweepExpired(nowMs: number, batch: number): Promise<SweepResult> {

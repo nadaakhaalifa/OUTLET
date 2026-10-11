@@ -70,7 +70,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
   });
   if (options.customise) builder = options.customise(builder);
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication({ logger: false });
+  const app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   configureApp(app, config);
   await app.init();
   const ageGate = app.get<AgeGate>(AGE_GATE, { strict: false });

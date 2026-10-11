@@ -1,9 +1,10 @@
-import type { ClaimOutcome, ReleaseOutcome, ReleaseReason, SweepResult } from "../domain/core";
+import type { ClaimOutcome, ReleaseOutcome, ReleaseReason, SweepResult, UnclaimOutcome } from "../domain/core";
 import type { ClockPort, InventoryStore } from "../domain/ports";
 import { OrderGroupInput } from "./schemas";
 
 export type ClaimResult = ClaimOutcome | { readonly status: "invalid_input" };
 export type ReleaseResult = ReleaseOutcome | { readonly status: "invalid_input" };
+export type UnclaimResult = UnclaimOutcome | { readonly status: "invalid_input" };
 
 /**
  * Checkout saga: payment.succeeded. The caller runs this in the same unit of work as its ledger
@@ -28,6 +29,16 @@ export class ReleaseReservation {
     const p = OrderGroupInput.safeParse(raw);
     if (!p.success) return { status: "invalid_input" };
     return this.store.release(p.data.orderGroupId, reason, this.clock.nowMs());
+  }
+
+  /**
+   * R-2: a saga that claimed stock but will never place orders (late credit loss) must give the
+   * units back. Only valid while no order exists for the group; idempotent.
+   */
+  async unclaim(raw: unknown, reason: Exclude<ReleaseReason, "expired">): Promise<UnclaimResult> {
+    const p = OrderGroupInput.safeParse(raw);
+    if (!p.success) return { status: "invalid_input" };
+    return this.store.unclaim(p.data.orderGroupId, reason, this.clock.nowMs());
   }
 }
 

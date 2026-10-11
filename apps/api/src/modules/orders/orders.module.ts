@@ -5,7 +5,7 @@ import type { Clock, IdGenerator } from "../../platform/ports";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
 import { OrderCommands } from "./application/commands";
 import { PlaceOrders } from "./application/intake";
-import { GetOrderGroup, GetSellerOrder, ListSellerOrders } from "./application/queries";
+import { GetOrderGroup, GetSellerOrder, ListMyOrders, ListSellerOrders } from "./application/queries";
 import { FakeStoreLookup, InMemoryOrderRepository } from "./adapters/in-memory";
 import { SellerOrdersController, ShopperOrdersController } from "./adapters/orders.controller";
 import { OrderGroupResolver, SellerOrderResolver, ShopperSellerOrderResolver } from "./adapters/resolvers";
@@ -13,6 +13,7 @@ import { OrderStoreAccess } from "./adapters/store-access";
 import {
   GET_ORDER_GROUP,
   GET_SELLER_ORDER,
+  LIST_MY_ORDERS,
   LIST_SELLER_ORDERS,
   ORDERS_NOW,
   ORDER_COMMANDS,
@@ -74,6 +75,7 @@ export class OrdersModule {
         },
         { provide: GET_ORDER_GROUP, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new GetOrderGroup(r) },
         { provide: GET_SELLER_ORDER, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new GetSellerOrder(r) },
+        { provide: LIST_MY_ORDERS, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new ListMyOrders(r) },
         { provide: LIST_SELLER_ORDERS, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new ListSellerOrders(r) },
         { provide: ORDER_GROUP_RESOLVER, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new OrderGroupResolver(r) },
         { provide: SELLER_ORDER_RESOLVER, inject: [ORDER_REPOSITORY], useFactory: (r: OrderRepository) => new SellerOrderResolver(r) },

@@ -1,0 +1,9 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE. Assumed validation failure shape. VERIFY BEFORE LAUNCH.",
+  "status": 200,
+  "body": {
+    "HasErrors": true,
+    "Notifications": [{ "Code": "ERR52", "Message": "Destination city is not serviceable" }],
+    "Shipments": []
+  }
+}

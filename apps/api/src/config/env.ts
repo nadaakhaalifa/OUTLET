@@ -32,6 +32,8 @@ const RawEnvSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   /** HMAC key that pseudonymises shopper ids in size demand events. Required when DEV_FIXTURES is off. */
   SIZE_DEMAND_PSEUDONYM_KEY: z.string().min(32).max(256).optional(),
+  /** HMAC key for checkout price-lock tokens. Optional: derived from OTP_PEPPER (domain separated) when unset. */
+  CHECKOUT_LOCK_SECRET: z.string().min(32).max(256).optional(),
   /** Version of the consent texts currently shown (applies to every purpose until texts diverge). */
   CONSENT_TEXT_VERSION: z.coerce.number().int().min(1).max(10_000).default(1),
 });
@@ -51,7 +53,7 @@ export interface AppConfig {
   readonly port: number;
   readonly tokenIssuer: string;
   readonly trustProxyHops: number;
-  /** "in-memory-dev" is the only adapter set that exists. Production has none yet. */
+  /** "in-memory-dev": fixtures. "production": Postgres stores plus Unconfigured providers (apps/api/src/production, ADR-0029). */
   readonly adapters: "in-memory-dev" | "production";
   readonly databaseUrl: string | undefined;
   readonly databasePoolMax: number;
@@ -59,6 +61,7 @@ export interface AppConfig {
   readonly otpPepper: string | undefined;
   readonly ipHashKey: string | undefined;
   readonly consentTextVersion: number;
+  readonly checkoutLockSecret: string | undefined;
   readonly ageBlockKey: string | undefined;
   readonly passkeyRpId: string;
   readonly passkeyOrigin: string;
@@ -98,6 +101,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     otpPepper: raw.OTP_PEPPER,
     ipHashKey: raw.IP_HASH_KEY,
     consentTextVersion: raw.CONSENT_TEXT_VERSION,
+    checkoutLockSecret: raw.CHECKOUT_LOCK_SECRET,
     ageBlockKey: raw.AGE_BLOCK_KEY,
     passkeyRpId: raw.PASSKEY_RP_ID,
     passkeyOrigin: raw.PASSKEY_ORIGIN,

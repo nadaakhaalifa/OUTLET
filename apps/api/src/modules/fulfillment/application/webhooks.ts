@@ -259,6 +259,10 @@ export class IngestCourierWebhook {
         total_amount: total.toString(),
         lines: lines.length,
         matched,
+        // Ledger recognition (cod_collected) clears only what matched; a mismatch is a finance ticket.
+        remittance_id: remittance.id,
+        matched_amount: lines.filter((l) => l.match === "MATCHED").reduce((a, l) => a + l.collected.amount, 0n).toString(),
+        matched_fee: lines.filter((l) => l.match === "MATCHED").reduce((a, l) => a + l.fee.amount, 0n).toString(),
       };
       outbox.push({
         id: ids.uuidV7(),

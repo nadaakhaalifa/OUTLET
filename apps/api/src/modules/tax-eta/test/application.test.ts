@@ -179,8 +179,12 @@ describe("PollSubmissionStatuses", () => {
 
 describe("daily reconciliation", () => {
   it("reports submitted vs accepted vs rejected for a Cairo day", async () => {
+    // Distinct creation instants: the queue is FIFO by creation time, and with a frozen clock the
+    // id tie-break is random, which made "the first two" (and so the rejected one) nondeterministic.
     const ok = await issueOk(invoice("r1"));
+    h.clock.advance(1_000);
     const bad = await issueOk(invoice("r2"));
+    h.clock.advance(1_000);
     await issueOk(invoice("r3"));
     h.eta.script(bad.stored.document.internalId, { kind: "rejected", reasons: ["x"] });
     // r3 stays queued: process only two by limiting.

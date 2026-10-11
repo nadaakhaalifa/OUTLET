@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "mutation:inventory": "stryker run stryker.inventory.mjs",
-    "mutation:cart": "stryker run stryker.cart.mjs"
+    "mutation:cart": "stryker run stryker.cart.mjs",
+    "mutation:ledger-posting": "stryker run stryker.ledger-posting.mjs"
   },
   "devDependencies": {
     "fast-check": "^4.0.0",

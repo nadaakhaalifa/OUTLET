@@ -361,9 +361,13 @@ describe("COD remittance records", () => {
     expect(rem).toMatchObject({ status: "MATCHED", total: { amount: 150_000n } });
     expect(rem?.lines[0]).toMatchObject({ match: "MATCHED", fee: { amount: 2_500n } });
     expect(h.repo.outbox.some((e) => e.type === "cod_remittance.matched")).toBe(true);
+    const matchedEvt = h.repo.outbox.filter((e) => e.type === "cod_remittance.matched");
+    expect(matchedEvt).toHaveLength(1);
+    expect(matchedEvt[0]?.payload).toMatchObject({ courier_ref: "CR-100", matched_amount: "150000", matched_fee: "2500" });
     // the same batch under another event id is a duplicate
     const dup = await h.webhook(remittanceBody("rem-evt-2", "CR-100", [{ awb, collected: 150_000 }]));
     expect(dup.body.duplicate).toBe(true);
+    expect(h.repo.outbox.filter((e) => e.type === "cod_remittance.matched")).toHaveLength(1);
     const wire = await h.http().get(`/v1/seller/shipments/${id}`).set(owner);
     expect(wire.body.status).toBe("delivered");
   });

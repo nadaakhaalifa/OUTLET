@@ -272,6 +272,41 @@ describe("POST /v1/seller/orders/{id}/reject", () => {
   });
 });
 
+describe("GET /v1/me/orders", () => {
+  it("lists only the caller's own groups, with a cursor", async () => {
+    const mine = await get("/v1/me/orders", T.shopperA);
+    expect(mine.status).toBe(200);
+    expect(mine.body.items.map((g: { id: string }) => g.id)).toEqual([GROUP_1]);
+    expect(mine.body.page).toEqual({ next_cursor: null, has_more: false });
+    // another shopper sees none of it: empty, not 403/404
+    const other = await get("/v1/me/orders", T.shopperB);
+    expect(other.status).toBe(200);
+    expect(other.body.items).toEqual([]);
+  });
+  it("pages with limit and rejects a malformed cursor or extra params", async () => {
+    await h.kit.intake.placeOrder({
+      groupId: U(0x7002),
+      userId: SHOPPER_A,
+      paidAtMs: T0 + 1000,
+      stores: [{ sellerOrderId: U(0x7003), storeId: STORE_A }],
+    });
+    const p1 = await get("/v1/me/orders?limit=1", T.shopperA);
+    expect(p1.body.items).toHaveLength(1);
+    expect(p1.body.page.has_more).toBe(true);
+    const p2 = await get(`/v1/me/orders?limit=1&cursor=${p1.body.page.next_cursor}`, T.shopperA);
+    expect(p2.body.items).toHaveLength(1);
+    expect(p2.body.items[0].id).not.toBe(p1.body.items[0].id);
+    expect(p2.body.page.has_more).toBe(false);
+    expect((await get("/v1/me/orders?cursor=garbage", T.shopperA)).status).toBe(400);
+    expect((await get("/v1/me/orders?user_id=x", T.shopperA)).status).toBe(400);
+  });
+  it("requires a buyer-audience token", async () => {
+    expect((await get("/v1/me/orders", null)).status).toBe(401);
+    expect((await get("/v1/me/orders", T.sellerAudOnBuyerRoute)).status).toBe(401);
+    expect((await get("/v1/me/orders", T.ownerA)).status).toBe(401);
+  });
+});
+
 describe("GET /v1/order-groups/{id}", () => {
   it("returns the group with its seller orders to the owner", async () => {
     const res = await get(`/v1/order-groups/${GROUP_1}`, T.shopperA);

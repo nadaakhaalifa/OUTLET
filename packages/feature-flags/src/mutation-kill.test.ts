@@ -5,6 +5,7 @@ import {
   InMemoryFlagProvider,
   isKnownFlag,
   KILL_SWITCHES,
+  PHASE2_KILL_SWITCHES,
   PAYMENT_METHODS,
   paymentKillSwitch,
   RELEASE_FLAGS,
@@ -43,6 +44,9 @@ describe("registry content", () => {
       "kill.gift_card_sales": { description: "Gift card sales" },
     });
     expect(RELEASE_FLAGS).toStrictEqual({
+      "release.budget_suite": {
+        description: "Budget suite and affordability (§12). Blocked: budget routes answer 404 and affordability filters are ignored",
+      },
       "release.us_storefront_linkout": {
         description: "US-only web purchase link-out (spec section on App Store storefronts); VERIFY BEFORE LAUNCH",
       },
@@ -51,9 +55,9 @@ describe("registry content", () => {
   it("FLAG_REGISTRY is kill switches then release flags with the right kinds", () => {
     const kills = FLAG_REGISTRY.filter((d) => d.kind === "kill_switch");
     const rels = FLAG_REGISTRY.filter((d) => d.kind === "release");
-    expect(kills.map((d) => d.key)).toEqual(Object.keys(KILL_SWITCHES));
+    expect(kills.map((d) => d.key)).toEqual([...Object.keys(KILL_SWITCHES), ...Object.keys(PHASE2_KILL_SWITCHES)]);
     expect(rels.map((d) => d.key)).toEqual(Object.keys(RELEASE_FLAGS));
-    expect(FLAG_REGISTRY).toHaveLength(15);
+    expect(FLAG_REGISTRY).toHaveLength(14 + Object.keys(PHASE2_KILL_SWITCHES).length + 2);
     expect(FLAG_REGISTRY[0]).toStrictEqual({
       key: "kill.payment.card",
       kind: "kill_switch",
@@ -61,7 +65,7 @@ describe("registry content", () => {
       defaultValue: false,
       failClosed: true,
     });
-    expect(FLAG_REGISTRY[14]).toStrictEqual({
+    expect(FLAG_REGISTRY[FLAG_REGISTRY.length - 1]).toStrictEqual({
       key: "release.us_storefront_linkout",
       kind: "release",
       description: RELEASE_FLAGS["release.us_storefront_linkout"].description,

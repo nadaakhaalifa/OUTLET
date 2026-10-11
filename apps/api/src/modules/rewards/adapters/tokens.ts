@@ -1,0 +1,21 @@
+export const REWARDS_STORE = Symbol("rewards.RewardsStore");
+export const REWARDS_LEDGER = Symbol("rewards.LedgerPort");
+export const REWARDS_CREDIT = Symbol("rewards.StoreCreditPort");
+export const REWARDS_PLUS = Symbol("rewards.EntitlementPort");
+export const REWARDS_VOUCHERS = Symbol("rewards.VoucherPort");
+export const REWARDS_SWITCHES = Symbol("rewards.RewardsSwitchPort");
+export const REWARDS_ATTEST = Symbol("rewards.AttestationPort");
+export const REWARDS_APPROVALS = Symbol("rewards.ConfigApprovalPort");
+
+export const GET_REWARDS = Symbol("rewards.GetRewards");
+export const CONVERT_COINS = Symbol("rewards.ConvertCoins");
+export const PLAY_GAME = Symbol("rewards.PlayGame");
+export const GET_ODDS = Symbol("rewards.GetOdds");
+export const PUBLISH_ODDS = Symbol("rewards.PublishOdds");
+export const GET_REWARDS_CONFIG = Symbol("rewards.GetRewardsConfig");
+export const UPDATE_REWARDS_CONFIG = Symbol("rewards.UpdateRewardsConfig");
+export const MANAGE_CHALLENGES = Symbol("rewards.ManageChallenges");
+export const INGEST_REWARD_TRIGGER = Symbol("rewards.IngestRewardTrigger");
+export const SWEEP_REWARDS = Symbol("rewards.SweepRewards");
+export const TIER_SERVICE = Symbol("rewards.TierService");
+export const REWARDS_ADMIN_RESOLVER = Symbol("rewards.AdminResolver");

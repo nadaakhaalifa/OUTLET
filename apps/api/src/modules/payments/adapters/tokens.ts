@@ -1,0 +1,15 @@
+export const PAYMENT_STORE = Symbol("payments.PaymentStore");
+export const PAYMENT_PSP_ROUTER = Symbol("payments.PspRouter");
+export const PAYMENT_METHOD_SWITCH = Symbol("payments.PaymentMethodSwitchPort");
+export const PAYMENT_IP_ALLOW_LIST = Symbol("payments.WebhookIpAllowListPort");
+export const PAYMENT_ID_PORT = Symbol("payments.IdPort");
+export const PAYMENT_LIST_METHODS = Symbol("payments.ListPaymentMethods");
+export const PAYMENT_CREATE_INTENT = Symbol("payments.CreatePaymentIntent");
+export const PAYMENT_CAPTURE = Symbol("payments.CapturePayment");
+export const PAYMENT_VOID = Symbol("payments.VoidPayment");
+export const PAYMENT_REFUND = Symbol("payments.RefundPayment");
+export const PAYMENT_RECEIVE_WEBHOOK = Symbol("payments.ReceiveWebhook");
+export const PAYMENT_PROCESS_WEBHOOK = Symbol("payments.ProcessPaymentWebhook");
+export const PAYMENT_EXPIRE_INTENTS = Symbol("payments.ExpirePaymentIntents");
+export const PAYMENT_LIST_CARDS = Symbol("payments.ListSavedCards");
+export const PAYMENT_DELETE_CARD = Symbol("payments.DeleteSavedCard");

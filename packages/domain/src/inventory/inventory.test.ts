@@ -175,6 +175,19 @@ describe("StockModel scenarios", () => {
     expect(m.checkInvariants()).toEqual([]);
   });
 
+  it("R-2: unclaim returns CLAIMED units to AVAILABLE, is idempotent, and keeps the invariants", () => {
+    const m = mkModel();
+    seed(m, 1, 5);
+    const plan = planOrThrow("CARD", [line(1, 2)]);
+    m.reserve({ reservationId: U(1000), orderGroupId: U(2000), userId: U(3), plan, nowMs: 1000 });
+    expect(m.claim(U(2000), 3000)).toEqual({ status: "claimed" });
+    expect(m.level(U(1), LOC, STANDARD)).toMatchObject({ committed: 2, available: 3 });
+    expect(m.unclaim(U(2000), "payment_failed", 4000)).toEqual({ status: "unclaimed" });
+    expect(m.level(U(1), LOC, STANDARD)).toMatchObject({ onHand: 5, committed: 0, reserved: 0, available: 5 });
+    expect(m.unclaim(U(2000), "payment_failed", 4001)).toMatchObject({ status: "noop" });
+    expect(m.checkInvariants()).toEqual([]);
+  });
+
   it("is all-or-nothing across SKUs and reports every shortfall", () => {
     const m = mkModel();
     seed(m, 1, 5);

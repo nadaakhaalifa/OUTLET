@@ -7,6 +7,8 @@ import {
   type ApplyResult,
   type BuyerContactRecord,
   type ListPage,
+  type GroupPage,
+  type ListGroupsQuery,
   type ListQuery,
   type NewOrderGroup,
   type OrderGroupRecord,
@@ -319,6 +321,49 @@ export class KyselyOrderRepository implements OrderRepository {
         createdAtMs: r.created_ms,
         updatedAtMs: r.updated_ms,
         sellerOrders: orders.map((o) => ({ ...o, buyer: null })),
+      };
+    });
+  }
+
+  async listGroupsForUser(q: ListGroupsQuery): Promise<GroupPage> {
+    if (!UUID.test(q.userId)) return { items: [], next: null };
+    return this.tx({ kind: "shopper", userId: q.userId }, async (trx) => {
+      const after =
+        q.after === null ? sql`` : sql`and (created_at, id) < (${iso(q.after.createdAtMs)}::timestamptz, ${q.after.id}::uuid)`;
+      const g = await sql<unknown>`
+        select id::text as id, user_id::text as user_id, status, payment_method, payment_type,
+               subtotal_amount::text as subtotal, shipping_amount::text as shipping, discount_amount::text as discount,
+               vat_amount::text as vat, store_credit_amount::text as store_credit, total_amount::text as total,
+               version, ${sql.raw(ms("created_at"))} as created_ms, ${sql.raw(ms("updated_at"))} as updated_ms
+          from order_groups where user_id = ${q.userId}::uuid ${after}
+         order by created_at desc, id desc limit ${q.limit + 1}`.execute(trx);
+      const rows = g.rows.map((x) => GroupRow.parse(x));
+      const page = rows.slice(0, q.limit);
+      const items: OrderGroupRecord[] = [];
+      for (const r of page) {
+        const orders = await KyselyOrderRepository.loadOrders(trx, sql`order_group_id = ${r.id}::uuid order by created_at, id`);
+        items.push({
+          id: r.id,
+          userId: r.user_id,
+          status: r.status as OrderGroupState,
+          paymentMethod: r.payment_method,
+          paymentType: r.payment_type,
+          subtotal: money(r.subtotal),
+          shipping: money(r.shipping),
+          discount: money(r.discount),
+          vat: money(r.vat),
+          storeCredit: money(r.store_credit),
+          total: money(r.total),
+          version: r.version,
+          createdAtMs: r.created_ms,
+          updatedAtMs: r.updated_ms,
+          sellerOrders: orders.map((o) => ({ ...o, buyer: null })),
+        });
+      }
+      const last = page[page.length - 1];
+      return {
+        items,
+        next: rows.length > q.limit && last !== undefined ? { createdAtMs: last.created_ms, id: last.id } : null,
       };
     });
   }

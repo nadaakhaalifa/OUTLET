@@ -1,4 +1,5 @@
 import type {
+  GroupPage,
   ListPage,
   OrderGroupRecord,
   OrderRepository,
@@ -38,5 +39,12 @@ export class ListSellerOrders {
       after: a.after,
       limit: a.limit,
     });
+  }
+}
+
+export class ListMyOrders {
+  constructor(private readonly repo: OrderRepository) {}
+  execute(a: { userId: string; after: { createdAtMs: number; id: string } | null; limit: number }): Promise<GroupPage> {
+    return this.repo.listGroupsForUser(a);
   }
 }

@@ -4,6 +4,11 @@ import {
   coinSource,
   dropType,
   durationMs,
+  gameKind,
+  gameOutcomeKind,
+  recommendationModule,
+  stylistSource,
+  adSurface,
   minorUnits,
   notificationChannel,
   onboardingStep,
@@ -37,6 +42,8 @@ type Definition<S extends z.ZodRawShape> = Gate & {
   readonly description: string;
   /** Where the event is named in the master prompt. */
   readonly specRef: string;
+  /** Schema version of this event's property set. Bump on any breaking change; additive optional fields keep it. */
+  readonly version?: number;
   readonly shape: S;
   /** Every property must be classified P0 or P1. P2/P3 are not assignable, so a personal field cannot be declared. */
   readonly classes: FieldClasses<S>;
@@ -46,7 +53,7 @@ function defineEvent<const N extends string, S extends z.ZodRawShape>(name: N, d
   assertAnalyticsEventName(name);
   for (const key of Object.keys(def.shape)) assertPropertyName(key);
   const piiClass: AnalyticsSafeClass = Object.values<AnalyticsSafeClass>(def.classes).includes("P1") ? "P1" : "P0";
-  return { name, ...def, piiClass, schema: z.strictObject(def.shape) };
+  return { name, ...def, version: def.version ?? 1, piiClass, schema: z.strictObject(def.shape) };
 }
 
 const R = "analytics_25m" as const;
@@ -122,8 +129,11 @@ export const analyticsEvents = {
   stylist_outfit_generated: defineEvent("stylist_outfit_generated", {
     owner: "stylist", origin: "server", purpose: "personalization", retention: R, specRef: "§11, §26",
     description: "The stylist produced outfits. The budget amount is not recorded, only whether one was used.",
-    shape: { outfit_count: smallCount, budget_used: z.boolean(), latency_ms: durationMs, model_version: code },
-    classes: { outfit_count: "P0", budget_used: "P1", latency_ms: "P0", model_version: "P0" },
+    shape: {
+      outfit_count: smallCount, budget_used: z.boolean(), latency_ms: durationMs, model_version: code,
+      budget_band_index: z.number().int().min(0).max(99).optional(), source: stylistSource.optional(),
+    },
+    classes: { outfit_count: "P0", budget_used: "P1", latency_ms: "P0", model_version: "P0", budget_band_index: "P1", source: "P0" },
   }),
   outfit_added_to_bag: defineEvent("outfit_added_to_bag", {
     owner: "stylist", origin: "client", purpose: "personalization", retention: R, specRef: "§11, §26",
@@ -310,6 +320,60 @@ export const analyticsEvents = {
     description: "A shopper was admitted from the waiting room.",
     shape: { drop_id: opaqueId, wait_seconds: z.number().int().min(0).max(86_400) },
     classes: { drop_id: "P1", wait_seconds: "P0" },
+  }),
+  game_played: defineEvent("game_played", {
+    owner: "rewards", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§15.5, phase2/06",
+    description: "A free light game was played. Odds were disclosed (always true) and the outcome is coins or a voucher, never cash.",
+    shape: { game: gameKind, odds_version: code, odds_disclosed: z.literal(true), outcome_kind: gameOutcomeKind },
+    classes: { game: "P0", odds_version: "P0", odds_disclosed: "P0", outcome_kind: "P1" },
+  }),
+  recommendation_impression: defineEvent("recommendation_impression", {
+    owner: "recommendations", origin: "client", purpose: "personalization", retention: R, specRef: "phase2/05",
+    description: "A recommendation module was shown.",
+    shape: { module: recommendationModule, model_version: code, item_count: smallCount, personalized: z.boolean() },
+    classes: { module: "P0", model_version: "P0", item_count: "P0", personalized: "P1" },
+  }),
+  recommendation_click: defineEvent("recommendation_click", {
+    owner: "recommendations", origin: "client", purpose: "personalization", retention: R, specRef: "phase2/05",
+    description: "An item in a recommendation module was opened.",
+    shape: { module: recommendationModule, model_version: code, product_id: opaqueId, position: smallCount },
+    classes: { module: "P0", model_version: "P0", product_id: "P1", position: "P0" },
+  }),
+  history_cleared: defineEvent("history_cleared", {
+    owner: "recommendations", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§13, phase2/05",
+    description: "The shopper cleared their history. Server mirror of history.cleared, no content.",
+    shape: { scope: z.enum(["all", "viewed", "searched"]) },
+    classes: { scope: "P0" },
+  }),
+  personalization_changed: defineEvent("personalization_changed", {
+    owner: "recommendations", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§13, phase2/05",
+    description: "The personalization toggle changed. Strictly necessary so withdrawal is always recorded.",
+    shape: { enabled: z.boolean() },
+    classes: { enabled: "P0" },
+  }),
+  ad_impression: defineEvent("ad_impression", {
+    owner: "ads", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§17, phase2/10",
+    description: "A sponsored result was served. Pseudonymous, no user id and no query text. Needed for billing and reporting.",
+    shape: { ad_id: opaqueId, campaign_id: opaqueId, surface: adSurface, position: smallCount },
+    classes: { ad_id: "P1", campaign_id: "P1", surface: "P0", position: "P0" },
+  }),
+  ad_click: defineEvent("ad_click", {
+    owner: "ads", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§17, phase2/10",
+    description: "A sponsored result was clicked (server-validated token, billed only if valid).",
+    shape: { ad_id: opaqueId, campaign_id: opaqueId, surface: adSurface, position: smallCount, valid: z.boolean() },
+    classes: { ad_id: "P1", campaign_id: "P1", surface: "P0", position: "P0", valid: "P0" },
+  }),
+  review_submitted: defineEvent("review_submitted", {
+    owner: "reviews", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§27, §15.5",
+    description: "A verified-purchase review was submitted. Rating and flags only, no review text.",
+    shape: { product_id: opaqueId, rating: z.number().int().min(1).max(5), has_image: z.boolean(), has_size_info: z.boolean() },
+    classes: { product_id: "P1", rating: "P1", has_image: "P0", has_size_info: "P0" },
+  }),
+  review_reported: defineEvent("review_reported", {
+    owner: "reviews", origin: "client", purpose: "analytics", retention: R, specRef: "§27",
+    description: "A review was reported. Reason is a bounded code, no free text.",
+    shape: { review_id: opaqueId, reason: code },
+    classes: { review_id: "P1", reason: "P0" },
   }),
   consent_changed: defineEvent("consent_changed", {
     owner: "privacy", origin: "server", purpose: "strictly_necessary", retention: R, specRef: "§B1, §26",

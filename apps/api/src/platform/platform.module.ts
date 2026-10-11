@@ -1,12 +1,12 @@
 import { Global, Module, type DynamicModule } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
-import { IdempotencyService, InMemoryIdempotencyStore } from "@outlet/idempotency";
+import { IdempotencyService, InMemoryIdempotencyStore, type IdempotencyStore } from "@outlet/idempotency";
 import { createDefaultRules } from "@outlet/policy";
 import type { AppConfig } from "../config/env";
 import { InMemoryAuditSink, InMemoryRateLimiter } from "./dev-fixtures";
-import { HealthController, ReadinessRegistry } from "./health.controller";
+import { HealthController, READINESS_REPORT, ReadinessRegistry, type ReadinessReport } from "./health.controller";
 import { IdempotencyInterceptor } from "./idempotency.interceptor";
-import type { Clock, IdGenerator } from "./ports";
+import type { AuditSink, Clock, IdGenerator, RateLimiter } from "./ports";
 import { PolicyGuard } from "./policy.guard";
 import { ProblemFilter } from "./problem.filter";
 import { RateLimitGuard } from "./rate-limit.guard";
@@ -33,6 +33,13 @@ export class NoProductionAdaptersError extends Error {
 export interface PlatformOverrides {
   readonly clock?: Clock;
   readonly ids?: IdGenerator;
+  /** Production adapters (apps/api/src/production). Required when `config.adapters` is not in-memory-dev. */
+  readonly production?: {
+    readonly idempotencyStore: IdempotencyStore;
+    readonly rateLimiter: RateLimiter;
+    readonly auditSink: AuditSink;
+    readonly report?: ReadinessReport;
+  };
 }
 
 /**
@@ -44,7 +51,8 @@ export interface PlatformOverrides {
 @Module({})
 export class PlatformModule {
   static forRoot(config: AppConfig, overrides: PlatformOverrides = {}): DynamicModule {
-    if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
+    const prod = overrides.production;
+    if (config.adapters !== "in-memory-dev" && prod === undefined) throw new NoProductionAdaptersError();
     const clock = overrides.clock ?? systemClock;
     const ids = overrides.ids ?? createIdGenerator(clock, nodeCsprng);
     return {
@@ -58,14 +66,15 @@ export class PlatformModule {
         {
           provide: IDEMPOTENCY_SERVICE,
           useValue: new IdempotencyService({
-            // DEVELOPMENT FIXTURE store: per process, lost on restart.
-            store: new InMemoryIdempotencyStore(),
+            // Without production adapters this is the DEVELOPMENT FIXTURE store (per process, lost on restart).
+            store: prod?.idempotencyStore ?? new InMemoryIdempotencyStore(),
             clock,
             newClaimToken: () => ids.hex(16),
           }),
         },
-        { provide: RATE_LIMITER, useValue: new InMemoryRateLimiter() },
-        { provide: AUDIT_SINK, useValue: new InMemoryAuditSink() },
+        { provide: RATE_LIMITER, useValue: prod?.rateLimiter ?? new InMemoryRateLimiter() },
+        { provide: AUDIT_SINK, useValue: prod?.auditSink ?? new InMemoryAuditSink() },
+        ...(prod?.report !== undefined ? [{ provide: READINESS_REPORT, useValue: prod.report }] : []),
         {
           provide: POLICY_RULES,
           // VERIFY BEFORE LAUNCH: owner to set both dual-approval thresholds (policy README).

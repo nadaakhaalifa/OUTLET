@@ -26,6 +26,8 @@ export interface TrackerDeps {
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly pseudonymousId: PseudonymousIdProvider;
+  /** Added to every envelope as `platform` when set. */
+  readonly platform?: "ios" | "android" | "web" | "server";
 }
 
 const pseudonymOk = z.string().regex(/^px_[A-Za-z0-9_-]{16,64}$/);
@@ -83,7 +85,8 @@ export class ConsentGatedTracker {
         pseudonymous_id: id.data,
         origin,
         purpose: def.purpose,
-        schema_version: 1,
+        schema_version: def.version,
+        ...(this.deps.platform === undefined ? {} : { platform: this.deps.platform }),
         properties: parsed.data,
       };
       try {

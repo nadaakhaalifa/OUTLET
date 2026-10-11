@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Button, TextField } from "../../ui";
+import { TestId } from "../../components/TestId";
 import { StepScaffold } from "../../components/Scaffold";
 import { errorKeyFor } from "../../features/api-errors";
 import { normalizeEgyptianPhone } from "../../features/phone";
@@ -65,7 +66,7 @@ export default function PhoneStep() {
 
   return (
     <StepScaffold step="phone" title={t("onboarding.phone.title")} body={t("onboarding.phone.body")}>
-      <TextField
+      <TestId id="phone-input"><TextField
         label={t("onboarding.phone.label")}
         value={raw}
         onChangeText={setRaw}
@@ -73,7 +74,7 @@ export default function PhoneStep() {
         helper={t("onboarding.phone.helper")}
         keyboardType="phone-pad"
         {...(errorKey !== null ? { error: t(errorKey) } : {})}
-      />
+      /></TestId>
       <Button title={t("onboarding.phone.send")} onPress={() => void send()} loading={busy} />
     </StepScaffold>
   );

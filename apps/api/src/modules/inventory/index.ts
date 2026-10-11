@@ -8,10 +8,12 @@ export {
   INVENTORY_SKU_DIRECTORY,
   INVENTORY_STORE,
   INVENTORY_SWEEP_EXPIRED,
+  INVENTORY_SYNC_STOCK,
   INVENTORY_TRANSFER_POOLS,
 } from "./adapters/tokens";
 export type { ReserveStock, ReserveStockResult } from "./application/reserve-stock";
-export type { ClaimReservation, ClaimResult, ReleaseReservation, ReleaseResult } from "./application/lifecycle";
+export type { ClaimReservation, ClaimResult, ReleaseReservation, ReleaseResult, UnclaimResult } from "./application/lifecycle";
 export { InMemoryInventoryStore, InMemorySkuDirectory, STANDARD_POOL_ID, FAWRY_POOL_ID } from "./adapters/in-memory";
 export { KyselyInventoryStore, LevelBackedSkuDirectory, type InventoryDb } from "./adapters/kysely-store";
 export type { InventoryStore, SkuDirectory, SkuLocation } from "./domain/ports";
+export type { SyncSellerStock } from "./application/sync-stock";

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Button, Text, TextField } from "../../ui";
+import { TestId } from "../../components/TestId";
 import { StepScaffold } from "../../components/Scaffold";
 import { errorKeyFor } from "../../features/api-errors";
 import { isCompleteOtp, resendExhausted, resendRemainingSeconds, sanitizeOtp } from "../../features/otp";
@@ -103,13 +104,13 @@ export default function OtpStep() {
 
   return (
     <StepScaffold step="otp" title={t("onboarding.otp.title")} body={t("onboarding.otp.body", { phone: maskPhone(phone) })}>
-      <TextField
+      <TestId id="otp-input"><TextField
         label={t("onboarding.otp.label")}
         value={code}
         onChangeText={(v) => setCode(sanitizeOtp(v))}
         keyboardType="numeric"
         {...(errorKey !== null ? { error: t(errorKey) } : {})}
-      />
+      /></TestId>
       <Button title={t("onboarding.otp.verify")} onPress={() => void verify()} loading={busy} />
       {remaining > 0 ? <Text secondary>{t("onboarding.otp.resendIn", { seconds: remaining })}</Text> : null}
       {exhausted ? <Text secondary>{t("onboarding.otp.resendExhausted")}</Text> : null}
