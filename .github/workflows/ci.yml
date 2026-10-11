@@ -1,7 +1,5 @@
-# Continuous integration (spec A2, T5, T11). Every job is read-only on repo contents.
-# Actions are referenced by major version tag for readability. VERIFY BEFORE LAUNCH: pin every
-# third-party action to a full commit SHA (Renovate does this through renovate.json) before the
-# first production deploy; see docs/engineering/ci-cd.md.
+# Continuous integration (spec A2, T5, T11). Contents are read-only everywhere; no job has a
+# write token. Third-party actions are pinned to full commit SHAs (Renovate keeps them current).
 name: ci
 
 on:
@@ -26,9 +24,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -38,27 +38,48 @@ jobs:
       - run: pnpm test
 
   boundaries:
-    name: architecture boundaries (dependency-cruiser)
+    name: architecture boundaries (dependency-cruiser, Node 24)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node --version
       - run: pnpm depcruise
+
+  coverage:
+    name: coverage gate (domain >= 90 percent, ratchet elsewhere)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node tooling/coverage/check.mjs
 
   i18n-parity:
     name: Arabic and English key parity
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -74,29 +95,52 @@ jobs:
       contents: read
       pull-requests: read # gitleaks-action lists PR commits through the API
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .github/gitleaks.toml
+
+  semgrep:
+    name: SAST (semgrep)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: semgrep (pinned version, registry rulesets, fails on findings)
+        env:
+          SEMGREP_VERSION: "1.180.0"
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          set -euo pipefail
+          pipx run --spec "semgrep==${SEMGREP_VERSION}" semgrep scan \
+            --config p/typescript --config p/nodejs --config p/security-audit \
+            --error --metrics=off \
+            --exclude node_modules --exclude coverage --exclude "*.test.ts" \
+            apps packages tooling
 
   dependency-audit:
     name: dependency audit (pnpm audit, OSV)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high --prod
       - name: OSV scan of the lockfile
-        uses: google/osv-scanner-action/osv-scanner-action@v2
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
@@ -106,8 +150,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       - name: fmt
         run: terraform fmt -check -recursive infra/terraform
       - name: validate every environment (no backend, no credentials)
@@ -119,7 +165,6 @@ jobs:
           done
       - name: policy-as-code (Conftest against the Terraform source)
         # Pinned release binary, checksum-verified against the release's own checksums file.
-        # Replaces instrumenta/conftest-action@master, which was an unpinned branch reference.
         env:
           CONFTEST_VERSION: "0.56.0"
         run: |
@@ -132,7 +177,7 @@ jobs:
           tar -xzf "${tarball}" conftest
           ./conftest test infra/terraform --policy infra/terraform/policy --parser hcl2 --all-namespaces
       - name: Checkov
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@c13aafd679d3814a25067d10fcaf98c4f7594931 # v12.3131.0
         with:
           directory: infra/terraform
           framework: terraform
@@ -144,9 +189,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -155,6 +202,7 @@ jobs:
         run: node tooling/api/validate-openapi.mjs
       - name: Privacy data inventory covers every migration column (spec B1)
         run: |
+          node --test tooling/privacy/test/inventory.test.mjs
           node --test tooling/privacy/test/*.test.mjs
           node tooling/privacy/check-inventory.mjs
       - name: Observability as code (generated files in sync, rule structure, burn-rate windows)
@@ -162,18 +210,49 @@ jobs:
           node --test tooling/observability/test/*.test.mjs
           node tooling/observability/generate.mjs --check
           node tooling/observability/validate-rules.mjs
-      - name: Workflow lint (offline)
-        run: node .github/scripts/validate-workflows.mjs
+      - name: Workflow lint (offline; every remote action must be a full SHA)
+        run: node .github/scripts/validate-workflows.mjs --require-sha
+
+  migrations-pg16:
+    name: migrations and DB guarantees (real PostgreSQL 16)
+    # Throw-away initdb cluster on the runner (not a services: container) because the scripts
+    # need initdb/pg_ctl and the server log. pg16-verify.mjs is run by run-on-postgres16.sh.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Ensure PostgreSQL 16 server binaries
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/lib/postgresql/16/bin/initdb ]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-16
+          fi
+          /usr/lib/postgresql/16/bin/postgres --version
+      - name: Apply every migration and run DB-level checks
+        env:
+          PG_BIN: /usr/lib/postgresql/16/bin
+        run: bash tooling/db/run-on-postgres16.sh
 
   mutation:
-    name: mutation testing (domain, weekly and on demand)
+    name: mutation testing (domain, on push and on demand)
     if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-mutation')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -181,7 +260,7 @@ jobs:
       - run: pnpm mutation
       - run: cd packages/domain && pnpm exec stryker run stryker.inventory.mjs
       - run: cd packages/domain && pnpm exec stryker run stryker.cart.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: mutation-report
@@ -191,16 +270,15 @@ jobs:
   inventory-concurrency:
     name: inventory concurrency proof (real PostgreSQL 16)
     # Blocking. PGlite is a single backend and cannot exercise SKIP LOCKED, advisory locks or
-    # deadlock behaviour, so this is the only gate for ADR-0005 / spec 20.2 under contention.
-    # The script starts its own throw-away cluster with initdb (no `services:` container: the
-    # storm needs pg_ctl/initdb and the server log to grep for "deadlock detected").
-    # Single-runner evidence only; it is not a production load test.
+    # deadlock behaviour. Single-runner evidence only; it is not a production load test.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm

@@ -3,7 +3,7 @@
 Status: Phase 1, synthetic data only, fixture file format, nothing deployed · Module: `apps/api/src/modules/reconciliation` · Pure rules: `packages/domain/src/reconciliation` · Migration: `0035_payouts_reconciliation.sql` · Builds on ADR-0021 point 8 · Privacy: `docs/privacy/data_inventory.yaml` (`settlement_files`, `settlement_file_lines`, `recon_runs`, `recon_tickets`)
 
 ## Hard limits
-* **Provider file formats are not known.** Paymob, courier and BNPL settlement files are NOT contracted. A single fixture format (CSV, integer piastres, trailing TOTAL row) sits behind `SettlementFilePort`. Real parsers are new adapters, the matchers do not change. Every field assumption is VERIFY (VR-F1-11).
+* **Provider file formats are not known.** Paymob, courier and BNPL settlement files are NOT contracted. A single fixture format (CSV, integer piastres, trailing TOTAL row) sits behind `SettlementFilePort`. Real parsers are new adapters, the matchers do not change. Every field assumption is VERIFY (VR-RC-01).
 * **No live network calls.** Files arrive by `IngestSettlementFile` (SFTP or manual upload is the adapter's concern).
 * **Read-only on money.** Reconciliation never posts. Findings become tickets and alerts. Corrections are human decisions followed by reversing entries elsewhere.
 
@@ -73,4 +73,8 @@ Unmatched PSP lines older than 3 days (SLO: 0, T8), open tickets by severity, ti
 * Given an unbalanced ledger, then a critical `trial_balance` ticket, escalated immediately.
 
 ## VERIFY BEFORE LAUNCH (appended to the register)
-VR-F1-11 (settlement file formats, units, timezones, per provider), VR-F1-12 (reference key that links a provider line to a ledger movement), VR-F1-13 (COD remittance cycle and cut-off, links VR-11), VR-F1-14 (BNPL settlement statement content and fee netting, links VR-F1-05).
+VR-RC-01 (settlement file formats, units, timezones, per provider), VR-RC-02 (reference key that links a provider line to a ledger movement), VR-RC-03 (COD remittance cycle and cut-off, links VR-11), VR-RC-04 (aging policy and escalation recipients).
+
+## Conservation across files (ADV-W4-4)
+
+The matcher is per settlement file. A provider that re-reports the same reference under a new settlement id would match the same internal clearing line twice. `reconcileAcrossFiles` runs per provider over every parsed file in the window: the same (provider reference, line kind, signed gross) appearing in two files of one provider is a `duplicate_external` finding on each later copy (the file with the lowest settlement id owns the line). A refund or chargeback of a captured reference has another kind and sign, so it never trips this.

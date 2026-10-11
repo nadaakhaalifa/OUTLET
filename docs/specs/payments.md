@@ -46,15 +46,17 @@ Out-of-order and conflicting events (`decideWebhookEffect`): a stale event for a
 
 ## Algorithm comparison (2 to 3 lines each)
 * **Webhook processing.** Inline processing in the HTTP request gives the fastest state but a slow or failing handler makes the PSP retry-storm and ties DB locks to a third party's clock. Store-then-outbox answers fast and replays safely. Chosen: store + outbox, processing is idempotent by inbox row and by `processed_at`.
-* **Dedup key.** `UNIQUE(provider, event_id)` on every row lets an attacker pre-register a real event id with a forged body and block the genuine one. Chosen: unique only over rows with `signature_ok`, and rows that failed verification get the synthetic id `unverified:<sha256(body)>` so identical garbage dedups too.
+* **Dedup key.** `UNIQUE(provider, event_id)` over every row lets an attacker pre-register a real event id with a forged body and block the genuine event; a partial unique index over `signature_ok` rows only leaves forged rows undeduplicated. Chosen: plain `UNIQUE(provider, event_id)` plus a CHECK that rows failing verification carry the synthetic id `unverified:<sha256(body)>` and verified rows never do. A forged id therefore lands in a separate namespace and identical garbage still deduplicates.
 * **Circuit breaker.** A sliding error-rate window needs bucketed counters and a clock per provider; consecutive-failure counting with half-open is a tiny immutable value and is exhaustively testable. Chosen: consecutive failures (default 5), open 30 s, one probe, probe timeout 10 s. Per-process state (documented gap for multi-instance).
 * **MAC verification.** HMAC over `timestamp "." rawBody`, constant-time `timingSafeEqual` on equal-length digests, secrets list for rotation, timestamp window of 5 min in both directions.
 
 ## Edge cases
-* Raw body not available (server not started with `rawBody: true`): the route answers 500 so the PSP retries, never stores an unverifiable body as authentic.
+* Raw body not available (the Nest app must be created with `rawBody: true`, see Needs in the module handover): the route answers 500 so the PSP retries, never stores an unverifiable body as authentic. The MAC is always computed over the raw bytes, never over re-serialized JSON (tested with a re-ordered body).
 * Body above 256 KiB: refused with 413 before any storage.
 * IP not on the allow-list: 403, nothing stored (flooding guard). Verified and failed-signature bodies from allowed IPs are both stored; only verified ones are processed.
 * Timestamp outside +-5 min is a verification failure (`timestamp_out_of_window`). A PSP that retries with the original timestamp after 5 min is rejected and the intent is recovered by `retrieve` (VR-PAY-07).
+* A 10-digit timestamp header is epoch SECONDS. The window is in milliseconds, so such a header is refused with reason `timestamp_in_seconds` (after the MAC verified), never as a clock or signature fault. VR-PAY-07 must confirm the PSP's timestamp unit before the provider is enabled; if it signs in seconds the adapter needs a unit conversion, not a wider window.
+* Refunds (F-9): a refund webhook is attributed by provider refund reference first. With no known reference it settles by amount only when exactly one pending, unreferenced refund of that amount exists on the intent. Two or more is parked as an `unknown_refund` anomaly (`ambiguous_pending_refund`) and never settled by amount; `ResolvePendingRefunds` replays each refund's own idempotency key at the PSP (idempotent) and settles each with its own outcome.
 * Duplicate delivery: `duplicate` answered 200, no second processing.
 * Unknown provider path: 404, nothing stored.
 * Event for an intent we do not have yet: consumer throws `PaymentIntentNotFoundYet`, the relay retries with backoff and DLQ.
@@ -86,6 +88,15 @@ OWASP API: API1 (saved cards owner scoped, 404), API4 (body cap, rate limit), AP
 
 ## Metrics
 Product: payment success rate by method, 3-DS drop-off. SLI/SLO: webhook to `payment.succeeded` p95 < 5 s, checkout success >= 99.5% (owned by checkout). Guardrail: anomaly rate, signature-failure rate, breaker open time, late-success rate (alert above 0.1%).
+
+## Tests (where each rule is proven)
+* `packages/domain/src/payments/payments.test.ts`: machine reachability and property walks, refund parts never exceed captured, breaker and router properties, webhook effect decisions.
+* `test/store-contract.ts` run on in-memory and Kysely/PGlite: unique intent per group, transitions, inbox dedup, outbox same-transaction, refunds, saved cards, rollback.
+* `test/migration.test.ts`: linter, RLS, DB-level state machine, immutability, dedup constraints.
+* `test/application.test.ts`: create idempotency, kill switch, drop SKU and Fawry, failover versus ambiguous timeout, breaker, webhook intake and replay, capture, void, refund, sweeper.
+* `test/http.test.ts`: webhook endpoint (always 200 after store, IP allow-list, raw bytes) and negative authorization on saved cards.
+* `test/paymob.test.ts`: fixture-only adapter mapping and signing assumptions.
+* `test/saq-a.test.ts`: no card-data field in any schema, table, fixture, outbox payload or log call; PAN redaction property; no network API in module source.
 
 ## Acceptance (Gherkin)
 * Given a CREATED intent, when a signed `payment.succeeded` webhook with the right amount is posted twice, then exactly one `payment.succeeded` outbox event exists and the intent is SUCCEEDED.

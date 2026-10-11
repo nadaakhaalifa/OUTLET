@@ -120,3 +120,15 @@ Outbox (same transaction as the state change): `shipment.created`, `shipment.lab
 8. Proof of delivery (OTP or photo) fields in webhooks (data model rule); stored as a later task.
 9. `seller_order` shippable states with the orders module (`ACCEPTED` vs `PACKED`).
 10. Whether regressions such as `OUT_FOR_DELIVERY -> IN_TRANSIT` must be applied (data model note) or ignored (this spec, safer for replay determinism).
+
+## COD ledger recognition (F-8 follow-up)
+
+Implemented in `apps/api/src/composition/cod-wiring.ts` (`CodLedgerRecognition`), driven by fulfillment outbox events:
+
+| Event | Ledger | Notes |
+|---|---|---|
+| `shipment.delivered` (cod) | `order_cod_confirmed:{orderGroupId}` (shared key `orderRecognitionKey(g, "cod")`) | cod_clearing receivable; one entry per group, posted on the first delivered seller order, later deliveries replay as duplicate. Refunds fail closed until it exists. |
+| `cod_remittance.matched` / `.mismatch` | `cod_collected:{courier}:{courier_ref}` for the MATCHED lines only (`matched_amount`, `matched_fee` in the payload) | Unmatched lines post nothing and stay a finance ticket. |
+| `shipment.rto_initiated` / `rto_received` | nothing | Refusal never recognised revenue; the shopper's COD spend counter is reversed once per seller order (`cod_refused:{sellerOrderId}`). |
+
+VERIFY (VR-F1-01): a multi-store group where one parcel is refused after a sibling was delivered leaves that parcel's receivable in cod_clearing until reconciliation flags the short remittance.

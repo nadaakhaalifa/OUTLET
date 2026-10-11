@@ -111,3 +111,26 @@ Template rules: plain language, no speculation, no blame, no marketing, state on
 
 - VERIFY BEFORE LAUNCH: clock start, PDPC channel and form, subject-notice exemptions, who the DPO and deputy are, whether sellers must be notified, and the language and content requirements.
 - The DPO role does not exist yet; this runbook cannot be exercised until it does.
+
+## Appendix A: mapping to the breach register endpoints (as built, 2026-10-11)
+
+Code: `apps/api/src/modules/privacy/adapters/dpo.controller.ts`; proven by `apps/api/src/modules/privacy/privacy.http.test.ts` ("runs a breach through its legal clocks from the injected clock") and `apps/api/src/adversarial.wave3-admin-privacy.test.ts` (overdue clocks). All routes need an admin session with the `dpo` role and a passkey; reads and writes are audited. Base path `/v1/admin/privacy`.
+
+| Runbook step | Endpoint | Body | Role |
+|---|---|---|---|
+| T0 recorded, register entry | `POST /breaches` | `detected_at` (ISO), `severity`, `summary` (<= 2000), `affected_count` | dpo |
+| Triage and DPO decision (step 4) | `POST /breaches/{id}/triage` | `decision`: `notify` or `no_notification_required` | dpo |
+| PDPC notice sent (step 5) | `POST /breaches/{id}/pdpc-notified` | none; server stamps time | dpo |
+| Subjects notified (step 6) | `POST /breaches/{id}/subjects-notified` | none | dpo |
+| Close (step 7) | `POST /breaches/{id}/close` | none | dpo |
+| Watch clocks | `GET /breaches` | | dpo |
+| DSAR queue (separate 30-day SLA) | `GET /requests?kind=export|delete&limit=` | | dpo |
+
+```bash
+# example (token = admin passkey session access token; ids are UUIDs)
+curl -sS -X POST "$API/v1/admin/privacy/breaches" -H "Authorization: Bearer $TOKEN" -H "Idempotency-Key: $(uuidgen)" \
+  -H 'content-type: application/json' -d '{"detected_at":"2026-10-11T09:00:00Z","severity":"high","summary":"...","affected_count":0}'
+curl -sS "$API/v1/admin/privacy/breaches" -H "Authorization: Bearer $TOKEN"
+```
+
+Limits of the tooling (state honestly): the register computes the 72 h and 3-day clocks and keeps overdue clocks overdue, but it does not send the PDPC filing or the subject notices; those are manual (steps 5 and 6) and the notification templates are not wired to a bulk sender. Severity enum values: see `BREACH_SEVERITIES` in the privacy domain (VERIFY before use). Whether the clock starts at awareness is a legal question (VR-01, VERIFY BEFORE LAUNCH). Containment commands: revoke sessions (`DELETE /v1/me/sessions/{id}` is user-scoped only; an admin mass-revoke endpoint is NOT implemented, so use a DB operation approved by the incident commander), set kill switches (kill-switches.md), rotate secrets (secret-rotation.md).

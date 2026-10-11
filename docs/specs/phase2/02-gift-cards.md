@@ -58,3 +58,10 @@ Given a redeemed card, Then store_credit gift_card sub-balance increases by amou
 Given a pot that closes unfunded, Then every contribution is refunded to its original method.
 Given a gift card in cart, When paying with a gift card, Then rejected (no loop).
 ```
+
+
+## Build notes (wave 4 re-review fixes B-1, B-2, B-3)
+- Redemption is two-phase: `beginRedemption` records a PENDING redemption (key `gift-card-redemption:{id}`) with the card debit in one transaction BEFORE the credit. `StoreCreditPort.creditGiftCard` must be idempotent on that key. A typed `StoreCreditRejectedError` is a definite refusal and reverses the card exactly once; any other throw (timeout, dropped connection) is UNKNOWN: the redemption stays PENDING, the API answers `{status: "processing"}`, and `ResumePendingRedemptions` re-calls the credit with the same key until it converges. Invariant: sum(non-reversed redemptions) + remaining = face, credits = completed redemptions.
+- Pots: `voidPending` marks a contribution `cancelled` only on a PSP-confirmed void (or no intent). `captured` is refunded; unknown/throw becomes `pending_void` (still counted against the target) and the `CloseDuePots` sweep retries. A late success webhook is applied through `confirmContribution`, which locks the pot row (FOR UPDATE) and applies only what fits an OPEN pot; the rest is refunded under `gift-pot-refund:{id}`. A replayed webhook retries a `refund_failed` refund.
+- Throttle: `admitAttempt` is one critical section (advisory locks on account, device, ip) that counts failures and inserts the attempt as `pending` (counts as a failure until `finalizeAttempt`) or `throttled`. A per-ip window (50/day) was added; the ip hash index is in migration 0037.
+- Open for wiring: the real StoreCreditPort must map its definite refusals to `StoreCreditRejectedError` and the real PaymentIntentPort.cancel must return cancelled/captured/unknown; schedule `ResumePendingRedemptions` (every minute).

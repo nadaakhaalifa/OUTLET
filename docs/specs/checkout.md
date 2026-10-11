@@ -1,6 +1,6 @@
 # Spec: checkout (multi-store, one payment), Phase 1 / F-1
 
-Status: DRAFT for review (money path: independent Fable-tier review required before merge, ADR-0021) · Spec refs: master prompt §7, §6, §15.2, §15.6, §20.2, §20.7, §T4, §B2, §B3, §B8 · ADR-0003, ADR-0011, ADR-0018, ADR-0019, ADR-0021 · Related specs: `orders.md`, `inventory.md`, `promotions.md`, `tax-eta.md`, `cart.md`, `ledger-chart-of-accounts.md`.
+Status: IMPLEMENTED on fakes and PGlite, awaiting the Fable-tier money review (ADR-0021) and integrator wiring · Spec refs: master prompt §7, §6, §15.2, §15.6, §20.2, §20.7, §T4, §B2, §B3, §B8 · ADR-0003, ADR-0011, ADR-0018, ADR-0019, ADR-0021 · Related specs: `orders.md`, `inventory.md`, `promotions.md`, `tax-eta.md`, `cart.md`, `ledger-chart-of-accounts.md`.
 
 Scope: quote, commit (saga), payment events, recovery. `GET /v1/order-groups/{id}` stays in `orders`. Hard limits: Paymob is not contracted, so only an in-repo fake and a recorded-fixture adapter exist behind `PaymentProviderPort`; no live network calls; every PSP endpoint, field or window assumption is a VERIFY row (VR-CHK-1..8, `docs/compliance/verify-register.md`).
 
@@ -36,7 +36,9 @@ Migration `0033_checkout.sql`: `checkout_sagas` (PK `order_group_id`, `user_id`,
 | `POST /v1/checkout/quote` | buyer, self | no (pure) | 30/min user |
 | `POST /v1/checkout` | buyer, self, App Attest | yes, required | 5/min user, 10/min device, 20/min IP |
 | `GET /v1/checkout/{order_group_id}` (saga status, owner only, 404 otherwise) | buyer, resource | no | 60/min user |
-| `POST /v1/webhooks/{provider}` | public, HMAC + timestamp | dedup on event id | 600/min IP |
+| `POST /v1/checkout/{order_group_id}/cancel` | buyer, resource (owner else 404) | yes, required | 10/min user |
+| `POST /v1/checkout/{order_group_id}/confirm-cod` (body `code`, verified through `CodConfirmationPort`) | buyer, resource | yes, required | 5/min user |
+| `POST /v1/webhooks/checkout/{provider}` (spec path `/v1/webhooks/{provider}`; namespaced so it cannot collide with a payments route, the integrator may alias) | public, HMAC over the RAW body + timestamp | dedup on event id | 600/min IP |
 
 ## Events (outbox, same transaction as the saga write)
 `order_group.paid`, `order_group.failed`, `order_group.expired`, `checkout.late_payment_refunded`, `checkout.apology_voucher_requested`, `checkout.saga_stuck`. Analytics (consent-aware, owned by the client and analytics ingest): `checkout_started`, `payment_selected`.
@@ -56,3 +58,25 @@ Checkout success >= 99.5% (SLO), time to confirmation p95 < 5 s, late-payment re
 - Given payment succeeds after the reservation expired and stock remains, then orders are placed; given no stock remains, then the payment is refunded, an apology voucher intent is emitted and the alert counter increments.
 - Given the same `Idempotency-Key` twice, then one OrderGroup; a different body with the same key -> 422.
 - Given the price changed between quote and commit outside the lock, then 409 with delta; inside the lock the shopper never pays more than the locked unit price.
+
+## Decisions and options compared (added at implementation)
+- **Saga driver.** (a) Choreography over outbox events: no central row, hard to prove "no leaked hold" and harder to resume. (b) Persisted orchestrator row driven by a pure `nextAction(facts, now)`, one effect per loop, CAS save with the outbox events (chosen). Every port call is keyed by the OrderGroup (`hold:{g}`, intent key `{g}`, ledger key `checkout:{g}:recognised`, orders key `checkout:{g}:place`, refund key `checkout:{g}:refund`), so effect-then-save is safe: a kill between them replays the same effect and gets the same answer. The opposite order (save intent-to-do, then effect) was rejected because it needs a second reconciliation state for "intent recorded, effect unknown".
+- **Hold ids after a revive.** A late payment revives an expired saga whose credit hold was released. A released hold id must not be reused (the store-credit port contract is unverified), so the facts carry `holdSeq` and the hold id is `hold:{g}` then `hold:{g}:{n}`.
+- **Ledger of a payment with no order.** Money that arrives for a saga that can no longer place orders is parked (`late_receipt_parked`: Dr psp_clearing, Cr refund_reserve) before the refund leaves, then released (`late_receipt_refunded`). When `OrderRecognised` was already posted it is reversed instead, and the PSP refund nets against the reversed clearing debit. VERIFY VR-CHK-6.
+- **COD confirmation** is verified server side through `CodConfirmationPort` (OTP or WhatsApp code), never by a client-asserted boolean.
+- **Failure of a port** (timeout, 5xx) never fails the saga: attempts and backoff are persisted, the sweeper retries, and after 8 attempts (or a ledger key conflict) the saga is parked `stuck` with `checkout.saga_stuck`. Money is never auto-refunded from a stuck saga: Ops decides.
+- **Payment events** record `rejected` with `amount_mismatch` when the amount or the intent differs from the saga. The route answers 200 "recorded" so the PSP does not retry, the counter `checkout_amount_mismatch_total` alerts.
+
+## Ports (all injected, fakes for tests, nothing live)
+`CartPort`, `PromotionsPort` (domain evaluator in the fake), `TaxPort`, `RiskPort`, `AgePolicyPort`, `KillSwitchPort`, `AddressPort`, `AppAttestPort`, `CodConfirmationPort`, `InventoryPort`, `StoreCreditPort`, `PaymentRegistry` + `PaymentProviderPort` (in-repo fake, recorded-fixture adapter), `LedgerPort`, `OrdersIntakePort` (= orders `PlaceOrders`), `MetricsPort`.
+
+## Test evidence
+Domain: pricing and ledger property tests (parts sum to total, tender sums to total, balanced entry, reversal symmetry, replay identical), saga facts property (any interleaving ends terminal, nothing leaked). API: use-case suite on fakes, application-level money property test, HTTP suite (authn, BOLA 404, idempotency, 409 shapes, raw-body webhook), repository contract on in-memory and Kysely/PGlite, migration lint + DB invariants + RLS, and the kill-point sweep (every port call, before and after, 6 scenarios on fakes; every fifth point on Postgres). The sweep asserts: at most one intent and one charge, no oversell, trial balance zero, no active reservation, no held credit, at most one placed OrderGroup, expected terminal status.
+
+## Wave 4 money review fixes (F-1, F-4, F-11, F-13, F-14)
+
+- **Credit hold lifetime (F-1).** `HOLD_CREDIT` passes `ttlSeconds = reservationTtlSeconds(method) + 300` to the store-credit port, so a hold outlives the method's payment window (card 10 min, wallet/InstaPay 30 min, BNPL 15 min, Fawry 24 h). `CreditHolds` also takes an optional liveness guard so a sweeper never releases the hold of a non-terminal saga.
+- **Capture is a hard step.** `StoreCreditPort.capture` returns `captured | not_held | not_found`. `post_ledger` captures the hold and posts the order entry in one step (one CAS), so `holdCaptured` and `ledgerPosted` are persisted together. `not_held`/`not_found` re-holds under `hold:<group>:<seq+1>` before anything is posted; if the credit cannot be taken again the whole group is compensated (`late_credit_unavailable` when paid, else `credit_unavailable`) and the payment is refunded. For COD (no ledger entry at checkout) `capture_credit` runs before `place_orders`. Capture under the same order entry key is an idempotent replay.
+- **Invariant.** After `PLACED`, the sum of `credit_used` equals the `store_credit` debits of the order entry; tested with the clock advanced past the old 10 minute TTL before the payment event.
+- **Commission fails closed (F-4).** A missing or out-of-range (0..10000) commission throws `InvalidCheckoutError` in quote, in the domain ledger entry and when placing orders; `StoredSchema` rejects values outside 0..10000.
+- **F-11.** Tender planning uses `availableOf(lot, now)` (expired lots are not planned). **F-13.** `reverse_ledger` never invents the original entry. **F-14.** The price-lock coverage check uses the signed lock's own expiry, persisted as `lockExpiresAtMs`.

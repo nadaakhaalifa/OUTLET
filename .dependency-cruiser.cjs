@@ -56,6 +56,21 @@ module.exports = {
       to: { path: "^apps/api/src/modules/[^/]+/", pathNot: "^apps/api/src/modules/[^/]+/index\\.ts$" },
     },
 
+    // ---- spec 12 and 17: budget data is P3 financial behaviour and is never a targeting or ranking input ----
+    {
+      name: "budget-isolated-from-targeting-and-ranking",
+      severity: "error",
+      comment:
+        "The budget module and the budget domain folder may not be imported by promotions, ads, seller " +
+        "analytics, recommendations or ranking code (spec 12 Isolation, spec 17). Affordability reaches " +
+        "feed, search and stylist only as a request-time price ceiling through AffordabilityFilterPort.",
+      from: {
+        path: "^apps/api/src/modules/(promotions|ads|seller-analytics|recommendations|ranking)(/|$)",
+        pathNot: TEST_PATH,
+      },
+      to: { path: "^(apps/api/src/modules/budget/|packages/domain/src/budget/)" },
+    },
+
     // ---- A2.3: layers run domain -> application -> adapters (dependencies point inward) ----
     {
       name: "domain-must-not-import-application-or-adapters",
@@ -187,7 +202,8 @@ module.exports = {
     doNotFollow: { path: ["node_modules"] },
     exclude: {
       path: [
-        "(^|/)(dist|build|coverage|reports|\\.expo|\\.turbo|\\.stryker-tmp)/",
+        "(^|/)(dist|build|coverage|reports|\\.expo|\\.turbo|\\.next|\\.stryker-tmp)/",
+        "(^|/)next-env\\.d\\.ts$",
         "^infra/",
         "^tooling/",
         "^docs/",

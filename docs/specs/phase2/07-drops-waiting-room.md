@@ -53,3 +53,23 @@ Given an expired admission token, Then checkout returns 403 and user rejoins at 
 Given a non-Plus user during EARLY_ACCESS, Then the queue refuses with an explanation.
 Given the same device with 3 accounts, Then one active ticket.
 ```
+
+## Build notes
+Written during the Phase 2 build (migration 0042, `packages/domain/src/drops`, `apps/api/src/modules/drops`, `apps/api/src/modules/waiting-room`).
+
+**Algorithm choices.**
+- Queue order: (a) Redis ZSET scored by arrival sequence with a Lua join/admit script, (b) per-device token buckets that interleave devices. Chosen: (a) semantics behind `QueuePort`, specified and tested as the pure `FifoWaitingQueue`. Fairness is structural (one active ticket per device, accounts collapse to the earliest) so strict FIFO is also fair; (b) would break the +-1% FIFO bound for no abuse benefit.
+- Rank lookup: scanning waiting tickets is O(n) per poll (50k polls = 2.5e9); a Fenwick tree over arrival sequence gives O(log n).
+- Admission token: (a) opaque random id looked up in Redis, (b) signed JWT. Chosen: HS256 JWT with `kid` rotation via `SecretPort`, because checkout must verify while Redis is down. Single use is a Postgres row (`admission_tokens.used_at`), not Redis.
+
+**Decisions and deviations (record as ADR if the integrator agrees).**
+1. Redis-down behaviour: join, status polling of waiting tickets and the admit sweeper return 503 `drops_paused` / paused; token verification, unit reservation, public drop reads and the lifecycle sweeper do not touch the queue. An already admitted shopper is served the token from Postgres.
+2. `SOLD_OUT` is reached when units are CLAIMED (paid), not merely reserved. The Drop machine has no `SOLD_OUT -> LIVE` edge, so moving on reservation would strand stock released by an abandoned payment. The "definitely sold out" flag (TTL 30 s, cleared on release) is the pre-filter for reserved-out pools.
+3. Admin T&S "pause" is a reversible `paused` flag, not a state. "End" uses `WINDOW_CLOSED` (EARLY_ACCESS or LIVE only). The machine has no CANCEL from a running drop, so a mid-run cancel is `end` + `closeDrop` (orders honoured, unsold pool freed).
+4. Social proof "N bought today" is a trailing 24 h count (Cairo midnight shifts with DST), exposed as `bought_24h`. Defaults: show bought >= 20, viewing >= 10, remaining 1..5; recomputed at most once per minute per drop; any unavailable signal shows nothing.
+5. Members-only drops must open exactly 24 h before the start (`EARLY_ACCESS_MS`), matching "Plus 24h early access".
+6. Price ladder is a published list of (time, price of the first SKU); other SKUs scale by the same ratio with integer floor division, so one schedule serves many SKUs and never exceeds a published step.
+7. SCHEDULED drops lock price, SKU set and schedule; stock may only rise. Anything past SCHEDULED is not editable by the seller.
+8. Per-user allowance is checked then recorded after the single-use token is consumed. One token per queue pass means one in-flight request per account; a unique constraint on (drop, sku, user) is not used because a user may legitimately hold two units under `per_user = 2`.
+9. "Shopper 18+" is satisfied by account creation (B6 gate); no separate age check runs on the queue route.
+10. Ticket TTL release after the token window is tracked in-process by the sweeper; the Redis adapter should use key TTLs instead.

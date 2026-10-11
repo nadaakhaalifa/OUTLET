@@ -100,3 +100,7 @@ Accept latency p50/p95 (paid to accepted), auto-cancel rate (SLA expiry), seller
 - `store_id` has no FK (stores module is separate); `packages/domain/src/index.ts` does not yet `export * from "./orders"` (integrator): the API bridge imports `@outlet/domain/src/orders/index` until then.
 - Full recipient and address snapshot (P3, encrypted) is checkout/fulfilment; here only the seller-safe projection exists.
 - Group `COMPLETED`, delivered/closed transitions and return states are driven by fulfilment and returns modules.
+
+## GET /v1/me/orders
+
+The shopper's Orders tab: keyset-paged (`cursor`, `limit` 1-50, newest first) list of the caller's own order groups in the `OrderGroup` wire shape. The subject comes from the token only; another user's groups never appear (an empty page, not an error). Buyer contact data is never included. Matrix row: self.

@@ -1,0 +1,10 @@
+{
+  "name": "@outlet/dora",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "report": "node dora.mjs --offline",
+    "test": "node --test test/*.test.mjs"
+  }
+}

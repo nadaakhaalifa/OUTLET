@@ -43,3 +43,6 @@ No behavioural difference in a guarantee was found: every constraint and trigger
 
 ## Wave 3 addendum
 The runner now also runs `tooling/db/pg16-verify.mjs` (pg Pool storms and races). Results and the push-token finding are in `docs/plan/wave-3-postgres16.md`.
+
+## Wave 4 addendum
+Referral cap, wishlist cross-owner and a 33-table foreign-tenant RLS sweep were added; 34 migrations apply. See `docs/plan/wave-4-postgres16.md`.

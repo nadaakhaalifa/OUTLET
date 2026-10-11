@@ -11,8 +11,10 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
-      "**/build/**",
+      "**/build/output/**",
       "**/.expo/**",
+      "**/.next/**",
+      "**/next-env.d.ts",
       "**/.turbo/**",
       "**/coverage/**",
       "**/reports/**",
@@ -116,6 +118,15 @@ export default tseslint.config(
         module: "readonly",
         require: "readonly",
       },
+    },
+    rules: { "no-console": "off" },
+  },
+  {
+    // k6 scripts run in the k6 runtime (Goja), not Node: its globals and module imports are
+    // provided by k6 itself.
+    files: ["tooling/load/k6/**/*.js"],
+    languageOptions: {
+      globals: { __ENV: "readonly", __VU: "readonly", __ITER: "readonly", open: "readonly", console: "readonly" },
     },
     rules: { "no-console": "off" },
   },

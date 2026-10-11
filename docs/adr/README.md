@@ -31,6 +31,8 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0025](0025-llm-provider-and-residency.md) | LLM provider and residency | Proposed | Owner confirmation; see the file |
 | [0026](0026-android-push-and-attestation.md) | Android push and attestation differences | Proposed | Owner confirmation; see the file |
 | [0027](0027-crawler-egress-isolation.md) | Crawler egress isolation | Proposed | Owner confirmation; see the file |
+| [0028](0028-kill-switch-polarity.md) | Kill-switch polarity and operator wording | Proposed | Owner confirmation; rename vs wording |
+| [0029](0029-production-composition-and-unconfigured-providers.md) | Production composition root and fail-closed unconfigured providers | Proposed | Owner confirmation |
 
 
 ## Convention

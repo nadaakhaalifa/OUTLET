@@ -211,7 +211,191 @@ else {
   check(rows === 1 && same.every((x) => x.status === "fulfilled"), `20 concurrent re-registrations of one (user, install): one row, no errors (rows=${rows})`);
 }
 
+// ---------------------------------------------------------------- 5. referral reward cap race
+console.log("== referrals: reward cap race (cap 2, 6 concurrent settles) ==");
+if (!(await hasTable("referrals"))) bad("referral tables present", "0026 missing");
+else {
+  const CAP = 2;
+  const settleOnce = (referralId, referrerId, msg, locked, consumer) => withConn((c) => tx(c, async (k) => {
+    // Same shape as KyselyReferralStore.settle: inbox row, per-referrer advisory lock, recount, guarded update.
+    const seen = await k.query("insert into inbox_processed (consumer, message_id) values ($1,$2::uuid) on conflict do nothing returning message_id", [consumer, msg]);
+    if (seen.rowCount === 0) return "duplicate";
+    let status = "rewarded", reason = null, amount = 10000;
+    if (locked) await k.query("select pg_advisory_xact_lock(hashtext($1))", ["referrals:" + referrerId]);
+    const n = (await k.query("select count(*) filter (where settled_at >= now() - interval '365 days')::int n from referrals where referrer_id=$1 and status='rewarded'", [referrerId])).rows[0].n;
+    if (n >= CAP) { status = "rejected"; reason = "cap_reached"; amount = null; }
+    const u = await k.query(`update referrals set status=$2, reject_reason=$3, reward_amount=$4::bigint, reward_currency=$5, settled_at=now()
+      where id=$1 and status='attributed' returning id`, [referralId, status, reason, amount, amount === null ? null : "EGP"]);
+    return u.rowCount === 0 ? "already" : status;
+  }, "system"));
+  for (const locked of [true, false]) {
+    const t = locked ? 1 : 2;
+    const referrer = uuid(0xd01, t);
+    await q("insert into users (id, status) values ($1,'active') on conflict do nothing", [referrer]);
+    const codeId = uuid(0xd02, t);
+    const code = locked ? "ABCDEFGH" : "JKMNPQRS";
+    await q("insert into referral_codes (id, owner_user_id, code) values ($1,$2,$3)", [codeId, referrer, code]);
+    const refs = [];
+    for (let i = 0; i < 6; i += 1) {
+      const referee = uuid(0xd03, t * 100 + i);
+      const rid = uuid(0xd04, t * 100 + i);
+      await q("insert into users (id, status) values ($1,'active') on conflict do nothing", [referee]);
+      await q("insert into referrals (id, code_id, referrer_id, referee_id, status) values ($1,$2,$3,$4,'attributed')", [rid, codeId, referrer, referee]);
+      refs.push(rid);
+    }
+    const r = await Promise.allSettled(refs.map((rid, i) => settleOnce(rid, referrer, uuid(0xd05, t * 100 + i), locked, "referrals.pg16")));
+    const errs = r.filter((x) => x.status === "rejected");
+    const rows = (await q("select status, count(*)::int n from referrals where referrer_id=$1 group by status", [referrer]));
+    const by = Object.fromEntries(rows.map((x) => [x.status, x.n]));
+    if (locked) check((by.rewarded ?? 0) === CAP && (by.rejected ?? 0) === 6 - CAP && errs.length === 0,
+      `cap ${CAP}, 6 concurrent settles with advisory lock: rewarded=${by.rewarded ?? 0} rejected=${by.rejected ?? 0} errors=${errs.length}`, errs[0] ? String(errs[0].reason) : "");
+    else console.log(`INFO  negative control (no advisory lock): rewarded=${by.rewarded ?? 0} rejected=${by.rejected ?? 0} errors=${errs.length} (> ${CAP} rewarded shows the race is observable)`);
+    if (locked) {
+      // Re-delivery of the same message ids must change nothing (inbox dedupe).
+      const again = await Promise.allSettled(refs.map((rid, i) => settleOnce(rid, referrer, uuid(0xd05, t * 100 + i), true, "referrals.pg16")));
+      const dup = again.filter((x) => x.status === "fulfilled" && x.value === "duplicate").length;
+      check(dup === 6, `redelivered messages are all deduplicated by the inbox (duplicates=${dup})`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- 6. wishlist cross-owner save
+console.log("== wishlists: cross-owner save ==");
+if (!(await hasTable("wishlist_items"))) bad("wishlist tables present", "0014 missing");
+else {
+  const A = uuid(0xb01, 1), B = uuid(0xb01, 2), WL = uuid(0xb02, 1), WLB = uuid(0xb02, 2);
+  for (const u of [A, B]) await q("insert into users (id, status) values ($1,'active') on conflict do nothing", [u]);
+  await q("insert into wishlists (id, user_id, intent, title) values ($1,$2,'need','a'),($3,$4,'need','b')", [WL, A, WLB, B]);
+  const item = (id, wl, owner, who, role = "customer") => withConn((c) => tx(c, (k) => k.query(
+    "insert into wishlist_items (id, wishlist_id, user_id, product_id, added_amount) values ($1,$2,$3,$4,100)",
+    [id, wl, owner, uuid(0xb03, 1)]), role, who));
+  const attempt = async (label, fn, wantCode) => {
+    try { await fn(); bad(label, "insert succeeded"); } catch (e) { check(codeOf(e) === wantCode, `${label} -> ${codeOf(e)}`, `want ${wantCode}: ${e.message}`); }
+  };
+  await attempt("B inserts item into A's wishlist claiming owner A (RLS WITH CHECK)", () => item(uuid(0xb04, 1), WL, A, B), "42501");
+  await attempt("B inserts item into A's wishlist claiming owner B (composite FK)", () => item(uuid(0xb04, 2), WL, B, B), "23503");
+  await attempt("system inserts item with mismatched owner (composite FK still holds)", () => item(uuid(0xb04, 3), WL, B, "", "system"), "23503");
+  const own = await item(uuid(0xb04, 4), WL, A, A).then(() => true, () => false);
+  check(own, "owner A can save into own wishlist");
+  const seen = await withConn((c) => tx(c, async (k) => (await k.query("select count(*)::int n from wishlist_items where wishlist_id=$1", [WL])).rows[0].n, "customer", B));
+  check(seen === 0, `B sees 0 items of A's wishlist (saw ${seen})`);
+  const upd = await withConn((c) => tx(c, async (k) => (await k.query("update wishlist_items set note='pwn' where wishlist_id=$1", [WL])).rowCount, "customer", B));
+  const del = await withConn((c) => tx(c, async (k) => (await k.query("delete from wishlist_items where wishlist_id=$1", [WL])).rowCount, "customer", B));
+  check(upd === 0 && del === 0, `B cannot update or delete A's items (updated=${upd} deleted=${del})`);
+  const still = (await q("select count(*)::int n from wishlist_items where wishlist_id=$1 and note is distinct from 'pwn'", [WL]))[0].n;
+  check(still === 1, "A's item is intact");
+  const race = await Promise.allSettled(Array.from({ length: 20 }, (_, i) => withConn((c) => tx(c, (k) => k.query(
+    "insert into wishlist_items (id, wishlist_id, user_id, product_id, added_amount) values ($1,$2,$3,$4,100)",
+    [uuid(0xb04, 100 + i), WL, B, uuid(0xb05, i + 1)]), "customer", B))));
+  check(race.every((x) => x.status === "rejected" && codeOf(x.reason) === "23503"), "20 concurrent cross-owner saves all rejected");
+}
+
 await appPool.end();
 await admin.end();
+
+// ---------------------------------------------------------------- 7. RLS: other tenant sees nothing
+// Done in a throw-away copy of the database so that CHECK constraints can be dropped to seed
+// one synthetic row per table (triggers and FKs are skipped with session_replication_role=replica).
+console.log("== RLS: foreign tenant ids see nothing (stores, orders, returns, analytics, money tables) ==");
+{
+  const sys = new Client({ ...cfg, database: "postgres", user: "postgres" });
+  await sys.connect();
+  await sys.query("drop database if exists outlet_rls");
+  await sys.query("create database outlet_rls template outlet");
+  await sys.end();
+  const seed = new Client({ ...cfg, database: "outlet_rls", user: "postgres" });
+  await seed.connect();
+  const TENANT_USER = uuid(0x9a01, 1), TENANT_STORE = uuid(0x9a02, 1);
+  const OTHER_USER = uuid(0x9b01, 1), OTHER_STORE = uuid(0x9b02, 1);
+  const TARGETS = ["stores", "store_activity_events", "user_favorite_stores", "order_groups", "seller_orders", "order_lines", "order_buyer_contacts",
+    "order_status_history", "returns", "return_evidence", "return_disputes", "returner_standing", "seller_analytics_facts", "seller_analytics_stock",
+    "seller_analytics_freshness", "shipments", "tax_documents", "carts", "cart_lines", "wishlists", "referrals", "refunds", "credit_lots",
+    "payment_intents", "checkout_sagas", "reviews", "promotion_redemptions", "size_profiles", "saved_searches", "notification_preferences",
+    "dsar_requests", "inventory_levels", "price_claims"];
+  const present = (await seed.query("select table_name from information_schema.tables where table_schema='public' and table_name = any($1)", [TARGETS])).rows.map((r) => r.table_name);
+  const missing = TARGETS.filter((t) => !present.includes(t));
+  if (missing.length) console.log(`INFO  tables not present (skipped): ${missing.join(", ")}`);
+  // Drop CHECK constraints in the copy so one generic row can be inserted per table.
+  for (const r of (await seed.query(`select conrelid::regclass::text t, conname from pg_constraint where contype='c' and connamespace='public'::regnamespace and conrelid::regclass::text = any($1)`, [present])).rows)
+    await seed.query(`alter table ${r.t} drop constraint "${r.conname}"`);
+  const userCols = new Set(["user_id", "owner_user_id", "buyer_id", "customer_id", "actor_user_id", "author_id", "reviewer_id", "referrer_id", "subject_user_id"]);
+  const storeCols = new Set(["store_id", "seller_id", "seller_store_id"]);
+  const val = (col, type, n, t = "") => {
+    if (t === "stores" && col === "id") return `'${TENANT_STORE}'`;
+    if (userCols.has(col)) return `'${TENANT_USER}'`;
+    if (storeCols.has(col)) return `'${TENANT_STORE}'`;
+    if (col === "id" && type === "uuid") return `'${uuid(0x9c01, n)}'`;
+    switch (type) {
+      case "uuid": return `'${uuid(0x9c02, n)}'`;
+      case "boolean": return "false";
+      case "smallint": case "integer": case "bigint": case "numeric": return "1";
+      case "timestamp with time zone": case "timestamp without time zone": return "now()";
+      case "date": return "current_date";
+      case "jsonb": case "json": return "'{}'";
+      case "bytea": return "'\\x00'";
+      case "ARRAY": return "'{}'";
+      case "inet": return "'127.0.0.1'";
+      case "interval": return "'1 day'";
+      default: return "'x'";
+    }
+  };
+  let n = 0;
+  const seeded = [];
+  await seed.query("set session_replication_role = replica");
+  for (const t of present) {
+    const cols = (await seed.query(`select column_name, data_type, udt_name, column_default, is_nullable, is_generated, identity_generation from information_schema.columns
+      where table_schema='public' and table_name=$1 order by ordinal_position`, [t])).rows;
+    const pick = cols.filter((c) => c.is_generated !== "ALWAYS" && c.identity_generation === null && c.udt_name !== "tsvector" &&
+      (c.is_nullable === "NO" && c.column_default === null || userCols.has(c.column_name) || storeCols.has(c.column_name) || c.column_name === "id"));
+    n += 1;
+    const colsSql = pick.map((c) => `"${c.column_name}"`).join(",");
+    const valsSql = pick.map((c) => {
+      if (c.data_type === "USER-DEFINED") return `(select enumlabel from pg_enum e join pg_type ty on ty.oid=e.enumtypid where ty.typname='${c.udt_name}' limit 1)::${c.udt_name}`;
+      return val(c.column_name, c.data_type === "character" ? "text" : c.data_type, n, t);
+    }).join(",");
+    try {
+      await seed.query(pick.length ? `insert into ${t} (${colsSql}) values (${valsSql})` : `insert into ${t} default values`);
+      seeded.push(t);
+    } catch (e) { console.log(`INFO  could not seed ${t}: ${e.message}`); }
+  }
+  await seed.query("set session_replication_role = origin");
+  const total = {};
+  for (const t of seeded) total[t] = (await seed.query(`select count(*)::int n from ${t}`)).rows[0].n;
+  await seed.end();
+  const app = new Pool({ host: "127.0.0.1", port: PORT, database: "outlet_rls", user: "app_login", max: 4 });
+  const asTenant = async (t, role, user, stores) => {
+    const c = await app.connect();
+    try {
+      await c.query("begin");
+      await c.query("set local role app_user");
+      await c.query("select set_config('app.role',$1,true), set_config('app.user_id',$2,true), set_config('app.store_ids',$3,true)", [role, user, stores]);
+      const r = await c.query(`select count(*)::int n from ${t}`);
+      await c.query("rollback");
+      return r.rows[0].n;
+    } catch (e) { await c.query("rollback").catch(() => {}); return `ERR ${codeOf(e)} ${e.message}`; } finally { c.release(); }
+  };
+  const leaks = [];
+  const publicByDesign = new Set();
+  for (const t of seeded) {
+    if (total[t] === 0) continue;
+    const foreignCust = await asTenant(t, "customer", OTHER_USER, OTHER_STORE);
+    const foreignSeller = await asTenant(t, "seller", OTHER_USER, OTHER_STORE);
+    const anon = await asTenant(t, "", "", "");
+    const own = await asTenant(t, "customer", TENANT_USER, TENANT_STORE);
+    const ownSeller = await asTenant(t, "seller", TENANT_USER, TENANT_STORE);
+    const bad1 = [foreignCust, foreignSeller, anon].some((v) => v !== 0);
+    console.log(`      ${t.padEnd(28)} rows=${total[t]} foreign-customer=${foreignCust} foreign-seller=${foreignSeller} anonymous=${anon} | owner=${own} own-store=${ownSeller}`);
+    if (bad1) leaks.push(`${t}: customer=${foreignCust} seller=${foreignSeller} anon=${anon}`);
+    else publicByDesign.add(t);
+  }
+  check(seeded.length > 0, `seeded ${seeded.length} of ${present.length} present tables with one synthetic row each`);
+  check(leaks.length === 0, `no table leaks a row to a foreign customer, foreign seller or anonymous session (${publicByDesign.size} tables checked)`, leaks.join("; "));
+  await app.end();
+  const sys2 = new Client({ ...cfg, database: "postgres", user: "postgres" });
+  await sys2.connect();
+  await sys2.query("drop database if exists outlet_rls");
+  await sys2.end();
+}
+
 console.log(`\nnode checks: passed=${pass} failed=${fail}`);
 process.exit(fail === 0 ? 0 : 1);

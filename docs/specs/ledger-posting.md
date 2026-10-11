@@ -77,5 +77,9 @@ Entries posted per kind, replay rate, conflict count (target 0), trial balance (
 ## VERIFY BEFORE LAUNCH rows added (see docs/compliance/verify-register.md)
 VR-F1-01 COD recognition point and receivable timing, VR-F1-02 cash refund of collected COD, VR-F1-03 PSP split or sub-merchant allocation and fees at settlement (Paymob unverified), VR-F1-04 gift-card VAT point and breakage, VR-F1-05 who bears provider and courier fees, VR-F1-06 platform-funded voucher expense versus revenue reduction.
 
+## Isolation and integrity-job reads (F-12, F-14)
+* `LedgerStore` requires READ COMMITTED for every posting transaction. The re-check after the chain lock must see the winner's committed row; under REPEATABLE READ it would read an old snapshot. `PostingService` also catches `IdempotencyKeyTaken` from `append` and re-reads (same payload replays, different payload is a conflict). On Postgres the failed insert aborts the surrounding transaction, so if the re-read fails the typed error is surfaced and the caller retries in a fresh transaction.
+* The wallet projection belongs to the store-credit module and cannot join the ledger's REPEATABLE READ snapshot. The integrity job reads it before and after the snapshot and reports an account as drift only when the ledger matches neither read, so a grant or capture in flight never pages Finance.
+
 ## Mutation testing
 `packages/domain/stryker.ledger-posting.mjs` (break 80, ADR-0019) covers `src/ledger-posting/**`. The run could not complete in the authoring sandbox (`spawn pgrep EAGAIN` in Stryker's process cleanup), so no score is claimed. Run it from `packages/domain` on Node 24 before the milestone review.

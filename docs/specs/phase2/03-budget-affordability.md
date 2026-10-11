@@ -57,3 +57,20 @@ Given a refund in the next cycle, Then reports credit the original cycle and ava
 Given consent withdrawn, Then budget tables for the user are empty within 24h.
 Given payday 31 in a 30-day month, Then the cycle ends the 30th.
 ```
+
+## Build notes (Phase 2 builder, budget module)
+
+Options compared and decisions:
+- **Planner:** greedy first-fit in priority order (chosen) vs per-cycle 0/1 knapsack. Greedy is deterministic, explainable and never defers a Need to fit two Treats; knapsack packs more value but breaks "Need first". Items that cannot fit any cycle are reported `exceeds_every_cycle` or `no_capacity`. Plans are returned, never stored (no extra P3 table).
+- **Spend accounting:** an idempotent event log (`budget_spend_events`, PK user + key) with cached per-cycle totals (`budget_cycles`) vs a running counter. The log makes refunds, COD refusal, payday change and nightly reconciliation exact and replay safe; the counter cannot be repaired. Totals are always derivable from events.
+- **Cap concurrency:** the spec says re-check with a row lock on `budget_cycles`. The cycle row may not exist yet, so the module takes a per-user transaction advisory lock (Postgres) / per-user queue (in-memory) and the guard records the order provisionally (`placed:<orderKey>`) inside the same lock. Two concurrent orders crossing the cap therefore serialize (tested: exactly one passes). Checkout must call `CheckoutCapPort.release` when the order fails or is abandoned; the later paid event with the same key is a no-op.
+
+Gaps found and chosen defaults:
+- "Payday 31 ends the 30th": cycles are `[this payday, next payday)` with Cairo local midnight boundaries, so the cycle that starts 31 March ends (exclusively) on 30 April, the clamped payday.
+- A refund received for an earlier cycle lowers current "spent" but never below zero, so remaining never exceeds the budget.
+- Spec table lists no endpoint for savings goals or a checkout check. `savings_goals` exists (RLS, purge, export) without endpoints; the checkout check is the `CheckoutCapPort` consumed in-process.
+- `start`/`end` columns are `cycle_start`/`cycle_end` (cycles) and `starts_at`/`ends_at` (commitments) because they are reserved words. `hold_until` is the maturity of the latest unlock request: the hard hold cannot be bypassed before it, and after it the cap is lifted only for the cycle the request was made in.
+- Backfill on first set reads the current cycle only (data minimisation); month over month fills as events arrive.
+- Consent withdrawal: handled on the next spend event, by `PurgeUserBudget` (consent.changed consumer) and by the daily `RollCycles` job as the 24 h backstop.
+- The domain folder is imported through a relative path in `domain/bridge.ts` until the integrator adds `export * as budget from "./budget"` to `packages/domain/src/index.ts` (that file is not owned by this task).
+- Flags: `release.budget_suite` and `kill.budget_caps` are consumed through `BudgetFlagsPort`; registering them in `packages/feature-flags` is a needs item. Both default off and fail closed, as the registry requires.

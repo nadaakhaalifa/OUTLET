@@ -1,15 +1,15 @@
 # Authorization matrix
 
-Status: generated from the Nest router and `docs/api/openapi.yaml` on 2026-10-10 (wave 3 integration). The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
+Status: generated from the Nest router and `docs/api/openapi.yaml` on 2026-10-11 (Phase 2 integration: subscriptions, gift cards, budget, stylist, recommendations, history, rewards, drops, waiting room, price crawler, hub, resale, ads). The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
 
 Master prompt A2.10: every endpoint has an integration test including a negative authorization test.
 
 ## Numbers
 
-- OpenAPI operations: 167
-- Implemented in `apps/api`: 109 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 111 registered routes
-- Not yet implemented: 58
-- Covered by the matrix: 111 of 111 registered routes (63 with full shared-harness cases, 48 delegated to per-module suites plus central 401/authz-mode/OpenAPI checks)
+- OpenAPI operations: 337
+- Implemented in `apps/api`: 289 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 291 registered routes
+- Not yet implemented: 48
+- Covered by the matrix: 291 of 291 registered routes (63 with full shared-harness cases, 228 delegated to per-module suites plus central 401/authz-mode/OpenAPI checks, including the 92 Phase 2 routes)
 
 ## What each row is checked for
 
@@ -113,6 +113,7 @@ These routes need module fixtures the shared harness does not seed, so their neg
 | `GET /v1/me/returns/:returnId` | resource | `apps/api/src/modules/returns/test/returns.authz.test.ts` |
 | `GET /v1/me/saved-searches` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
 | `GET /v1/me/saved-searches/:savedSearchId` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
+| `GET /v1/me/orders` | self | `apps/api/src/modules/orders/test/orders.http.test.ts` |
 | `GET /v1/order-groups/:id` | resource | `apps/api/src/modules/orders/test/orders.http.test.ts` |
 | `GET /v1/search` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
 | `GET /v1/search/suggestions` | self | `apps/api/src/modules/search/test/search.authz.test.ts` |
@@ -213,68 +214,187 @@ Same delegation rule as the wave 3 table above: the negative cases live in the n
 | `POST /v1/ugc/reports` | self | `apps/api/src/modules/reviews/reviews.http.test.ts` |
 | `PUT /v1/admin/flags/:key` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
 | `PUT /v1/admin/tax/categories/:code/exemption` | self | `apps/api/src/modules/tax-eta/test/tax-eta.http.test.ts` |
+| `GET /v1/admin/ledger/balances` | self | `apps/api/src/modules/ledger/test/ledger.http.test.ts` |
+| `GET /v1/admin/ledger/entries/:id` | self | `apps/api/src/modules/ledger/test/ledger.http.test.ts` |
+| `POST /v1/webhooks/:provider` | public | `apps/api/src/modules/payments/test/http.test.ts` |
+| `GET /v1/payments/methods` | self | `apps/api/src/modules/payments/test/http.test.ts` |
+| `GET /v1/me/payment-methods` | self | `apps/api/src/modules/payments/test/http.test.ts` |
+| `DELETE /v1/me/payment-methods/:id` | self | `apps/api/src/modules/payments/test/http.test.ts` |
+| `POST /v1/checkout/quote` | self | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `POST /v1/checkout` | self | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `GET /v1/checkout/:id` | resource | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `POST /v1/checkout/:id/cancel` | resource | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `POST /v1/checkout/:id/confirm-cod` | resource | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `POST /v1/webhooks/checkout/:provider` | public | `apps/api/src/modules/checkout/test/checkout.http.test.ts` |
+| `GET /v1/me/refunds` | self | `apps/api/src/modules/refunds/test/http.test.ts` |
+| `GET /v1/refunds/:id` | self | `apps/api/src/modules/refunds/test/http.test.ts` |
+| `GET /v1/me/wallet` | self | `apps/api/src/modules/refunds/test/http.test.ts` |
+| `GET /v1/me/wallet/transactions` | self | `apps/api/src/modules/refunds/test/http.test.ts` |
+| `GET /v1/seller/payouts` | self | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `GET /v1/seller/payouts/:id` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `GET /v1/seller/stores/:id/statements` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `GET /v1/admin/finance/payouts` | self | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `GET /v1/admin/finance/payouts/:id` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `POST /v1/admin/finance/payouts/:id/approve` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `POST /v1/admin/finance/payouts/:id/hold` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `POST /v1/admin/finance/payouts/:id/cancel` | resource | `apps/api/src/modules/payouts/test/payouts.http.test.ts` |
+| `GET /v1/admin/finance/reconciliation/summary` | self | `apps/api/src/modules/reconciliation/test/recon.http.test.ts` |
+| `GET /v1/admin/finance/reconciliation/tickets` | self | `apps/api/src/modules/reconciliation/test/recon.http.test.ts` |
+| `GET /v1/admin/finance/reconciliation/tickets/:id` | self | `apps/api/src/modules/reconciliation/test/recon.http.test.ts` |
+| `GET /v1/admin/finance/reconciliation/runs` | self | `apps/api/src/modules/reconciliation/test/recon.http.test.ts` |
+| `GET /v1/admin/finance/reconciliation/files` | self | `apps/api/src/modules/reconciliation/test/recon.http.test.ts` |
+
+### Phase 2 modules (integration wave)
+
+Subscriptions, gift cards, budget, stylist, recommendations, history, rewards, drops, waiting room, price crawler, hub consolidation, resale lane and ads. Negative authorization (non-owned object 404, missing role 403, wrong audience 401) is proven by each owning suite; the central matrix enforces the declared mode, the 401 without credentials (or a 4xx for public routes), the OpenAPI operation and this row.
+
+| Operation | Authorization | Owning suite |
+|---|---|---|
+| `GET /v1/admin/ads/config` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `GET /v1/seller/ads/balance` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `GET /v1/seller/ads/campaigns` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `GET /v1/seller/ads/campaigns/:id` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `GET /v1/seller/ads/reports` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `PATCH /v1/seller/ads/campaigns/:id` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `POST /v1/ads/click` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `POST /v1/seller/ads/campaigns` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `POST /v1/seller/ads/campaigns/:id/pause` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `POST /v1/seller/ads/campaigns/:id/resume` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `POST /v1/seller/ads/topup` | self | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `PUT /v1/admin/ads/config` | resource | `apps/api/src/modules/ads/ads.http.test.ts` |
+| `DELETE /v1/me/budget` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `GET /v1/me/affordability` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `GET /v1/me/budget/summary` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `POST /v1/me/budget/cap-unlock` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `POST /v1/me/budget/plan` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `PUT /v1/me/budget` | self | `apps/api/src/modules/budget/budget.http.test.ts` |
+| `GET /v1/admin/price-matching/config` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/channels` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/crawl-targets` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/price-matches` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `POST /v1/seller/stores/:storeId/channels` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `POST /v1/seller/stores/:storeId/crawl-targets` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `POST /v1/seller/stores/:storeId/crawl-targets/:targetId/verify` | resource | `apps/api/src/modules/price-crawler/crawler.http.test.ts` |
+| `DELETE /v1/seller/drops/:id` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `GET /v1/drops` | public | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `GET /v1/drops/:id` | public | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `GET /v1/seller/drops` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `GET /v1/seller/drops/:id` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `PATCH /v1/seller/drops/:id` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `POST /v1/admin/drops/:id/pause` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `POST /v1/drops/:id/waitlist` | self | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `POST /v1/seller/drops` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `POST /v1/seller/drops/:id/schedule` | resource | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `GET /v1/gift-pots/:id` | resource | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `GET /v1/me/gift-cards` | self | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `GET /v1/shared/gift-pots/:token` | public | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `POST /v1/gift-cards` | self | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `POST /v1/gift-cards/:id/void` | resource | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `POST /v1/gift-cards/redeem` | self | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `POST /v1/gift-pots` | self | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `POST /v1/gift-pots/:id/contribute` | self | `apps/api/src/modules/gift-cards/gift-cards.http.test.ts` |
+| `DELETE /v1/me/history` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `GET /v1/me/history` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `GET /v1/me/recently-viewed` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `PATCH /v1/me/settings` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `POST /v1/me/history/pause` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `POST /v1/me/recently-viewed` | self | `apps/api/src/modules/recommendations/history-flows.http.test.ts` |
+| `GET /v1/me/orders/:orderGroupId/tracking` | resource | `apps/api/src/modules/hub-consolidation/hub.http.test.ts` |
+| `POST /v1/hub/consolidations/:id/dispatch` | resource | `apps/api/src/modules/hub-consolidation/hub.http.test.ts` |
+| `POST /v1/hub/receipts` | resource | `apps/api/src/modules/hub-consolidation/hub.http.test.ts` |
+| `GET /v1/feed` | self | `apps/api/src/modules/recommendations/recommendations.http.test.ts` |
+| `GET /v1/me/recommendations/price-drops` | self | `apps/api/src/modules/recommendations/recommendations.http.test.ts` |
+| `GET /v1/me/recommendations/restock` | self | `apps/api/src/modules/recommendations/recommendations.http.test.ts` |
+| `GET /v1/products/:productId/similar` | public | `apps/api/src/modules/recommendations/recommendations.http.test.ts` |
+| `POST /v1/recommendations/clicks` | self | `apps/api/src/modules/recommendations/recommendations.http.test.ts` |
+| `GET /v1/resale/listings` | self | `apps/api/src/modules/resale-lane/resale.http.test.ts` |
+| `GET /v1/resale/listings/:id` | self | `apps/api/src/modules/resale-lane/resale.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/resale/listings` | resource | `apps/api/src/modules/resale-lane/resale.http.test.ts` |
+| `POST /v1/hub/resale/listings` | resource | `apps/api/src/modules/resale-lane/resale.http.test.ts` |
+| `POST /v1/seller/stores/:storeId/resale/listings/:id/withdraw` | resource | `apps/api/src/modules/resale-lane/resale.http.test.ts` |
+| `DELETE /v1/admin/rewards/challenges/:id` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `GET /v1/admin/rewards/challenges` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `GET /v1/admin/rewards/config` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `GET /v1/games/:game/odds` | public | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `GET /v1/me/rewards` | self | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `POST /v1/admin/games/:game/odds` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `POST /v1/admin/rewards/challenges` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `POST /v1/games/:game/play` | self | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `POST /v1/me/coins/convert` | self | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `PUT /v1/admin/rewards/config` | resource | `apps/api/src/modules/rewards/rewards.http.test.ts` |
+| `POST /v1/stylist/capsule` | self | `apps/api/src/modules/stylist/stylist.http.test.ts` |
+| `POST /v1/stylist/complete-look` | self | `apps/api/src/modules/stylist/stylist.http.test.ts` |
+| `POST /v1/stylist/feedback` | self | `apps/api/src/modules/stylist/stylist.http.test.ts` |
+| `POST /v1/stylist/outfits` | self | `apps/api/src/modules/stylist/stylist.http.test.ts` |
+| `POST /v1/stylist/outfits/:outfitId/add-to-bag` | resource | `apps/api/src/modules/stylist/stylist.http.test.ts` |
+| `GET /v1/admin/plus/plans` | resource | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `GET /v1/me/plus` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `GET /v1/plus/plans` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `PATCH /v1/admin/plus/plans/:planId` | resource | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/admin/plus/plans` | resource | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/cancel` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/pause` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/reactivate` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/refund` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/resume` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/subscribe` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/plus/switch-plan` | self | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `POST /v1/webhooks/:provider/recurring` | public | `apps/api/src/modules/subscriptions/subscriptions.http.test.ts` |
+| `GET /v1/drops/:dropId/queue/status` | self | `apps/api/src/modules/drops/drops.http.test.ts` |
+| `POST /v1/drops/:dropId/queue` | self | `apps/api/src/modules/drops/drops.http.test.ts` |
 
 ## Not yet implemented (in OpenAPI, no controller)
 
 | Operation |
 |---|
-| `GET /v1/me` |
-| `PATCH /v1/me` |
-| `POST /v1/me/age-attestation` |
-| `GET /v1/me/addresses` |
-| `POST /v1/me/addresses` |
-| `GET /v1/me/addresses/:addressId` |
-| `PATCH /v1/me/addresses/:addressId` |
 | `DELETE /v1/me/addresses/:addressId` |
-| `GET /v1/products/:productId/price-history` |
-| `GET /v1/products/:productId/price-evidence` |
-| `POST /v1/products/:productId/alerts` |
-| `POST /v1/products/:productId/price-reports` |
-| `POST /v1/checkout/quote` |
-| `POST /v1/checkout` |
-| `GET /v1/me/orders` |
-| `POST /v1/webhooks/:provider` |
-| `GET /v1/me/wallet` |
-| `GET /v1/me/wallet/transactions` |
-| `GET /v1/me/referral` |
-| `POST /v1/referrals/attribute` |
-| `GET /v1/seller/kyc` |
-| `PATCH /v1/seller/kyc` |
-| `POST /v1/seller/kyc/documents` |
-| `POST /v1/seller/kyc/submit` |
-| `GET /v1/seller/store` |
-| `PATCH /v1/seller/store` |
-| `GET /v1/seller/team` |
-| `POST /v1/seller/team` |
-| `DELETE /v1/seller/team/:memberId` |
-| `PUT /v1/seller/skus/:skuId/price` |
-| `POST /v1/seller/channels` |
-| `GET /v1/seller/channels` |
 | `DELETE /v1/seller/channels/:channelId` |
-| `POST /v1/seller/price-evidence` |
-| `GET /v1/seller/price-claims` |
-| `POST /v1/seller/price-claims/:claimId/appeal` |
-| `GET /v1/seller/price-trust` |
-| `GET /v1/seller/balance` |
-| `GET /v1/seller/payouts` |
-| `GET /v1/seller/statements` |
-| `GET /v1/seller/analytics/summary` |
-| `GET /v1/admin/sellers` |
-| `GET /v1/admin/sellers/:storeId/kyc` |
-| `POST /v1/admin/sellers/:storeId/kyc-decision` |
-| `POST /v1/admin/sellers/:storeId/suspend` |
-| `GET /v1/admin/order-groups/:orderGroupId` |
-| `POST /v1/admin/disputes/:disputeId/resolve` |
-| `POST /v1/admin/refunds/:refundId/approval` |
-| `POST /v1/admin/payouts/:payoutId/approval` |
+| `DELETE /v1/seller/team/:memberId` |
 | `GET /v1/admin/audit-log` |
 | `GET /v1/admin/feature-flags` |
-| `PUT /v1/admin/kill-switches/:key` |
-| `GET /v1/admin/reconciliation/breaks` |
+| `GET /v1/admin/order-groups/:orderGroupId` |
 | `GET /v1/admin/price-integrity/actions` |
 | `GET /v1/admin/price-integrity/config` |
-| `PUT /v1/admin/price-integrity/config` |
-| `POST /v1/admin/privacy/requests/:requestId/decision` |
+| `GET /v1/admin/reconciliation/breaks` |
+| `GET /v1/admin/sellers` |
+| `GET /v1/admin/sellers/:storeId/kyc` |
 | `GET /v1/admin/tax/invoices` |
+| `GET /v1/me` |
+| `GET /v1/me/addresses` |
+| `GET /v1/me/addresses/:addressId` |
+| `GET /v1/me/orders` |
+| `GET /v1/products/:productId/price-history` |
+| `GET /v1/seller/analytics/summary` |
+| `GET /v1/seller/balance` |
+| `GET /v1/seller/channels` |
+| `GET /v1/seller/kyc` |
+| `GET /v1/seller/price-claims` |
+| `GET /v1/seller/statements` |
+| `GET /v1/seller/store` |
+| `GET /v1/seller/team` |
+| `PATCH /v1/me` |
+| `PATCH /v1/me/addresses/:addressId` |
+| `PATCH /v1/seller/kyc` |
+| `PATCH /v1/seller/store` |
+| `POST /v1/admin/disputes/:disputeId/resolve` |
+| `POST /v1/admin/payouts/:payoutId/approval` |
+| `POST /v1/admin/privacy/requests/:requestId/decision` |
+| `POST /v1/admin/refunds/:refundId/approval` |
+| `POST /v1/admin/sellers/:storeId/kyc-decision` |
+| `POST /v1/admin/sellers/:storeId/suspend` |
+| `POST /v1/me/addresses` |
+| `POST /v1/me/age-attestation` |
+| `POST /v1/products/:productId/alerts` |
+| `POST /v1/products/:productId/price-reports` |
+| `POST /v1/seller/channels` |
+| `POST /v1/seller/kyc/documents` |
+| `POST /v1/seller/kyc/submit` |
+| `POST /v1/seller/price-claims/:claimId/appeal` |
+| `POST /v1/seller/price-evidence` |
+| `POST /v1/seller/team` |
+| `PUT /v1/admin/kill-switches/:key` |
+| `PUT /v1/admin/price-integrity/config` |
+| `PUT /v1/seller/skus/:skuId/price` |
+
 
 Each of these must gain a matrix row in the same change that adds its controller; the suite fails otherwise.

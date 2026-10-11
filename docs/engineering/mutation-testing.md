@@ -190,3 +190,16 @@ rather than a `services:` container because it needs `pg_ctl` and the server log
 (100 claimed, 0 lost, 0 deadlocks, 0 server ERROR lines, reserve p50 9.4 ms, p95 19.1 ms,
 p99 35.8 ms). The CI job has never executed on GitHub. It is single-machine evidence, not a
 production load test.
+
+## Wave 4: ledger posting (2026-10-11, NOT MEASURED)
+
+`packages/domain/stryker.ledger-posting.mjs` mutates `src/ledger-posting/**` (posting templates,
+refund allocation, reversal, fingerprint, hash chain, integrity checks; 637 mutants, `break: 80`).
+Run from `packages/domain` with `pnpm mutation:ledger-posting` on Node 24.
+
+**No score is claimed.** Two attempts (Node 25.9 and Node 24.21, concurrency 2 and 1) aborted after
+the initial dry run (56 tests green) with `spawn pgrep EAGAIN`: Stryker's process-tree kill cannot
+fork inside the agent sandbox. The ADR-0019 gate (>= 80% on ledger-adjacent money code) is therefore
+**unproven**. Run it once on a normal runner and record the per-file table here; do not lower `break`.
+Payouts, reconciliation, refunds, store-credit and checkout domain code have unit and fast-check
+property tests but no Stryker config yet.

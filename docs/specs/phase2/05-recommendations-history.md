@@ -50,3 +50,25 @@ Given clear history, Then user_events and user_features are empty within 24h.
 Given a similar-for-less card, Then it only appears when claim_allowed is true.
 Given budget filter active, Then no budget value is persisted in any feature table.
 ```
+
+## Build notes (Phase 2 build, recommendations + history)
+Modules: `apps/api/src/modules/history` (events, settings, features, clear/pause, recently viewed, jobs), `apps/api/src/modules/recommendations` (feed, similar, goes-with, restock, price drops, clicks, co-occurrence job), pure domain in `packages/domain/src/recommendations`, migration `0040_recommendations_history.sql`.
+
+**Algorithm choices (2-3 lines each).**
+- Exploration: Thompson sampling (Beta(clicks+1, misses+1), integer Gamma via exponentials, seeded RNG port) vs epsilon-greedy. Chosen: Thompson, because it spends the 5% budget on arms with uncertainty and decays on its own with data; epsilon-greedy keeps wasting slots on known losers. Hard cap `floor(5% * list size)` is applied before sampling, so exploration is 0 for lists under 20.
+- Diversity: greedy "never a third consecutive item of one store while another store remains" vs MMR. Chosen: greedy, because the rule is the spec's literal invariant, is O(n^2) on <= 200 items, keeps score order otherwise and is property-testable; MMR would need an item distance we do not have for stores.
+- Personal feature: decayed signed event counts (14-day half-life, permille, category and store only) vs a learned user embedding. Chosen: counts, because they are explainable, deletable per user, and structurally cannot hold budget or measurement data (closed shape plus a DB CHECK).
+- Retrieval: ANN neighbors of the last 3 viewed/bought items plus co-buy rows plus popular-in-top-affinity-categories; pure ANN would starve cold items, pure co-occurrence cannot see new SKUs.
+
+**Decisions and deviations.**
+- `PATCH /v1/me/settings` currently accepts only `{personalization}` (strict). If the privacy or settings module also owns `/me/settings`, merge the handlers at integration.
+- `DELETE /v1/me/history` deletes events, features and recently viewed in one transaction and records a `history_clear_requests` row; the sweeper job re-deletes anything a batch rebuilt before the request time and reports `privacy_history_clear_overdue_total`. Feature builds are refused while a clear is pending.
+- Personalization is decided before any user data is read. `personalized=false`, setting off, no consent, kill switch: the feature store, history and sizes are never called, and the ranker receives `features: null` (integration test with a spy).
+- Features older than 24h are not served (fail closed). The ranker-down fallback is popularity + freshness; ANN-down falls back to category rules.
+- Similar/for-less/goes-with is public and not personalized (no user data is read), so it is cacheable. "For less" requires strictly lower price AND `claim_allowed` from price integrity; `verified_discount_pct` is only emitted when `claimAllowed`.
+- Outbox event types use dotted names (`recommendation.impression`, `recommendation.click`, `history.cleared`, `personalization.changed`) because `outbox_events.event_type` is CHECK-constrained to dotted lowercase; analytics names in the spec map 1:1.
+- Budget fit: only through `AffordabilityFilterPort.filter` at request time; `isolation.test.ts` asserts that neither module imports the budget module or references budget tables, and `user_features` has a CHECK against budget/measurement keys. The dependency-cruiser rule itself belongs to the budget builder.
+- pgvector: `PgVectorIndex` reads `product_embeddings(product_id uuid, vec vector(768))` (owned by the embeddings pipeline, ADR-0023). Its test is skipped on PGlite builds without the `vector` extension and is intended for the real Postgres 16 job.
+- `user_events` is range partitioned with a DEFAULT partition only; monthly partition creation belongs to the retention/partition job (same pattern as `size_recommendation_log`).
+- Spec gap: "bot filter" for ranking is not built here; click and impression endpoints are rate limited per user and unknown products are ignored. Bot scoring belongs to the edge/anti-abuse layer.
+- Spec gap: `GET /v1/feed` has no pagination cursor (single ranked page, max 50); a cursor needs a stable ranked snapshot and is deferred.
