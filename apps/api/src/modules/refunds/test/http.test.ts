@@ -114,10 +114,10 @@ describe("GET /v1/me/wallet", () => {
   it("returns the caller's balances only, as decimal strings", async () => {
     const a = await http().get("/v1/me/wallet").set(bearer(TA));
     expect(a.status).toBe(200);
-    expect(a.body.total_available).toEqual({ amount: "2500", currency: "EGP" });
-    expect(a.body.balances.map((b: { sub: string }) => b.sub)).toEqual(["goodwill"]);
+    expect(a.body.total).toEqual({ amount: "2500", currency: "EGP" });
+    expect(a.body.sub_balances.map((b: { kind: string }) => b.kind)).toEqual(["goodwill"]);
     const b = await http().get("/v1/me/wallet").set(bearer(TB));
-    expect(b.body.total_available).toEqual({ amount: "900", currency: "EGP" });
+    expect(b.body.total).toEqual({ amount: "900", currency: "EGP" });
   });
 
   it("never says cash or money in any string on the wire", async () => {
@@ -134,7 +134,7 @@ describe("GET /v1/me/wallet", () => {
     const res = await http().get("/v1/me/wallet/transactions?limit=1").set(bearer(TA));
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0]).toMatchObject({ kind: "credit_added", sub: "goodwill" });
+    expect(res.body.items[0]).toMatchObject({ kind: "goodwill_in", sub_balance: "goodwill" });
     expect((await http().get("/v1/me/wallet/transactions?cursor=%25%25").set(bearer(TA))).status).toBe(400);
   });
 });

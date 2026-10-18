@@ -77,6 +77,10 @@ export interface ReconHarness {
   readonly store: InMemoryReconStore;
   readonly kit: Kit;
   readonly audit: InMemoryAuditSink;
+  /** Flag `release.admin.finance_views`; OFF by default (blocked), as in production. */
+  readonly financeViewsFlag: { on: boolean };
+  /** Rail readiness the summary reports; empty means every rail is "unconfigured". */
+  readonly railInputs: { value: Record<string, "configured" | "unconfigured"> };
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -96,6 +100,8 @@ export async function createReconHarness(): Promise<ReconHarness> {
   }
 
   const store = new InMemoryReconStore();
+  const financeViewsFlag = { on: false };
+  const railInputs: { value: Record<string, "configured" | "unconfigured"> } = { value: {} };
   const k = kit(store, clock);
   const moduleRef = await Test.createTestingModule({
     imports: [
@@ -108,6 +114,8 @@ export async function createReconHarness(): Promise<ReconHarness> {
         integrity: k.integrity,
         alerts: k.alerts,
         flags: k.flags,
+        financeViewsEnabled: () => financeViewsFlag.on,
+        railInputs: () => railInputs.value,
       }),
     ],
   }).compile();
@@ -121,6 +129,8 @@ export async function createReconHarness(): Promise<ReconHarness> {
     store,
     kit: k,
     audit: app.get<InMemoryAuditSink>(AUDIT_SINK, { strict: false }),
+    financeViewsFlag,
+    railInputs,
     http: () => request(app.getHttpServer()),
     close: () => app.close(),
   };

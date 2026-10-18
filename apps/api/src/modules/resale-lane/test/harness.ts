@@ -39,6 +39,7 @@ const admin = (id: string, role: AdminRole): Actor => ({ id, status: "active", a
 export const TOKENS = {
   opHub1: "token-rs-operator-1-000000001",
   opHub2: "token-rs-operator-2-000000002",
+  adminOps: "token-rs-admin-ops-000000000011",
   adminSupport: "token-rs-admin-support-00003",
   shopper: "token-rs-shopper-0000000000004",
   ownerA: "token-rs-owner-a-0000000000005",
@@ -68,6 +69,7 @@ export async function createResaleHarness(): Promise<ResaleHarness> {
   const tokens = new TokenTable();
   tokens.add(TOKENS.opHub1, { actor: operator(U(11), HUB_1), aud: "admin_api" });
   tokens.add(TOKENS.opHub2, { actor: operator(U(12), HUB_2), aud: "admin_api" });
+  tokens.add(TOKENS.adminOps, { actor: admin(U(22), "ops"), aud: "admin_api" });
   tokens.add(TOKENS.adminSupport, { actor: admin(U(21), "support"), aud: "admin_api" });
   tokens.add(TOKENS.shopper, { actor: shopper(U(31)), aud: "buyer_api" });
   tokens.add(TOKENS.ownerA, { actor: seller(U(41), STORE_A, "owner"), aud: "seller_api" });

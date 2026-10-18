@@ -1,7 +1,8 @@
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
-import { SUBSCRIPTION_STATES, type PlusPlan, type PlusSubscription } from "../domain/bridge";
+import { SUBSCRIPTION_STATES, type PlusPlan, type PlusSubscription, type SubscriptionState } from "../domain/bridge";
 import type {
+  MetricsCounts,
   ClientAction,
   CommitResult,
   EntitlementRow,
@@ -30,6 +31,8 @@ const PlanRow = z.object({
   version: z.number().int(),
   active: z.boolean(),
   trial_days: z.number().int(),
+  kind: z.enum(["individual", "family", "student"]),
+  seat_limit: z.number().int().nullable(),
   effective_ms: Ms,
   notified_ms: Ms.nullable(),
 });
@@ -127,7 +130,7 @@ const ts = (ms: number) => sql`to_timestamp(${ms}::double precision / 1000.0)`;
 const tsOrNull = (ms: number | null) => (ms === null ? sql`null::timestamptz` : ts(ms));
 
 const PLAN_COLS = sql`id::text as id, code, billing_interval, price::text as price, version::int as version, active,
-  trial_days::int as trial_days, ${EPOCH_MS("effective_from")} as effective_ms, ${EPOCH_MS("notified_at")} as notified_ms`;
+  trial_days::int as trial_days, kind, seat_limit::int as seat_limit, ${EPOCH_MS("effective_from")} as effective_ms, ${EPOCH_MS("notified_at")} as notified_ms`;
 const SUB_COLS = sql`id::text as id, user_id::text as user_id, plan_id::text as plan_id, plan_code,
   plan_version::int as plan_version, billing_interval, status,
   ${EPOCH_MS("period_start")} as period_start_ms, ${EPOCH_MS("period_end")} as period_end_ms,
@@ -151,6 +154,8 @@ const SIGNUP_COLS = sql`id::text as id, user_id::text as user_id, plan_id::text 
 const toPlan = (r: z.infer<typeof PlanRow>): PlusPlan => ({
   id: r.id,
   code: r.code,
+  kind: r.kind,
+  seatLimit: r.seat_limit,
   interval: r.billing_interval,
   priceMinor: r.price,
   version: r.version,
@@ -301,9 +306,9 @@ export class KyselySubscriptionStore implements SubscriptionStore {
     try {
       await this.tx(async (trx) => {
         await sql`
-          insert into plans (id, code, billing_interval, price, version, active, trial_days, effective_from, notified_at)
+          insert into plans (id, code, billing_interval, price, version, active, trial_days, kind, seat_limit, effective_from, notified_at)
           values (${p.id}::uuid, ${p.code}, ${p.interval}, ${p.priceMinor.toString()}::bigint, ${p.version}, ${p.active},
-                  ${p.trialDays}, ${ts(p.effectiveFromMs)}, ${tsOrNull(p.notifiedAtMs)})
+                  ${p.trialDays}, ${p.kind ?? "individual"}, ${p.seatLimit ?? null}, ${ts(p.effectiveFromMs)}, ${tsOrNull(p.notifiedAtMs)})
           on conflict (id) do update set active = excluded.active, notified_at = excluded.notified_at`.execute(trx);
         await this.emit(trx, events);
       });
@@ -352,6 +357,20 @@ export class KyselySubscriptionStore implements SubscriptionStore {
       SubRow,
     );
     return rows.map(toSub);
+  }
+
+  async metricsCounts(sinceMs: number): Promise<MetricsCounts> {
+    const since = new Date(sinceMs).toISOString();
+    const byStatus: Record<SubscriptionState, number> = { TRIALING: 0, ACTIVE: 0, PAST_DUE: 0, PAUSED: 0, CANCELLED_AT_PERIOD_END: 0, EXPIRED: 0 };
+    const r = await sql<{ status: string; n: string }>`select status, count(*)::text as n from subscriptions group by status`.execute(this.db);
+    for (const row of r.rows) if (row.status in byStatus) byStatus[row.status as SubscriptionState] = Number(row.n);
+    const c = await sql<{ created: string; live: string; ended: string }>`
+      select count(*) filter (where created_at >= ${since}::timestamptz)::text as created,
+             count(*) filter (where created_at < ${since}::timestamptz and (status <> 'EXPIRED' or period_end >= ${since}::timestamptz))::text as live,
+             count(*) filter (where created_at < ${since}::timestamptz and status = 'EXPIRED' and period_end >= ${since}::timestamptz)::text as ended
+      from subscriptions`.execute(this.db);
+    const row = c.rows[0];
+    return { byStatus, createdSince: Number(row?.created ?? 0), liveAtStart: Number(row?.live ?? 0), endedSince: Number(row?.ended ?? 0) };
   }
 
   async claimedTrialKeys(keyHashes: readonly string[]): Promise<ReadonlySet<string>> {

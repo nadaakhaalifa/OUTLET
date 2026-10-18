@@ -38,3 +38,46 @@ export type {
   SubscriptionStore,
   TaxReceiptPort,
 } from "./domain/ports";
+
+// ---- Phase 3: family and student plans ----
+export {
+  AcceptInvite,
+  CreateFamily,
+  FamilySeatEntitlements,
+  GetFamily,
+  GetStudentStatus,
+  HandleStudentCallback,
+  InviteMember,
+  LeaveFamily,
+  RemoveMember,
+  RevokeInvite,
+  RunFamilySweep,
+  RunStudentSweep,
+  StartStudentVerification,
+  StudentEligibility,
+  SubscribeByKind,
+  TerminateFamilyForOwner,
+} from "./family/application";
+export {
+  CsprngInviteTokens,
+  FakeFamilyIdentity,
+  FakeInviteDelivery,
+  FakeStudentVerifier,
+  InMemoryFamilyStore,
+  InMemoryStudentStore,
+  SequentialInviteTokens,
+  UnconfiguredFamilyIdentity,
+  UnconfiguredInviteDelivery,
+  UnconfiguredStudentVerifier,
+} from "./family/in-memory";
+export { KyselyFamilyStore, KyselyStudentStore } from "./family/kysely-store";
+export type {
+  FamilyEvent,
+  FamilyIdentityPort,
+  FamilyInviteDeliveryPort,
+  FamilyStore,
+  InviteTokenPort,
+  StudentEligibilityPort,
+  StudentStore,
+  StudentVerifierPort,
+} from "./family/ports";

@@ -29,21 +29,22 @@ export class ReferralsController {
   @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
   async me(@Req() req: ApiRequest) {
     const v = await this.myReferral.execute(userIdOf(req));
+    const money = (amount: bigint) => moneyToWire({ amount, currency: "EGP" });
     return {
       code: v.code,
-      deep_link: v.deepLink,
+      share_url: v.deepLink,
+      friend_offer: { discount: money(v.friendOffer.discount), min_order: money(v.friendOffer.minOrder) },
+      referrer_reward: money(v.referrerReward),
+      rewarded_this_year: v.rewardedInWindow,
+      yearly_cap: v.rewardedInWindow + v.remainingInWindow,
+      referrals: v.referrals.map((r) => ({
+        status: r.status === "attributed" ? "pending" : r.status,
+        created_at: new Date(r.createdAtMs).toISOString(),
+      })),
       pending_count: v.pending,
       rewarded_count: v.rewarded,
-      rewarded_in_window: v.rewardedInWindow,
-      remaining_in_window: v.remainingInWindow,
       milestone: { every: v.milestone.every, progress: v.milestone.progress, plus_months: v.milestone.plusMonths },
-      offer:
-        v.offer === null
-          ? null
-          : {
-              discount: moneyToWire({ amount: v.offer.discount, currency: "EGP" }),
-              min_order: moneyToWire({ amount: v.offer.minOrder, currency: "EGP" }),
-            },
+      own_offer: v.offer === null ? null : { discount: money(v.offer.discount), min_order: money(v.offer.minOrder) },
     };
   }
 

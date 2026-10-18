@@ -4,7 +4,7 @@ import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock, IdGenerator } from "../../platform/ports";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
 import { DEFAULT_PAYOUT_CONFIG, PayoutCommands } from "./application/commands";
-import { GetPayout, ListPayouts, SellerStatements } from "./application/queries";
+import { GetPayout, GetStoreBalance, ListPayouts, PayoutSummaryQuery, SellerStatements } from "./application/queries";
 import { FinanceAccess, PayoutStoreAccess } from "./adapters/access";
 import {
   FakeApprovals,
@@ -17,13 +17,16 @@ import {
   FakeSellerBank,
 } from "./adapters/fakes";
 import { InMemoryPayoutStore } from "./adapters/in-memory";
-import { FinancePayoutsController, SellerPayoutsController } from "./adapters/payouts.controller";
+import { FinancePayoutsController, SellerPayoutsController, type PayoutBalanceOptions } from "./adapters/payouts.controller";
 import { AdminPayoutResolver, StoreParamResolver, StorePayoutResolver } from "./adapters/resolvers";
 import {
   ADMIN_PAYOUT_RESOLVER,
+  FINANCE_VIEWS_ENABLED,
   GET_PAYOUT,
+  GET_STORE_BALANCE,
   LIST_PAYOUTS,
   PAYOUTS_NOW,
+  PAYOUT_BALANCE_OPTIONS,
   PAYOUT_APPROVALS,
   PAYOUT_BANK,
   PAYOUT_COMMANDS,
@@ -35,6 +38,7 @@ import {
   PAYOUT_RISK,
   PAYOUT_SOURCE,
   PAYOUT_STORE,
+  PAYOUT_SUMMARY,
   SELLER_STATEMENTS,
   STATEMENT_SOURCE,
   STORE_PARAM_RESOLVER,
@@ -66,6 +70,10 @@ export interface PayoutsModuleOverrides {
   readonly provider?: PayoutPort;
   readonly flags?: PayoutFlagsPort;
   readonly config?: PayoutConfig;
+  /** release.admin.finance_views. Absent means BLOCKED: GET /v1/admin/finance/payouts/summary answers 404. */
+  readonly financeViewsEnabled?: () => Promise<boolean> | boolean;
+  /** Release flag of the seller balance route. Absent means blocked (404). */
+  readonly balance?: PayoutBalanceOptions;
 }
 
 /** Thrown at boot when a non-test environment has no real adapter for a money-moving port. */
@@ -172,6 +180,18 @@ export class PayoutsModule {
               ids,
               config: cfg,
             }),
+        },
+        { provide: FINANCE_VIEWS_ENABLED, useValue: overrides.financeViewsEnabled ?? (() => false) },
+        {
+          provide: PAYOUT_SUMMARY,
+          inject: [PAYOUT_STORE, PAYOUT_CONFIG],
+          useFactory: (s: PayoutStore, c: PayoutConfig) => new PayoutSummaryQuery(s, c.cycle),
+        },
+        { provide: PAYOUT_BALANCE_OPTIONS, useValue: overrides.balance ?? { enabled: () => false } },
+        {
+          provide: GET_STORE_BALANCE,
+          inject: [PAYOUT_STORE, PAYOUT_SOURCE, PAYOUT_LEDGER, PAYOUTS_NOW],
+          useFactory: (s: PayoutStore, src: PayoutSourcePort, l: PayoutLedgerPort, now: () => number) => new GetStoreBalance(s, src, l, now),
         },
         { provide: GET_PAYOUT, inject: [PAYOUT_STORE], useFactory: (s: PayoutStore) => new GetPayout(s) },
         { provide: LIST_PAYOUTS, inject: [PAYOUT_STORE], useFactory: (s: PayoutStore) => new ListPayouts(s) },

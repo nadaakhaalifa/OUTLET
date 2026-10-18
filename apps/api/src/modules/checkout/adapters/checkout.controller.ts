@@ -41,6 +41,7 @@ const QuoteBody = z
 const CommitBody = QuoteBody.extend({
   address_id: Uuid,
   expected_total: Piastres.nullable().optional(),
+  admission_token: z.string().min(20).max(2048).nullable().optional(),
 }).strict();
 const ConfirmBody = z.object({ code: z.string().trim().min(4).max(12) }).strict();
 
@@ -79,6 +80,12 @@ function commitWire(r: CommitResult) {
       throw Problems.forbidden("app_attest_required");
     case "key_reuse":
       throw Problems.idempotencyKeyReuse();
+    case "admission_required":
+      throw conflict("admission-required", "This drop needs a waiting-room admission", "admission_required");
+    case "admission_invalid":
+      throw Problems.forbidden("admission_invalid");
+    case "admission_used":
+      throw conflict("admission-used", "This admission was already used", "admission_used");
     case "address_required":
       throw Problems.validation([{ pointer: "/body/address_id", code: "required" }]);
     case "address_not_found":
@@ -176,6 +183,7 @@ export class CheckoutController {
       priceLock: body.price_lock ?? null,
       expectedTotal: body.expected_total === undefined || body.expected_total === null ? null : BigInt(body.expected_total),
       appAttestAssertion: headerValue(req, "x-app-attest") ?? null,
+      admissionToken: body.admission_token ?? null,
     });
     return commitWire(r);
   }

@@ -9,6 +9,8 @@ import type {
   PayoutMovement,
   PayoutRecord,
   PayoutScope,
+  PayoutState,
+  PayoutStateTotals,
   PayoutStore,
   TransitionCommand,
 } from "../domain/ports";
@@ -135,6 +137,35 @@ export class InMemoryPayoutStore implements PayoutStore {
       items: page.map((p) => this.view(p)),
       next: rows.length > q.limit && last !== undefined ? { createdAtMs: last.createdAtMs, id: last.id } : null,
     };
+  }
+
+  async balanceTotals(scope: PayoutScope, storeId: string): Promise<{ held: bigint; inTransit: bigint }> {
+    let held = 0n;
+    let inTransit = 0n;
+    for (const p of this.payouts.values()) {
+      if (p.storeId !== storeId || !this.visible(p, scope)) continue;
+      if (p.status === "ON_HOLD") held += p.amount;
+      else if (p.status === "SCHEDULED" || p.status === "APPROVED" || p.status === "SENT" || p.status === "FAILED") inTransit += p.amount;
+    }
+    return { held, inTransit };
+  }
+
+  async summaryByState(
+    scope: PayoutScope,
+    windowSinceMs: number,
+  ): Promise<Partial<Record<PayoutState, PayoutStateTotals>>> {
+    const out: Partial<Record<PayoutState, { -readonly [K in keyof PayoutStateTotals]: PayoutStateTotals[K] }>> = {};
+    for (const p of this.payouts.values()) {
+      if (!this.visible(p, scope)) continue;
+      if (TERMINAL.has(p.status) && p.updatedAtMs < windowSinceMs) continue;
+      const t = (out[p.status] ??= { count: 0, amount: 0n, oldestUpdatedAtMs: null, byHoldReason: {}, byFailureCode: {} });
+      t.count += 1;
+      t.amount += p.amount;
+      t.oldestUpdatedAtMs = t.oldestUpdatedAtMs === null ? p.updatedAtMs : Math.min(t.oldestUpdatedAtMs, p.updatedAtMs);
+      if (p.holdReason !== null) t.byHoldReason = { ...t.byHoldReason, [p.holdReason]: (t.byHoldReason[p.holdReason] ?? 0) + 1 };
+      if (p.failureCode !== null) t.byFailureCode = { ...t.byFailureCode, [p.failureCode]: (t.byFailureCode[p.failureCode] ?? 0) + 1 };
+    }
+    return out;
   }
 
   async activeSellerOrderIds(storeId: string): Promise<ReadonlySet<string>> {

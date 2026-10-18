@@ -74,6 +74,10 @@ export interface HubStore {
   listLegs(orderGroupId: string): Promise<readonly LegRecord[]>;
   getParcel(id: string): Promise<ParcelRecord | null>;
   listParcels(orderGroupId: string): Promise<readonly ParcelRecord[]>;
+  /** Admin ops view: every consolidated parcel, newest first, keyset on (createdAt, id). */
+  listParcelsPage(limit: number, after: { readonly createdAtMs: number; readonly id: string } | null): Promise<readonly ParcelRecord[]>;
+  /** Seller view: only legs of the given stores (optionally one order group), keyset on seller_order_id ascending. */
+  listLegsForStores(input: { readonly storeIds: readonly string[]; readonly orderGroupId: string | null; readonly limit: number; readonly afterId: string | null }): Promise<readonly LegRecord[]>;
   getReceipt(sellerOrderId: string): Promise<ReceiptRecord | null>;
   /**
    * One transaction: insert the receipt (unique per seller order), move the leg

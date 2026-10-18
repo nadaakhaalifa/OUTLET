@@ -1,3 +1,4 @@
+import { GetSubscriptionMetrics } from "./application/metrics";
 import { Module, type DynamicModule } from "@nestjs/common";
 import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
@@ -18,6 +19,45 @@ import {
   InMemorySubscriptionStore,
 } from "./adapters/in-memory";
 import { SubscriptionsController } from "./adapters/controller";
+import {
+  AcceptInvite,
+  CreateFamily,
+  FamilySeatEntitlements,
+  GetFamily,
+  GetStudentStatus,
+  HandleStudentCallback,
+  InviteMember,
+  LeaveFamily,
+  RemoveMember,
+  RevokeInvite,
+  RunFamilySweep,
+  RunStudentSweep,
+  StartStudentVerification,
+  StudentEligibility,
+  SubscribeByKind,
+  TerminateFamilyForOwner,
+  type FamilyDeps,
+} from "./family/application";
+import { FamilyController } from "./family/controller";
+import {
+  CsprngInviteTokens,
+  FakeFamilyIdentity,
+  FakeInviteDelivery,
+  FakeStudentVerifier,
+  InMemoryFamilyStore,
+  InMemoryStudentStore,
+  UnconfiguredFamilyIdentity,
+  UnconfiguredInviteDelivery,
+  UnconfiguredStudentVerifier,
+} from "./family/in-memory";
+import type {
+  FamilyIdentityPort,
+  FamilyInviteDeliveryPort,
+  FamilyStore,
+  InviteTokenPort,
+  StudentStore,
+  StudentVerifierPort,
+} from "./family/ports";
 import { PlusAdminResolver } from "./adapters/resolvers";
 import * as T from "./adapters/tokens";
 import { GetMyPlus, PlusEntitlements, RecordBenefitUsed, ReverseBenefit } from "./application/member";
@@ -65,6 +105,17 @@ export interface SubscriptionsModuleOptions {
   readonly approvals?: PlanPriceApprovalPort;
   readonly hasher?: KeyHasherPort;
   readonly webhookVerifier?: RecurringWebhookVerifierPort;
+  /** Family seats (Kysely in production, required there). */
+  readonly familyStore?: FamilyStore;
+  /** Student verifications (Kysely in production, required there). */
+  readonly studentStore?: StudentStore;
+  /** Users-module phone identity. Unconfigured (fail closed) outside dev and test. */
+  readonly familyIdentity?: FamilyIdentityPort;
+  /** SMS or WhatsApp invite delivery. Unconfigured (fail closed) outside dev and test. */
+  readonly inviteDelivery?: FamilyInviteDeliveryPort;
+  readonly inviteTokens?: InviteTokenPort;
+  /** Student verifier vendor (VR-P3-09). Unconfigured by default in production: nothing is ever verified. */
+  readonly studentVerifier?: StudentVerifierPort;
 }
 
 /**
@@ -103,6 +154,8 @@ export class SubscriptionsModule {
       if (o.approvals === undefined) missing.push("approvals (dual approval)");
       if (o.hasher === undefined) missing.push("hasher (HMAC key)");
       if (o.webhookVerifier === undefined) missing.push("webhookVerifier (PSP MAC)");
+      if (production && o.familyStore === undefined) missing.push("familyStore (Postgres)");
+      if (production && o.studentStore === undefined) missing.push("studentStore (Postgres)");
       if (missing.length > 0) throw new MissingSubscriptionsPortsError(missing);
     }
     const store = o.store ?? new InMemorySubscriptionStore();
@@ -119,21 +172,45 @@ export class SubscriptionsModule {
     const hasher = o.hasher ?? new HmacKeyHasher("dev-only-trial-key");
     const verifier = o.webhookVerifier ?? rejectingVerifier;
     const cfg = o.config ?? DEFAULT_PLUS_CONFIG;
+    // Fakes only outside production; production gets fail-closed stand-ins until real adapters are wired.
+    const familyStore = o.familyStore ?? new InMemoryFamilyStore();
+    const studentStore = o.studentStore ?? new InMemoryStudentStore();
+    const identity = o.familyIdentity ?? (production ? new UnconfiguredFamilyIdentity() : new FakeFamilyIdentity());
+    const delivery = o.inviteDelivery ?? (production ? new UnconfiguredInviteDelivery() : new FakeInviteDelivery());
+    const tokens = o.inviteTokens ?? new CsprngInviteTokens();
+    const studentVerifier = o.studentVerifier ?? (production ? new UnconfiguredStudentVerifier() : new FakeStudentVerifier());
 
     const runtime = (clock: Clock, ids: IdGenerator) => {
-      const d: PlusDeps = { store, clock, ids, cfg, ledger, receipts, notices, flags, charges, refunds, ages, persons, vault, hasher };
+      const eligibility = new StudentEligibility(studentStore, notices, clock);
+      const d: PlusDeps = { store, clock, ids, cfg, ledger, receipts, notices, flags, charges, refunds, ages, persons, vault, hasher, students: eligibility };
+      const fd: FamilyDeps = { plus: d, family: familyStore, students: studentStore, identity, delivery, tokens, verifier: studentVerifier };
+      const seats = new FamilySeatEntitlements(fd);
+      const subscribe = new Subscribe(d);
       return {
         plans: new ListPlans(store, clock),
-        subscribe: new Subscribe(d),
+        subscribe: new SubscribeByKind(fd, subscribe, eligibility),
+        createFamily: new CreateFamily(fd, subscribe),
+        getFamily: new GetFamily(fd),
+        inviteMember: new InviteMember(fd),
+        revokeInvite: new RevokeInvite(fd),
+        acceptInvite: new AcceptInvite(fd),
+        removeMember: new RemoveMember(fd),
+        leaveFamily: new LeaveFamily(fd),
+        familySweep: new RunFamilySweep(fd),
+        terminateFamily: new TerminateFamilyForOwner(fd),
+        startStudent: new StartStudentVerification(fd),
+        studentCallback: new HandleStudentCallback(fd),
+        studentStatus: new GetStudentStatus(fd),
+        studentSweep: new RunStudentSweep(fd),
         cancel: new CancelPlus(d),
         reactivate: new ReactivatePlus(d),
         pause: new PausePlus(d),
         resume: new ResumePlus(d),
         switchPlan: new SwitchPlan(d),
         refund: new RefundPlus(d),
-        mine: new GetMyPlus(store, clock),
-        entitlements: new PlusEntitlements(store, clock),
-        recordBenefit: new RecordBenefitUsed(store, clock, ids),
+        mine: new GetMyPlus(store, clock, seats),
+        entitlements: new PlusEntitlements(store, clock, seats),
+        recordBenefit: new RecordBenefitUsed(store, clock, ids, seats),
         reverseBenefit: new ReverseBenefit(store, clock),
         sweep: new RunRenewalSweep(d),
         recognize: new RecognizeDeferredRevenue(d),
@@ -141,6 +218,7 @@ export class SubscriptionsModule {
         publish: new PublishPlanVersion(store, clock, ids, approvals, notices),
         setActive: new SetPlanActive(store),
         versions: new ListPlanVersions(store),
+        metrics: new GetSubscriptionMetrics(store, clock),
       };
     };
     const RUNTIME = Symbol("subscriptions.Runtime");
@@ -153,9 +231,11 @@ export class SubscriptionsModule {
 
     return {
       module: SubscriptionsModule,
-      controllers: [SubscriptionsController],
+      controllers: [SubscriptionsController, FamilyController],
       providers: [
         { provide: T.PLUS_STORE, useValue: store },
+        { provide: T.PLUS_FAMILY_STORE, useValue: familyStore },
+        { provide: T.PLUS_STUDENT_STORE, useValue: studentStore },
         { provide: T.PLUS_WEBHOOK_VERIFIER, useValue: verifier },
         { provide: T.PLUS_ADMIN_RESOLVER, useValue: new PlusAdminResolver() },
         {
@@ -164,6 +244,7 @@ export class SubscriptionsModule {
           useFactory: (c: Clock, ids: IdGenerator) => runtime(c, ids),
         },
         from(T.PLUS_LIST_PLANS, (r) => r.plans),
+        from(T.PLUS_METRICS, (r) => r.metrics),
         from(T.PLUS_SUBSCRIBE, (r) => r.subscribe),
         from(T.PLUS_CANCEL, (r) => r.cancel),
         from(T.PLUS_REACTIVATE, (r) => r.reactivate),
@@ -181,6 +262,19 @@ export class SubscriptionsModule {
         from(T.PLUS_PUBLISH_PLAN, (r) => r.publish),
         from(T.PLUS_SET_PLAN_ACTIVE, (r) => r.setActive),
         from(T.PLUS_LIST_PLAN_VERSIONS, (r) => r.versions),
+        from(T.PLUS_CREATE_FAMILY, (r) => r.createFamily),
+        from(T.PLUS_GET_FAMILY, (r) => r.getFamily),
+        from(T.PLUS_INVITE_MEMBER, (r) => r.inviteMember),
+        from(T.PLUS_REVOKE_INVITE, (r) => r.revokeInvite),
+        from(T.PLUS_ACCEPT_INVITE, (r) => r.acceptInvite),
+        from(T.PLUS_REMOVE_MEMBER, (r) => r.removeMember),
+        from(T.PLUS_LEAVE_FAMILY, (r) => r.leaveFamily),
+        from(T.PLUS_FAMILY_SWEEP, (r) => r.familySweep),
+        from(T.PLUS_TERMINATE_FAMILY, (r) => r.terminateFamily),
+        from(T.PLUS_START_STUDENT, (r) => r.startStudent),
+        from(T.PLUS_STUDENT_CALLBACK, (r) => r.studentCallback),
+        from(T.PLUS_STUDENT_STATUS, (r) => r.studentStatus),
+        from(T.PLUS_STUDENT_SWEEP, (r) => r.studentSweep),
       ],
     };
   }

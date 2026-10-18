@@ -15,9 +15,15 @@ export {
   StaticMembership,
   StaticPlatformConfig,
 } from "./adapters/in-memory";
-export type { BagGroupView, BagLineView, BagView, QuoteBagForCheckout } from "./application/bag";
+export type { BagGroupView, BagLineView, BagView, GetCart, QuoteBagForCheckout } from "./application/bag";
+export { GET_CART } from "./adapters/tokens";
+export { CatalogUnavailableError } from "./domain/ports";
+export { cartWire } from "./adapters/wire";
 export type {
   CartEventPublisher,
+  CartLineRecord,
+  CartRecord,
+  LineSource,
   CartRepository,
   CatalogPort,
   MembershipPort,

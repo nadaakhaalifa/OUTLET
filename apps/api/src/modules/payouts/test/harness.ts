@@ -88,6 +88,10 @@ export interface PayoutsHarness {
   readonly store: InMemoryPayoutStore;
   readonly kit: Kit;
   readonly audit: InMemoryAuditSink;
+  /** Flag `release.seller.balance`; on by default in this harness. */
+  readonly balanceFlag: { on: boolean };
+  /** Flag `release.admin.finance_views`; OFF by default here, as in production (blocked). */
+  readonly financeViewsFlag: { on: boolean };
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -106,6 +110,8 @@ export async function createPayoutsHarness(): Promise<PayoutsHarness> {
     }
   }
 
+  const balanceFlag = { on: true };
+  const financeViewsFlag = { on: false };
   const store = new InMemoryPayoutStore(clock);
   const k = kit(store, clock);
   const moduleRef = await Test.createTestingModule({
@@ -123,6 +129,8 @@ export async function createPayoutsHarness(): Promise<PayoutsHarness> {
         ledger: k.ledger,
         provider: k.provider,
         flags: k.flags,
+        balance: { enabled: () => balanceFlag.on },
+        financeViewsEnabled: () => financeViewsFlag.on,
       }),
     ],
   }).compile();
@@ -135,6 +143,8 @@ export async function createPayoutsHarness(): Promise<PayoutsHarness> {
     tokens,
     store,
     kit: k,
+    balanceFlag,
+    financeViewsFlag,
     audit: app.get<InMemoryAuditSink>(AUDIT_SINK, { strict: false }),
     http: () => request(app.getHttpServer()),
     close: () => app.close(),

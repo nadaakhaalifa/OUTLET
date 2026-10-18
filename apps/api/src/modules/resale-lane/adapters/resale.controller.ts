@@ -8,7 +8,7 @@ import { ZodPipe } from "../../../platform/zod.pipe";
 import type { BrowseResale, ListReturnedUnit, ListingView, WithdrawListing } from "../application/resale";
 import type { ListingRecord, ResaleStore } from "../domain/ports";
 import { hubIdsOf } from "./resolvers";
-import { BROWSE_RESALE, LIST_RETURNED_UNIT, RESALE_OPERATOR_RESOLVER, RESALE_STORE, RESALE_STORE_RESOLVER, WITHDRAW_LISTING } from "./tokens";
+import { BROWSE_RESALE, LIST_RETURNED_UNIT, RESALE_ADMIN_RESOLVER, RESALE_OPERATOR_RESOLVER, RESALE_STORE, RESALE_STORE_RESOLVER, WITHDRAW_LISTING } from "./tokens";
 
 const Id = z.uuid();
 const ListBody = z
@@ -20,6 +20,21 @@ const ListBody = z
     price_piastres: z.string().regex(/^[1-9]\d{0,11}$/),
   })
   .strict();
+const ADMIN_ROLES = ["ops", "finance", "trust_safety", "super_admin"] as const;
+const AdminListQuery = z
+  .object({ limit: z.coerce.number().int().min(1).max(50).default(50), cursor: z.string().max(200).optional(), status: z.enum(["LISTED", "SOLD", "WITHDRAWN"]).optional() })
+  .strict();
+const adminWire = (l: ListingRecord) => ({
+  id: l.id,
+  store_id: l.storeId,
+  sku_id: l.resaleSkuId,
+  grade: l.grade,
+  price: { amount_minor: l.price.toString(), currency: "EGP" },
+  ownership: l.ownership,
+  status: l.status,
+  listed_at: new Date(l.listedAtMs).toISOString(),
+  sold_at: l.soldAtMs === null ? null : new Date(l.soldAtMs).toISOString(),
+});
 const IdParam = z.object({ id: Id }).strict();
 const StoreParam = z.object({ storeId: Id }).strict();
 const StoreListingParam = StoreParam.extend({ id: Id }).strict();
@@ -142,5 +157,27 @@ export class ResaleController {
     if (r.kind === "not_found") throw Problems.notFound();
     if (r.kind === "not_listed") throw new ProblemError(409, "invalid-transition", "The listing is no longer for sale", { code: "invalid_transition" });
     return { id: p.id.toLowerCase(), status: "WITHDRAWN" };
+  }
+
+  @Get("admin/resale/listings")
+  @Authorize({ audience: "admin_api", action: "read", resourceType: "admin_console", resolver: RESALE_ADMIN_RESOLVER, idParam: "none" })
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async adminListings(@Req() req: ApiRequest, @Query(new ZodPipe(AdminListQuery, "/query")) q: z.infer<typeof AdminListQuery>) {
+    const ok = principalOf(req).actor.grants.some((g) => g.kind === "admin" && (ADMIN_ROLES as readonly string[]).includes(g.role));
+    if (!ok) throw Problems.forbidden();
+    let after: { listedAtMs: number; id: string } | null = null;
+    if (q.cursor !== undefined) {
+      try {
+        const c = Cursor.parse(JSON.parse(Buffer.from(q.cursor, "base64url").toString("utf8")));
+        after = { listedAtMs: c.t, id: c.id.toLowerCase() };
+      } catch {
+        throw Problems.validation([{ pointer: "/query/cursor", code: "invalid_cursor" }]);
+      }
+    }
+    const rows = await this.store.listAll(q.limit + 1, after, q.status ?? null);
+    const items = rows.slice(0, q.limit);
+    const last = items[items.length - 1];
+    const next = rows.length > q.limit && last !== undefined ? Buffer.from(JSON.stringify({ t: last.listedAtMs, id: last.id })).toString("base64url") : null;
+    return { items: items.map(adminWire), page: { next_cursor: next, has_more: next !== null } };
   }
 }

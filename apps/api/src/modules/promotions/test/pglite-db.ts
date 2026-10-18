@@ -12,7 +12,7 @@ const DIR = new URL("../../../../../../packages/db/migrations/", import.meta.url
  */
 export async function promotionsDatabase(): Promise<PGlite> {
   const names = readdirSync(fileURLToPath(DIR))
-    .filter((f) => /^00(0[1-9]|1[01])_/.test(f) || /^0021_promotions\.sql$/.test(f))
+    .filter((f) => /^00(0[1-9]|1[01])_/.test(f) || /^0021_promotions\.sql$/.test(f) || /^0049_admin_calendar\.sql$/.test(f))
     .sort();
   const files = names.map((f) => parseMigration(f, readFileSync(fileURLToPath(new URL(f, DIR)), "utf8")));
   const db = new PGlite();
@@ -21,3 +21,5 @@ export async function promotionsDatabase(): Promise<PGlite> {
 }
 
 export const MIGRATION_SQL = readFileSync(fileURLToPath(new URL("0021_promotions.sql", DIR)), "utf8");
+
+export const CALENDAR_MIGRATION_SQL = readFileSync(fileURLToPath(new URL("0049_admin_calendar.sql", DIR)), "utf8");

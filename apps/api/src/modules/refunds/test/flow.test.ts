@@ -87,7 +87,18 @@ describe("refund processing", () => {
     // replay is a no-op: same ledger entry, no second provider call
     expect(await w.process.execute(id)).toMatchObject({ status: "COMPLETED", ledger: "already" });
     expect(w.executor.calls).toHaveLength(1);
-    expect(w.store.events.map((e) => e.type)).toEqual(["refund.requested", "refund.approved", "refund.completed"]);
+    expect(w.store.events.map((e) => e.type)).toEqual([
+      "refund.requested",
+      "refund.approved",
+      "refund.completed",
+      "order_line.refunded", // additive producer for creators clawback; money effects above are unchanged
+    ]);
+    expect(w.store.events.find((e) => e.type === "order_line.refunded")).toMatchObject({
+      orderLineId: "line-1",
+      lineGross: 10_000n,
+      refundedGross: 10_000n,
+      delta: 10_000n,
+    });
   });
 
   it("BNPL with a stated store-credit preference is still cancelled at the provider only", async () => {

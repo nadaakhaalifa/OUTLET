@@ -36,3 +36,6 @@ export type {
   ServiceAuthenticator,
 } from "./domain/ports";
 export { PromotionsUnavailableError } from "./domain/ports";
+export { KyselyCalendarStore } from "./adapters/calendar-kysely";
+export { InMemoryCalendarStore } from "./adapters/calendar-in-memory";
+export type { CalendarStore, CalendarEvent } from "./domain/calendar";

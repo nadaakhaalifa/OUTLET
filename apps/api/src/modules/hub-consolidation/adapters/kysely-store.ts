@@ -237,6 +237,35 @@ export class KyselyHubStore implements HubStore {
     });
   }
 
+  async listParcelsPage(limit: number, after: { createdAtMs: number; id: string } | null): Promise<readonly ParcelRecord[]> {
+    return this.tx(async (trx) => {
+      const lim = Math.max(1, Math.min(limit, 101));
+      const r =
+        after === null
+          ? await sql<unknown>`select ${PARCEL_COLS} from consolidated_shipments order by created_at desc, id desc limit ${lim}`.execute(trx)
+          : await sql<unknown>`select ${PARCEL_COLS} from consolidated_shipments
+              where (created_at, id) < (${new Date(after.createdAtMs).toISOString()}::timestamptz, ${after.id}::uuid)
+              order by created_at desc, id desc limit ${lim}`.execute(trx);
+      return r.rows.map(toParcel);
+    });
+  }
+
+  async listLegsForStores(i: { storeIds: readonly string[]; orderGroupId: string | null; limit: number; afterId: string | null }): Promise<readonly LegRecord[]> {
+    const stores = i.storeIds.filter((x) => UUID.test(x));
+    if (stores.length === 0) return [];
+    if (i.orderGroupId !== null && !UUID.test(i.orderGroupId)) return [];
+    if (i.afterId !== null && !UUID.test(i.afterId)) return [];
+    return this.tx(async (trx) => {
+      const lim = Math.max(1, Math.min(i.limit, 101));
+      const r = await sql<unknown>`select ${LEG_COLS} from hub_legs
+        where store_id = any(${stores}::uuid[])
+          and (${i.orderGroupId}::uuid is null or order_group_id = ${i.orderGroupId}::uuid)
+          and (${i.afterId}::uuid is null or seller_order_id > ${i.afterId}::uuid)
+        order by seller_order_id limit ${lim}`.execute(trx);
+      return r.rows.map(toLeg);
+    });
+  }
+
   async getReceipt(sellerOrderId: string): Promise<ReceiptRecord | null> {
     if (!UUID.test(sellerOrderId)) return null;
     return this.tx(async (trx) => {

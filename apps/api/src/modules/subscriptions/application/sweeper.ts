@@ -16,6 +16,7 @@ import {
   renewSucceeded,
   resume,
   reverseEntry,
+  selectPlanVersion,
   trialReminderSent,
   type PlusPlan,
   type PlusSubscription,
@@ -32,6 +33,17 @@ import {
   type PlusDeps,
 } from "./shared";
 import { completeSignup } from "./subscribe";
+
+/** The cheapest active individual plan with the same interval, in force at `atMs`. */
+async function individualFallback(d: PlusDeps, from: PlusPlan, atMs: number): Promise<PlusPlan | null> {
+  const all = await d.store.listPlanVersions();
+  const codes = [...new Set(all.filter((p) => (p.kind ?? "individual") === "individual" && p.interval === from.interval).map((p) => p.code))];
+  const picked = codes
+    .map((c) => selectPlanVersion(all.filter((p) => p.code === c), atMs))
+    .filter((p): p is PlusPlan => p !== null)
+    .sort((a, b) => (a.priceMinor < b.priceMinor ? -1 : a.priceMinor > b.priceMinor ? 1 : a.code.localeCompare(b.code)));
+  return picked[0] ?? null;
+}
 
 export interface SweepSummary {
   readonly examined: number;
@@ -85,7 +97,14 @@ export class RunRenewalSweep {
   }
 
   private async targetPlan(sub: PlusSubscription, atMs: number): Promise<PlusPlan | null> {
-    return planFor(this.d, sub.pendingPlanCode ?? sub.planCode, atMs);
+    const plan = await planFor(this.d, sub.pendingPlanCode ?? sub.planCode, atMs);
+    if (plan === null || plan.kind !== "student") return plan;
+    // Student price needs a verified, unexpired status at the renewal instant; no evidence means the
+    // individual plan of the same interval (never a silent discount, and never a silent increase:
+    // `renewalPrice` only reverts once a 30 day notice is out).
+    const price = this.d.students === undefined ? "individual" : await this.d.students.renewalPrice(sub.userId, atMs);
+    if (price === "student") return plan;
+    return individualFallback(this.d, plan, atMs);
   }
 
   private async charge(
@@ -182,7 +201,12 @@ export class RunRenewalSweep {
         [{ type: "plus.renewed", subscriptionId: sub.id, userId: sub.userId, cycle, invoiceId: invoice.id }],
         { invoices: [invoice] },
       );
-      if (r === "ok") await queueReceipt(d, invoice);
+      if (r === "ok") {
+        await queueReceipt(d, invoice);
+        if (plan.code !== (sub.pendingPlanCode ?? sub.planCode)) {
+          await d.notices.send({ userId: sub.userId, template: "student_price_ended", data: { plan_code: plan.code } });
+        }
+      }
       return r === "ok" ? "renewed" : "other";
     }
     const r = await applyTransition(

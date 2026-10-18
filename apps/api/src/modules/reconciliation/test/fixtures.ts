@@ -62,7 +62,7 @@ export function kit(store: ReconStore, clock: TestClock): Kit {
     ingest: new IngestSettlementFile(store, new FixtureSettlementFilePort(), clock, ids),
     runner,
     scheduler: new ScheduleReconciliation(deps, runner),
-    read: new FinanceReconReadModel(store),
+    read: new FinanceReconReadModel(store, () => clock.nowMs()),
   };
 }
 

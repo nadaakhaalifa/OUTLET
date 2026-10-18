@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { z } from "zod";
 import { Authorize, AuthenticatedSelf, Idempotent, Public, RateLimit } from "../../../platform/decorators";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
 import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
+import type { GetSubscriptionMetrics } from "../application/metrics";
 import type { GetMyPlus } from "../application/member";
 import type {
   CancelPlus,
@@ -15,7 +16,7 @@ import type {
   SwitchPlan,
 } from "../application/manage";
 import type { ListPlanVersions, ListPlans, PublishPlanVersion, SetPlanActive } from "../application/plans";
-import type { Subscribe } from "../application/subscribe";
+import type { SubscribeByKind } from "../family/application";
 import type { HandleRecurringWebhook } from "../application/sweeper";
 import { PAYMENT_METHODS, type RecurringWebhookVerifierPort } from "../domain/ports";
 import {
@@ -23,6 +24,7 @@ import {
   PLUS_CANCEL,
   PLUS_LIST_PLAN_VERSIONS,
   PLUS_LIST_PLANS,
+  PLUS_METRICS,
   PLUS_MINE,
   PLUS_PAUSE,
   PLUS_PUBLISH_PLAN,
@@ -56,8 +58,11 @@ const PublishBody = z
     trial_days: z.number().int().min(0).max(60).default(0),
     effective_from: z.iso.datetime(),
     approval_id: z.string().uuid(),
+    kind: z.enum(["individual", "family", "student"]).optional(),
+    seat_limit: z.number().int().min(2).max(8).optional(),
   })
   .strict();
+const MetricsQuery = z.object({ window_days: z.coerce.number().int().min(1).max(365).default(30) }).strict();
 const PlanIdParam = z.object({ planId: z.string().uuid() }).strict();
 const ActiveBody = z.object({ active: z.boolean() }).strict();
 const ProviderParam = z.object({ provider: z.string().regex(/^[a-z][a-z0-9_]{1,31}$/) }).strict();
@@ -103,7 +108,7 @@ function lowerHeaders(h: ApiRequest["headers"]): Record<string, string | undefin
 export class SubscriptionsController {
   constructor(
     @Inject(PLUS_LIST_PLANS) private readonly plans: ListPlans,
-    @Inject(PLUS_SUBSCRIBE) private readonly subscribe: Subscribe,
+    @Inject(PLUS_SUBSCRIBE) private readonly subscribe: SubscribeByKind,
     @Inject(PLUS_CANCEL) private readonly cancel: CancelPlus,
     @Inject(PLUS_REACTIVATE) private readonly reactivate: ReactivatePlus,
     @Inject(PLUS_PAUSE) private readonly pause: PausePlus,
@@ -116,6 +121,7 @@ export class SubscriptionsController {
     @Inject(PLUS_PUBLISH_PLAN) private readonly publish: PublishPlanVersion,
     @Inject(PLUS_SET_PLAN_ACTIVE) private readonly setActive: SetPlanActive,
     @Inject(PLUS_LIST_PLAN_VERSIONS) private readonly versions: ListPlanVersions,
+    @Inject(PLUS_METRICS) private readonly metrics: GetSubscriptionMetrics,
   ) {}
 
   // ---- shopper: no object id appears in any path, so the subject is always the caller (no BOLA surface) ----
@@ -171,6 +177,10 @@ export class SubscriptionsController {
         });
       case "plan_not_found":
         throw Problems.notFound();
+      case "student_verification_required":
+        throw new ProblemError(403, "student-verification-required", "A verified student status is required for this plan", {
+          code: "student_verification_required",
+        });
       case "invalid_payment_method":
         throw unprocessable("invalid_payment_method", "The payment method is not valid");
       case "payment_failed":
@@ -226,6 +236,10 @@ export class SubscriptionsController {
         throw Problems.notFound();
       case "same_plan":
         throw unprocessable("same_plan", "You are already on this plan");
+      case "student_verification_required":
+        throw new ProblemError(403, "student-verification-required", "A verified student status is required for this plan", {
+          code: "student_verification_required",
+        });
       case "payment_failed":
         throw new ProblemError(402, "payment-failed", "The payment was not completed", { code: "payment_failed" });
       case "requires_action":
@@ -293,6 +307,27 @@ export class SubscriptionsController {
     return actor.id;
   }
 
+  @Get("admin/subscriptions/metrics")
+  @Authorize({ audience: "admin_api", action: "read", resourceType: "admin_console", resolver: PLUS_ADMIN_RESOLVER, idParam: "none" })
+  @RateLimit([{ dimension: "user", limit: 30, windowSeconds: 60 }])
+  async adminMetrics(@Req() req: ApiRequest, @Query(new ZodPipe(MetricsQuery, "/query")) q: z.output<typeof MetricsQuery>) {
+    this.requireRole(req, READ_ROLES);
+    const m = await this.metrics.execute(q.window_days);
+    return {
+      window_days: m.windowDays,
+      active: m.active,
+      trialing: m.counts.byStatus.TRIALING,
+      past_due: m.counts.byStatus.PAST_DUE,
+      paused: m.paused,
+      cancelled_at_period_end: m.cancelledAtPeriodEnd,
+      expired: m.counts.byStatus.EXPIRED,
+      new_in_window: m.counts.createdSince,
+      live_at_window_start: m.counts.liveAtStart,
+      ended_in_window: m.counts.endedSince,
+      churn_bps: m.churnBps,
+    };
+  }
+
   @Get("admin/plus/plans")
   @Authorize({ audience: "admin_api", action: "read", resourceType: "admin_console", resolver: PLUS_ADMIN_RESOLVER, idParam: "none" })
   @RateLimit([{ dimension: "user", limit: 30, windowSeconds: 60 }])
@@ -315,6 +350,8 @@ export class SubscriptionsController {
       trialDays: b.trial_days,
       effectiveFromMs: Date.parse(b.effective_from),
       approvalId: b.approval_id,
+      ...(b.kind !== undefined ? { kind: b.kind } : {}),
+      ...(b.seat_limit !== undefined ? { seatLimit: b.seat_limit } : {}),
     });
     switch (r.kind) {
       case "published":
@@ -326,6 +363,10 @@ export class SubscriptionsController {
         });
       case "interval_mismatch":
         throw unprocessable("interval_mismatch", "A plan code keeps its billing interval");
+      case "kind_mismatch":
+        throw unprocessable("kind_mismatch", "A plan code keeps its plan kind");
+      case "seat_limit_invalid":
+        throw unprocessable("seat_limit_invalid", "Seat limit applies to family plans only, between 2 and 8");
       case "approval_required":
         throw new ProblemError(403, "dual-approval-required", "An approved dual approval is required", {
           code: "dual_approval_required",

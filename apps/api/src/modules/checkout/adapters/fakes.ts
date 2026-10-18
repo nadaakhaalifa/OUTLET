@@ -16,6 +16,7 @@ import {
   type AgeGate,
   type AgePolicyPort,
   type AppAttestPort,
+  type DropAdmissionPort,
   type BagSnapshot,
   type CartPort,
   type CodConfirmationPort,
@@ -119,6 +120,19 @@ export class FakeAppAttest implements AppAttestPort {
   /** Accepts only the assertion "valid-assertion". */
   async verify(input: { assertion: string | null }): Promise<boolean> {
     return input.assertion === "valid-assertion";
+  }
+}
+
+/** Accepts the token "valid-admission-token-0001" once per user. */
+export class FakeDropAdmission implements DropAdmissionPort {
+  readonly used = new Set<string>();
+  async redeem(i: { userId: string; token: string | null }): ReturnType<DropAdmissionPort["redeem"]> {
+    if (i.token === null) return "required";
+    if (i.token !== "valid-admission-token-0001") return "invalid";
+    const k = `${i.userId}`;
+    if (this.used.has(k)) return "already_used";
+    this.used.add(k);
+    return "ok";
   }
 }
 

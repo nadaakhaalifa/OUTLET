@@ -10,3 +10,5 @@ export const RUN_RECONCILIATION = Symbol("reconciliation.RunReconciliation");
 export const SCHEDULE_RECONCILIATION = Symbol("reconciliation.ScheduleReconciliation");
 export const FINANCE_RECON_READ = Symbol("reconciliation.FinanceReconReadModel");
 export const RECON_NOW = Symbol("reconciliation.Now");
+export const RECON_RAIL_INPUTS = Symbol("reconciliation.RailInputs");
+export const RECON_FINANCE_VIEWS_ENABLED = Symbol("reconciliation.FinanceViewsEnabled");

@@ -26,6 +26,8 @@ export interface BagLine extends CheckoutLine {
   readonly sizeLabel?: string;
   /** Tax category code for the tax engine. */
   readonly taxCategoryCode: string;
+  /** Set by the cart for drop SKUs; checkout needs it to demand the matching waiting-room admission. */
+  readonly dropId?: string;
 }
 
 export interface BagStoreTerms extends StoreTermsForCheckout {
@@ -113,6 +115,22 @@ export type AddressResolution =
 
 export interface AddressPort {
   resolve(userId: string, addressId: string): Promise<AddressResolution>;
+}
+
+export type DropAdmissionOutcome = "ok" | "required" | "invalid" | "already_used";
+
+/**
+ * Waiting-room admission for drop SKUs (spec 16). `redeem` verifies the signed token server-side
+ * (signature, drop, user, device, expiry) and consumes it exactly once. Stateless apart from the
+ * single-use row, so purchases keep working while the queue is down.
+ */
+export interface DropAdmissionPort {
+  redeem(input: {
+    readonly userId: string;
+    readonly deviceId: string | null;
+    readonly token: string | null;
+    readonly dropIds: readonly string[];
+  }): Promise<DropAdmissionOutcome>;
 }
 
 export interface AppAttestPort {

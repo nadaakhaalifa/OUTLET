@@ -17,3 +17,7 @@ export const PAYOUT_FLAGS = Symbol("payouts.PayoutFlagsPort");
 export const STATEMENT_SOURCE = Symbol("payouts.StatementSourcePort");
 export const PAYOUT_CONFIG = Symbol("payouts.PayoutConfig");
 export const PAYOUTS_NOW = Symbol("payouts.Now");
+export const PAYOUT_SUMMARY = Symbol("payouts.PayoutSummaryQuery");
+export const FINANCE_VIEWS_ENABLED = Symbol("payouts.FinanceViewsEnabled");
+export const GET_STORE_BALANCE = Symbol("payouts.GetStoreBalance");
+export const PAYOUT_BALANCE_OPTIONS = Symbol("payouts.BalanceOptions");

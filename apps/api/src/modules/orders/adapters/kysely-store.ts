@@ -2,6 +2,7 @@ import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 import { CANCEL_INITIATORS, REJECT_REASONS, money, type OrderGroupState } from "../domain/bridge";
 import type { Clock } from "../../../platform/ports";
+import { analyticsConsentGranted, appendAnalyticsDrafts, type AnalyticsProducers } from "../../analytics-ingest";
 import {
   PAYMENT_METHODS,
   type ApplyResult,
@@ -121,6 +122,8 @@ export class KyselyOrderRepository implements OrderRepository {
     private readonly db: OrdersDb,
     private readonly clock: Clock,
     private readonly applicationRole: string | null = "app_user",
+    /** Server analytics producers (kill.analytics.producers). Null or blocked: nothing analytics is written. */
+    private readonly analytics: AnalyticsProducers | null = null,
   ) {}
 
   private async tx<T>(scope: OrderScope, run: (trx: OrdersDb) => Promise<T>): Promise<T> {
@@ -227,6 +230,8 @@ export class KyselyOrderRepository implements OrderRepository {
 
   async place(g: NewOrderGroup): Promise<{ kind: "created" | "duplicate"; groupId: string }> {
     const now = this.clock.nowMs();
+    // Read once, before the transaction: never a flag lookup inside the money transaction.
+    const analyticsOn = this.analytics !== null && (await this.analytics.enabled());
     return this.tx({ kind: "system" }, async (trx) => {
       const ins = await sql<{ id: string }>`
         insert into order_groups (id, user_id, status, payment_method, payment_type, subtotal_amount, shipping_amount,
@@ -247,6 +252,7 @@ export class KyselyOrderRepository implements OrderRepository {
         if (id === undefined) throw new Error("order group vanished after conflict");
         return { kind: "duplicate" as const, groupId: id };
       }
+      const consented = analyticsOn ? await analyticsConsentGranted(trx, g.userId) : false;
       for (const so of g.sellerOrders) {
         await sql`
           insert into seller_orders (id, order_group_id, store_id, user_id, status, version, payment_type,
@@ -273,6 +279,10 @@ export class KyselyOrderRepository implements OrderRepository {
           insert into order_buyer_contacts (seller_order_id, store_id, first_name, phone_relay, governorate_code)
           values (${so.id}::uuid, ${so.storeId}::uuid, ${so.buyer.firstName}, ${so.buyer.phoneRelay},
                   ${so.buyer.governorateCode})`.execute(trx);
+        const placedExtra =
+          analyticsOn && this.analytics !== null
+            ? this.analytics.sellerOrderPlaced({ userId: g.userId, consented, placedAtMs: g.placedAtMs, lines: so.lines })
+            : {};
         await sql`
           insert into outbox_events (id, occurred_at, aggregate_type, aggregate_id, event_type, ordering_key, payload)
           values (gen_random_uuid(), ${iso(now)}::timestamptz, 'seller_order', ${so.id}::uuid, 'seller_order.placed',
@@ -284,7 +294,35 @@ export class KyselyOrderRepository implements OrderRepository {
                     payment_type: g.paymentType,
                     total_amount: so.total.amount.toString(),
                     accept_by_ms: so.acceptByMs,
+                    ...placedExtra,
                   })}::jsonb)`.execute(trx);
+        if (analyticsOn && this.analytics !== null) {
+          const a = this.analytics;
+          await appendAnalyticsDrafts(
+            trx,
+            so.lines.flatMap((l) => {
+              const d = a.orderLinePurchased({
+                userId: g.userId,
+                consented,
+                sellerOrderId: so.id,
+                storeId: so.storeId,
+                commissionRateBps: so.commissionRateBps,
+                governorate: so.buyer.governorateCode,
+                purchasedAtMs: so.paidAtMs,
+                line: {
+                  orderLineId: l.id,
+                  productId: l.productId,
+                  skuId: l.skuId,
+                  qty: l.qty,
+                  unitPriceMinor: l.unitPrice.amount,
+                  discountAllocMinor: l.discountAlloc.amount,
+                  sizeLabel: l.sizeLabel ?? null,
+                },
+              });
+              return d === null ? [] : [d];
+            }),
+          );
+        }
       }
       return { kind: "created" as const, groupId: g.id };
     });
@@ -438,6 +476,16 @@ export class KyselyOrderRepository implements OrderRepository {
     });
   }
 
+  async findCloseCandidates(deliveredBeforeMs: number, limit: number): Promise<readonly string[]> {
+    return this.tx({ kind: "system" }, async (trx) => {
+      const r = await sql<{ id: string }>`
+        select id::text as id from seller_orders
+         where status = 'DELIVERED' and delivered_at <= ${iso(deliveredBeforeMs)}::timestamptz
+         order by delivered_at, id limit ${limit}`.execute(trx);
+      return r.rows.map((x) => x.id);
+    });
+  }
+
   // ------------------------------------------------------------------ command
 
   async applyTransition(c: TransitionCommand): Promise<ApplyResult> {
@@ -470,6 +518,8 @@ export class KyselyOrderRepository implements OrderRepository {
           dispatch_by = coalesce(${isoOrNull(t.stamps.dispatchByMs)}::timestamptz, dispatch_by),
           packed_at = coalesce(${isoOrNull(t.stamps.packedAtMs)}::timestamptz, packed_at),
           shipped_at = coalesce(${isoOrNull(t.stamps.shippedAtMs)}::timestamptz, shipped_at),
+          delivered_at = coalesce(${isoOrNull(t.stamps.deliveredAtMs)}::timestamptz, delivered_at),
+          closed_at = coalesce(${isoOrNull(t.stamps.closedAtMs)}::timestamptz, closed_at),
           cancelled_at = coalesce(${isoOrNull(t.stamps.cancelledAtMs)}::timestamptz, cancelled_at),
           cancel_initiator = coalesce(${t.cancelInitiator ?? null}, cancel_initiator),
           cancel_reason = coalesce(${t.cancelInitiator === undefined ? null : t.reasonCode}, cancel_reason),

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Query, Req } from "@nestjs/common";
+import { Controller, Get, Header, Inject, Param, Query, Req } from "@nestjs/common";
 import { z } from "zod";
 import { AuthenticatedSelf, RateLimit } from "../../../platform/decorators";
 import type { ApiRequest } from "../../../platform/http-types";
@@ -8,7 +8,7 @@ import { RECON_SOURCES, SEVERITIES } from "../domain/bridge";
 import type { FinanceReconReadModel } from "../application/queries";
 import type { RunRecord, SettlementFileRecord, TicketRecord } from "../domain/ports";
 import { ReconAccess } from "./access";
-import { FINANCE_RECON_READ } from "./tokens";
+import { FINANCE_RECON_READ, RECON_FINANCE_VIEWS_ENABLED } from "./tokens";
 
 const IdParam = z.object({ id: z.uuid() }).strict();
 const TicketQuery = z
@@ -94,15 +94,34 @@ export class ReconciliationController {
   constructor(
     @Inject(ReconAccess) private readonly access: ReconAccess,
     @Inject(FINANCE_RECON_READ) private readonly read: FinanceReconReadModel,
+    @Inject(RECON_FINANCE_VIEWS_ENABLED) private readonly viewsEnabled: () => Promise<boolean> | boolean,
   ) {}
 
   @Get("summary")
+  @Header("Cache-Control", "private, no-store")
   @AuthenticatedSelf("admin_api")
   @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
   async summary(@Req() req: ApiRequest) {
     await this.access.require(actorOf(req));
     const s = await this.read.summary();
+    // B-2 fields sit behind release.admin.finance_views (blocked: the response is exactly the pre-B-2 shape).
+    const b2 = (await this.viewsEnabled())
+      ? {
+          aging: Object.fromEntries(
+            Object.entries(s.aging).map(([k, v]) => [k, { lt_1d: v.lt1d, d1_3: v.d1to3, gt_3d: v.gt3d }]),
+          ),
+          // Rail sources only (psp, cod, bnpl, eta). store_credit, trial_balance and run are excluded; read `aging` for those.
+          unmatched_over_3d: s.unmatchedOver3d,
+          rails: s.rails.map((r) => ({
+            source: r.source,
+            last_file_at: isoOrNull(r.lastFileAtMs),
+            files_received: r.filesReceived,
+            input: r.input,
+          })),
+        }
+      : {};
     return {
+      ...b2,
       open: s.open,
       escalated: s.escalated,
       by_severity: s.bySeverity,

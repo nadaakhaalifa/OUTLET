@@ -77,8 +77,17 @@ export class FinanceAccess {
 
   /** True when the actor holds a live finance grant (not ops). */
   static isFinance(actor: Actor, nowMs: number): boolean {
-    return actor.grants.some(
-      (g) => g.kind === "admin" && g.role === "finance" && (g.expiresAtMs === undefined || g.expiresAtMs > nowMs),
-    );
+    return isFinanceActor(actor, nowMs);
   }
+}
+
+/**
+ * Pure predicate behind the in-handler `requireFinance` gate (payout approve and the other
+ * finance-only routes): a live (unexpired) `finance` admin grant. Exported so the admin capability
+ * map calls the same code as the route (docs/specs/dashboard-foundations.md, track 1).
+ */
+export function isFinanceActor(actor: Actor, nowMs: number): boolean {
+  return actor.grants.some(
+    (g) => g.kind === "admin" && g.role === "finance" && (g.expiresAtMs === undefined || g.expiresAtMs > nowMs),
+  );
 }

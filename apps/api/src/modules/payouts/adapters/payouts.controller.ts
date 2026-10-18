@@ -7,22 +7,32 @@ import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import { PAYOUT_STATES } from "../domain/bridge";
 import type { CommandResult, PayoutCommands } from "../application/commands";
-import type { GetPayout, ListPayouts, SellerStatements } from "../application/queries";
+import type { GetPayout, GetStoreBalance, ListPayouts, PayoutSummaryQuery, SellerStatements } from "../application/queries";
 import type { PayoutScope } from "../domain/ports";
 import { FinanceAccess, PayoutStoreAccess } from "./access";
 import {
   ADMIN_PAYOUT_RESOLVER,
+  FINANCE_VIEWS_ENABLED,
   GET_PAYOUT,
+  GET_STORE_BALANCE,
   LIST_PAYOUTS,
   PAYOUTS_NOW,
+  PAYOUT_BALANCE_OPTIONS,
   PAYOUT_COMMANDS,
+  PAYOUT_SUMMARY,
   SELLER_STATEMENTS,
   STORE_PARAM_RESOLVER,
   STORE_PAYOUT_RESOLVER,
 } from "./tokens";
-import { adminPayoutWire, sellerPayoutWire, statementViewWire } from "./wire";
+import { adminPayoutWire, payoutSummaryWire, sellerPayoutWire, statementViewWire, storeBalanceWire } from "./wire";
+
+export interface PayoutBalanceOptions {
+  /** `release.seller.balance`. Default blocked: the route answers 404, the same body as a foreign store. */
+  readonly enabled: () => Promise<boolean> | boolean;
+}
 
 const IdParam = z.object({ id: z.uuid() }).strict();
+const StoreIdParam = z.object({ storeId: z.uuid() }).strict();
 const ListQuery = z
   .object({
     status: z.enum(PAYOUT_STATES).optional(),
@@ -106,6 +116,8 @@ export class SellerPayoutsController {
     @Inject(LIST_PAYOUTS) private readonly list: ListPayouts,
     @Inject(GET_PAYOUT) private readonly getPayout: GetPayout,
     @Inject(SELLER_STATEMENTS) private readonly statements: SellerStatements,
+    @Inject(GET_STORE_BALANCE) private readonly balance: GetStoreBalance,
+    @Inject(PAYOUT_BALANCE_OPTIONS) private readonly balanceOpts: PayoutBalanceOptions,
   ) {}
 
   private scopeOf(req: ApiRequest, storeIds: readonly string[]): PayoutScope {
@@ -153,6 +165,32 @@ export class SellerPayoutsController {
     return wire;
   }
 
+  /** Store balance (ADR-0050). Roles owner, manager, finance by the central store_payout.read rule; catalog is 403, foreign and unknown stores 404. */
+  @Get("stores/:storeId/balance")
+  @Authorize({ audience: "seller_api", action: "read", resourceType: "store_payout", resolver: STORE_PARAM_RESOLVER, idParam: "storeId" })
+  @RateLimit([{ dimension: "user", limit: 120, windowSeconds: 60 }])
+  async storeBalance(
+    @Req() req: ApiRequest,
+    @Res({ passthrough: true }) res: ApiResponse,
+    @Param(new ZodPipe(StoreIdParam, "/params")) params: z.infer<typeof StoreIdParam>,
+  ) {
+    // Flag after authorization: blocked answers 404 with the shared not-found body.
+    if (!(await this.balanceOpts.enabled())) throw Problems.notFound();
+    let view;
+    try {
+      view = await this.balance.execute({ storeId: params.storeId.toLowerCase(), scope: this.scopeOf(req, [params.storeId.toLowerCase()]) });
+    } catch {
+      throw Problems.unavailable("seller_balance_unavailable");
+    }
+    const wire = storeBalanceWire(view);
+    const { as_of: _asOf, ...stable } = wire;
+    const etag = etagOf(stable);
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "private, no-cache");
+    if (matches(headerValue(req, "if-none-match"), etag)) throw new ProblemError(304, "not-modified", "Not modified");
+    return wire;
+  }
+
   @Get("stores/:id/statements")
   @Authorize({ audience: "seller_api", action: "read", resourceType: "store_payout", resolver: STORE_PARAM_RESOLVER, idParam: "id" })
   @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
@@ -186,6 +224,8 @@ export class FinancePayoutsController {
     @Inject(GET_PAYOUT) private readonly getPayout: GetPayout,
     @Inject(PAYOUT_COMMANDS) private readonly commands: PayoutCommands,
     @Inject(PAYOUTS_NOW) private readonly now: () => number,
+    @Inject(PAYOUT_SUMMARY) private readonly summaryQuery: PayoutSummaryQuery,
+    @Inject(FINANCE_VIEWS_ENABLED) private readonly viewsEnabled: () => Promise<boolean> | boolean,
   ) {}
 
   private scope(req: ApiRequest): PayoutScope {
@@ -217,6 +257,25 @@ export class FinancePayoutsController {
       items: page.items.map(adminPayoutWire),
       page: { next_cursor: page.next === null ? null : encodeCursor(page.next), has_more: page.next !== null },
     };
+  }
+
+  /** B-1. Declared before `:id` so "summary" is never read as an id. Blocked (404) unless release.admin.finance_views. */
+  @Get("summary")
+  @AuthenticatedSelf("admin_api")
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async summary(@Req() req: ApiRequest, @Res({ passthrough: true }) res: ApiResponse) {
+    // Authorization and the audit record come first (also while blocked: a non-finance caller gets 403, and the
+    // read is audited); the flag then hides the route from authorized callers only. The ETag follows authorization.
+    await this.access.require(principalOf(req).actor);
+    if (!(await this.viewsEnabled())) throw Problems.notFound();
+    const nowMs = this.now();
+    const wire = payoutSummaryWire(await this.summaryQuery.execute({ scope: this.scope(req), nowMs }));
+    const { as_of: _asOf, ...stable } = wire;
+    const etag = etagOf(stable);
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "private, no-cache");
+    if (matches(headerValue(req, "if-none-match"), etag)) throw new ProblemError(304, "not-modified", "Not modified");
+    return wire;
   }
 
   @Get(":id")

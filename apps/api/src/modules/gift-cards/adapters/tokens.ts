@@ -19,3 +19,7 @@ export const GET_SHARED_POT = Symbol("giftCards.GetSharedPot");
 export const GET_MY_POT = Symbol("giftCards.GetMyPot");
 export const CARD_RESOLVER = Symbol("giftCards.CardResolver");
 export const POT_RESOLVER = Symbol("giftCards.PotResolver");
+export const ADMIN_VOID_GIFT_CARD = Symbol("giftCards.AdminVoidGiftCard");
+export const LIST_ADMIN_POTS = Symbol("giftCards.ListAdminPots");
+export const LIST_THROTTLE_EVENTS = Symbol("giftCards.ListThrottleEvents");
+export const GIFT_CARD_ADMIN_RESOLVER = Symbol("giftCards.AdminResolver");

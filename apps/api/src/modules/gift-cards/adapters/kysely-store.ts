@@ -12,6 +12,7 @@ import type {
   ContributionRecord,
   GiftCardStore,
   IdPort,
+  KeysetPos,
   OutboxDraft,
   PotRecord,
   RedemptionRecord,
@@ -485,6 +486,31 @@ export class KyselyGiftCardStore implements GiftCardStore {
       const r = await sql<{ id: string }>`select id::text as id from gift_pots
         where status = 'OPEN' and closes_at <= ${ts(nowMs)} order by closes_at limit ${limit}`.execute(t);
       return r.rows.map((x) => x.id);
+    });
+  }
+
+  async listThrottledAttempts(after: KeysetPos | null, limit: number) {
+    return this.tx(async (t) => {
+      const cond = after === null ? sql`true` : sql`(at, id) < (${ts(after.ms)}, ${after.id}::uuid)`;
+      const r = await sql<{ id: string; account_id: string; device_hash: string; ip_hash: string; ms: string }>`
+        select id::text as id, account_id::text as account_id, device_hash, ip_hash, ${EPOCH("at")} as ms
+        from gift_card_attempts where outcome = 'throttled' and ${cond} order by at desc, id desc limit ${limit}`.execute(t);
+      return r.rows.map((x) => ({
+        id: x.id,
+        accountId: x.account_id,
+        deviceHash: x.device_hash,
+        ipHash: x.ip_hash,
+        outcome: "throttled" as const,
+        atMs: Number(x.ms),
+      }));
+    });
+  }
+
+  async listPotsPage(after: KeysetPos | null, limit: number) {
+    return this.tx(async (t) => {
+      const cond = after === null ? sql`true` : sql`(created_at, id) < (${ts(after.ms)}, ${after.id}::uuid)`;
+      const r = await sql<unknown>`select ${POT_COLS} from gift_pots where ${cond} order by created_at desc, id desc limit ${limit}`.execute(t);
+      return r.rows.map(toPot);
     });
   }
 

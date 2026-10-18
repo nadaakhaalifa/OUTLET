@@ -14,6 +14,8 @@ export {
   InMemoryGiftCardStore,
   FakeSecret,
   FakeStoreCredit,
+  FakeVoidApprovals,
+  DenyVoidApprovals,
   FakeAudit,
   FakeFlags,
   FakeAgeGate,
@@ -39,4 +41,5 @@ export type {
   RandomPort,
   SecretPort,
   StoreCreditPort,
+  VoidApprovalPort,
 } from "./domain/ports";

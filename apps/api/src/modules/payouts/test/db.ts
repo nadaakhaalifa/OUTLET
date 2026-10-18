@@ -17,3 +17,21 @@ export async function createPayoutsDatabase(): Promise<PGlite> {
   await raw.exec(readFileSync(MIGRATION_0035, "utf8"));
   return raw;
 }
+
+/**
+ * The shared touch_updated_at trigger stamps UPDATEs with clock_timestamp() (real wall time), while
+ * scenarios drive an injected TestClock. Any real-time stamp that drifts past the test clock makes
+ * date-dependent results (cycle keys, the 30-day summary window) change with the calendar.
+ * This pins the stamp to the fixed scenario instant in the test database only; production migrations
+ * are untouched.
+ */
+export async function pinUpdatedAt(raw: PGlite, fixedMs: number): Promise<void> {
+  const iso = new Date(fixedMs).toISOString();
+  await raw.exec(`
+    CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      NEW.updated_at := '${iso}'::timestamptz;
+      RETURN NEW;
+    END
+    $$;`);
+}

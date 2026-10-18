@@ -18,6 +18,13 @@ const fresh = async () => {
     ensureUser: async (id: string) => {
       await raw.query(`insert into users (id, status) values ($1, 'active') on conflict do nothing`, [id]);
     },
+    payloadsOf: async (type: string) =>
+      (
+        await raw.query<{ p: Record<string, unknown> }>(
+          `select payload as p from outbox_events where event_type = $1 order by occurred_at, id`,
+          [type],
+        )
+      ).rows.map((r) => r.p),
     eventTypes: async () =>
       (await raw.query<{ t: string }>(`select event_type as t from outbox_events order by occurred_at, id`)).rows.map((r) => r.t),
   };
@@ -86,7 +93,12 @@ describe("refund saga on Postgres", () => {
       ["cod", "store_credit", 4_000n],
     ]);
     expect([...credit.restored.values()].reduce((a, c) => a + c.amount, 0n)).toBe(4_000n);
-    expect(await w.eventTypes()).toEqual(["refund.requested", "refund.approved", "refund.completed"]);
+    expect(await w.eventTypes()).toEqual([
+      "refund.requested",
+      "refund.approved",
+      "refund.completed",
+      "order_line.refunded", // additive producer; ledger and legs asserted above are unchanged
+    ]);
     expect((await store.listActionable(clock.nowMs(), 10)).length).toBe(0);
   });
 });

@@ -21,3 +21,5 @@ export const GET_SELLER_INVOICE = Symbol("taxEta.GetSellerInvoice");
 
 export const TAX_STORE_LIST_RESOLVER = Symbol("taxEta.StoreListResolver");
 export const TAX_STORE_INVOICE_RESOLVER = Symbol("taxEta.StoreInvoiceResolver");
+
+export const TAX_FINANCE_VIEWS_ENABLED = Symbol("taxEta.FinanceViewsEnabled");

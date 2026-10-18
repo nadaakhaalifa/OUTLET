@@ -130,6 +130,18 @@ export class KyselyResaleStore implements ResaleStore {
     });
   }
 
+  async listAll(limit: number, after: ListingCursor | null, status: ListingRecord["status"] | null) {
+    return this.tx(async (trx) => {
+      const lim = Math.max(1, Math.min(limit, 101));
+      const r = await sql<unknown>`select ${COLS} from resale_listings
+        where (${status}::text is null or status = ${status})
+          and (${after === null ? null : iso(after.listedAtMs)}::timestamptz is null
+               or (listed_at, id) < (${after === null ? null : iso(after.listedAtMs)}::timestamptz, ${after === null ? null : after.id}::uuid))
+        order by listed_at desc, id desc limit ${lim}`.execute(trx);
+      return r.rows.map(toListing);
+    });
+  }
+
   async listForStore(storeId: string, limit: number) {
     if (!UUID.test(storeId)) return [];
     return this.tx(async (trx) => {

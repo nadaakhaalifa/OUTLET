@@ -152,7 +152,21 @@ export interface PayoutMovement {
   readonly id: string;
 }
 
+/** One state's totals for the finance summary (B-1). Windowed states count only rows changed since `sinceMs`. */
+export interface PayoutStateTotals {
+  readonly count: number;
+  readonly amount: bigint;
+  /** Oldest `updated_at` among the counted payouts ("last change": no state-entry timestamp exists). */
+  readonly oldestUpdatedAtMs: number | null;
+  readonly byHoldReason: Readonly<Record<string, number>>;
+  readonly byFailureCode: Readonly<Record<string, number>>;
+}
+
 export interface PayoutStore {
+  /** Totals per state, one read (no row walk). SETTLED and CANCELLED count only payouts updated at or after `windowSinceMs`. */
+  /** Payout amounts of one store for the balance view: ON_HOLD and in transit (SCHEDULED, APPROVED, SENT, FAILED). One aggregate, scoped by RLS. */
+  balanceTotals(scope: PayoutScope, storeId: string): Promise<{ readonly held: bigint; readonly inTransit: bigint }>;
+  summaryByState(scope: PayoutScope, windowSinceMs: number): Promise<Readonly<Partial<Record<PayoutState, PayoutStateTotals>>>>;
   /** Idempotent on (store, cycle) while not CANCELLED. A duplicate writes nothing. */
   create(p: NewPayout): Promise<{ readonly kind: "created" | "duplicate"; readonly payout: PayoutRecord }>;
   /** Visible to the scope only (RLS plus filter). Others get null, so 404 and missing are alike. */

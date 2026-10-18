@@ -6,6 +6,7 @@ import {
   RETURN_METHODS,
   RETURN_REASONS,
   RETURN_RESOLUTIONS,
+  OPEN_RETURN_STATES,
   RETURN_STATES,
   SHIPPING_PAYERS,
   money,
@@ -21,6 +22,7 @@ import type {
   StandingRecord,
 } from "../domain/ports";
 import { decodeCursor, encodeCursor } from "../domain/cursor";
+import { analyticsConsentGranted, appendAnalyticsDrafts, type AnalyticsProducers } from "../../analytics-ingest";
 
 /** Raw SQL only, rows validated with Zod (same approach as the cart and inventory adapters). */
 export type ReturnsDb = Kysely<Record<string, never>>;
@@ -153,15 +155,7 @@ const allocJson = (a: RefundAllocation | null): string | null =>
         netTotal: a.netTotal.amount.toString(),
       });
 
-const OPEN_STATES: readonly string[] = [
-  "REQUESTED",
-  "PICKUP_SCHEDULED",
-  "IN_TRANSIT",
-  "RECEIVED",
-  "APPROVED",
-  "REJECTED",
-  "DISPUTED",
-];
+const OPEN_STATES: readonly string[] = OPEN_RETURN_STATES;
 
 type Fragment = ReturnType<typeof sql>;
 
@@ -172,7 +166,11 @@ type Fragment = ReturnType<typeof sql>;
  * order line with a transaction-scoped advisory lock so two requests can never exceed the line.
  */
 export class KyselyReturnRepository implements ReturnRepository {
-  constructor(private readonly db: ReturnsDb) {}
+  /** `analytics`: server producers behind kill.analytics.producers. Null or blocked: no analytics event is written. */
+  constructor(
+    private readonly db: ReturnsDb,
+    private readonly analytics: AnalyticsProducers | null = null,
+  ) {}
 
   private async tx<X>(run: (trx: ReturnsDb) => Promise<X>): Promise<X> {
     return this.db.transaction().execute(async (trx) => {
@@ -352,6 +350,8 @@ export class KyselyReturnRepository implements ReturnRepository {
   }
 
   async save(record: ReturnRecord, expectedVersion: number): Promise<boolean> {
+    // Read once, before the transaction. Only a RECEIVED return produces `return_line.received`.
+    const analyticsOn = record.state === "RECEIVED" && this.analytics !== null && (await this.analytics.enabled());
     return this.tx(async (trx) => {
       const upd = await sql<{ id: string }>`
         update returns set
@@ -374,6 +374,29 @@ export class KyselyReturnRepository implements ReturnRepository {
           values (${d.id}::uuid, ${record.id}::uuid, ${d.status}, ${d.statement}, ${iso(d.reviewDueAtMs)}::timestamptz,
                   ${isoOrNull(d.decidedAtMs)}::timestamptz, ${iso(d.createdAtMs)}::timestamptz)
           on conflict (return_id) do update set status = excluded.status, decided_at = excluded.decided_at`.execute(trx);
+      }
+      if (analyticsOn && this.analytics !== null && record.receivedAtMs !== null) {
+        // Same transaction as the state change. The deterministic id makes a repeated save a no-op.
+        const line = await sql<{ product_id: string; sku_id: string }>`
+          select product_id::text as product_id, sku_id::text as sku_id from order_lines
+           where id = ${record.orderLineId}::uuid`.execute(trx);
+        const l = line.rows[0];
+        if (l !== undefined) {
+          const consented = await analyticsConsentGranted(trx, record.userId);
+          const d = this.analytics.returnLineReceived({
+            userId: record.userId,
+            consented,
+            returnId: record.id,
+            orderLineId: record.orderLineId,
+            storeId: record.storeId,
+            productId: l.product_id,
+            skuId: l.sku_id,
+            qty: record.qty,
+            reason: record.reason,
+            receivedAtMs: record.receivedAtMs,
+          });
+          if (d !== null) await appendAnalyticsDrafts(trx, [d]);
+        }
       }
       return true;
     });
@@ -437,6 +460,20 @@ export class KyselyReturnRepository implements ReturnRepository {
         select count(*)::text as n from returns
          where user_id = ${userId}::uuid and state = any (${states}::text[])`.execute(trx);
       return Number(r.rows[0]?.n ?? "0") > 0;
+    });
+  }
+
+  async openReturnCountsBySellerOrder(sellerOrderId: string): Promise<ReadonlyMap<string, number>> {
+    const out = new Map<string, number>();
+    if (!UUID.test(sellerOrderId)) return out;
+    const states = [...OPEN_STATES];
+    return this.tx(async (trx) => {
+      const r = await sql<{ order_line_id: string; n: string }>`
+        select order_line_id::text as order_line_id, count(*)::text as n from returns
+         where seller_order_id = ${sellerOrderId}::uuid and state = any (${states}::text[])
+         group by order_line_id`.execute(trx);
+      for (const row of r.rows) out.set(row.order_line_id, Number(row.n));
+      return out;
     });
   }
 

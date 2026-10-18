@@ -193,6 +193,27 @@ export function describeReturnRepositoryContract(name: string, make: () => Promi
       expect(await c.repo.hasOpenReturns(U(2))).toBe(false);
     });
 
+    it("counts non-terminal returns per line of one seller order, never leaking another order", async () => {
+      const L1 = U(2001);
+      const L2 = U(2002);
+      const S2 = U(3001);
+      const a = record(1, { orderLineId: L1 });
+      const b = record(2, { orderLineId: L1, priorQty: 1 });
+      const d = record(3, { orderLineId: L2 });
+      const other = record(4, { orderLineId: U(2003), sellerOrderId: S2 });
+      for (const r of [a, b, d, other]) expect((await c.repo.createIfCapacity(r, 3)).kind).toBe("created");
+      expect(await c.repo.openReturnCountsBySellerOrder(U(3000))).toEqual(new Map([[L1, 2], [L2, 1]]));
+      expect(await c.repo.openReturnCountsBySellerOrder(S2)).toEqual(new Map([[U(2003), 1]]));
+      // terminal states (from the machine) stop counting; a state mid-flow (REJECTED, dispute window) still counts
+      expect(await c.repo.save({ ...a, state: "CLOSED", version: 1 }, 0)).toBe(true);
+      expect(await c.repo.save({ ...d, state: "REJECTED", version: 1 }, 0)).toBe(true);
+      expect(await c.repo.save({ ...b, state: "CANCELLED", version: 1 }, 0)).toBe(true);
+      expect(await c.repo.openReturnCountsBySellerOrder(U(3000))).toEqual(new Map([[L2, 1]]));
+      expect(await c.repo.save({ ...d, state: "REFUNDED", version: 2 }, 1)).toBe(true);
+      expect(await c.repo.openReturnCountsBySellerOrder(U(3000))).toEqual(new Map());
+      expect(await c.repo.openReturnCountsBySellerOrder("not-a-uuid-or-unknown")).toEqual(new Map());
+    });
+
     it("stores the published serial-returner standing per user", async () => {
       expect(await c.repo.getStanding(U(1))).toBeNull();
       await c.repo.saveStanding({

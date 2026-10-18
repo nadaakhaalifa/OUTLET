@@ -1,3 +1,4 @@
+import type { admin } from "@outlet/domain";
 import type {
   ContributionStatus,
   DeliveryChannel,
@@ -73,6 +74,7 @@ export interface AuditPort {
       | "gift_card.redeemed"
       | "gift_card.issued"
       | "gift_card.voided"
+      | "gift_card.admin_voided"
       | "gift_card.expired"
       | "gift_pot.closed";
     readonly actorId: string | null;
@@ -334,6 +336,24 @@ export interface GiftCardStore {
   confirmContribution(contributionId: string, paymentIntentId: string): Promise<ConfirmApply>;
   listContributionsInStatus(status: ContributionStatus, limit: number): Promise<readonly ContributionRecord[]>;
   listContributions(potId: string): Promise<readonly ContributionRecord[]>;
+
+  /** Admin: throttled redemption attempts, newest first, keyset on (at, id) strictly after `after`. */
+  listThrottledAttempts(after: KeysetPos | null, limit: number): Promise<readonly AttemptRecord[]>;
+  /** Admin: pots, newest first, keyset on (created, id) strictly after `after`. */
+  listPotsPage(after: KeysetPos | null, limit: number): Promise<readonly PotRecord[]>;
+}
+
+/** Position of the last row of a page: sort time (ms) then id, both descending. */
+export interface KeysetPos {
+  readonly ms: number;
+  readonly id: string;
+}
+
+/** Admin module's dual approval, consumed once (PlanPriceApprovalPort pattern). */
+export interface VoidApprovalPort {
+  find(approvalId: string): Promise<admin.ApprovalRecord | null>;
+  /** True once; false when already consumed. */
+  consume(approvalId: string): Promise<boolean>;
 }
 
 export interface CardView {

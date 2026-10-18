@@ -42,3 +42,21 @@ export class OrderGroupResolver implements ResourceResolver {
     return { type: "order", id: g.orderGroupId, ownerUserId: g.userId, state: "active" };
   }
 }
+
+export function storeIdsOf(actor: Actor): string[] {
+  return actor.grants.flatMap((g) => (g.kind === "brand" ? [g.storeId] : []));
+}
+
+export class HubAdminResolver implements ResourceResolver {
+  async resolve(): Promise<Resource | null> {
+    return { type: "admin_console", id: "hub", state: "active" };
+  }
+}
+
+/** Seller collection: the actor's first store; a non-seller falls on the nil store and is refused. */
+export class HubSellerResolver implements ResourceResolver {
+  async resolve(input: { readonly actor: Actor }): Promise<Resource | null> {
+    const first = storeIdsOf(input.actor)[0] ?? NIL_HUB;
+    return { type: "store_order", id: first, storeId: first, state: "active" };
+  }
+}

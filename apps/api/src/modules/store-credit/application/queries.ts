@@ -13,6 +13,7 @@ export interface WalletView {
   readonly expiringSoon: readonly ExpiringSoon[];
   readonly totalAvailable: bigint;
   readonly totalHeld: bigint;
+  readonly asOfMs: number;
 }
 
 /** Keyed by the token subject only: there is no object id to enumerate. */
@@ -30,6 +31,7 @@ export class GetWallet {
       expiringSoon: expiringSoon(lots, now, EXPIRING_WINDOW_MS),
       totalAvailable: balances.reduce((a, b) => a + b.available, 0n),
       totalHeld: balances.reduce((a, b) => a + b.held, 0n),
+      asOfMs: now,
     };
   }
 }

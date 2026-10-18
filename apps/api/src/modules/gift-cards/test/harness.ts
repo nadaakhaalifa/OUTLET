@@ -16,6 +16,7 @@ import {
   FakePayments,
   FakeSecret,
   FakeStoreCredit,
+  FakeVoidApprovals,
   InMemoryGiftCardStore,
   NodeRandom,
 } from "../adapters/in-memory";
@@ -64,6 +65,7 @@ export function createRuntime() {
   const age = new FakeAgeGate();
   const payments = new FakePayments();
   const delivery = new FakeDelivery();
+  const approvals = new FakeVoidApprovals();
   const d: GiftCardDeps = { store, clock, ids, secret, random, cipher, storeCredit, audit, flags, age, payments, delivery };
   const close = new ClosePot(d);
   const refund = new RefundUnfundedPot(d);
@@ -78,6 +80,7 @@ export function createRuntime() {
     age,
     payments,
     delivery,
+    approvals,
     cipher,
     random,
     purchase: new PurchaseGiftCard(d),
@@ -126,6 +129,9 @@ export const TOKENS = {
   b: "token-shopper-b-000000000000002",
   seller: "token-seller-owner-0000000000003",
   admin: "token-admin-support-000000000004",
+  finance: "token-admin-finance-000000000005",
+  finance2: "token-admin-finance2-00000000006",
+  ops: "token-admin-ops-00000000000000007",
 };
 const shopper = (id: string): Actor => ({ id, status: "active", assurance: "basic", grants: [{ kind: "shopper" }], tokenScopes: [] });
 
@@ -152,6 +158,11 @@ export async function createGiftCardHarness(): Promise<GiftCardHarness> {
     aud: "admin_api",
   });
 
+  const adminActor = (id: number, role: "finance" | "ops"): Actor => ({ id: U(id), status: "active", assurance: "passkey", grants: [{ kind: "admin", role }], tokenScopes: ["admin:access"] });
+  tokens.add(TOKENS.finance, { actor: adminActor(22, "finance"), aud: "admin_api" });
+  tokens.add(TOKENS.finance2, { actor: adminActor(23, "finance"), aud: "admin_api" });
+  tokens.add(TOKENS.ops, { actor: adminActor(24, "ops"), aud: "admin_api" });
+
   @Global()
   @Module({})
   class TestAuthModule {
@@ -175,6 +186,7 @@ export async function createGiftCardHarness(): Promise<GiftCardHarness> {
         age: rt.age,
         payments: rt.payments,
         delivery: rt.delivery,
+        approvals: rt.approvals,
       }),
     ],
   }).compile();

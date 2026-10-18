@@ -1,6 +1,6 @@
 import { sql, type Kysely, type RawBuilder } from "kysely";
 import { z } from "zod";
-import { RECON_SOURCES, SEVERITIES, FINDING_KINDS, SETTLEMENT_LINE_KINDS, type SettlementLine } from "../domain/bridge";
+import { ESCALATE_AFTER_MS, RECON_SOURCES, SEVERITIES, FINDING_KINDS, SETTLEMENT_LINE_KINDS, type SettlementLine } from "../domain/bridge";
 import type {
   CommitResult,
   CommitRun,
@@ -18,6 +18,7 @@ import type {
   TicketQuery,
   TicketRecord,
 } from "../domain/ports";
+import { MS_1D } from "../domain/ports";
 
 export type ReconDb = Kysely<Record<string, never>>;
 
@@ -368,7 +369,7 @@ export class KyselyReconStore implements ReconStore {
     });
   }
 
-  async summary(): Promise<ReconSummary> {
+  async summary(nowMs: number): Promise<ReconSummary> {
     return this.tx(async (trx) => {
       const live = await sql<{ status: string; severity: string; source: string; n: string; oldest: string | null }>`
         select status, severity, source, count(*)::text as n, ${sql.raw(ms("min(item_at)"))} as oldest
@@ -387,10 +388,26 @@ export class KyselyReconStore implements ReconStore {
         bySource[s] = (bySource[s] ?? 0) + n;
         if (r.oldest !== null) oldest = oldest === null ? Number(r.oldest) : Math.min(oldest, Number(r.oldest));
       }
+      const cut1 = new Date(nowMs - MS_1D).toISOString();
+      const cut3 = new Date(nowMs - ESCALATE_AFTER_MS).toISOString();
+      const ag = await sql<{ source: string; lt1d: string; d1to3: string; gt3d: string }>`
+        select source,
+               count(*) filter (where item_at > ${cut1}::timestamptz)::text as lt1d,
+               count(*) filter (where item_at <= ${cut1}::timestamptz and item_at >= ${cut3}::timestamptz)::text as d1to3,
+               count(*) filter (where item_at < ${cut3}::timestamptz)::text as gt3d
+          from recon_tickets where status <> 'resolved' group by source`.execute(trx);
+      const aging: Partial<Record<TicketRecord["source"], { lt1d: number; d1to3: number; gt3d: number }>> = {};
+      for (const r of ag.rows) aging[z.enum(RECON_SOURCES).parse(r.source)] = { lt1d: Number(r.lt1d), d1to3: Number(r.d1to3), gt3d: Number(r.gt3d) };
+      const fr = await sql<{ kind: string; n: string; last: string }>`
+        select kind, count(*)::text as n, ${sql.raw(ms("max(received_at)"))} as last from settlement_files group by kind`.execute(trx);
+      const fileReceipts: Partial<Record<FileKind, { filesReceived: number; lastFileAtMs: number }>> = {};
+      for (const r of fr.rows) fileReceipts[z.enum(["psp", "cod", "bnpl"]).parse(r.kind)] = { filesReceived: Number(r.n), lastFileAtMs: Number(r.last) };
       const rej = await sql<{ n: string }>`select count(*)::text as n from settlement_files where status = 'rejected'`.execute(trx);
       const lr = await sql<unknown>`select ${RUN_COLS} from recon_runs order by started_at desc, id desc limit 1`.execute(trx);
       const lastRaw = lr.rows[0];
       return {
+        aging,
+        fileReceipts,
         open,
         escalated,
         bySeverity,

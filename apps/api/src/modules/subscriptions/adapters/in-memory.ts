@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
-import { DEFAULT_PLAN_DEFINITIONS, type JournalEntry, type PlusPlan, type PlusSubscription } from "../domain/bridge";
+import { DEFAULT_PLAN_DEFINITIONS, type JournalEntry, type PlusPlan, type PlusSubscription, type SubscriptionState } from "../domain/bridge";
 import type {
+  MetricsCounts,
   AgePolicyPort,
   CardVaultPort,
   ChargeOutcome,
@@ -94,6 +95,22 @@ export class InMemorySubscriptionStore implements SubscriptionStore {
   }
   async listLiveByPlanCode(code: string): Promise<readonly PlusSubscription[]> {
     return [...this.subs.values()].filter((s) => s.status !== "EXPIRED" && s.planCode === code);
+  }
+
+  async metricsCounts(sinceMs: number): Promise<MetricsCounts> {
+    const byStatus: Record<SubscriptionState, number> = { TRIALING: 0, ACTIVE: 0, PAST_DUE: 0, PAUSED: 0, CANCELLED_AT_PERIOD_END: 0, EXPIRED: 0 };
+    let createdSince = 0;
+    let liveAtStart = 0;
+    let endedSince = 0;
+    for (const s of this.subs.values()) {
+      byStatus[s.status] += 1;
+      if (s.createdAtMs >= sinceMs) createdSince += 1;
+      else if (s.status !== "EXPIRED" || s.periodEndMs >= sinceMs) {
+        liveAtStart += 1;
+        if (s.status === "EXPIRED") endedSince += 1;
+      }
+    }
+    return { byStatus, createdSince, liveAtStart, endedSince };
   }
 
   async claimedTrialKeys(keyHashes: readonly string[]): Promise<ReadonlySet<string>> {

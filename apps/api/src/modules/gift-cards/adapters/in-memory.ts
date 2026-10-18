@@ -1,3 +1,4 @@
+import type { admin } from "@outlet/domain";
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import { REDEMPTION_THROTTLE, evaluateThrottle, next } from "../domain/bridge";
 import { StoreCreditRejectedError } from "../domain/ports";
@@ -16,6 +17,7 @@ import type {
   FieldCipherPort,
   GiftCardFlagsPort,
   GiftCardStore,
+  KeysetPos,
   OutboxDraft,
   PaymentIntentPort,
   PotRecord,
@@ -23,6 +25,7 @@ import type {
   RedemptionRecord,
   SecretPort,
   StoreCreditPort,
+  VoidApprovalPort,
   PaymentCancelResult,
 } from "../domain/ports";
 
@@ -187,6 +190,21 @@ export class InMemoryGiftCardStore implements GiftCardStore {
     this.attempts.length = 0;
     this.attempts.push(...keep);
     return before - keep.length;
+  }
+
+  async listThrottledAttempts(after: KeysetPos | null, limit: number) {
+    return this.attempts
+      .filter((a) => a.outcome === "throttled")
+      .filter((a) => after === null || a.atMs < after.ms || (a.atMs === after.ms && a.id < after.id))
+      .sort((x, y) => y.atMs - x.atMs || (x.id < y.id ? 1 : -1))
+      .slice(0, limit);
+  }
+
+  async listPotsPage(after: KeysetPos | null, limit: number) {
+    return [...this.pots.values()]
+      .filter((p) => after === null || p.createdAtMs < after.ms || (p.createdAtMs === after.ms && p.id < after.id))
+      .sort((x, y) => y.createdAtMs - x.createdAtMs || (x.id < y.id ? 1 : -1))
+      .slice(0, limit);
   }
 
   async insertPot(pot: PotRecord, card: CardRecord, events: readonly OutboxDraft[]) {
@@ -374,6 +392,29 @@ export class FakeStoreCredit implements StoreCreditPort {
   }
   total(cardId: string): bigint {
     return this.postings.filter((p) => p.cardId === cardId).reduce((s, p) => s + p.amount, 0n);
+  }
+}
+
+export class FakeVoidApprovals implements VoidApprovalPort {
+  readonly records = new Map<string, admin.ApprovalRecord>();
+  readonly consumed = new Set<string>();
+  async find(id: string) {
+    return this.records.get(id) ?? null;
+  }
+  async consume(id: string) {
+    if (this.consumed.has(id)) return false;
+    this.consumed.add(id);
+    return true;
+  }
+}
+
+/** Fail closed: with no admin approval port wired, voids at or above the threshold are refused. */
+export class DenyVoidApprovals implements VoidApprovalPort {
+  async find() {
+    return null;
+  }
+  async consume() {
+    return false;
   }
 }
 

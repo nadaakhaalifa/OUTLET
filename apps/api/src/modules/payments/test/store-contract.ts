@@ -211,9 +211,13 @@ export function describePaymentStoreContract(name: string, fresh: () => Promise<
       expect(await w.store.getSavedCard(c.id, SHOPPER_B)).toBeNull();
       expect(await w.store.deleteSavedCard(c.id, SHOPPER_B, T0)).toBe(false);
       expect(await w.store.getSavedCard(c.id, SHOPPER_A)).not.toBeNull();
+      // a refused delete (not the owner) emits nothing
+      expect((await w.outboxTypes()).filter((t) => t === "payment_method.removed")).toHaveLength(0);
       expect(await w.store.deleteSavedCard(c.id, SHOPPER_A, T0)).toBe(true);
       expect(await w.store.listSavedCards(SHOPPER_A)).toHaveLength(0);
       expect(await w.store.deleteSavedCard(c.id, SHOPPER_A, T0)).toBe(false);
+      // exactly one removal event, in the same unit as the soft delete; a repeat delete adds none
+      expect((await w.outboxTypes()).filter((t) => t === "payment_method.removed")).toHaveLength(1);
     });
 
     it("keeps unrelated order groups independent", async () => {

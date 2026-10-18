@@ -11,6 +11,7 @@ describeOrderRepositoryContract("in-memory", async () => {
     clock,
     ensureUser: async () => undefined,
     outboxTypes: async () => repo.outbox.map((e) => e.type),
+    outboxEvents: async () => repo.outbox.map((e) => ({ type: e.type, payload: { ...e.payload } })),
     historyCount: async (id) => repo.history.filter((h) => h.sellerOrderId === id).length,
   };
 });

@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { createIdGenerator, nodeCsprng } from "../../../platform";
+import { OrderCommands } from "../application/commands";
 import type { OrderRepository } from "../domain/ports";
 import {
   GROUP_1,
@@ -27,6 +30,8 @@ export interface OrderRepoContext {
   ensureUser(userId: string): Promise<void>;
   /** Types of every outbox event written so far, in order. */
   outboxTypes(): Promise<string[]>;
+  /** Every outbox event written so far, in order, with its payload. */
+  outboxEvents(): Promise<{ type: string; payload: Record<string, unknown> }[]>;
   /** Number of status history rows for an order. */
   historyCount(sellerOrderId: string): Promise<number>;
 }
@@ -291,6 +296,191 @@ export function describeOrderRepositoryContract(name: string, make: () => Promis
       expect(await c.historyCount(ORDER_A)).toBe(1);
     });
 
+    // ---- delivery, closure and the order_line.closed producer -----------------------------------
+
+    async function shipOrderA(): Promise<void> {
+      await placeTwoStoreGroup(k);
+      const s = sellerScope(STAFF_A, STORE_A);
+      await k.commands.accept({ sellerOrderId: ORDER_A, scope: s, actorId: STAFF_A, idempotencyKey: "a" });
+      await k.commands.pack({ sellerOrderId: ORDER_A, scope: s, actorId: STAFF_A, idempotencyKey: "p" });
+      await k.commands.markShipped({ sellerOrderId: ORDER_A, commandKey: "s" });
+    }
+    const DAY = 86_400_000;
+
+    it("markDelivered passes through OUT_FOR_DELIVERY, stamps delivered_at and replays safely", async () => {
+      await shipOrderA();
+      const t = c.clock.nowMs() + 2 * DAY;
+      const r = await k.commands.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: t, commandKey: "evt-1" });
+      expect(r).toMatchObject({ kind: "ok", replayed: false });
+      if (r.kind !== "ok") return;
+      expect(r.order.status).toBe("DELIVERED");
+      expect(r.order.deliveredAtMs).toBe(t);
+      const again = await k.commands.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: t, commandKey: "evt-1" });
+      expect(again).toMatchObject({ kind: "ok", replayed: true });
+      const types = await c.outboxTypes();
+      expect(types.filter((x) => x === "seller_order.delivered")).toHaveLength(1);
+      expect(types.filter((x) => x === "seller_order.out_for_delivery")).toHaveLength(1);
+      // a second, different delivery event for an order already DELIVERED is not a transition
+      expect((await k.commands.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: t, commandKey: "evt-2" })).kind).toBe("invalid_transition");
+    });
+
+    it("closeDelivered waits for the window, then closes once and emits one order_line.closed per line", async () => {
+      await shipOrderA();
+      await k.commands.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: c.clock.nowMs(), commandKey: "evt" });
+      expect(await k.commands.closeDelivered(10)).toEqual({ closed: 0, skipped: 0, failed: 0 });
+      expect((await c.repo.getSellerOrder(ORDER_A, { kind: "system" }))?.status).toBe("DELIVERED");
+
+      c.clock.advance(33 * DAY);
+      expect(await k.commands.closeDelivered(10)).toEqual({ closed: 1, skipped: 0, failed: 0 });
+      const o = await c.repo.getSellerOrder(ORDER_A, { kind: "system" });
+      expect(o).toMatchObject({ status: "CLOSED", closedAtMs: c.clock.nowMs() });
+
+      const events = await c.outboxEvents();
+      const closed = events.filter((e) => e.type === "order_line.closed");
+      expect(closed).toHaveLength(o?.lines.length ?? -1);
+      expect(closed.length).toBe(2);
+      for (const e of closed) {
+        expect(e.payload).toMatchObject({
+          seller_order_id: ORDER_A,
+          order_group_id: GROUP_1,
+          store_id: STORE_A,
+          user_id: SHOPPER_A,
+          currency: "EGP",
+          refunded_merchandise_gross: "0",
+          closed_at_ms: c.clock.nowMs(),
+        });
+        expect(e.payload["merchandise_gross"]).toMatch(/^\d+$/);
+      }
+      expect(new Set(closed.map((e) => e.payload["order_line_id"])).size).toBe(2);
+      expect(events.filter((e) => e.type === "seller_order.closed")).toHaveLength(1);
+      // idempotent: a second sweep and a replayed command write nothing
+      const before = (await c.outboxTypes()).length;
+      expect(await k.commands.closeDelivered(10)).toEqual({ closed: 0, skipped: 0, failed: 0 });
+      expect((await c.outboxTypes()).length).toBe(before);
+    });
+
+    it("reports cumulative refunded goods per line at closure, capped at the line value", async () => {
+      await shipOrderA();
+      const order = await c.repo.getSellerOrder(ORDER_A, { kind: "system" });
+      const first = order?.lines[0];
+      if (first === undefined) throw new Error("no line");
+      const gross = first.unitPrice.amount * BigInt(first.qty);
+      const withRefunds = new OrderCommands({
+        repo: c.repo,
+        clock: c.clock,
+        ids: createIdGenerator(c.clock, nodeCsprng),
+        lineRefunds: { refundedGoodsByLine: async () => new Map([[first.id, gross + 5n]]) },
+      });
+      await withRefunds.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: c.clock.nowMs(), commandKey: "evt" });
+      c.clock.advance(34 * DAY);
+      await withRefunds.closeDelivered(10);
+      const closed = (await c.outboxEvents()).filter((e) => e.type === "order_line.closed");
+      const mine = closed.find((e) => e.payload["order_line_id"] === first.id);
+      expect(mine?.payload["refunded_merchandise_gross"]).toBe(gross.toString());
+      expect(mine?.payload["merchandise_gross"]).toBe(gross.toString());
+      const other = closed.find((e) => e.payload["order_line_id"] !== first.id);
+      expect(other?.payload["refunded_merchandise_gross"]).toBe("0");
+    });
+
+    it("never closes a cancelled or not yet delivered order", async () => {
+      await shipOrderA();
+      c.clock.advance(60 * DAY);
+      expect(await k.commands.closeDelivered(10)).toEqual({ closed: 0, skipped: 0, failed: 0 });
+      expect((await c.outboxTypes()).filter((t) => t === "order_line.closed")).toHaveLength(0);
+    });
+
+    describe("order_line.closed return gate (A-9)", () => {
+      const DAYMS = 86_400_000;
+      const mk = (o: { days?: number | null; open?: ReadonlyMap<string, number> }) =>
+        new OrderCommands({
+          repo: c.repo,
+          clock: c.clock,
+          ids: createIdGenerator(c.clock, nodeCsprng),
+          lineReturns: { openReturnsByLine: async () => o.open ?? new Map() },
+          sellerWindows: { returnWindowDays: async () => o.days ?? null },
+        });
+      const closedEvents = async () => (await c.outboxEvents()).filter((e) => e.type === "order_line.closed");
+
+      it("emits the window end from courier delivered_at (30 days + 3 margin) and zero open returns, matching the creators schema", async () => {
+        await shipOrderA();
+        const deliveredAt = c.clock.nowMs();
+        const cmds = mk({});
+        await cmds.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: deliveredAt, commandKey: "evt" });
+        c.clock.advance(33 * DAYMS);
+        expect(await cmds.closeDelivered(10)).toEqual({ closed: 1, skipped: 0, failed: 0 });
+        const ev = await closedEvents();
+        expect(ev).toHaveLength(2);
+        for (const e of ev) {
+          expect(e.payload["return_window_ends_at_ms"]).toBe(deliveredAt + 33 * DAYMS);
+          expect(e.payload["open_returns"]).toBe(0);
+          expect(CreatorsLineClosed.parse(e.payload)).toMatchObject({
+            return_window_ends_at_ms: deliveredAt + 33 * DAYMS,
+            open_returns: 0,
+          });
+        }
+      });
+
+      it("a 45-day seller window closes only after 48 days and states that end", async () => {
+        await shipOrderA();
+        const deliveredAt = c.clock.nowMs();
+        const cmds = mk({ days: 45 });
+        await cmds.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: deliveredAt, commandKey: "evt" });
+        c.clock.advance(40 * DAYMS);
+        expect(await cmds.closeDelivered(10)).toEqual({ closed: 0, skipped: 1, failed: 0 });
+        expect(await closedEvents()).toHaveLength(0);
+        c.clock.advance(8 * DAYMS);
+        expect(await cmds.closeDelivered(10)).toEqual({ closed: 1, skipped: 0, failed: 0 });
+        for (const e of await closedEvents()) expect(e.payload["return_window_ends_at_ms"]).toBe(deliveredAt + 48 * DAYMS);
+      });
+
+      it("a seller window below the statutory 30 days is clamped to 30", async () => {
+        await shipOrderA();
+        const deliveredAt = c.clock.nowMs();
+        const cmds = mk({ days: 7 });
+        await cmds.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: deliveredAt, commandKey: "evt" });
+        c.clock.advance(33 * DAYMS);
+        await cmds.closeDelivered(10);
+        for (const e of await closedEvents()) expect(e.payload["return_window_ends_at_ms"]).toBe(deliveredAt + 33 * DAYMS);
+      });
+
+      it("a line with a non-terminal return keeps the order unclosed and emits nothing; closes once it is terminal", async () => {
+        await shipOrderA();
+        const order = await c.repo.getSellerOrder(ORDER_A, { kind: "system" });
+        const first = order?.lines[0]?.id;
+        if (first === undefined) throw new Error("no line");
+        const base = mk({});
+        await base.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: c.clock.nowMs(), commandKey: "evt" });
+        c.clock.advance(60 * DAYMS);
+        const before = (await c.outboxTypes()).length;
+        const blocked = mk({ open: new Map([[first, 1]]) });
+        expect(await blocked.closeDelivered(10)).toEqual({ closed: 0, skipped: 1, failed: 0 });
+        expect((await c.repo.getSellerOrder(ORDER_A, { kind: "system" }))?.status).toBe("DELIVERED");
+        expect((await c.outboxTypes()).length).toBe(before);
+        expect(await mk({}).closeDelivered(10)).toEqual({ closed: 1, skipped: 0, failed: 0 });
+        const mine = (await closedEvents()).find((e) => e.payload["order_line_id"] === first);
+        expect(mine?.payload["open_returns"]).toBe(0);
+      });
+
+      it("replay writes nothing more", async () => {
+        await shipOrderA();
+        const cmds = mk({});
+        await cmds.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: c.clock.nowMs(), commandKey: "evt" });
+        c.clock.advance(34 * DAYMS);
+        await cmds.closeDelivered(10);
+        const n = (await c.outboxTypes()).length;
+        expect(await cmds.closeDelivered(10)).toEqual({ closed: 0, skipped: 0, failed: 0 });
+        expect((await c.outboxTypes()).length).toBe(n);
+      });
+
+      it("without a returns port the facts are unknown (null) so creators defer", async () => {
+        await shipOrderA();
+        await k.commands.markDelivered({ sellerOrderId: ORDER_A, deliveredAtMs: c.clock.nowMs(), commandKey: "evt" });
+        c.clock.advance(34 * DAYMS);
+        await k.commands.closeDelivered(10);
+        for (const e of await closedEvents()) expect(e.payload["open_returns"]).toBeNull();
+      });
+    });
+
     it("unknown and malformed ids are not found, never an error", async () => {
       expect(await c.repo.getSellerOrder("nope", { kind: "system" })).toBeNull();
       expect(await c.repo.locate("nope")).toBeNull();
@@ -299,5 +489,20 @@ export function describeOrderRepositoryContract(name: string, make: () => Promis
     });
   });
 }
+
+/** Mirror of the creators consumer's `order_line.closed` schema (cross-module import is forbidden). */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CreatorsLineClosed = z.object({
+  // shape-only: the fixtures use non-RFC ids; real ids are UUIDv7 (z.uuid() in the consumer)
+  order_group_id: z.string().regex(UUID_SHAPE),
+  order_line_id: z.string().regex(UUID_SHAPE),
+  category_id: z.string().min(1).max(64).nullable().default(null),
+  merchandise_gross: z.string().regex(/^[0-9]{1,18}$/),
+  voucher_allocated: z.string().regex(/^[0-9]{1,18}$/),
+  refunded_merchandise_gross: z.string().regex(/^[0-9]{1,18}$/),
+  closed_at_ms: z.number().int().nonnegative(),
+  return_window_ends_at_ms: z.number().int().nonnegative().nullable().default(null),
+  open_returns: z.number().int().nonnegative().nullable().default(null),
+});
 
 const U9 = "00000000-0000-4000-8000-0000000009ff";

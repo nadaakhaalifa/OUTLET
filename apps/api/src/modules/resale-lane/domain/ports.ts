@@ -46,6 +46,8 @@ export interface ResaleStore {
   /** LISTED only, newest first. */
   listLive(limit: number, after: ListingCursor | null): Promise<readonly ListingRecord[]>;
   listForStore(storeId: string, limit: number): Promise<readonly ListingRecord[]>;
+  /** Admin ops view: every listing (optionally one status), newest first, keyset on (listedAt, id). */
+  listAll(limit: number, after: ListingCursor | null, status: ListingStatus | null): Promise<readonly ListingRecord[]>;
   getProceeds(listingId: string): Promise<ProceedsRecord | null>;
   /** One transaction: LISTED -> SOLD by compare-and-set, proceeds row, outbox. */
   markSold(i: { readonly listingId: string; readonly nowMs: number; readonly proceeds: ProceedsRecord; readonly events: readonly ResaleEvent[] }): Promise<"ok" | "not_listed" | "not_found">;

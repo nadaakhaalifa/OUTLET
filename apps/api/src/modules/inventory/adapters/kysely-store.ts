@@ -18,6 +18,7 @@ import {
 } from "../domain/core";
 import type { InventoryStore, PoolIds, ReserveCommand, SkuDirectory, SkuLocation } from "../domain/ports";
 import { FAWRY_POOL_ID, STANDARD_POOL_ID } from "./in-memory";
+import { appendAnalyticsDrafts, type AnalyticsProducers } from "../../analytics-ingest";
 
 /** Raw SQL only: the stock logic lives in migration 0016's functions, not in query builders. */
 export type InventoryDb = Kysely<Record<string, never>>;
@@ -89,7 +90,36 @@ const iso = (ms: number): string => new Date(ms).toISOString();
 
 /** Postgres adapter. Every call is one transaction that runs under the `system` DB role (see 0016 header). */
 export class KyselyInventoryStore implements InventoryStore {
-  constructor(private readonly db: InventoryDb) {}
+  /** `analytics`: server producers behind kill.analytics.producers. Null or blocked: no analytics event is written. */
+  constructor(
+    private readonly db: InventoryDb,
+    private readonly analytics: AnalyticsProducers | null = null,
+  ) {}
+
+  /**
+   * `inventory.level_changed`, one per SKU per transaction (coalesced), written on the CALLER's
+   * transaction after the stock change. Totals are summed over locations and pools.
+   */
+  private async emitLevels(trx: InventoryDb, skuIds: readonly string[], nowMs: number): Promise<void> {
+    if (this.analytics === null) return;
+    for (const skuId of [...new Set(skuIds)].sort()) {
+      const r = await sql<{ store_id: string | null; on_hand: string; committed: string; version: string }>`
+        select min(store_id::text) as store_id, coalesce(sum(on_hand), 0)::text as on_hand,
+               coalesce(sum(committed), 0)::text as committed, coalesce(max(sync_version), 0)::text as version
+          from inventory_levels where sku_id = ${skuId}::uuid`.execute(trx);
+      const row = r.rows[0];
+      if (row === undefined || row.store_id === null) continue;
+      const d = this.analytics.inventoryLevelChanged({
+        skuId,
+        storeId: row.store_id,
+        onHandTotal: Number(row.on_hand),
+        committedTotal: Number(row.committed),
+        levelVersion: Number(row.version),
+        changedAtMs: nowMs,
+      });
+      if (d !== null) await appendAnalyticsDrafts(trx, [d]);
+    }
+  }
 
   private async tx<T>(run: (trx: InventoryDb) => Promise<T>, statementTimeoutMs?: number): Promise<T> {
     return this.db.transaction().execute(async (trx) => {
@@ -178,9 +208,17 @@ export class KyselyInventoryStore implements InventoryStore {
   }
 
   async claim(orderGroupId: string, nowMs: number): Promise<ClaimOutcome> {
+    const analyticsOn = this.analytics !== null && (await this.analytics.enabled());
     const raw = await this.tx(async (trx) => {
       const r = await sql<{ result: unknown }>`
         select inventory_claim(${orderGroupId}::uuid, ${iso(nowMs)}::timestamptz) as result`.execute(trx);
+      const status = (r.rows[0]?.result as { status?: unknown } | null | undefined)?.status;
+      if (analyticsOn && (status === "claimed" || status === "claimed_late")) {
+        const skus = await sql<{ sku_id: string }>`
+          select distinct rl.sku_id::text as sku_id from reservation_lines rl
+            join reservations r on r.id = rl.reservation_id where r.order_group_id = ${orderGroupId}::uuid`.execute(trx);
+        await this.emitLevels(trx, skus.rows.map((x) => x.sku_id), nowMs);
+      }
       return r.rows[0]?.result;
     });
     const res = ClaimResult.parse(raw);
@@ -217,6 +255,7 @@ export class KyselyInventoryStore implements InventoryStore {
    */
   async unclaim(orderGroupId: string, reason: ReleaseReason, nowMs: number): Promise<UnclaimOutcome> {
     if (reason === "expired") throw new Error("expiry is released by sweepExpired only");
+    const analyticsOn = this.analytics !== null && (await this.analytics.enabled());
     return this.tx(async (trx) => {
       const found = await sql<{ id: string; status: string }>`
         select id, status from reservations where order_group_id = ${orderGroupId}::uuid for no key update`.execute(trx);
@@ -251,6 +290,7 @@ export class KyselyInventoryStore implements InventoryStore {
       for (const l of lines.rows) {
         await sql`select inventory_rebalance_core(${l.sku_id}::uuid, ${l.location_id}::uuid, ${l.pool_id}::uuid)`.execute(trx);
       }
+      if (analyticsOn) await this.emitLevels(trx, lines.rows.map((l) => l.sku_id), nowMs);
       return { status: "unclaimed" as const };
     });
   }
@@ -274,6 +314,7 @@ export class KyselyInventoryStore implements InventoryStore {
   }
 
   async applySync(cmd: SyncCommand): Promise<SyncOutcome> {
+    const analyticsOn = this.analytics !== null && (await this.analytics.enabled());
     const raw = await this.tx(async (trx) => {
       const r = await sql<{ result: unknown }>`
         select inventory_apply_stock_sync(
@@ -281,6 +322,8 @@ export class KyselyInventoryStore implements InventoryStore {
           ${cmd.mode}, ${cmd.quantity}::int, ${cmd.reason}, ${cmd.idempotencyKey},
           ${cmd.expectedVersion ?? null}::bigint, ${cmd.sourceVersion ?? null}::bigint,
           ${cmd.actorType}, ${cmd.actorId}, ${iso(cmd.nowMs)}::timestamptz) as result`.execute(trx);
+      const out = r.rows[0]?.result as { status?: unknown; replayed?: unknown } | null | undefined;
+      if (analyticsOn && out?.status === "applied" && out.replayed !== true) await this.emitLevels(trx, [cmd.skuId], cmd.nowMs);
       return r.rows[0]?.result;
     });
     const res = SyncResult.parse(raw);

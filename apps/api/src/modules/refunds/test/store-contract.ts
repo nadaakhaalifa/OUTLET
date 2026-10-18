@@ -15,6 +15,8 @@ export interface RefundStoreWorld {
   readonly store: RefundStore;
   readonly ensureUser: (id: string) => Promise<void>;
   readonly eventTypes: () => Promise<string[]>;
+  /** Outbox payloads of one event type, in order. */
+  readonly payloadsOf: (type: string) => Promise<Record<string, unknown>[]>;
 }
 
 export function makeRefund(n: number, over: Partial<RefundRecord> = {}, legs?: RefundLegRecord[]): RefundRecord {
@@ -171,6 +173,52 @@ export function describeRefundStoreContract(name: string, make: () => Promise<Re
       expect(done?.completedAtMs).toBe(T0 + 2000);
       expect(done?.legs[0]?.providerRef).toBe("ref-1");
       expect((await w.eventTypes()).filter((t) => t === "refund.completed")).toHaveLength(1);
+    });
+
+    it("completion emits one order_line.refunded per line with the cumulative goods refunded, once", async () => {
+      const w = await make();
+      await w.ensureUser(SHOPPER_A);
+      const complete = async (n: number, lines: RefundRecord["lines"], amount: bigint): Promise<RefundRecord> => {
+        const base = makeRefund(n);
+        const leg = { ...(base.legs[0] as RefundLegRecord), amount };
+        const r: RefundRecord = { ...base, amount, itemTotal: amount, lines, legs: [leg] };
+        await intakeNow(w.store, { consumer: "c", messageId: U(n), refund: r });
+        await w.store.markLedgerPosted(r.id, T0);
+        await w.store.transitionLeg(transition(leg, "SUBMITTED", "LEDGER_POSTED"));
+        expect(await w.store.transitionLeg(transition(leg, "COMPLETED", "SUBMITTED", T0 + 5))).toBe("applied");
+        return r;
+      };
+      const line = (id: string, item: bigint) => ({
+        orderLineId: id,
+        qty: 1,
+        itemAmount: item,
+        lineGross: 10_000n,
+        voucherShare: 0n,
+        deliveryFeeShare: 0n,
+        netAmount: item,
+      });
+      const first = await complete(1, [line("line-1", 3_000n), line("line-2", 1_000n)], 4_000n);
+      let ev = await w.payloadsOf("order_line.refunded");
+      expect(ev).toHaveLength(2);
+      expect(ev[0]).toMatchObject({
+        refund_id: first.id,
+        seller_order_id: SELLER_ORDER_1,
+        user_id: SHOPPER_A,
+        order_line_id: "line-1",
+        line_merchandise_gross: "10000",
+        refunded_merchandise_gross: "3000",
+        delta: "3000",
+        currency: "EGP",
+      });
+      // a second refund of the same line: the cumulative moves up, never the delta alone
+      await complete(2, [line("line-1", 2_000n)], 2_000n);
+      ev = await w.payloadsOf("order_line.refunded");
+      expect(ev).toHaveLength(3);
+      expect(ev[2]).toMatchObject({ order_line_id: "line-1", refunded_merchandise_gross: "5000", delta: "2000" });
+      // re-applying a leg transition that already happened (stale) writes no second event
+      const types = await w.eventTypes();
+      expect(types.filter((t) => t === "refund.completed")).toHaveLength(2);
+      expect(types.filter((t) => t === "order_line.refunded")).toHaveLength(3);
     });
 
     it("two legs: the refund completes only when both do", async () => {

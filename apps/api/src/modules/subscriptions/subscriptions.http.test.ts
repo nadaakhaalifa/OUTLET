@@ -255,3 +255,27 @@ describe("admin plans", () => {
 });
 
 void USERS;
+
+describe("GET /v1/admin/subscriptions/metrics", () => {
+  const path = "/v1/admin/subscriptions/metrics";
+  it("401 without a token or with a buyer-audience admin token or a shopper token", async () => {
+    expect((await get(path)).status).toBe(401);
+    expect((await get(path, TOKENS.a)).status).toBe(401);
+    expect((await get(path, TOKENS.adminOnBuyerAud)).status).toBe(401);
+    expect((await get(path, TOKENS.seller)).status).toBe(401);
+  });
+  it("403 for a support admin; 400 for a bad window", async () => {
+    expect((await get(path, TOKENS.support)).status).toBe(403);
+    expect((await get(`${path}?window_days=0`, TOKENS.finance)).status).toBe(400);
+    expect((await get(`${path}?window_days=x`, TOKENS.finance)).status).toBe(400);
+  });
+  it("returns stored counts, with churn null when nothing was live at window start", async () => {
+    const r = await get(path, TOKENS.finance);
+    expect(r.status).toBe(200);
+    for (const k of ["active", "trialing", "past_due", "paused", "cancelled_at_period_end", "expired", "new_in_window", "live_at_window_start", "ended_in_window"]) {
+      expect(typeof r.body[k]).toBe("number");
+    }
+    expect(r.body.window_days).toBe(30);
+    expect(r.body.live_at_window_start === 0 ? r.body.churn_bps : 0).toBe(r.body.live_at_window_start === 0 ? null : 0);
+  });
+});

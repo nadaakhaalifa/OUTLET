@@ -44,6 +44,13 @@ export class InMemoryResaleStore implements ResaleStore {
       .filter((l) => after === null || l.listedAtMs < after.listedAtMs || (l.listedAtMs === after.listedAtMs && l.id < after.id))
       .slice(0, limit);
   }
+  async listAll(limit: number, after: ListingCursor | null, status: ListingRecord["status"] | null) {
+    return [...this.listings.values()]
+      .filter((l) => status === null || l.status === status)
+      .sort(newer)
+      .filter((l) => after === null || l.listedAtMs < after.listedAtMs || (l.listedAtMs === after.listedAtMs && l.id < after.id))
+      .slice(0, limit);
+  }
   async listForStore(storeId: string, limit: number) {
     return [...this.listings.values()].filter((l) => l.storeId === storeId).sort(newer).slice(0, limit);
   }

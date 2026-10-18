@@ -7,6 +7,7 @@ import {
   buildSellerGoodsReceipt,
   buildTaxDocument,
   cairoDayWindow,
+  type EtaReportedItem,
   computeOrderTax,
   reconcileDay,
   submissionMachine,
@@ -338,17 +339,61 @@ export class PollSubmissionStatuses {
   }
 }
 
+/** A day report plus whether the tax authority was actually queried (B-3, F-2). */
+export interface CheckedReconciliation {
+  readonly report: ReconciliationReport;
+  /** False when ETA was Unconfigured or failed: only internal checks ran, so `report.reconciled` must not be shown as "reconciled". */
+  readonly authorityChecked: boolean;
+}
+
+/** Longest range one call may cover (Cairo days). */
+export const MAX_RECONCILIATION_RANGE_DAYS = 31;
+
+/** Small TTL cache for ETA day reports of PAST Cairo days (immutable once the day is over). In-process. */
+export class DayReportCache {
+  private readonly m = new Map<string, { at: number; v: readonly EtaReportedItem[] }>();
+  constructor(
+    private readonly ttlMs = 10 * 60_000,
+    private readonly max = 64,
+  ) {}
+  get(key: string, nowMs: number): readonly EtaReportedItem[] | null {
+    const e = this.m.get(key);
+    if (e === undefined || nowMs - e.at > this.ttlMs) return null;
+    return e.v;
+  }
+  set(key: string, nowMs: number, v: readonly EtaReportedItem[]): void {
+    if (this.m.size >= this.max) this.m.delete(this.m.keys().next().value as string);
+    this.m.set(key, { at: nowMs, v });
+  }
+}
+
 export class RunDailyReconciliation {
+  private readonly cache = new DayReportCache();
   constructor(private readonly d: TaxEtaDeps) {}
 
   /** `date` is a Cairo calendar day (YYYY-MM-DD). Throws a DomainError on a malformed date. */
   async execute(date: string): Promise<ReconciliationReport> {
+    return (await this.check(date)).report;
+  }
+
+  async check(date: string): Promise<CheckedReconciliation> {
     const { startMs, endMs } = cairoDayWindow(date);
     const rows = await this.d.documents.listIssuedBetween(startMs, endMs);
-    const etaReport = await this.d.eta.dayReport(startMs, endMs).catch(() => null);
-    return reconcileDay({
+    const nowMs = this.d.clock.nowMs();
+    // A day that has fully passed cannot change at the authority, so its report may be served from the TTL cache.
+    const past = endMs <= nowMs;
+    const cached = past ? this.cache.get(date, nowMs) : null;
+    const etaReport =
+      cached ??
+      (await this.d.eta.dayReport(startMs, endMs).catch((e: unknown) => {
+        // Class name only: never the message, which may carry provider detail.
+        process.stdout.write(`${JSON.stringify({ level: "warn", event: "tax.eta_day_report_failed", error: e instanceof Error ? e.constructor.name : "unknown" })}\n`);
+        return null;
+      }));
+    if (past && cached === null && etaReport !== null) this.cache.set(date, nowMs, etaReport);
+    const report = reconcileDay({
       date,
-      nowMs: this.d.clock.nowMs(),
+      nowMs,
       etaReport,
       submissions: rows.map((r) => ({
         internalId: r.submission.internalId,
@@ -359,6 +404,22 @@ export class RunDailyReconciliation {
         lastSubmittedAtMs: r.submission.lastSubmittedAtMs,
       })),
     });
+    return { report, authorityChecked: etaReport !== null };
+  }
+
+  /** Inclusive Cairo-day range, ascending, at most MAX_RECONCILIATION_RANGE_DAYS. Throws a DomainError when invalid. */
+  async checkRange(from: string, to: string): Promise<readonly CheckedReconciliation[]> {
+    cairoDayWindow(from);
+    cairoDayWindow(to);
+    const days: string[] = [];
+    for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86_400_000) {
+      days.push(new Date(t).toISOString().slice(0, 10));
+      if (days.length > MAX_RECONCILIATION_RANGE_DAYS) throw new DomainError("range too long");
+    }
+    if (days.length === 0) throw new DomainError("from is after to");
+    const out: CheckedReconciliation[] = [];
+    for (const day of days) out.push(await this.check(day));
+    return out;
   }
 }
 

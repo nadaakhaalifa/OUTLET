@@ -30,6 +30,9 @@ export const PLUS_MIGRATION_FILES = [
   "0010_ledger_owner_bank.sql",
   "0011_ledger_account_types.sql",
   "0036_subscriptions.sql",
+  "0059_plans_kind_seat_limit.sql",
+  "0060_family_plans.sql",
+  "0061_student_verifications.sql",
 ] as const;
 
 export const migrationSql = (file: string): string => readFileSync(resolve(MIGRATIONS, file), "utf8");

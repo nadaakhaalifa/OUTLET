@@ -41,10 +41,46 @@ export class PlusEntitlements {
   constructor(
     private readonly store: SubscriptionStore,
     private readonly clock: Clock,
+    private readonly seats?: SeatEntitlementReader,
   ) {}
   async forUser(userId: string): Promise<EntitlementView> {
-    return viewOf(await this.store.getLiveByUser(userId), this.clock.nowMs());
+    return entitlementViewFor(this.store, this.clock, this.seats, userId);
   }
+}
+
+/** Family seats (Phase 3): the instant a user's seat entitles them, or null. Never throws for a non member. */
+export interface SeatEntitlementReader {
+  endsAt(userId: string): Promise<number | null>;
+}
+
+/** A seat grants the same commerce benefits as an own subscription, until the seat's end instant. */
+export function viewFromEnd(endMs: number | null): EntitlementView {
+  if (endMs === null) return NONE;
+  const g = entitlementGrants();
+  return {
+    entitled: true,
+    endsAtMs: endMs,
+    groups: {
+      commerce_benefits: g.filter((x) => x.group === "commerce_benefits").map((x) => x.key),
+      app_features: g.filter((x) => x.group === "app_features").map((x) => x.key),
+    },
+  };
+}
+
+/** Own subscription first; a family seat fills in when the user has no entitling plan of their own. */
+async function entitlementViewFor(
+  store: SubscriptionStore,
+  clock: Clock,
+  seats: SeatEntitlementReader | undefined,
+  userId: string,
+): Promise<EntitlementView> {
+  const now = clock.nowMs();
+  const own = viewOf(await store.getLiveByUser(userId), now);
+  if (seats === undefined) return own;
+  const seatEnd = await seats.endsAt(userId);
+  if (seatEnd === null) return own;
+  if (!own.entitled || own.endsAtMs === null || seatEnd > own.endsAtMs) return viewFromEnd(seatEnd);
+  return own;
 }
 
 export interface MyPlusView {
@@ -57,11 +93,13 @@ export class GetMyPlus {
   constructor(
     private readonly store: SubscriptionStore,
     private readonly clock: Clock,
+    private readonly seats?: SeatEntitlementReader,
   ) {}
   async execute(userId: string): Promise<MyPlusView> {
     const sub = await this.store.getLatestByUser(userId);
     const [total, recent] = await Promise.all([this.store.totalSavedMinor(userId), this.store.listSavings(userId, 10)]);
-    return { subscription: sub, entitlements: viewOf(sub, this.clock.nowMs()), savings: { totalMinor: total, recent } };
+    const entitlements = await entitlementViewFor(this.store, this.clock, this.seats, userId);
+    return { subscription: sub, entitlements, savings: { totalMinor: total, recent } };
   }
 }
 
@@ -77,6 +115,7 @@ export class RecordBenefitUsed {
     private readonly store: SubscriptionStore,
     private readonly clock: Clock,
     private readonly ids: IdPort,
+    private readonly seats?: SeatEntitlementReader,
   ) {}
   async execute(i: {
     readonly userId: string;
@@ -89,7 +128,10 @@ export class RecordBenefitUsed {
     }
     const now = this.clock.nowMs();
     const sub = await this.store.getLiveByUser(i.userId);
-    if (sub === null || !isEntitled(sub, now)) return { kind: "not_entitled" };
+    const ownEntitled = sub !== null && isEntitled(sub, now);
+    // A family seat entitles per member order; the savings row is the member's own.
+    const seatEntitled = !ownEntitled && this.seats !== undefined && (await this.seats.endsAt(i.userId)) !== null;
+    if (!ownEntitled && !seatEntitled) return { kind: "not_entitled" };
     const r = await this.store.addSavings(
       {
         id: this.ids.uuidV7(),

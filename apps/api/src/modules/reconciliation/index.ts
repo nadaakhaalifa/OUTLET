@@ -11,6 +11,7 @@ export {
   RUN_RECONCILIATION,
   SCHEDULE_RECONCILIATION,
 } from "./adapters/tokens";
+export { canReadReconciliation } from "./adapters/access";
 export { InMemoryReconStore } from "./adapters/in-memory";
 export { KyselyReconStore, type ReconDb } from "./adapters/kysely-store";
 export {

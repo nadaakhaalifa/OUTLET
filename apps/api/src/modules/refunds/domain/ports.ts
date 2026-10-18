@@ -35,6 +35,8 @@ export interface AllocationLine {
   readonly orderLineId: string;
   readonly qty: number;
   readonly itemAmount: bigint;
+  /** Line value (after item discounts, before vouchers) at intake, for downstream proportional clawbacks. Absent on rows written before it. */
+  readonly lineGross?: bigint;
   readonly voucherShare: bigint;
   readonly deliveryFeeShare: bigint;
   readonly netAmount: bigint;
@@ -95,6 +97,21 @@ export type RefundEvent =
   | { readonly type: "refund.requested"; readonly refundId: string; readonly userId: string; readonly amount: bigint; readonly returnId: string | null }
   | { readonly type: "refund.approved"; readonly refundId: string; readonly userId: string }
   | { readonly type: "refund.completed"; readonly refundId: string; readonly userId: string; readonly amount: bigint; readonly returnId: string | null }
+  /**
+   * One per refunded line when a refund COMPLETES (ledger-first already done). `refundedGross` is
+   * cumulative goods value over every COMPLETED refund of the seller order for that line, so a
+   * redelivery or a later partial refund can only move it up.
+   */
+  | {
+      readonly type: "order_line.refunded";
+      readonly refundId: string;
+      readonly sellerOrderId: string;
+      readonly orderLineId: string;
+      readonly userId: string;
+      readonly lineGross: bigint | null;
+      readonly refundedGross: bigint;
+      readonly delta: bigint;
+    }
   | { readonly type: "refund.failed"; readonly refundId: string; readonly legId: string; readonly code: string; readonly attempts: number }
   | { readonly type: "refund.manual_review"; readonly refundId: string; readonly legId: string; readonly code: string }
   | { readonly type: "refund.intent_rejected"; readonly returnId: string; readonly reason: string };

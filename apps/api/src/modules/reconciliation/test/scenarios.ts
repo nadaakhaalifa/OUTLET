@@ -90,7 +90,7 @@ export function describeReconScenarios(name: string, make: () => Promise<ReconSc
       matchingLedger();
       const r = await k.runner.execute("nightly");
       expect(r).toMatchObject({ kind: "completed", findings: 0, opened: 0, ok: true });
-      const s = await c.store.summary();
+      const s = await c.store.summary(c.clock.nowMs());
       expect(s.open + s.escalated).toBe(0);
       expect(s.lastRun?.ok).toBe(true);
       expect(await c.outboxTypes()).toEqual(["reconciliation.run_completed"]);
@@ -248,7 +248,7 @@ export function describeReconScenarios(name: string, make: () => Promise<ReconSc
       k.alerts.fail = true;
       const r = await k.runner.execute("nightly");
       expect(r).toMatchObject({ kind: "completed", opened: 1, alertFailures: 2 });
-      expect((await c.store.summary()).escalated).toBe(1);
+      expect((await c.store.summary(c.clock.nowMs())).escalated).toBe(1);
     });
 
     it("runs the nightly job once per Cairo date and intraday only in event mode", async () => {
@@ -277,6 +277,19 @@ export function describeReconScenarios(name: string, make: () => Promise<ReconSc
       expect(s.bySource).toEqual({ trial_balance: 1, psp_settlement: 1 });
       expect(s.oldestItemAtMs).toBe(BASE);
       expect(s.lastRun?.findingCount).toBe(2);
+      // B-2: buckets partition the live tickets of each source; both adapters agree on the boundaries.
+      const live = (src: "psp_settlement" | "trial_balance") => s.bySource[src] ?? 0;
+      for (const src of ["psp_settlement", "trial_balance"] as const) {
+        const a = s.aging[src];
+        expect(a.lt1d + a.d1to3 + a.gt3d).toBe(live(src));
+      }
+      expect(s.rails.find((r) => r.source === "psp_settlement")?.filesReceived).toBe(1);
+      expect(s.rails.find((r) => r.source === "cod_remittance")).toMatchObject({ filesReceived: 0, lastFileAtMs: null, input: "unconfigured" });
+      expect(s.rails.find((r) => r.source === "eta_submission")?.filesReceived).toBeNull();
+      const raw = await c.store.summary(BASE + 72 * 3_600_000);
+      expect(raw.aging?.psp_settlement?.d1to3).toBe(1);
+      expect((await c.store.summary(BASE + 72 * 3_600_000 + 1)).aging?.psp_settlement?.gt3d).toBe(1);
+      expect((await c.store.summary(BASE + 24 * 3_600_000 - 1)).aging?.psp_settlement?.lt1d).toBe(1);
     });
 
     it("paginates tickets by item time", async () => {

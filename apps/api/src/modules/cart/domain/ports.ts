@@ -41,6 +41,8 @@ export interface SkuFacts {
   /** Current selling price, already net of item-level discounts, VAT inclusive. */
   readonly unitPrice: Money;
   readonly available: boolean;
+  /** Real units left, when the catalog adapter knows it. Served to shoppers only when 1 to 5 (spec 5). Absent = unknown. */
+  readonly unitsLeft?: number | null;
 }
 
 export type PriceBadge = "verified_discount" | "lowest_30d" | "launch_price" | "none";
@@ -49,6 +51,8 @@ export interface SuggestionFacts {
   readonly skuId: string;
   readonly productId: string;
   readonly title: LocalizedText;
+  /** Size label of this SKU, when the catalog adapter supplies it. */
+  readonly sizeLabel?: string;
   readonly store: StoreSummaryFacts;
   readonly imageUrl?: string;
   readonly blurhash?: string;
@@ -92,7 +96,7 @@ export interface PlatformConfigPort {
   freeDeliveryThreshold(): Promise<Money>;
 }
 
-export type LineSource = "pdp" | "search" | "stylist" | "wishlist" | "feed" | "bag_suggestion" | "reorder";
+export type LineSource = "pdp" | "search" | "stylist" | "wishlist" | "feed" | "bag_suggestion" | "reorder" | "merged_guest";
 
 export interface CartLineRecord {
   readonly id: string;

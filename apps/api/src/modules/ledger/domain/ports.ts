@@ -1,4 +1,5 @@
 import type { AccountId, ChainLink, JournalEntry, PostingCommand } from "./bridge";
+import type { CompletedRunData, IntegrityRunKind, LatestAttempt, StoredRun } from "./integrity-runs";
 
 /** Minimal transaction handle the posting service needs: events go out in the SAME transaction. */
 export interface LedgerTxn {
@@ -122,3 +123,78 @@ export interface ProjectionSource {
 }
 
 export type { PostingCommand };
+
+// ---------------------------------------------------------------------------------------------
+// Persisted integrity result (ADR-0046, dashboard foundations track 3).
+// ---------------------------------------------------------------------------------------------
+
+export interface IntegrityAuditInput {
+  /** Occurred-at of the audit row (also selects the monthly chain `ledger-integrity:YYYY-MM`). */
+  readonly atMs: number;
+  readonly runId: string;
+  readonly ok: boolean;
+  readonly reportSha256: string;
+}
+
+/** The audit insert failed, so the whole completed-run transaction rolled back (H4). */
+export class IntegrityAuditWriteError extends Error {
+  constructor() {
+    super("integrity audit write failed");
+    this.name = "IntegrityAuditWriteError";
+  }
+}
+
+/**
+ * A final row for this attempt already exists (unique index lir_attempt_final_uq, 0093). The earlier
+ * commit is the record, so the recorder treats this as success: no second completed row, no second audit row.
+ */
+export class IntegrityAlreadyRecordedError extends Error {
+  constructor() {
+    super("integrity run already recorded for this attempt");
+    this.name = "IntegrityAlreadyRecordedError";
+  }
+}
+
+export interface IntegrityRunIds {
+  /** Primary key of the row this call writes (a different id per row). */
+  readonly id: string;
+  /** Groups the `started` row with its final row. */
+  readonly attemptId: string;
+  readonly kind: IntegrityRunKind;
+}
+
+/** Writes run rows. Rows are append-only: there is no update. Runs under the system role. */
+export interface IntegrityRunStore {
+  recordStarted(a: IntegrityRunIds): Promise<void>;
+  /**
+   * ONE transaction: the completed row, its drift sample rows AND the `ledger.integrity.run` audit row.
+   * Any failure (audit included, as `IntegrityAuditWriteError`) leaves nothing behind.
+   */
+  completeRun(a: IntegrityRunIds & { readonly data: CompletedRunData; readonly audit: IntegrityAuditInput }): Promise<void>;
+  recordFailure(a: IntegrityRunIds & { readonly outcome: "error" | "timeout"; readonly errorCode: string }): Promise<void>;
+}
+
+export interface IntegrityReadScope {
+  readonly actorId: string | null;
+  /** DB role used for RLS: finance (HTTP read path) or system (metrics exporter). */
+  readonly role: "finance" | "super_admin" | "system";
+}
+
+export interface IntegritySnapshot {
+  readonly latest: StoredRun | null;
+  readonly latestAttempt: LatestAttempt | null;
+  readonly firstStartedAtMs: number | null;
+}
+
+/** Opaque to callers: `ts` is the row's started_at as an ISO string, `id` its uuid. */
+export interface RunCursor {
+  readonly ts: string;
+  readonly id: string;
+}
+
+export interface IntegrityRunReader {
+  /** Latest completed run, latest attempt and the table's first row, read in one transaction. */
+  snapshot(scope: IntegrityReadScope): Promise<IntegritySnapshot>;
+  /** Completed runs newest first, keyset on (started_at, id). */
+  listCompleted(scope: IntegrityReadScope, q: { readonly limit: number; readonly before: RunCursor | null }): Promise<{ readonly items: readonly StoredRun[]; readonly next: RunCursor | null }>;
+}

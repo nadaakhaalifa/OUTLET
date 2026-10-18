@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { Global, Module, type DynamicModule, type INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { AccessClaims } from "@outlet/auth-core";
-import type { Actor, AdminRole } from "@outlet/policy";
+import type { Actor, AdminRole, BrandRole } from "@outlet/policy";
 import request from "supertest";
 import { configureApp } from "../../../app.setup";
 import { loadConfig } from "../../../config/env";
@@ -74,7 +74,19 @@ const admin = (id: string, role: AdminRole): Actor => ({
   tokenScopes: ["admin:access"],
 });
 
+const seller = (id: string, storeId: string, role: BrandRole): Actor => ({
+  id,
+  status: "active",
+  assurance: "basic",
+  grants: [{ kind: "brand", storeId, role }],
+  tokenScopes: ["seller:read", "seller:write"],
+});
+
 export const TOKENS = {
+  adminOps: "token-hub-admin-ops-0000000008",
+  sellerA: "token-hub-seller-store-a-000009",
+  sellerOther: "token-hub-seller-other-0000010",
+  sellerOnBuyerAud: "token-hub-seller-buyer-aud-11",
   shopper1: "token-hub-shopper-1-0000000001",
   shopper2: "token-hub-shopper-2-0000000002",
   opHub1: "token-hub-operator-1-000000003",
@@ -109,6 +121,10 @@ export async function createHubHarness(): Promise<HubHarness> {
   tokens.add(TOKENS.shopper2, { actor: shopper(USERS.shopper2), aud: "buyer_api" });
   tokens.add(TOKENS.opHub1, { actor: operator(USERS.opHub1, HUB_1), aud: "admin_api" });
   tokens.add(TOKENS.opHub2, { actor: operator(USERS.opHub2, HUB_2), aud: "admin_api" });
+  tokens.add(TOKENS.adminOps, { actor: admin(U(22), "ops"), aud: "admin_api" });
+  tokens.add(TOKENS.sellerA, { actor: seller(U(41), U(9000), "owner"), aud: "seller_api" });
+  tokens.add(TOKENS.sellerOther, { actor: seller(U(42), U(9777), "owner"), aud: "seller_api" });
+  tokens.add(TOKENS.sellerOnBuyerAud, { actor: seller(U(41), U(9000), "owner"), aud: "buyer_api" });
   tokens.add(TOKENS.adminSupport, { actor: admin(U(21), "support"), aud: "admin_api" });
   tokens.add(TOKENS.shopperOnAdminAud, { actor: shopper(USERS.shopper1), aud: "admin_api" });
   tokens.add(TOKENS.operatorOnBuyerAud, { actor: operator(USERS.opHub1, HUB_1), aud: "buyer_api" });

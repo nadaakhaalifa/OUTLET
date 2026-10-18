@@ -56,6 +56,11 @@ export interface MyReferralView {
   readonly milestone: { readonly every: number; readonly progress: number; readonly plusMonths: number };
   /** Present only when the caller was referred and has not completed the first order. */
   readonly offer: { readonly discount: bigint; readonly minOrder: bigint } | null;
+  /** What a friend gets and what the caller earns, from the admin-editable config. */
+  readonly friendOffer: { readonly discount: bigint; readonly minOrder: bigint };
+  readonly referrerReward: bigint;
+  /** Newest first. No referee identity. */
+  readonly referrals: readonly { readonly status: "attributed" | "rewarded" | "rejected"; readonly createdAtMs: number }[];
 }
 
 export class GetMyReferral {
@@ -99,6 +104,11 @@ export class GetMyReferral {
         own !== null && own.status === "attributed"
           ? { discount: this.opts.config.refereeDiscount, minOrder: this.opts.config.refereeMinOrder }
           : null,
+      friendOffer: { discount: this.opts.config.refereeDiscount, minOrder: this.opts.config.refereeMinOrder },
+      referrerReward: this.opts.config.referrerReward,
+      referrals: [...mine]
+        .sort((a, b) => b.attributedAtMs - a.attributedAtMs)
+        .map((r) => ({ status: r.status, createdAtMs: r.attributedAtMs })),
     };
   }
 }

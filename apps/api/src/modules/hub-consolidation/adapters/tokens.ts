@@ -15,3 +15,5 @@ export const RECORD_HUB_RECEIPT = Symbol("hub.RecordHubReceipt");
 export const DISPATCH_HUB_PARCEL = Symbol("hub.DispatchHubParcel");
 export const SWEEP_HUB_GROUPS = Symbol("hub.SweepHubGroups");
 export const GET_HUB_TRACKING = Symbol("hub.GetHubTracking");
+export const HUB_ADMIN_RESOLVER = Symbol("hub.AdminResolver");
+export const HUB_SELLER_RESOLVER = Symbol("hub.SellerResolver");

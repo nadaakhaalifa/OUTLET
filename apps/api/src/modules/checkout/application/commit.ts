@@ -17,6 +17,8 @@ export interface CommitInput {
   /** The total the shopper confirmed. A difference is a 409 with the delta (spec 7). */
   readonly expectedTotal: bigint | null;
   readonly appAttestAssertion: string | null;
+  /** Waiting-room admission token (single use), required when the bag holds drop SKUs. */
+  readonly admissionToken?: string | null;
 }
 
 export type CommitState = "placed" | "pending" | "awaiting_confirmation";
@@ -31,6 +33,9 @@ export type CommitResult =
     }
   | { readonly kind: "app_attest_required" }
   | { readonly kind: "key_reuse" }
+  | { readonly kind: "admission_required" }
+  | { readonly kind: "admission_invalid" }
+  | { readonly kind: "admission_used" }
   | { readonly kind: "address_required" }
   | { readonly kind: "address_not_found" }
   | { readonly kind: "address_not_covered" }
@@ -128,6 +133,19 @@ export class PlaceCheckout {
     const rc = reconfirm(i.expectedTotal, q.quote.total.amount);
     if (rc.kind === "changed") {
       return { kind: "price_changed", expected: rc.expected, actual: rc.actual, delta: rc.delta, fresh: q };
+    }
+
+    if (q.dropIds.length > 0 || q.dropUnidentified) {
+      if (q.dropUnidentified || ctx.dropAdmission === undefined) return { kind: "admission_required" };
+      const a = await ctx.dropAdmission.redeem({
+        userId: i.userId,
+        deviceId: i.deviceId,
+        token: i.admissionToken ?? null,
+        dropIds: q.dropIds,
+      });
+      if (a === "required") return { kind: "admission_required" };
+      if (a === "invalid") return { kind: "admission_invalid" };
+      if (a === "already_used") return { kind: "admission_used" };
     }
 
     const nowMs = ctx.clock.nowMs();

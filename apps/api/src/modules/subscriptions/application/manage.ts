@@ -14,6 +14,7 @@ import {
   reverseEntry,
   scheduleSwitch,
   subtract,
+  planSwitch,
   switchKind,
   switchNow,
   upgradeCharge,
@@ -130,6 +131,7 @@ export type SwitchResult =
   | ManageResult
   | { readonly kind: "plan_not_found" }
   | { readonly kind: "same_plan" }
+  | { readonly kind: "student_verification_required" }
   | { readonly kind: "payment_failed"; readonly reason: string }
   | { readonly kind: "requires_action"; readonly action: ClientAction };
 
@@ -151,7 +153,21 @@ export class SwitchPlan {
     const target = await planFor(d, toCode, now);
     if (target === null) return { kind: "plan_not_found" };
     if (target.code === sub.planCode) return { kind: "same_plan" };
-    const kind = switchKind(sub.interval, target.interval);
+    if ((target.kind ?? "individual") === "student") {
+      if (d.students === undefined || !(await d.students.validAt(userId, now))) {
+        return { kind: "student_verification_required" };
+      }
+    }
+    // Phase 3: same interval plans compare by price (yearly -> family is an upgrade, family -> yearly
+    // waits for period end). With no price on record the Phase 2 interval rule applies unchanged.
+    const current = await d.store.getPlan(sub.planId);
+    const kind =
+      current === null
+        ? switchKind(sub.interval, target.interval)
+        : planSwitch(
+            { code: sub.planCode, interval: sub.interval, priceMinor: current.priceMinor },
+            { code: target.code, interval: target.interval, priceMinor: target.priceMinor },
+          );
     if (kind === "same") return { kind: "same_plan" };
 
     if (kind === "downgrade_at_period_end") {

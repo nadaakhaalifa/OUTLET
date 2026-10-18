@@ -10,6 +10,7 @@ export {
   StaticReturnerHistory,
   StaticReturnsMembership,
 } from "./adapters/in-memory";
+export { ReturnsLineReturns } from "./adapters/line-returns";
 export { KyselyReturnRepository, type ReturnsDb } from "./adapters/kysely-store";
 export type {
   AutoApproveOverdueInspections,

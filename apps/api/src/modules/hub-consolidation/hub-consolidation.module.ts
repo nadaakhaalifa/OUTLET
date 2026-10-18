@@ -12,7 +12,7 @@ import {
   StaticHubFlags,
 } from "./adapters/in-memory";
 import { HubController } from "./adapters/hub.controller";
-import { OperatorHubResolver, OrderGroupResolver, ParcelResolver } from "./adapters/resolvers";
+import { HubAdminResolver, HubSellerResolver, OperatorHubResolver, OrderGroupResolver, ParcelResolver } from "./adapters/resolvers";
 import * as T from "./adapters/tokens";
 import {
   DispatchHubParcel,
@@ -112,6 +112,8 @@ export class HubConsolidationModule {
         { provide: T.HUB_OUTBOUND, useValue: outbound },
         { provide: T.HUB_LEDGER, useValue: ledger },
         { provide: T.HUB_METRICS, useValue: metrics },
+        { provide: T.HUB_ADMIN_RESOLVER, useValue: new HubAdminResolver() },
+        { provide: T.HUB_SELLER_RESOLVER, useValue: new HubSellerResolver() },
         { provide: T.HUB_LEG_RESOLVER, useValue: new OperatorHubResolver() },
         { provide: T.HUB_PARCEL_RESOLVER, useValue: new ParcelResolver(store) },
         { provide: T.HUB_GROUP_RESOLVER, useValue: new OrderGroupResolver(store) },

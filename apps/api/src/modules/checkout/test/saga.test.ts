@@ -59,6 +59,29 @@ describe("checkout saga (fakes)", () => {
     expect(w.cart.removed).toHaveLength(1);
   });
 
+  it("order_group.paid carries the additive fields for creators and auto-buy, once, with the original fields intact", async () => {
+    const w = createWorld();
+    const r = await commit(w);
+    if (r.kind !== "ok") throw new Error("expected ok");
+    const g = r.record.orderGroupId;
+    await pay(w, g, `pi_${g}`);
+    await pay(w, g, `pi_${g}`); // webhook replay
+    const repo = w.repo as unknown as { outbox: { type: string; aggregateId: string; payload: Record<string, unknown> }[] };
+    const paid = repo.outbox.filter((e) => e.type === "order_group.paid");
+    expect(paid).toHaveLength(1);
+    const e = paid[0];
+    expect(e?.aggregateId).toBe(g);
+    // existing fields unchanged
+    expect(e?.payload).toMatchObject({ user_id: SHOPPER, method: "card", total: "238000" });
+    // additive fields
+    const skus = String(e?.payload["sku_ids"]).split(",");
+    expect(skus.length).toBeGreaterThan(0);
+    expect(skus).toEqual([...skus].sort());
+    expect(new Set(skus)).toEqual(new Set((await w.repo.get(g))?.stored.lines.map((l) => l.skuId)));
+    expect(e?.payload["order_group_id"]).toBe(g);
+    expect(typeof e?.payload["paid_at_ms"]).toBe("number");
+  });
+
   it("duplicate taps (same key) and a second key for the same bag give one OrderGroup and one intent", async () => {
     const w = createWorld();
     const a = await commit(w);

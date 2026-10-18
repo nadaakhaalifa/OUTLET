@@ -118,6 +118,8 @@ export interface TaxHarness {
   readonly queue: ProcessSubmissionQueue;
   readonly poll: PollSubmissionStatuses;
   readonly reconcile: RunDailyReconciliation;
+  /** Flag `release.admin.finance_views`; OFF by default (blocked), as in production. */
+  readonly financeViewsFlag: { on: boolean };
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -153,11 +155,12 @@ export async function createTaxHarness(): Promise<TaxHarness> {
   const signed = new InMemorySignedDocumentStore();
   const delegations = new InMemorySigningDelegations();
   const events = new InMemoryTaxEtaEventPublisher();
+  const financeViewsFlag = { on: false };
   const moduleRef = await Test.createTestingModule({
     imports: [
       PlatformModule.forRoot(config, { clock, ids }),
       TestAuthModule.register(),
-      TaxEtaModule.forRoot(config, { config: cfg, documents, eta, signed, delegations, events }),
+      TaxEtaModule.forRoot(config, { config: cfg, documents, eta, signed, delegations, events, financeViewsEnabled: () => financeViewsFlag.on }),
     ],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
@@ -179,6 +182,7 @@ export async function createTaxHarness(): Promise<TaxHarness> {
     queue: get(T.PROCESS_SUBMISSION_QUEUE),
     poll: get(T.POLL_SUBMISSION_STATUSES),
     reconcile: get(T.RUN_DAILY_RECONCILIATION),
+    financeViewsFlag,
     http: () => request(app.getHttpServer()),
     close: () => app.close(),
   };

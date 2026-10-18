@@ -15,6 +15,7 @@ import {
   type PayoutRecord,
   type PayoutScope,
   type PayoutState,
+  type PayoutStateTotals,
   type PayoutStore,
   type TransitionCommand,
 } from "../domain/ports";
@@ -70,6 +71,15 @@ const LineRow = z.object({
   source_type: z.enum(["seller_order", "clawback"]),
   source_id: z.string(),
   amount: Amount,
+});
+
+const SummaryRow = z.object({
+  status: z.enum(PAYOUT_STATES),
+  hold_reason: HOLD.nullable(),
+  failure_code: z.string().nullable(),
+  n: Int,
+  total: Amount,
+  oldest: Ms,
 });
 
 const ms = (col: string): string => `floor(extract(epoch from ${col}) * 1000)::text`;
@@ -235,6 +245,44 @@ export class KyselyPayoutStore implements PayoutStore {
         items,
         next: rows.length > q.limit && last !== undefined ? { createdAtMs: last.created_ms, id: last.id } : null,
       };
+    });
+  }
+
+  async balanceTotals(scope: PayoutScope, storeId: string): Promise<{ held: bigint; inTransit: bigint }> {
+    if (!UUID.test(storeId)) return { held: 0n, inTransit: 0n };
+    return this.tx(scope, async (trx) => {
+      const r = await sql<{ held: string; in_transit: string }>`
+        select coalesce(sum(amount) filter (where status = 'ON_HOLD'), 0)::text as held,
+               coalesce(sum(amount) filter (where status in ('SCHEDULED', 'APPROVED', 'SENT', 'FAILED')), 0)::text as in_transit
+          from payouts where store_id = ${storeId}::uuid`.execute(trx);
+      const row = r.rows[0];
+      return { held: BigInt(row?.held ?? "0"), inTransit: BigInt(row?.in_transit ?? "0") };
+    });
+  }
+
+  async summaryByState(
+    scope: PayoutScope,
+    windowSinceMs: number,
+  ): Promise<Partial<Record<PayoutState, PayoutStateTotals>>> {
+    return this.tx(scope, async (trx) => {
+      const r = await sql<unknown>`
+        select status, hold_reason, failure_code, count(*)::text as n, coalesce(sum(amount), 0)::text as total,
+               ${sql.raw(ms("min(updated_at)"))} as oldest
+          from payouts
+         where status not in ('SETTLED', 'CANCELLED') or updated_at >= ${iso(windowSinceMs)}::timestamptz
+         group by status, hold_reason, failure_code`.execute(trx);
+      const out: Partial<Record<PayoutState, { -readonly [K in keyof PayoutStateTotals]: PayoutStateTotals[K] }>> = {};
+      for (const raw of r.rows) {
+        const x = SummaryRow.parse(raw);
+        const t = (out[x.status] ??= { count: 0, amount: 0n, oldestUpdatedAtMs: null, byHoldReason: {}, byFailureCode: {} });
+        const n = Number(x.n);
+        t.count += n;
+        t.amount += x.total;
+        t.oldestUpdatedAtMs = t.oldestUpdatedAtMs === null ? x.oldest : Math.min(t.oldestUpdatedAtMs, x.oldest);
+        if (x.hold_reason !== null) t.byHoldReason = { ...t.byHoldReason, [x.hold_reason]: (t.byHoldReason[x.hold_reason] ?? 0) + n };
+        if (x.failure_code !== null) t.byFailureCode = { ...t.byFailureCode, [x.failure_code]: (t.byFailureCode[x.failure_code] ?? 0) + n };
+      }
+      return out;
     });
   }
 

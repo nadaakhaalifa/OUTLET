@@ -3,6 +3,7 @@ import type {
   AddressPort,
   AgePolicyPort,
   AppAttestPort,
+  DropAdmissionPort,
   CartPort,
   CodConfirmationPort,
   InventoryPort,
@@ -29,6 +30,8 @@ export interface CheckoutContext {
   readonly killSwitch: KillSwitchPort;
   readonly addresses: AddressPort;
   readonly appAttest: AppAttestPort;
+  /** Absent = drop SKUs cannot be bought (fail closed). */
+  readonly dropAdmission?: DropAdmissionPort;
   readonly codConfirmation: CodConfirmationPort;
   readonly inventory: InventoryPort;
   readonly credit: StoreCreditPort;

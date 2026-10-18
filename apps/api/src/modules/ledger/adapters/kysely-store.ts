@@ -325,6 +325,8 @@ export class KyselyIntegritySnapshots implements IntegritySnapshots {
           resolveTxOptions({ session: { userId: null, role: "system" }, process: "ledger.integrity", profile: "batch" }),
           this.applicationRole,
         );
+        // Defence in depth: the integrity job only reads. Whatever the session role could do, this snapshot cannot write.
+        await sql`set transaction read only`.execute(trx);
         return fn(new TrxIntegritySource(trx));
       });
   }

@@ -6,6 +6,11 @@ import {
   decideAccept,
   decideAcceptSlaExpiry,
   decideCancel,
+  closeAfterMsForWindowDays,
+  decideClose,
+  ReturnsOpenError,
+  decideDeliver,
+  decideOutForDelivery,
   decidePack,
   decideReject,
   decideShip,
@@ -17,6 +22,9 @@ import {
 } from "../domain/bridge";
 import type {
   EventPayload,
+  LineRefundsPort,
+  LineReturnsPort,
+  SellerReturnWindowPort,
   OrderRepository,
   OrderScope,
   OutboxEventDraft,
@@ -28,7 +36,18 @@ export interface OrderDeps {
   readonly repo: OrderRepository;
   readonly clock: Clock;
   readonly ids: IdGenerator;
+  /** Cumulative refunded goods per line, read at closure. Absent: reported as 0 (see LineRefundsPort). */
+  readonly lineRefunds?: LineRefundsPort;
+  /** Non-terminal returns per line, read at closure. Absent: reported as unknown (null) so creators defer. */
+  readonly lineReturns?: LineReturnsPort;
+  /** Per-seller return window. Absent: the statutory 30 days plus margin. */
+  readonly sellerWindows?: SellerReturnWindowPort;
+  /** Delivered-to-closed delay. Default: 30-day defect window + 3 days (spec 20.1 / T4). */
+  readonly closeAfterMs?: number;
 }
+
+const DAY_MS = 86_400_000;
+export const DEFAULT_CLOSE_AFTER_MS = 33 * DAY_MS;
 
 export type CommandResult =
   | { readonly kind: "ok"; readonly order: SellerOrderRecord; readonly replayed: boolean }
@@ -45,6 +64,7 @@ interface CommandSpec {
   readonly commandKey: string;
   readonly actorId: string | null;
   readonly decide: (o: SellerOrderRecord, nowMs: number) => Transition | null;
+  readonly closeFacts?: CloseFacts;
 }
 
 const MAX_ATTEMPTS = 2;
@@ -56,7 +76,20 @@ const factsOf = (o: SellerOrderRecord) => ({
   acceptByMs: o.acceptByMs,
 });
 
-function eventsFor(ids: IdGenerator, o: SellerOrderRecord, t: Transition, nowMs: number): OutboxEventDraft[] {
+/** Per-line facts the creators accrual gate reads (A-9). Null = unknown (fail closed downstream). */
+interface CloseFacts {
+  readonly returnWindowEndsAtMs: number;
+  readonly openByLine: ReadonlyMap<string, number> | null;
+}
+
+function eventsFor(
+  ids: IdGenerator,
+  o: SellerOrderRecord,
+  t: Transition,
+  nowMs: number,
+  refundedByLine: ReadonlyMap<string, bigint> = new Map(),
+  closeFacts: CloseFacts | undefined = undefined,
+): OutboxEventDraft[] {
   const base: Record<string, string | number | boolean | null> = {
     seller_order_id: o.id,
     order_group_id: o.orderGroupId,
@@ -80,6 +113,43 @@ function eventsFor(ids: IdGenerator, o: SellerOrderRecord, t: Transition, nowMs:
       return [make("seller_order.packed")];
     case "SHIP":
       return [make("seller_order.shipped")];
+    case "OUT_FOR_DELIVERY":
+      return [make("seller_order.out_for_delivery")];
+    case "DELIVER":
+      return [make("seller_order.delivered", { delivered_at_ms: t.stamps.deliveredAtMs ?? nowMs })];
+    case "CLOSE": {
+      // One message per line: the creators accrual and the referral settlement are line-grained.
+      // Amounts are decimal strings (bigint safe). Refunded is the cumulative goods value at closure.
+      const lines = o.lines.map((l) => {
+        const gross = l.unitPrice.amount * BigInt(l.qty);
+        const refunded = refundedByLine.get(l.id) ?? 0n;
+        return {
+          id: ids.uuidV7(),
+          type: "order_line.closed",
+          aggregateType: "seller_order" as const,
+          aggregateId: o.id,
+          occurredAtMs: nowMs,
+          payload: {
+            order_line_id: l.id,
+            seller_order_id: o.id,
+            order_group_id: o.orderGroupId,
+            store_id: o.storeId,
+            user_id: o.userId,
+            sku_id: l.skuId,
+            product_id: l.productId,
+            category_id: null,
+            currency: "EGP",
+            merchandise_gross: gross.toString(),
+            voucher_allocated: l.discountAlloc.amount.toString(),
+            refunded_merchandise_gross: (refunded > gross ? gross : refunded).toString(),
+            closed_at_ms: t.stamps.closedAtMs ?? nowMs,
+            return_window_ends_at_ms: closeFacts?.returnWindowEndsAtMs ?? null,
+            open_returns: closeFacts?.openByLine === undefined || closeFacts.openByLine === null ? null : (closeFacts.openByLine.get(l.id) ?? 0),
+          },
+        };
+      });
+      return [make("seller_order.closed", { user_id: o.userId, closed_at_ms: t.stamps.closedAtMs ?? nowMs }), ...lines];
+    }
     case "SELLER_REJECT":
       // Informs the refund saga (F-1). This module never moves money.
       return [
@@ -125,6 +195,7 @@ export class OrderCommands {
       } catch (e) {
         if (e instanceof AcceptWindowElapsedError) return { kind: "accept_window_elapsed" };
         if (e instanceof NotCancellableError) return { kind: "not_cancellable" };
+        if (e instanceof ReturnsOpenError) return { kind: "invalid_transition", from: order.status };
         if (e instanceof InvalidTransitionError) return { kind: "invalid_transition", from: order.status };
         throw e;
       }
@@ -139,7 +210,16 @@ export class OrderCommands {
         actorId: spec.actorId,
         nowMs,
         historyId: ids.uuidV7(),
-        events: eventsFor(ids, order, t, nowMs),
+        events: eventsFor(
+          ids,
+          order,
+          t,
+          nowMs,
+          t.event === "CLOSE" && this.d.lineRefunds !== undefined
+            ? await this.d.lineRefunds.refundedGoodsByLine(order.id)
+            : undefined,
+          spec.closeFacts,
+        ),
         rollup: (group, siblings) => {
           const r = rollupOrderGroup(group.status, siblings);
           if (r === null) return null;
@@ -225,6 +305,71 @@ export class OrderCommands {
       commandKey: `ship:${a.commandKey}`,
       decide: (o, now) => decideShip(factsOf(o), now),
     });
+  }
+
+  /**
+   * Courier-confirmed delivery (from `shipment.delivered`). SHIPPED passes through OUT_FOR_DELIVERY
+   * first because the machine has no direct edge. Repeats are replays; an order already past
+   * DELIVERED answers invalid_transition, which callers treat as "nothing to do".
+   */
+  async markDelivered(a: { sellerOrderId: string; deliveredAtMs: number; commandKey: string }): Promise<CommandResult> {
+    const base = { sellerOrderId: a.sellerOrderId, scope: { kind: "system" } as OrderScope, actorId: null };
+    const cur = await this.d.repo.getSellerOrder(a.sellerOrderId, base.scope);
+    if (cur === null) return { kind: "not_found" };
+    if (cur.status === "SHIPPED") {
+      const r = await this.exec({
+        ...base,
+        commandKey: `ofd:${a.commandKey}`,
+        decide: (o) => decideOutForDelivery(factsOf(o)),
+      });
+      if (r.kind !== "ok") return r;
+    }
+    return this.exec({
+      ...base,
+      commandKey: `deliver:${a.commandKey}`,
+      decide: (o) => decideDeliver(factsOf(o), a.deliveredAtMs),
+    });
+  }
+
+  /**
+   * Closes DELIVERED orders whose return window plus grace has elapsed and emits `order_line.closed`
+   * for each line in the same transaction as the state change. Idempotent (`close:<id>` keys) and
+   * safe to run concurrently; a failing order does not stop the batch.
+   */
+  async closeDelivered(limit = 100): Promise<{ closed: number; skipped: number; failed: number }> {
+    const nowMs = this.d.clock.nowMs();
+    const floor = this.d.closeAfterMs ?? DEFAULT_CLOSE_AFTER_MS;
+    const ids = await this.d.repo.findCloseCandidates(nowMs - floor, limit);
+    let closed = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const cur = await this.d.repo.getSellerOrder(id, { kind: "system" });
+        if (cur === null || cur.deliveredAtMs === null) {
+          skipped += 1;
+          continue;
+        }
+        const days = (await this.d.sellerWindows?.returnWindowDays(cur.storeId)) ?? null;
+        const after = Math.max(floor, closeAfterMsForWindowDays(days));
+        const openByLine = this.d.lineReturns === undefined ? null : await this.d.lineReturns.openReturnsByLine(id);
+        let open = 0;
+        for (const n of openByLine?.values() ?? []) open += n;
+        const r = await this.run({
+          sellerOrderId: id,
+          scope: { kind: "system" },
+          actorId: null,
+          commandKey: `close:${id}`,
+          decide: (o, now) => decideClose({ ...factsOf(o), deliveredAtMs: o.deliveredAtMs, openReturns: open }, now, after),
+          closeFacts: { returnWindowEndsAtMs: cur.deliveredAtMs + after, openByLine },
+        });
+        if (r.kind === "ok" && !r.replayed) closed += 1;
+        else skipped += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { closed, skipped, failed };
   }
 
   cancelByShopper(a: {

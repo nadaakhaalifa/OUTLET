@@ -10,3 +10,6 @@ export const ORDER_GROUP_RESOLVER = Symbol("orders.OrderGroupResolver");
 export const SELLER_ORDER_RESOLVER = Symbol("orders.SellerOrderResolver");
 export const SHOPPER_ORDER_RESOLVER = Symbol("orders.ShopperOrderResolver");
 export const ORDERS_NOW = Symbol("orders.Now");
+export const ORDER_LINE_REFUNDS = Symbol("orders.LineRefundsPort");
+export const ORDER_LINE_RETURNS = Symbol("orders.LineReturnsPort");
+export const ORDER_DELIVERY_CONSUMER = Symbol("orders.DeliveryEventConsumer");

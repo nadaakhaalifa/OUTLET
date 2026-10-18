@@ -124,7 +124,24 @@ export interface TicketPage {
   readonly next: { readonly itemAtMs: number; readonly id: string } | null;
 }
 
+/** Live-ticket age buckets (B-2). Age = now - item_at. lt_1d: < 24 h. d1_3: 24 h to 72 h inclusive. gt_3d: strictly over 72 h (ESCALATE_AFTER_MS). */
+export interface AgeBuckets {
+  readonly lt1d: number;
+  readonly d1to3: number;
+  readonly gt3d: number;
+}
+export const MS_1D = 24 * 60 * 60 * 1000;
+
+/** Settlement files received per kind (parsed or rejected). Absent kind = none received. */
+export interface FileReceipt {
+  readonly filesReceived: number;
+  readonly lastFileAtMs: number;
+}
+
 export interface ReconSummary {
+  /** Sparse: sources with no live ticket are absent (the read model fills zeros). */
+  readonly aging?: Readonly<Partial<Record<ReconSource, AgeBuckets>>>;
+  readonly fileReceipts?: Readonly<Partial<Record<FileKind, FileReceipt>>>;
   readonly open: number;
   readonly escalated: number;
   readonly bySeverity: Readonly<Record<Severity, number>>;
@@ -151,7 +168,8 @@ export interface ReconStore {
   listTickets(q: TicketQuery): Promise<TicketPage>;
   getTicket(id: string): Promise<TicketRecord | null>;
   listRuns(limit: number): Promise<readonly RunRecord[]>;
-  summary(): Promise<ReconSummary>;
+  /** `nowMs` anchors the age buckets. */
+  summary(nowMs: number): Promise<ReconSummary>;
 }
 
 // ---------------------------------------------------------------- ports to other modules

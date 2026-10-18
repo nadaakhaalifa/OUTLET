@@ -8,6 +8,7 @@ export const RESALE_LEDGER = Symbol("resale.ResaleLedgerPort");
 export const RESALE_METRICS = Symbol("resale.ResaleMetrics");
 
 export const RESALE_OPERATOR_RESOLVER = Symbol("resale.OperatorResolver");
+export const RESALE_ADMIN_RESOLVER = Symbol("resale.AdminResolver");
 export const RESALE_STORE_RESOLVER = Symbol("resale.StoreResolver");
 
 export const LIST_RETURNED_UNIT = Symbol("resale.ListReturnedUnit");

@@ -60,6 +60,7 @@ export function quoteWire(q: QuoteOk) {
   return {
     ...quoteBody(q.quote),
     plus_member: q.plusMember,
+    plus_savings: q.plusSavings === null ? null : moneyWire(q.plusSavings),
     methods: q.methods.map((m) => ({
       method: m.method,
       available: m.available,

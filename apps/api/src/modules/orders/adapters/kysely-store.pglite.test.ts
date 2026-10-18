@@ -24,6 +24,12 @@ const fresh = async () => {
       (await raw.query<{ t: string }>(`select event_type as t from outbox_events order by occurred_at, id`)).rows.map(
         (r) => r.t,
       ),
+    outboxEvents: async () =>
+      (
+        await raw.query<{ t: string; p: Record<string, unknown> }>(
+          `select event_type as t, payload as p from outbox_events order by occurred_at, id`,
+        )
+      ).rows.map((r) => ({ type: r.t, payload: r.p })),
     historyCount: async (id: string) =>
       Number(
         (await raw.query<{ n: string }>(`select count(*)::text as n from order_status_history where seller_order_id = $1`, [id]))

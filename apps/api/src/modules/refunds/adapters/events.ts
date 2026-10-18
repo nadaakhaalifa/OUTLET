@@ -6,6 +6,17 @@ export function eventPayload(e: RefundEvent): Record<string, string | number | n
     case "refund.requested":
     case "refund.completed":
       return { refund_id: e.refundId, user_id: e.userId, amount: e.amount.toString(), currency: "EGP", return_id: e.returnId };
+    case "order_line.refunded":
+      return {
+        refund_id: e.refundId,
+        seller_order_id: e.sellerOrderId,
+        order_line_id: e.orderLineId,
+        user_id: e.userId,
+        line_merchandise_gross: e.lineGross === null ? null : e.lineGross.toString(),
+        refunded_merchandise_gross: e.refundedGross.toString(),
+        delta: e.delta.toString(),
+        currency: "EGP",
+      };
     case "refund.approved":
       return { refund_id: e.refundId, user_id: e.userId };
     case "refund.failed":

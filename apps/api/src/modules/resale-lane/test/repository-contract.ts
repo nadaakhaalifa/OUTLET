@@ -54,6 +54,17 @@ export function runResaleStoreContract(name: string, make: () => Promise<ResaleC
       expect((await c.store.listForStore(STORE_B, 10)).map((l) => l.id)).toEqual([U(4002)]);
     });
 
+    it("listAll pages every listing newest first, filters by status, keyset stable", async () => {
+      for (const n of [1, 2, 3]) await c.store.insertListing(listing(n, n === 2 ? { storeId: STORE_B } : {}), []);
+      await c.store.withdraw({ listingId: U(4001), events: [] });
+      const p1 = await c.store.listAll(2, null, null);
+      expect(p1.map((l) => l.id)).toEqual([U(4003), U(4002)]);
+      const last = p1[1];
+      if (last === undefined) throw new Error("page");
+      expect((await c.store.listAll(2, { listedAtMs: last.listedAtMs, id: last.id }, null)).map((l) => l.id)).toEqual([U(4001)]);
+      expect((await c.store.listAll(5, null, "WITHDRAWN")).map((l) => l.id)).toEqual([U(4001)]);
+    });
+
     it("sells once: compare-and-set with proceeds and event, a replay is not_listed", async () => {
       const l = listing(1);
       await c.store.insertListing(l, []);

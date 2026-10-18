@@ -14,7 +14,7 @@ import {
   StaticResaleTerms,
 } from "./adapters/in-memory";
 import { ResaleController } from "./adapters/resale.controller";
-import { ResaleOperatorResolver, ResaleStoreResolver } from "./adapters/resolvers";
+import { ResaleAdminResolver, ResaleOperatorResolver, ResaleStoreResolver } from "./adapters/resolvers";
 import * as T from "./adapters/tokens";
 import { BrowseResale, ListReturnedUnit, RecordResaleSale, WithdrawListing, type ResaleDeps } from "./application/resale";
 import type { ResaleCatalogPort, ResaleConsentPort, ResaleFlagsPort, ResaleLedgerPort, ResaleMetrics, ResaleStore, ResaleTermsPort, ReturnFactsPort } from "./domain/ports";
@@ -84,6 +84,7 @@ export class ResaleLaneModule {
         { provide: T.RESALE_LEDGER, useValue: ledger },
         { provide: T.RESALE_METRICS, useValue: metrics },
         { provide: T.RESALE_OPERATOR_RESOLVER, useValue: new ResaleOperatorResolver() },
+        { provide: T.RESALE_ADMIN_RESOLVER, useValue: new ResaleAdminResolver() },
         { provide: T.RESALE_STORE_RESOLVER, useValue: new ResaleStoreResolver() },
         { provide: RUNTIME, inject: [CLOCK, ID_GENERATOR], useFactory: (c: Clock, ids: IdGenerator) => runtime(c, ids) },
         from(T.LIST_RETURNED_UNIT, (r) => r.list),

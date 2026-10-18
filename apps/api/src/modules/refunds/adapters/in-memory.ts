@@ -144,6 +144,23 @@ export class InMemoryRefundStore implements RefundStore {
       }
       if (status === "COMPLETED" && before !== "COMPLETED") {
         this.events.push({ type: "refund.completed", refundId: r.id, userId: r.userId, amount: r.amount, returnId: r.returnId });
+        const cumulative = new Map<string, bigint>();
+        for (const o of this.refunds.values()) {
+          if (o.sellerOrderId !== r.sellerOrderId || o.status !== "COMPLETED") continue;
+          for (const l of o.lines) cumulative.set(l.orderLineId, (cumulative.get(l.orderLineId) ?? 0n) + l.itemAmount);
+        }
+        for (const l of r.lines) {
+          this.events.push({
+            type: "order_line.refunded",
+            refundId: r.id,
+            sellerOrderId: r.sellerOrderId,
+            orderLineId: l.orderLineId,
+            userId: r.userId,
+            lineGross: l.lineGross ?? null,
+            refundedGross: cumulative.get(l.orderLineId) ?? l.itemAmount,
+            delta: l.itemAmount,
+          });
+        }
       }
       return "applied";
     }

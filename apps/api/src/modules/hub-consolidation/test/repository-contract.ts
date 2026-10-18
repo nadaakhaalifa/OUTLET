@@ -111,6 +111,19 @@ export function runHubStoreContract(name: string, make: () => Promise<HubStoreCo
       ...over,
     });
 
+    it("pages parcels newest first and scopes legs to the given stores with a keyset", async () => {
+      await open();
+      for (const n of [1, 2]) await c.store.recordReceipt({ receipt: receipt(n), expectedVersion: 0, next: "RECEIVED", events: [] });
+      await c.store.createParcel({ parcel: parcel(), legs: [{ sellerOrderId: U(301), expectedVersion: 1 }, { sellerOrderId: U(302), expectedVersion: 1 }], events: [] });
+      expect((await c.store.listParcelsPage(5, null)).map((p) => p.id)).toEqual([U(600)]);
+      expect(await c.store.listParcelsPage(5, { createdAtMs: T0 + 5000, id: U(600) })).toEqual([]);
+      const mine = await c.store.listLegsForStores({ storeIds: [U(9001), U(9003)], orderGroupId: null, limit: 10, afterId: null });
+      expect(mine.map((l) => l.sellerOrderId)).toEqual([U(301), U(303)]);
+      const next = await c.store.listLegsForStores({ storeIds: [U(9001), U(9003)], orderGroupId: GROUP, limit: 10, afterId: U(301) });
+      expect(next.map((l) => l.sellerOrderId)).toEqual([U(303)]);
+      expect(await c.store.listLegsForStores({ storeIds: [U(9999)], orderGroupId: null, limit: 10, afterId: null })).toEqual([]);
+    });
+
     it("consolidates received legs atomically, then dispatches once", async () => {
       await open();
       for (const n of [1, 2]) {

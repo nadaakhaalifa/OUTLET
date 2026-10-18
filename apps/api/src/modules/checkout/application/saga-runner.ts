@@ -268,7 +268,16 @@ export class SagaRunner {
           events: [
             {
               type: f.method === "cod" ? "order_group.cod_confirmed" : "order_group.paid",
-              payload: { user_id: rec.userId, method: f.method, total: stored.quote.total.amount.toString() },
+              payload: {
+                user_id: rec.userId,
+                method: f.method,
+                total: stored.quote.total.amount.toString(),
+                // Additive (backward compatible) fields for downstream consumers: creators
+                // attribution and auto-buy CloseOnPurchase. Flat primitives only (OutboxDraft).
+                order_group_id: g,
+                sku_ids: [...new Set(stored.lines.map((l) => l.skuId))].sort().join(","),
+                paid_at_ms: nowMs,
+              },
             },
           ],
           metrics: [{ name: "checkout_placed_total", labels: { method: f.method } }],

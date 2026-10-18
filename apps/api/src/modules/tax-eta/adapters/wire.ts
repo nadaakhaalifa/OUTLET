@@ -114,8 +114,10 @@ export function adminDocumentWire(v: DocumentWithSubmission) {
   };
 }
 
-export function reconciliationWire(r: ReconciliationReport) {
+export function reconciliationWire(r: ReconciliationReport, authorityChecked: boolean) {
   return {
+    /** False: ETA was not queried, only internal checks ran. `reconciled` then must not be shown as "reconciled". */
+    authority_checked: authorityChecked,
     date: r.date,
     documents: r.documents,
     counts: r.counts,

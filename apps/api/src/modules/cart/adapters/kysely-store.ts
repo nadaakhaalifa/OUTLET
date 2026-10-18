@@ -9,7 +9,7 @@ export type CartDb = Kysely<Record<string, never>>;
 const Int = z.string().regex(/^-?\d+$/);
 const Ms = Int.transform((s) => Number(s));
 const Amount = Int.transform((s) => BigInt(s));
-const SOURCES = ["pdp", "search", "stylist", "wishlist", "feed", "bag_suggestion", "reorder"] as const;
+const SOURCES = ["pdp", "search", "stylist", "wishlist", "feed", "bag_suggestion", "reorder", "merged_guest"] as const;
 
 const CartRow = z.object({ id: z.string(), user_id: z.string(), version: z.number().int(), updated_ms: Ms });
 const LineRow = z.object({

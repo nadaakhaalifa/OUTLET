@@ -26,3 +26,10 @@ export class PotResolver implements ResourceResolver {
     return p === null ? null : { type: "gift_card", id, ownerUserId: p.organiserId, state: "active" };
   }
 }
+
+/** Admin console surface for gift cards. The role check is in the controller; audience is enforced by the guard. */
+export class GiftCardAdminResolver implements ResourceResolver {
+  async resolve(): Promise<Resource | null> {
+    return { type: "admin_console", id: "gift-cards", state: "active" };
+  }
+}

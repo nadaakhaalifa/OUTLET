@@ -101,6 +101,24 @@ describe("authorization", () => {
   });
 });
 
+describe("admin listings", () => {
+  it("ops-style admin pages listings with keyset cursor; seller/shopper/other audience refused; bad cursor 400", async () => {
+    expect((await create(TOKENS.opHub1)).status).toBe(201);
+    tick();
+    const ok = await h.http().get("/v1/admin/resale/listings?limit=1").set(bearer(TOKENS.adminOps));
+    expect(ok.status).toBe(200);
+    expect(ok.body.items).toHaveLength(1);
+    expect(ok.body.items[0].price).toEqual({ amount_minor: "80000", currency: "EGP" });
+    expect(ok.body.page.has_more).toBe(false);
+    tick();
+    expect((await h.http().get("/v1/admin/resale/listings").set(bearer(TOKENS.adminSupport))).status).toBe(403);
+    expect((await h.http().get("/v1/admin/resale/listings").set(bearer(TOKENS.ownerA))).status).toBe(401);
+    expect((await h.http().get("/v1/admin/resale/listings").set(bearer(TOKENS.shopperOnAdminAud))).status).toBe(403);
+    expect((await h.http().get("/v1/admin/resale/listings")).status).toBe(401);
+    expect((await h.http().get("/v1/admin/resale/listings?cursor=zzz").set(bearer(TOKENS.adminOps))).status).toBe(400);
+  });
+});
+
 describe("module boot", () => {
   it("refuses to boot outside test mode without real ports", () => {
     expect(() => ResaleLaneModule.forRoot(loadConfig({ NODE_ENV: "development" }))).toThrow(MissingResalePortsError);

@@ -13,8 +13,8 @@ import type {
   TicketQuery,
   TicketRecord,
 } from "../domain/ports";
-import type { FileKind } from "../domain/ports";
-import type { SettlementLine } from "../domain/bridge";
+import { MS_1D, type FileKind } from "../domain/ports";
+import { ESCALATE_AFTER_MS, type SettlementLine } from "../domain/bridge";
 
 type MutableTicket = { -readonly [K in keyof TicketRecord]: TicketRecord[K] };
 
@@ -178,7 +178,7 @@ export class InMemoryReconStore implements ReconStore {
     return [...this.runs].sort((a, b) => b.startedAtMs - a.startedAtMs).slice(0, limit);
   }
 
-  async summary(): Promise<ReconSummary> {
+  async summary(nowMs: number): Promise<ReconSummary> {
     const live = [...this.tickets.values()].filter((t) => t.status !== "resolved");
     const bySeverity = { critical: 0, high: 0, medium: 0 };
     const bySource: Partial<Record<TicketRecord["source"], number>> = {};
@@ -188,7 +188,23 @@ export class InMemoryReconStore implements ReconStore {
     }
     const oldest = live.reduce<number | null>((m, t) => (m === null || t.itemAtMs < m ? t.itemAtMs : m), null);
     const last = [...this.runs].sort((a, b) => b.startedAtMs - a.startedAtMs)[0] ?? null;
+    const aging: Partial<Record<TicketRecord["source"], { lt1d: number; d1to3: number; gt3d: number }>> = {};
+    for (const t of live) {
+      const a = (aging[t.source] ??= { lt1d: 0, d1to3: 0, gt3d: 0 });
+      const age = nowMs - t.itemAtMs;
+      if (age < MS_1D) a.lt1d += 1;
+      else if (age > ESCALATE_AFTER_MS) a.gt3d += 1;
+      else a.d1to3 += 1;
+    }
+    const fileReceipts: Partial<Record<FileKind, { filesReceived: number; lastFileAtMs: number }>> = {};
+    for (const e of this.files.values()) {
+      const r = (fileReceipts[e.record.kind] ??= { filesReceived: 0, lastFileAtMs: e.record.receivedAtMs });
+      r.filesReceived += 1;
+      r.lastFileAtMs = Math.max(r.lastFileAtMs, e.record.receivedAtMs);
+    }
     return {
+      aging,
+      fileReceipts,
       open: live.filter((t) => t.status === "open").length,
       escalated: live.filter((t) => t.status === "escalated").length,
       bySeverity,

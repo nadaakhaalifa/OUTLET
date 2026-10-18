@@ -47,6 +47,8 @@ export interface TaxEtaModuleOverrides {
   readonly signed?: SignedDocumentStore;
   readonly delegations?: SigningDelegationPort;
   readonly events?: TaxEtaEventPublisher;
+  /** release.admin.finance_views. Absent means BLOCKED: the from/to range form of GET /v1/admin/tax/reconciliation answers 404. */
+  readonly financeViewsEnabled?: () => Promise<boolean> | boolean;
 }
 
 /**
@@ -100,6 +102,7 @@ export class TaxEtaModule {
         { provide: T.TAX_SIGNED_STORE, useValue: overrides.signed ?? new InMemorySignedDocumentStore() },
         { provide: T.TAX_DELEGATIONS, useValue: overrides.delegations ?? new InMemorySigningDelegations() },
         { provide: T.TAX_EVENTS, useValue: overrides.events ?? new InMemoryTaxEtaEventPublisher() },
+        { provide: T.TAX_FINANCE_VIEWS_ENABLED, useValue: overrides.financeViewsEnabled ?? (() => false) },
         { provide: T.TAX_STORE_LIST_RESOLVER, useValue: new StoreListResolver() },
         { provide: T.TAX_STORE_INVOICE_RESOLVER, useValue: new StoreInvoiceResolver(documents) },
         useCase(T.QUOTE_ORDER_TAX, (d) => new QuoteOrderTax(d)),

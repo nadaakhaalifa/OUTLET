@@ -65,6 +65,11 @@ export interface QuoteOk {
   readonly cartHash: string;
   readonly codNeedsConfirmation: boolean;
   readonly plusMember: boolean;
+  /** Drop ids of the drop lines in this quote; `dropUnidentified` = a drop line without a drop id (fails closed). */
+  readonly dropIds: readonly string[];
+  readonly dropUnidentified: boolean;
+  /** Plus would waive this much delivery; null for members (they already have it). Server computed. */
+  readonly plusSavings: Money | null;
   /** True when a still-valid lock lowered at least one price. */
   readonly lockApplied: boolean;
 }
@@ -289,6 +294,9 @@ export class QuoteCheckout {
       cartHash: sha256Hex(`${input.userId}|${canonicalQuote(quote)}`),
       codNeedsConfirmation,
       plusMember: bag.plusMember,
+      dropIds: [...new Set(live.filter((l) => l.isDrop && l.dropId !== undefined).map((l) => l.dropId as string))].sort(),
+      dropUnidentified: live.some((l) => l.isDrop && l.dropId === undefined),
+      plusSavings: bag.plusMember ? null : money(quote.shipping.amount),
       lockApplied,
     };
   }

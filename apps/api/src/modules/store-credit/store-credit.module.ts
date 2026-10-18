@@ -34,6 +34,13 @@ export interface StoreCreditModuleOverrides {
   readonly giftCardSalesEnabled?: boolean;
 }
 
+export class MissingHoldLivenessError extends Error {
+  constructor() {
+    super("StoreCreditModule requires a real holdLiveness port (checkout SagaHoldLiveness) outside in-memory-dev");
+    this.name = "MissingHoldLivenessError";
+  }
+}
+
 @Module({})
 export class StoreCreditModule {
   static forRoot(config: AppConfig, overrides: StoreCreditModuleOverrides = {}): DynamicModule {
@@ -41,8 +48,9 @@ export class StoreCreditModule {
     if (production && (overrides.store === undefined || overrides.ledger === undefined)) {
       throw new NoProductionAdaptersError();
     }
-    const liveness: HoldLivenessPort =
-      overrides.holdLiveness ?? (production ? { isLive: async () => true } : new InMemoryHoldLiveness());
+    // R-6: no silent "everything is live" default (it would stop the sweeper releasing any expired hold).
+    if (production && overrides.holdLiveness === undefined) throw new MissingHoldLivenessError();
+    const liveness: HoldLivenessPort = overrides.holdLiveness ?? new InMemoryHoldLiveness();
     const store = (): StoreCreditStore => overrides.store ?? new InMemoryStoreCredit();
     return {
       module: StoreCreditModule,

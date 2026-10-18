@@ -177,6 +177,8 @@ export interface ReturnRepository {
   listDisputeWindowElapsed(nowMs: number, limit: number): Promise<readonly ReturnRecord[]>;
   listUnpublishedIntents(limit: number): Promise<readonly ReturnRecord[]>;
   hasOpenReturns(userId: string): Promise<boolean>;
+  /** Read only. Per order line of the seller order: how many returns are in a non-terminal state. Lines with none are absent. */
+  openReturnCountsBySellerOrder(sellerOrderId: string): Promise<ReadonlyMap<string, number>>;
   getStanding(userId: string): Promise<StandingRecord | null>;
   saveStanding(s: StandingRecord): Promise<void>;
 }

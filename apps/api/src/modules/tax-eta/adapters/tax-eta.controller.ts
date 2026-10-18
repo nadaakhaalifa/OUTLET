@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Header, HttpCode, Inject, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { TAX_READER_ROLES, TAX_WRITER_ROLES, taxAdminDenial } from "./access";
 import { z } from "zod";
 import { AuthenticatedSelf, Authorize, Idempotent, RateLimit } from "../../../platform/decorators";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
@@ -28,6 +29,7 @@ import {
   LIST_TAX_CATEGORIES,
   REQUEUE_DEAD_LETTER,
   RUN_DAILY_RECONCILIATION,
+  TAX_FINANCE_VIEWS_ENABLED,
   TAX_STORE_INVOICE_RESOLVER,
   TAX_STORE_LIST_RESOLVER,
 } from "./tokens";
@@ -57,10 +59,15 @@ const ClearBody = z.object({ reason: z.string().trim().min(3).max(500), expected
 const ListQuery = z.object({ cursor: z.string().max(512).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 const AdminListQuery = ListQuery.extend({ state: z.enum(SUBMISSION_STATES).optional(), kind: z.enum(DOCUMENT_KINDS).optional() }).strict();
 const AuditQuery = z.object({ code: CodeParam.shape.code.optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }).strict();
-const ReconQuery = z.object({ date: DateIso }).strict();
+const ReconQuery = z
+  .object({ date: DateIso.optional(), from: DateIso.optional(), to: DateIso.optional() })
+  .strict()
+  .refine((q) => (q.date !== undefined) !== (q.from !== undefined || q.to !== undefined), { message: "date or from+to", path: ["date"] })
+  .refine((q) => (q.from === undefined) === (q.to === undefined), { message: "from and to go together", path: ["from"] });
 
-const READERS = ["finance", "ops", "super_admin"] as const;
-const WRITERS = ["finance", "super_admin"] as const;
+const RANGE_LIMIT = 5;
+const READERS = TAX_READER_ROLES;
+const WRITERS = TAX_WRITER_ROLES;
 
 function principalOf(req: ApiRequest) {
   const p = req.principal;
@@ -96,7 +103,17 @@ export class TaxEtaController {
     @Inject(GET_SELLER_INVOICE) private readonly sellerOne: GetSellerInvoice,
     @Inject(AUDIT_SINK) private readonly audit: AuditSink,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(TAX_FINANCE_VIEWS_ENABLED) private readonly viewsEnabled: () => Promise<boolean> | boolean,
   ) {}
+
+  /** Range reads fan out to up to 31 ETA calls: at most RANGE_LIMIT per user per minute, in addition to the route limit. */
+  private readonly rangeHits = new Map<string, number[]>();
+  private rangeLimit(userId: string): void {
+    const now = this.clock.nowMs();
+    const recent = (this.rangeHits.get(userId) ?? []).filter((t) => now - t < 60_000);
+    if (recent.length >= RANGE_LIMIT) throw Problems.rateLimited((60_000 - (now - (recent[0] ?? now))) / 1000);
+    this.rangeHits.set(userId, [...recent, now]);
+  }
 
   private async requireAdmin(
     req: ApiRequest,
@@ -106,10 +123,7 @@ export class TaxEtaController {
   ): Promise<string> {
     const actor = principalOf(req).actor;
     const now = this.clock.nowMs();
-    const hasRole = actor.grants.some(
-      (g) => g.kind === "admin" && roles.includes(g.role) && (g.expiresAtMs === undefined || g.expiresAtMs > now),
-    );
-    const reason = !hasRole ? "missing_role" : actor.assurance !== "passkey" ? "passkey_required" : null;
+    const reason = taxAdminDenial(actor, roles, now);
     await this.audit.record({
       effect: reason === null ? "allow" : "deny",
       actorId: actor.id,
@@ -236,14 +250,24 @@ export class TaxEtaController {
   }
 
   @Get("admin/tax/reconciliation")
+  @Header("Cache-Control", "private, no-store")
   @AuthenticatedSelf("admin_api")
   @RateLimit([{ dimension: "user", limit: 30, windowSeconds: 60 }])
   async reconciliation(@Req() req: ApiRequest, @Query(new ZodPipe(ReconQuery, "/query")) q: z.infer<typeof ReconQuery>) {
+    const range = q.from !== undefined && q.to !== undefined;
+    // The range form is new (B-3): blocked unless release.admin.finance_views, and unreachable to anyone not authorised.
     await this.requireAdmin(req, READERS, "read", null);
+    if (range && !(await this.viewsEnabled())) throw Problems.notFound();
+    if (range) this.rangeLimit(principalOf(req).actor.id);
     try {
-      return reconciliationWire(await this.recon.execute(q.date));
+      if (q.from !== undefined && q.to !== undefined) {
+        const days = await this.recon.checkRange(q.from, q.to);
+        return { days: days.map((d) => reconciliationWire(d.report, d.authorityChecked)) };
+      }
+      const one = await this.recon.check(q.date ?? "");
+      return reconciliationWire(one.report, one.authorityChecked);
     } catch (e) {
-      if (e instanceof DomainError) throw Problems.validation([{ pointer: "/query/date", code: "invalid" }]);
+      if (e instanceof DomainError) throw Problems.validation([{ pointer: range ? "/query/to" : "/query/date", code: "invalid" }]);
       throw e;
     }
   }

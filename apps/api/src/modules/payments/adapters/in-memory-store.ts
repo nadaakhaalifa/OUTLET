@@ -364,6 +364,14 @@ export class InMemoryPaymentStore implements PaymentStore {
     const c = this.cards.get(id);
     if (c === undefined || c.userId !== userId || c.deletedAtMs !== null) return false;
     this.cards.set(id, { ...c, deletedAtMs: nowMs });
+    this.outbox.push({
+      id: this.newId(),
+      type: "payment_method.removed",
+      aggregateType: "payment_method",
+      aggregateId: id,
+      occurredAtMs: nowMs,
+      payload: { card_id: id, user_id: userId, provider: c.provider },
+    });
     return true;
   }
 }

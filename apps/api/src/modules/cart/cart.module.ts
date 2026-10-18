@@ -4,6 +4,7 @@ import { NoProductionAdaptersError } from "../../platform/platform.module";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
 import type { Clock, IdGenerator } from "../../platform/ports";
 import { CartController } from "./adapters/cart.controller";
+import { PublicSkusController } from "./adapters/public-skus.controller";
 import { FakeCatalog } from "./adapters/fake-catalog";
 import {
   CartLineResolver,
@@ -99,7 +100,7 @@ export class CartModule {
     });
     return {
       module: CartModule,
-      controllers: [CartController],
+      controllers: [CartController, PublicSkusController],
       providers: [
         { provide: CART_REPOSITORY, useValue: repo },
         // Test mode only (forRoot throws otherwise): an empty fixture catalog, adds answer 422 unknown_sku.

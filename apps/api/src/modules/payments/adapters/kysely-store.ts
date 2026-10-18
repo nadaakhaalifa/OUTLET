@@ -609,11 +609,23 @@ export class KyselyPaymentStore implements PaymentStore {
 
   async deleteSavedCard(id: string, userId: string, nowMs: number) {
     return this.tx({ kind: "customer", userId }, async (trx) => {
-      const own = await sql<{ id: string }>`select id::text as id from payment_methods
+      const own = await sql<{ id: string; provider: string }>`select id::text as id, provider from payment_methods
                                             where id::text = ${id} and user_id::text = ${userId} and deleted_at is null`.execute(trx);
       if (own.rows.length === 0) return false;
       await KyselyPaymentStore.elevate(trx);
       await sql`update payment_methods set deleted_at = ${iso(nowMs)}::timestamptz where id::text = ${id}`.execute(trx);
+      // Same transaction as the soft delete: consumers (auto-buy CancelAllForUser) learn of the
+      // removal exactly when it is durable. Ids only, never the PSP token.
+      await this.writeOutbox(trx, [
+        {
+          id: this.newId(),
+          type: "payment_method.removed",
+          aggregateType: "payment_method",
+          aggregateId: id,
+          occurredAtMs: nowMs,
+          payload: { card_id: id, user_id: userId, provider: own.rows[0]?.provider ?? "unknown" },
+        },
+      ]);
       return true;
     });
   }

@@ -54,6 +54,18 @@ export class InMemoryHubStore implements HubStore {
   async listParcels(orderGroupId: string): Promise<readonly ParcelRecord[]> {
     return [...this.parcels.values()].filter((p) => p.orderGroupId === orderGroupId).sort((a, b) => a.createdAtMs - b.createdAtMs);
   }
+  async listParcelsPage(limit: number, after: { createdAtMs: number; id: string } | null): Promise<readonly ParcelRecord[]> {
+    return [...this.parcels.values()]
+      .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+      .filter((p) => after === null || p.createdAtMs < after.createdAtMs || (p.createdAtMs === after.createdAtMs && p.id < after.id))
+      .slice(0, limit);
+  }
+  async listLegsForStores(i: { storeIds: readonly string[]; orderGroupId: string | null; limit: number; afterId: string | null }): Promise<readonly LegRecord[]> {
+    return [...this.legs.values()]
+      .filter((l) => i.storeIds.includes(l.storeId) && (i.orderGroupId === null || l.orderGroupId === i.orderGroupId) && (i.afterId === null || l.sellerOrderId > i.afterId))
+      .sort((a, b) => (a.sellerOrderId < b.sellerOrderId ? -1 : 1))
+      .slice(0, i.limit);
+  }
   async getReceipt(sellerOrderId: string): Promise<ReceiptRecord | null> {
     return this.receipts.get(sellerOrderId) ?? null;
   }

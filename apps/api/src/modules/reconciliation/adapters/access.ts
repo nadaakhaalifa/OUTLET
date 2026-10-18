@@ -18,16 +18,7 @@ export class ReconAccess {
   ) {}
 
   async require(actor: Actor): Promise<void> {
-    const decision = decide(
-      {
-        actor,
-        action: "read",
-        resourceType: "payout",
-        resource: { type: "payout", id: "reconciliation", state: "active" },
-        nowMs: this.clock.nowMs(),
-      },
-      this.rules,
-    );
+    const decision = reconReadDecision(actor, this.rules, this.clock.nowMs());
     try {
       await this.audit.record(decision.audit);
     } catch {
@@ -35,4 +26,23 @@ export class ReconAccess {
     }
     if (decision.effect !== "allow") throw Problems.forbidden();
   }
+}
+
+/** The central policy decision for reading reconciliation (rule `payout.read`). Shared by the gate and the capability map. */
+function reconReadDecision(actor: Actor, rules: readonly Rule[], nowMs: number) {
+  return decide(
+    {
+      actor,
+      action: "read",
+      resourceType: "payout",
+      resource: { type: "payout", id: "reconciliation", state: "active" },
+      nowMs,
+    },
+    rules,
+  );
+}
+
+/** Pure predicate behind `ReconAccess.require` (spec capability `recon.read`). */
+export function canReadReconciliation(actor: Actor, rules: readonly Rule[], nowMs: number): boolean {
+  return reconReadDecision(actor, rules, nowMs).effect === "allow";
 }

@@ -18,6 +18,7 @@ import type {
   ReturnerHistoryPort,
   StandingRecord,
 } from "../domain/ports";
+import { OPEN_RETURN_STATES } from "../domain/bridge";
 import { decodeCursor, encodeCursor } from "../domain/cursor";
 
 const CANCELLED = "CANCELLED";
@@ -36,7 +37,7 @@ function pageOf(rows: readonly ReturnRecord[], cursor: string | null, limit: num
   return { items, nextCursor: more && last !== undefined ? encodeCursor({ createdAtMs: last.createdAtMs, id: last.id }) : null };
 }
 
-const OPEN_STATES = new Set(["REQUESTED", "PICKUP_SCHEDULED", "IN_TRANSIT", "RECEIVED", "APPROVED", "REJECTED", "DISPUTED"]);
+const OPEN_STATES: ReadonlySet<string> = new Set(OPEN_RETURN_STATES);
 
 export class InMemoryReturnRepository implements ReturnRepository {
   private readonly byId = new Map<string, ReturnRecord>();
@@ -108,6 +109,14 @@ export class InMemoryReturnRepository implements ReturnRepository {
 
   async hasOpenReturns(userId: string): Promise<boolean> {
     return [...this.byId.values()].some((r) => r.userId === userId && OPEN_STATES.has(r.state));
+  }
+
+  async openReturnCountsBySellerOrder(sellerOrderId: string): Promise<ReadonlyMap<string, number>> {
+    const out = new Map<string, number>();
+    for (const r of this.byId.values()) {
+      if (r.sellerOrderId === sellerOrderId && OPEN_STATES.has(r.state)) out.set(r.orderLineId, (out.get(r.orderLineId) ?? 0) + 1);
+    }
+    return out;
   }
 
   async getStanding(userId: string): Promise<StandingRecord | null> {

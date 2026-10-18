@@ -234,6 +234,28 @@ export interface OrderRepository extends OrderIntake {
   applyTransition(cmd: TransitionCommand): Promise<ApplyResult>;
   /** Unaccepted orders whose accept_by has passed, oldest first. */
   findAcceptSlaExpired(nowMs: number, limit: number): Promise<readonly string[]>;
+  /** DELIVERED orders whose courier-confirmed delivered_at is at or before `deliveredBeforeMs`, oldest first. */
+  findCloseCandidates(deliveredBeforeMs: number, limit: number): Promise<readonly string[]>;
+}
+
+/**
+ * Cumulative goods value (VAT-inclusive, after item discounts, before vouchers) already refunded
+ * per order line of a seller order. Supplied by composition from the refunds module; the orders
+ * module never reads refund tables. Absent: lines are reported with 0 refunded at closure and the
+ * later `order_line.refunded` event (refunds producer) corrects the commission.
+ */
+export interface LineRefundsPort {
+  refundedGoodsByLine(sellerOrderId: string): Promise<ReadonlyMap<string, bigint>>;
+}
+
+/** Non-terminal returns per order line of a seller order (returns module in production). */
+export interface LineReturnsPort {
+  openReturnsByLine(sellerOrderId: string): Promise<ReadonlyMap<string, number>>;
+}
+
+/** The seller's own return window in days (seller policy). Null = no policy: statutory default. */
+export interface SellerReturnWindowPort {
+  returnWindowDays(storeId: string): Promise<number | null>;
 }
 
 export interface StoreSummaryFacts {

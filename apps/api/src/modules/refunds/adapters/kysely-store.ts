@@ -38,6 +38,7 @@ const LineSchema = z.object({
   orderLineId: z.string(),
   qty: z.number().int(),
   itemAmount: z.string(),
+  lineGross: z.string().optional(),
   voucherShare: z.string(),
   deliveryFeeShare: z.string(),
   netAmount: z.string(),
@@ -150,6 +151,7 @@ const toRefund = (raw: unknown, legs: readonly RefundLegRecord[]): RefundRecord 
     orderLineId: l.orderLineId,
     qty: l.qty,
     itemAmount: BigInt(l.itemAmount),
+    ...(l.lineGross === undefined ? {} : { lineGross: BigInt(l.lineGross) }),
     voucherShare: BigInt(l.voucherShare),
     deliveryFeeShare: BigInt(l.deliveryFeeShare),
     netAmount: BigInt(l.netAmount),
@@ -274,6 +276,7 @@ export class KyselyRefundStore implements RefundStore {
         orderLineId: l.orderLineId,
         qty: l.qty,
         itemAmount: l.itemAmount.toString(),
+        ...(l.lineGross === undefined ? {} : { lineGross: l.lineGross.toString() }),
         voucherShare: l.voucherShare.toString(),
         deliveryFeeShare: l.deliveryFeeShare.toString(),
         netAmount: l.netAmount.toString(),
@@ -389,8 +392,16 @@ export class KyselyRefundStore implements RefundStore {
       const refundId = owner.rows[0]?.refund_id;
       if (refundId === undefined) return "stale";
       // Lock the refund first so concurrent legs aggregate one at a time.
-      const head = await sql<{ status: string; user_id: string; amount: string; return_id: string | null }>`
-        select status, user_id::text as user_id, amount::text as amount, return_id::text as return_id
+      const head = await sql<{
+        status: string;
+        user_id: string;
+        amount: string;
+        return_id: string | null;
+        seller_order_id: string;
+        allocation_lines: unknown;
+      }>`
+        select status, user_id::text as user_id, amount::text as amount, return_id::text as return_id,
+               seller_order_id::text as seller_order_id, allocation_lines
         from refunds where id = ${refundId}::uuid for update`.execute(trx);
       const before = head.rows[0];
       if (before === undefined) return "stale";
@@ -430,6 +441,29 @@ export class KyselyRefundStore implements RefundStore {
           amount: BigInt(before.amount),
           returnId: before.return_id,
         });
+        // Cumulative goods refunded per line over every COMPLETED refund of the seller order,
+        // this one included (its status was written above, in this transaction).
+        const done = await sql<{ allocation_lines: unknown }>`
+          select allocation_lines from refunds
+          where seller_order_id = ${before.seller_order_id}::uuid and status = 'COMPLETED'`.execute(trx);
+        const cumulative = new Map<string, bigint>();
+        for (const r of done.rows) {
+          for (const l of z.array(LineSchema).parse(r.allocation_lines)) {
+            cumulative.set(l.orderLineId, (cumulative.get(l.orderLineId) ?? 0n) + BigInt(l.itemAmount));
+          }
+        }
+        for (const l of z.array(LineSchema).parse(before.allocation_lines)) {
+          events.push({
+            type: "order_line.refunded",
+            refundId,
+            sellerOrderId: before.seller_order_id,
+            orderLineId: l.orderLineId,
+            userId: before.user_id,
+            lineGross: l.lineGross === undefined ? null : BigInt(l.lineGross),
+            refundedGross: cumulative.get(l.orderLineId) ?? BigInt(l.itemAmount),
+            delta: BigInt(l.itemAmount),
+          });
+        }
       }
       await this.emit(trx, events);
       return "applied";

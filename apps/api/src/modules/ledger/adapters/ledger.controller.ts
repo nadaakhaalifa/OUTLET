@@ -7,7 +7,10 @@ import { Problems } from "../../../platform/problem";
 import { AUDIT_SINK, CLOCK } from "../../../platform/tokens";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import type { GetEntry, ListBalances } from "../application/queries";
-import { GET_ENTRY, LIST_BALANCES } from "./tokens";
+import { computeIntegrityState, type IntegrityMode } from "../domain/integrity-runs";
+import type { IntegrityRunReader, RunCursor } from "../domain/ports";
+import { integrityRunWire, integrityStatusWire } from "./integrity-wire";
+import { GET_ENTRY, INTEGRITY_MODE, INTEGRITY_ROUTES_ENABLED, INTEGRITY_RUN_READER, LIST_BALANCES } from "./tokens";
 import { balanceWire, entryWire } from "./wire";
 
 const IdParam = z.object({ id: z.uuid() }).strict();
@@ -17,6 +20,27 @@ const BalancesQuery = z
     owner_id: z.string().min(1).max(128).optional(),
     type: z.string().regex(/^[a-z_]{1,48}$/).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+
+const CursorPayload = z.object({ ts: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}Z$/), id: z.uuid() }).strict();
+const encodeCursor = (c: RunCursor): string => Buffer.from(JSON.stringify({ ts: c.ts, id: c.id }), "utf8").toString("base64url");
+const RunsQuery = z
+  .object({
+    cursor: z
+      .string()
+      .max(512)
+      .optional()
+      .transform((v, ctx): RunCursor | null => {
+        if (v === undefined) return null;
+        try {
+          return CursorPayload.parse(JSON.parse(Buffer.from(v, "base64url").toString("utf8")));
+        } catch {
+          ctx.addIssue({ code: "custom", message: "invalid cursor" });
+          return null;
+        }
+      }),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict();
 
@@ -33,6 +57,9 @@ export class LedgerController {
     @Inject(GET_ENTRY) private readonly entries: GetEntry,
     @Inject(AUDIT_SINK) private readonly audit: AuditSink,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(INTEGRITY_RUN_READER) private readonly integrity: IntegrityRunReader,
+    @Inject(INTEGRITY_ROUTES_ENABLED) private readonly integrityEnabled: () => Promise<boolean> | boolean,
+    @Inject(INTEGRITY_MODE) private readonly integrityMode: () => IntegrityMode,
   ) {}
 
   private async gate(req: ApiRequest, routeId: string, resourceId: string | null): Promise<string> {
@@ -90,5 +117,39 @@ export class LedgerController {
     const found = await this.entries.execute({ actorId, role: "finance" }, params.id);
     if (found === null) throw Problems.notFound();
     return entryWire(found);
+  }
+
+  /** `release.admin.ledger_integrity` blocked: both integrity routes answer 404 (nothing is read or audited). */
+  private async requireIntegrityRoutes(): Promise<void> {
+    if (!(await this.integrityEnabled())) throw Problems.notFound();
+  }
+
+  @Get("integrity")
+  @AuthenticatedSelf("admin_api")
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async integrityStatus(@Req() req: ApiRequest) {
+    await this.requireIntegrityRoutes();
+    const actorId = await this.gate(req, "integrity", null);
+    const snap = await this.integrity.snapshot({ actorId, role: "finance" }).catch(() => {
+      throw Problems.unavailable("integrity_unavailable");
+    });
+    const nowMs = this.clock.nowMs();
+    const state = computeIntegrityState({ latest: snap.latest, latestAttempt: snap.latestAttempt, nowMs, mode: this.integrityMode() });
+    return integrityStatusWire({ nowMs, state, latest: snap.latest, attempt: snap.latestAttempt });
+  }
+
+  @Get("integrity/runs")
+  @AuthenticatedSelf("admin_api")
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async integrityRuns(@Req() req: ApiRequest, @Query(new ZodPipe(RunsQuery, "/query")) q: z.output<typeof RunsQuery>) {
+    await this.requireIntegrityRoutes();
+    const actorId = await this.gate(req, "integrity_runs", null);
+    const page = await this.integrity.listCompleted({ actorId, role: "finance" }, { limit: q.limit, before: q.cursor }).catch(() => {
+      throw Problems.unavailable("integrity_unavailable");
+    });
+    return {
+      items: page.items.map(integrityRunWire),
+      page: { next_cursor: page.next === null ? null : encodeCursor(page.next), has_more: page.next !== null },
+    };
   }
 }

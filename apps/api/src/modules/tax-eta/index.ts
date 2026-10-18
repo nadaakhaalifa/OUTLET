@@ -1,6 +1,7 @@
 /** Public surface of the tax-eta module (A2.3). Other code imports only this file. */
 export { TaxEtaModule, MissingTaxEtaPortsError, type TaxEtaModuleOverrides } from "./tax-eta.module";
 export * from "./adapters/tokens";
+export { canReadTax, canWriteTax, holdsAdminRole, TAX_READER_ROLES, TAX_WRITER_ROLES } from "./adapters/access";
 export {
   FakeEtaPort,
   InMemorySignedDocumentStore,

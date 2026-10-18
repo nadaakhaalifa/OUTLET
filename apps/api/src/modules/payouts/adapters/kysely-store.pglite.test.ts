@@ -3,16 +3,18 @@ import type { Kysely } from "kysely";
 import { createPgliteDatabase, type PgliteInstance } from "../../../platform/db";
 import { KyselyPayoutStore, type PayoutsDb } from "./kysely-store";
 import { describePayoutScenarios } from "../test/scenarios";
-import { createPayoutsDatabase } from "../test/db";
-import { CUTOFF, FINANCE_1, STORE_A, T0, TestClock, U, addOrder, kit, seedStore } from "../test/fixtures";
+import { createPayoutsDatabase, pinUpdatedAt } from "../test/db";
+import { CUTOFF, FINANCE_1, STORE_A, STORE_B, T0, TestClock, U, addOrder, kit, seedStore } from "../test/fixtures";
 
 const open: Kysely<Record<string, never>>[] = [];
 
 const fresh = async () => {
   const raw = await createPayoutsDatabase();
+  await pinUpdatedAt(raw, T0);
   const db: PayoutsDb = createPgliteDatabase<Record<string, never>>(raw as unknown as PgliteInstance);
   open.push(db);
-  const clock = new TestClock();
+  // Fixed scenario clock; the DB trigger stamps updated_at from the same fixed instant (see pinUpdatedAt).
+  const clock = new TestClock(T0);
   const store = new KyselyPayoutStore(db, clock);
   return {
     raw,
@@ -124,5 +126,24 @@ describe("KyselyPayoutStore specifics", () => {
     await expect(c.raw.query(`delete from payout_status_history`)).rejects.toThrow(/append-only/);
     await c.store.recordAttempt(p.id, { attemptNo: 1, outcome: "unavailable", code: "x", providerRef: null, atMs: T0 });
     await expect(c.raw.query(`update payout_attempts set code = 'y'`)).rejects.toThrow(/append-only/);
+  });
+});
+
+describe("balanceTotals under RLS (app_user)", () => {
+  it("sums ON_HOLD and in-transit payouts of one store with a single aggregate, and a seller scope cannot see another store", async () => {
+    const c = await fresh();
+    const k = kit(c.store, c.clock);
+    seedStore(k, STORE_A);
+    seedStore(k, STORE_B);
+    addOrder(k, 1, 80_000n);
+    addOrder(k, 2, 50_000n, { storeId: STORE_B });
+    k.risk.held.add(STORE_B);
+    await k.commands.schedule();
+    const seller = (storeId: string) => ({ kind: "seller" as const, userId: U(77), storeIds: [storeId] });
+    expect(await c.store.balanceTotals(seller(STORE_A), STORE_A)).toEqual({ held: 0n, inTransit: 80_000n });
+    expect(await c.store.balanceTotals(seller(STORE_B), STORE_B)).toEqual({ held: 50_000n, inTransit: 0n });
+    // Row level security: store A's seller scope reads nothing of store B even when asking for it.
+    expect(await c.store.balanceTotals(seller(STORE_A), STORE_B)).toEqual({ held: 0n, inTransit: 0n });
+    expect(await c.store.balanceTotals({ kind: "system" }, STORE_B)).toEqual({ held: 50_000n, inTransit: 0n });
   });
 });

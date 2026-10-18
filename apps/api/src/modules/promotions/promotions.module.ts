@@ -2,6 +2,10 @@ import { Module, type DynamicModule } from "@nestjs/common";
 import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
+import { AdminCalendarController } from "./adapters/calendar.controller";
+import { InMemoryCalendarStore } from "./adapters/calendar-in-memory";
+import { ListCalendarEvents, SaveCalendarEvent } from "./application/calendar";
+import type { CalendarStore } from "./domain/calendar";
 import { PromotionAuthorizer } from "./adapters/authorizer";
 import {
   DenyAllServiceAuthenticator,
@@ -14,6 +18,9 @@ import {
   SellerPromotionsController,
 } from "./adapters/promotions.controllers";
 import {
+  CALENDAR_STORE,
+  LIST_CALENDAR,
+  SAVE_CALENDAR,
   CREATE_PROMOTION,
   EVALUATE_PROMOTIONS,
   GET_PROMOTION,
@@ -42,6 +49,8 @@ import type { PromotionEventPublisher, PromotionRepository, ServiceAuthenticator
 
 export interface PromotionsModuleOverrides {
   readonly repository?: PromotionRepository;
+  /** Admin calendar persistence (KyselyCalendarStore in production). */
+  readonly calendar?: CalendarStore;
   readonly events?: PromotionEventPublisher;
   /** Verifies the internal caller of `POST /v1/promotions/evaluate`. */
   readonly serviceAuth?: ServiceAuthenticator;
@@ -78,12 +87,23 @@ export class PromotionsModule {
     });
     return {
       module: PromotionsModule,
-      controllers: [AdminPromotionsController, SellerPromotionsController, InternalPromotionsController],
+      controllers: [AdminCalendarController, AdminPromotionsController, SellerPromotionsController, InternalPromotionsController],
       providers: [
         { provide: PROMOTION_REPOSITORY, useValue: repo },
         { provide: PROMOTION_EVENTS, useValue: overrides.events ?? new InMemoryPromotionEventPublisher() },
         // Test mode only (forRoot throws otherwise): nobody is a service until a real authenticator is wired.
         { provide: PROMOTION_SERVICE_AUTH, useValue: overrides.serviceAuth ?? new DenyAllServiceAuthenticator() },
+        { provide: CALENDAR_STORE, useValue: overrides.calendar ?? new InMemoryCalendarStore() },
+        {
+          provide: LIST_CALENDAR,
+          inject: [CALENDAR_STORE],
+          useFactory: (c: CalendarStore) => new ListCalendarEvents(c),
+        },
+        {
+          provide: SAVE_CALENDAR,
+          inject: [CALENDAR_STORE, CLOCK, ID_GENERATOR],
+          useFactory: (c: CalendarStore, clock: Clock, ids: IdGenerator) => new SaveCalendarEvent(c, clock, ids),
+        },
         PromotionAuthorizer,
         { provide: PROMOTION_AUTHORIZER, useExisting: PromotionAuthorizer },
         useCase(EVALUATE_PROMOTIONS, (d) => new EvaluatePromotions(d)),

@@ -9,3 +9,6 @@ export const UPDATE_PROMOTION = Symbol("promotions.UpdatePromotion");
 export const RECORD_REDEMPTIONS = Symbol("promotions.RecordRedemptions");
 export const REINSTATE_REDEMPTIONS = Symbol("promotions.ReinstateRedemptions");
 export const PROMOTION_AUTHORIZER = Symbol("promotions.PromotionAuthorizer");
+export const CALENDAR_STORE = Symbol("promotions.CalendarStore");
+export const LIST_CALENDAR = Symbol("promotions.ListCalendar");
+export const SAVE_CALENDAR = Symbol("promotions.SaveCalendar");

@@ -1,6 +1,6 @@
 import type { PayoutRecord } from "../domain/ports";
 import type { Statement } from "../domain/bridge";
-import type { StatementView } from "../application/queries";
+import type { PayoutSummary, StatementView, StoreBalanceView } from "../application/queries";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const isoOrNull = (ms: number | null): string | null => (ms === null ? null : iso(ms));
@@ -84,5 +84,37 @@ export function statementViewWire(v: StatementView) {
       netted_total: moneyWire(p.nettedTotal),
       carry_forward: moneyWire(p.carryForward),
     })),
+  };
+}
+
+export function payoutSummaryWire(v: PayoutSummary) {
+  return {
+    as_of: iso(v.asOfMs),
+    next_cycle_at: iso(v.nextCycleAtMs),
+    by_state: Object.fromEntries(
+      Object.entries(v.byState).map(([k, t]) => [
+        k,
+        {
+          count: t.count,
+          amount: moneyWire(t.amount),
+          oldest_updated_at: isoOrNull(t.oldestUpdatedAtMs),
+          ...(t.byHoldReason !== undefined ? { by_hold_reason: t.byHoldReason } : {}),
+          ...(t.byFailureCode !== undefined ? { by_failure_code: t.byFailureCode } : {}),
+        },
+      ]),
+    ),
+    settled_window_days: v.settledWindowDays,
+  };
+}
+
+/** Seller balance wire. No hold reason, no next payout date (VR-DB-02 safe default). */
+export function storeBalanceWire(b: StoreBalanceView) {
+  return {
+    available: moneyWire(b.available),
+    pending_release: moneyWire(b.pendingRelease),
+    held: moneyWire(b.held),
+    in_transit: moneyWire(b.inTransit),
+    negative_carry: moneyWire(b.negativeCarry),
+    as_of: iso(b.asOfMs),
   };
 }

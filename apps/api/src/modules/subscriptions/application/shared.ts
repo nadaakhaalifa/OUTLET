@@ -12,6 +12,7 @@ import {
   type PlusPlan,
   type PlusSubscription,
 } from "../domain/bridge";
+import type { StudentEligibilityPort } from "../family/ports";
 import type {
   AgePolicyPort,
   CardVaultPort,
@@ -56,6 +57,8 @@ export interface PlusDeps {
   readonly persons: PersonKeyPort;
   readonly vault: CardVaultPort;
   readonly hasher: KeyHasherPort;
+  /** Student price eligibility (Phase 3). Absent means no student price is ever granted (fail closed). */
+  readonly students?: StudentEligibilityPort;
 }
 
 /** The plan version that bills a period starting at `atMs` for a plan code. */

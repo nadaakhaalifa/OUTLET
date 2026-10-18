@@ -41,7 +41,7 @@ function lineWire(l: BagLineView) {
     price_at_add: moneyWire(l.priceAtAdd),
     price_change: l.priceChange,
     availability: l.available ? ("available" as const) : ("unavailable" as const),
-    ...(l.source !== null && l.source !== "reorder" ? { source: l.source } : {}),
+    ...(l.source !== null && l.source !== "reorder" && l.source !== "merged_guest" ? { source: l.source } : {}),
     saved_for_later: l.savedForLater,
   };
 }
@@ -75,6 +75,8 @@ function productWire(p: SuggestionFacts) {
   const verified = p.badge === "verified_discount" && p.referencePrice !== null && p.discountPct !== null;
   return {
     id: p.productId,
+    sku_id: p.skuId,
+    ...(p.sizeLabel !== undefined ? { size_label: p.sizeLabel } : {}),
     title: text(p.title),
     store: storeWire(p.store),
     ...(p.imageUrl !== undefined ? { image_url: p.imageUrl } : {}),

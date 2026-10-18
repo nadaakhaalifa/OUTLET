@@ -48,7 +48,9 @@ describe("store credit module wiring", () => {
     const prod = loadConfig({ NODE_ENV: "test" });
     const forced = { ...prod, adapters: "production" } as const;
     const store = new InMemoryStoreCredit();
-    const mod = StoreCreditModule.forRoot(forced, { store, ledger: new InMemoryCreditLedger() });
+    const ports = { store, ledger: new InMemoryCreditLedger() };
+    expect(() => StoreCreditModule.forRoot(forced, ports)).toThrow(/holdLiveness/);
+    const mod = StoreCreditModule.forRoot(forced, { ...ports, holdLiveness: { isLive: async () => false } });
     expect(mod.providers?.length).toBeGreaterThan(0);
     const m = await Test.createTestingModule({
       imports: [

@@ -8,6 +8,7 @@ import {
   FakeAddresses,
   FakeAgePolicy,
   FakeAppAttest,
+  FakeDropAdmission,
   FakeCart,
   FakeCodConfirmation,
   FakeInventory,
@@ -113,6 +114,9 @@ export class CheckoutModule {
               killSwitch: overrides.killSwitch ?? new FakeKillSwitch(),
               addresses: overrides.addresses ?? new FakeAddresses(),
               appAttest: overrides.appAttest ?? new FakeAppAttest(),
+              ...(overrides.dropAdmission !== undefined || config.env === "test"
+                ? { dropAdmission: overrides.dropAdmission ?? new FakeDropAdmission() }
+                : {}),
               codConfirmation: overrides.codConfirmation ?? new FakeCodConfirmation(),
               inventory,
               credit: overrides.credit ?? new FakeStoreCredit(),

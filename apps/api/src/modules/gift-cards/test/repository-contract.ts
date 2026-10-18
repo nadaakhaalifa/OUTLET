@@ -245,5 +245,27 @@ export function describeGiftCardStoreContract(name: string, fresh: () => Promise
       expect(await c.store.updateContribution(U(501), { status: "cancelled" }, ["pending"])).toBeNull();
       expect((await c.store.listContributionsInStatus("paid", 10)).length).toBe(2);
     });
+
+    it("pages throttled attempts and pots newest first with a keyset position", async () => {
+      const c = await setup();
+      for (const n of [1, 2, 3]) {
+        await c.store.recordAttempt({ id: U(600 + n), accountId: U(1), deviceHash: HASH("d"), ipHash: HASH("i"), outcome: n === 2 ? "wrong" : "throttled", atMs: T0 + n });
+      }
+      const p1 = await c.store.listThrottledAttempts(null, 1);
+      expect(p1.map((a) => a.id)).toEqual([U(603)]);
+      const p2 = await c.store.listThrottledAttempts({ ms: T0 + 3, id: U(603) }, 5);
+      expect(p2.map((a) => a.id)).toEqual([U(601)]);
+      for (const n of [1, 2]) {
+        const card = pendingCard(U(700 + n), { status: "POT_OPEN", potId: null });
+        const pot: PotRecord = {
+          id: U(710 + n), organiserId: U(1), organiserNickname: "S", target: 100_000n, closesAtMs: T0 + 86_400_000,
+          status: "OPEN", cardId: card.id, shareTokenHash: HASH(String(n)), version: 1, createdAtMs: T0 + n, closedAtMs: null,
+        };
+        await c.store.insertPot(pot, { ...card, potId: pot.id, idempotencyKey: `pk${n}` }, []);
+      }
+      const first = await c.store.listPotsPage(null, 1);
+      expect(first.map((p) => p.id)).toEqual([U(712)]);
+      expect((await c.store.listPotsPage({ ms: T0 + 2, id: U(712) }, 5)).map((p) => p.id)).toEqual([U(711)]);
+    });
   });
 }

@@ -26,6 +26,7 @@ import {
   type InMemoryAuditSink,
 } from "../../../platform";
 import { FakeClock, login, type Harness, type LoggedIn } from "../../../test/harness";
+import type { Principal } from "../../../platform/http-types";
 import { InMemoryPromotionEventPublisher, InMemoryPromotionRepository, StaticServiceTokenAuthenticator } from "../adapters/in-memory";
 import { PromotionsModule } from "../promotions.module";
 
@@ -75,10 +76,17 @@ export async function createPromotionsHarness(): Promise<PromotionsHarness> {
   const authn = app.get<Authenticator>(AUTHENTICATOR, { strict: false });
   const overrides = new Map<string, Partial<Actor>>();
   const original = authn.authenticate.bind(authn);
+  const minted = new Map<string, { readonly userId: string; readonly claims: Principal["claims"] }>();
   authn.authenticate = async (token, nowMs) => {
     const p = await original(token, nowMs);
     const o = overrides.get(token);
-    return p === null || o === undefined ? p : { ...p, actor: { ...p.actor, ...o } };
+    if (o === undefined) return p;
+    if (p !== null) return { ...p, actor: { ...p.actor, ...o } };
+    // seller_api tokens only authenticate against a real seller session; a minted test token carries its actor here.
+    const m = minted.get(token);
+    if (m === undefined) return null;
+    const actor: Actor = { id: m.userId, status: "active", assurance: "basic", grants: [], tokenScopes: [], ...o };
+    return { actor, claims: m.claims };
   };
   let n = 0;
   const issuer = authn as unknown as { issue(claims: unknown): Promise<string> };
@@ -109,6 +117,16 @@ export async function createPromotionsHarness(): Promise<PromotionsHarness> {
           nowMs: clock.nowMs(),
         }),
       );
+      const claims = buildAccessClaims({
+        issuer: config.tokenIssuer,
+        userId: base.userId,
+        audience: spec.audience,
+        sessionId: base.sessionId,
+        jti: `jti-promo-${n}`,
+        amr: ["otp_sms"],
+        nowMs: clock.nowMs(),
+      });
+      minted.set(token, { userId: base.userId, claims: claims as Principal["claims"] });
       overrides.set(token, {
         grants: spec.grants,
         tokenScopes: spec.scopes ?? [],

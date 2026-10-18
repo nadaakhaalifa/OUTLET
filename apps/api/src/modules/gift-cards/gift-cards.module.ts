@@ -3,7 +3,9 @@ import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock, IdGenerator } from "../../platform/ports";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
+import { GiftCardsAdminController } from "./adapters/admin.controller";
 import { GiftCardsController } from "./adapters/gift-cards.controller";
+import { AdminVoidGiftCard, ListAdminPots, ListThrottleEvents } from "./application/admin";
 import {
   DevAesGcmFieldCipher,
   FakeAgeGate,
@@ -13,10 +15,12 @@ import {
   FakePayments,
   FakeSecret,
   FakeStoreCredit,
+  FakeVoidApprovals,
+  DenyVoidApprovals,
   InMemoryGiftCardStore,
   NodeRandom,
 } from "./adapters/in-memory";
-import { CardResolver, PotResolver } from "./adapters/resolvers";
+import { CardResolver, GiftCardAdminResolver, PotResolver } from "./adapters/resolvers";
 import * as T from "./adapters/tokens";
 import {
   CancelUnpaidCard,
@@ -50,6 +54,7 @@ import type {
   RandomPort,
   SecretPort,
   StoreCreditPort,
+  VoidApprovalPort,
 } from "./domain/ports";
 
 export interface GiftCardsModuleOptions {
@@ -64,6 +69,8 @@ export interface GiftCardsModuleOptions {
   readonly age?: AgeGatePort;
   readonly payments?: PaymentIntentPort;
   readonly delivery?: DeliveryPort;
+  /** Admin dual approval (consume once) for voids at or above the refund threshold. */
+  readonly approvals?: VoidApprovalPort;
 }
 
 /**
@@ -107,6 +114,7 @@ export class GiftCardsModule {
       delivery: o.delivery ?? new FakeDelivery(),
     };
 
+    const approvals = o.approvals ?? (config.env === "test" || !production ? new FakeVoidApprovals() : new DenyVoidApprovals());
     const runtime = (clock: Clock, ids: IdGenerator) => {
       const d: GiftCardDeps = { store, clock, ids, ...ports };
       const close = new ClosePot(d);
@@ -119,6 +127,9 @@ export class GiftCardsModule {
         redeem: new RedeemGiftCard(d),
         resume: new ResumePendingRedemptions(d),
         voidCard: new VoidGiftCard(d),
+        adminVoid: new AdminVoidGiftCard(d, approvals),
+        adminPots: new ListAdminPots(d),
+        throttle: new ListThrottleEvents(d),
         list: new ListMyGiftCards(d),
         expire: new ExpireGiftCards(d),
         createPot: new CreateGiftPot(d),
@@ -141,7 +152,7 @@ export class GiftCardsModule {
 
     return {
       module: GiftCardsModule,
-      controllers: [GiftCardsController],
+      controllers: [GiftCardsController, GiftCardsAdminController],
       providers: [
         { provide: T.GIFT_CARD_STORE, useValue: store },
         { provide: RUNTIME, inject: [CLOCK, ID_GENERATOR], useFactory: (c: Clock, ids: IdGenerator) => runtime(c, ids) },
@@ -154,6 +165,10 @@ export class GiftCardsModule {
         from(T.REDEEM_GIFT_CARD, (r) => r.redeem),
         from(T.RESUME_PENDING_REDEMPTIONS, (r) => r.resume),
         from(T.VOID_GIFT_CARD, (r) => r.voidCard),
+        from(T.ADMIN_VOID_GIFT_CARD, (r) => r.adminVoid),
+        from(T.LIST_ADMIN_POTS, (r) => r.adminPots),
+        from(T.LIST_THROTTLE_EVENTS, (r) => r.throttle),
+        { provide: T.GIFT_CARD_ADMIN_RESOLVER, useValue: new GiftCardAdminResolver() },
         from(T.LIST_MY_GIFT_CARDS, (r) => r.list),
         from(T.EXPIRE_GIFT_CARDS, (r) => r.expire),
         from(T.CREATE_GIFT_POT, (r) => r.createPot),

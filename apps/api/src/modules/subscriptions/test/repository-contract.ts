@@ -285,5 +285,21 @@ export function describeSubscriptionStoreContract(name: string, open: () => Prom
       expect(await eventTypes()).toEqual(["plus.benefit_reversed"]);
       expect(await store.totalSavedMinor(U(2))).toBe(0n);
     });
+
+    it("metricsCounts: counts by status, created in window, and churn base", async () => {
+      const { store, p } = await setup([1, 2, 3]);
+      const a = sub(p, 1, 1);
+      const b = sub(p, 2, 2);
+      await store.commit({ subscription: { value: a, expectedVersion: null }, events: [] });
+      await store.commit({ subscription: { value: b, expectedVersion: null }, events: [] });
+      const m = await store.metricsCounts(T0 - 1);
+      expect(m.byStatus.ACTIVE).toBe(2);
+      expect(m.createdSince).toBe(2);
+      expect(m.liveAtStart).toBe(0);
+      const later = await store.metricsCounts(T0 + 1);
+      expect(later.createdSince).toBe(0);
+      expect(later.liveAtStart).toBe(2);
+      expect(later.endedSince).toBe(0);
+    });
   });
 }

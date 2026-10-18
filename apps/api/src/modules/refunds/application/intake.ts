@@ -173,6 +173,7 @@ export class IntakeRefundIntent {
         orderLineId: l.orderLineId,
         qty: l.qty,
         itemAmount: BigInt(l.itemAmount),
+        lineGross: facts.lines.find((f) => f.orderLineId === l.orderLineId)?.gross ?? 0n,
         voucherShare: BigInt(l.voucherShare),
         deliveryFeeShare: BigInt(l.deliveryFeeShare),
         netAmount: BigInt(l.netAmount),

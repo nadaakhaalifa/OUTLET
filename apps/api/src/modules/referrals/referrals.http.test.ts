@@ -101,8 +101,8 @@ describe("GET /v1/me/referral", () => {
     const r1 = await mine(await mint(a));
     expect(r1.status).toBe(200);
     expect(r1.body.code).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
-    expect(r1.body.deep_link).toBe(`https://x.test/r/${r1.body.code}`);
-    expect(r1.body).toMatchObject({ pending_count: 0, rewarded_count: 0, remaining_in_window: 50, offer: null });
+    expect(r1.body.share_url).toBe(`https://x.test/r/${r1.body.code}`);
+    expect(r1.body).toMatchObject({ pending_count: 0, rewarded_count: 0, rewarded_this_year: 0, yearly_cap: 50, own_offer: null, referrals: [] });
     expect(r1.body.milestone).toEqual({ every: 10, progress: 0, plus_months: 1 });
     expect((await mine(await mint(a))).body.code).toBe(r1.body.code);
   });
@@ -127,13 +127,13 @@ describe("POST /v1/referrals/attribute", () => {
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ attributed: true });
     const view = await mine(await mint(b));
-    expect(view.body.offer).toEqual({
+    expect(view.body.own_offer).toEqual({
       discount: { amount: "15000", currency: "EGP" },
       min_order: { amount: "60000", currency: "EGP" },
     });
     const owner = await mine(await mint(a));
     expect(owner.body.pending_count).toBe(1);
-    expect(owner.body.offer).toBeNull();
+    expect(owner.body.own_offer).toBeNull();
   });
 
   it("self referral looks identical to success, earns no offer and is logged", async () => {
@@ -141,7 +141,7 @@ describe("POST /v1/referrals/attribute", () => {
     const r = await attribute(await mint(c), { code });
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ attributed: true });
-    expect((await mine(await mint(c))).body.offer).toBeNull();
+    expect((await mine(await mint(c))).body.own_offer).toBeNull();
     expect(store.events).toContainEqual(
       expect.objectContaining({ type: "referral.attribution_rejected", reason: "self_referral", refereeId: c.userId }),
     );

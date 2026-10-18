@@ -28,3 +28,10 @@ export class ResaleStoreResolver implements ResourceResolver {
     return { type: "store_product", id, storeId: id, state: "active" };
   }
 }
+
+/** Admin console collections (no object id): any admin grant passes the policy; the handler narrows roles. */
+export class ResaleAdminResolver implements ResourceResolver {
+  async resolve(): Promise<Resource | null> {
+    return { type: "admin_console", id: "resale", state: "active" };
+  }
+}

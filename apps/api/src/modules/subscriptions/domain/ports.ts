@@ -88,7 +88,14 @@ export type MemberNoticeTemplate =
   | "plus_trial_reminder"
   | "plus_payment_failed"
   | "plus_expired"
-  | "plus_price_change";
+  | "plus_price_change"
+  | "family_member_joined"
+  | "family_member_left"
+  | "family_member_removed"
+  | "family_plan_ending"
+  | "family_plan_ended"
+  | "student_status_expiring"
+  | "student_price_ended";
 
 /** Notifications module. Transactional messages (no marketing consent needed). */
 export interface MemberNoticePort {
@@ -121,6 +128,10 @@ export interface KeyHasherPort {
 
 export const PLUS_FLAGS = {
   sales: "kill.plus.sales",
+  /** Family plan sales, invites and seat changes (spec P3-03). Off by default. */
+  family: "kill.plus.family",
+  /** Student plan verification and sales (spec P3-03, VR-P3-09). Off by default. */
+  student: "kill.plus.student",
   recurring: (method: string): string => `kill.plus.recurring.${method}`,
 } as const;
 
@@ -234,6 +245,16 @@ export interface SubscriptionChange {
 
 export type CommitResult = "ok" | "conflict" | "trial_taken" | "duplicate_event" | "already_subscribed";
 
+export interface MetricsCounts {
+  readonly byStatus: Readonly<Record<SubscriptionState, number>>;
+  /** Subscriptions created on or after `sinceMs`. */
+  readonly createdSince: number;
+  /** Subscriptions that existed before `sinceMs` and were live then. */
+  readonly liveAtStart: number;
+  /** Of those, how many are EXPIRED now with period end inside the window. */
+  readonly endedSince: number;
+}
+
 export interface SubscriptionStore {
   listPlanVersions(code?: string): Promise<readonly PlusPlan[]>;
   getPlan(id: string): Promise<PlusPlan | null>;
@@ -246,6 +267,8 @@ export interface SubscriptionStore {
   getLatestByUser(userId: string): Promise<PlusSubscription | null>;
   listDue(nowMs: number, limit: number): Promise<readonly PlusSubscription[]>;
   listLiveByPlanCode(code: string): Promise<readonly PlusSubscription[]>;
+  /** Admin metrics: plain counts from stored rows. `sinceMs` opens the churn window. */
+  metricsCounts(sinceMs: number): Promise<MetricsCounts>;
 
   claimedTrialKeys(keyHashes: readonly string[]): Promise<ReadonlySet<string>>;
 

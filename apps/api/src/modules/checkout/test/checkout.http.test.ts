@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ADDRESS, OTHER_SHOPPER, SHOPPER, U } from "./world";
+import { ADDRESS, OTHER_SHOPPER, SHOPPER, STORE_A, U, bagLine, defaultBag } from "./world";
 import { createCheckoutHarness, shopperActor, type CheckoutHarness } from "./harness";
 
 let h: CheckoutHarness;
@@ -129,5 +129,54 @@ describe("POST /v1/webhooks/checkout/:provider", () => {
     // The owner sees it placed; nobody else can.
     const s = await h.http().get(`/v1/checkout/${g}`).set(auth("shopper-token-000001")).expect(200);
     expect(s.body.status).toBe("placed");
+  });
+});
+
+describe("quote plus_savings", () => {
+  it("shows what Plus would save, computed server-side, and null for members", async () => {
+    const r = await h.http().post("/v1/checkout/quote").set(auth("shopper-token-000001")).send(body()).expect(200);
+    expect(r.body.plus_member).toBe(false);
+    expect(r.body.plus_savings).toEqual({ amount: r.body.shipping_total.amount, currency: "EGP" });
+    expect(r.body.plus_savings.amount).toBe("8000");
+    await h.close();
+    h = await createCheckoutHarness({ plus: true });
+    h.tokens.add("shopper-token-000001", shopperActor(SHOPPER));
+    const m = await h.http().post("/v1/checkout/quote").set(auth("shopper-token-000001")).send(body()).expect(200);
+    expect(m.body.plus_member).toBe(true);
+    expect(m.body.plus_savings).toBeNull();
+  });
+});
+
+describe("drop admission on POST /v1/checkout", () => {
+  const dropBag = () => {
+    const bag = defaultBag();
+    h.world.cart.set(SHOPPER, {
+      ...bag,
+      lines: [{ ...bagLine({ lineId: U(401), skuId: U(501), storeId: STORE_A, price: 150_000n, isDrop: true }), dropId: U(900) }, ...bag.lines.slice(1)],
+    });
+  };
+  it("a bag with a drop SKU needs a valid single-use admission token", async () => {
+    dropBag();
+    const post = (n: number, extra: Record<string, unknown>) =>
+      h.http().post("/v1/checkout").set(auth("shopper-token-000001")).set("idempotency-key", KEY(n)).send(body({ ...extra }));
+    const none = await post(20, {});
+    expect(none.status).toBe(409);
+    expect(none.body.code).toBe("admission_required");
+    const bad = await post(21, { admission_token: "x".repeat(30) });
+    expect(bad.status).toBe(403);
+    expect(bad.body.code).toBe("admission_invalid");
+    await h.http().post("/v1/checkout").set(auth("shopper-token-000001")).set("idempotency-key", KEY(22)).send(body({ admission_token: "short" })).expect(400);
+  });
+
+  it("a valid token places the order once; reusing it for a new checkout is a 409 admission_used", async () => {
+    dropBag();
+    const ok = await h.http().post("/v1/checkout").set(auth("shopper-token-000001")).set("idempotency-key", KEY(23)).send(body({ admission_token: "valid-admission-token-0001" }));
+    expect(ok.status).toBe(200);
+    const replay = await h.http().post("/v1/checkout").set(auth("shopper-token-000001")).set("idempotency-key", KEY(23)).send(body({ admission_token: "valid-admission-token-0001" }));
+    expect(replay.body.order_group_id).toBe(ok.body.order_group_id);
+    dropBag();
+    const again = await h.http().post("/v1/checkout").set(auth("shopper-token-000001")).set("idempotency-key", KEY(24)).send(body({ method: "meeza", admission_token: "valid-admission-token-0001" }));
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe("admission_used");
   });
 });

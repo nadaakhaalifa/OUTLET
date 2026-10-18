@@ -245,6 +245,8 @@ export class InMemoryOrderRepository implements OrderRepository {
       dispatchByMs: iso(t.stamps.dispatchByMs, e.order.dispatchByMs),
       packedAtMs: iso(t.stamps.packedAtMs, e.order.packedAtMs),
       shippedAtMs: iso(t.stamps.shippedAtMs, e.order.shippedAtMs),
+      deliveredAtMs: iso(t.stamps.deliveredAtMs, e.order.deliveredAtMs),
+      closedAtMs: iso(t.stamps.closedAtMs, e.order.closedAtMs),
       cancelledAtMs: iso(t.stamps.cancelledAtMs, e.order.cancelledAtMs),
       cancelInitiator: t.cancelInitiator ?? e.order.cancelInitiator,
       cancelReason: t.cancelInitiator !== undefined ? t.reasonCode : e.order.cancelReason,
@@ -287,6 +289,15 @@ export class InMemoryOrderRepository implements OrderRepository {
       .map((e) => e.order)
       .filter((o) => (o.status === "PAID" || o.status === "CONFIRMED_COD") && o.acceptByMs !== null && o.acceptByMs <= nowMs)
       .sort((a, b) => (a.acceptByMs ?? 0) - (b.acceptByMs ?? 0) || (a.id < b.id ? -1 : 1))
+      .slice(0, limit)
+      .map((o) => o.id);
+  }
+
+  async findCloseCandidates(deliveredBeforeMs: number, limit: number): Promise<readonly string[]> {
+    return [...this.orders.values()]
+      .map((e) => e.order)
+      .filter((o) => o.status === "DELIVERED" && o.deliveredAtMs !== null && o.deliveredAtMs <= deliveredBeforeMs)
+      .sort((a, b) => (a.deliveredAtMs ?? 0) - (b.deliveredAtMs ?? 0) || (a.id < b.id ? -1 : 1))
       .slice(0, limit)
       .map((o) => o.id);
   }

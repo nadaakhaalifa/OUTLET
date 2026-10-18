@@ -17,6 +17,8 @@ export function planWire(p: PlusPlan) {
     price: moneyWire(p.priceMinor),
     trial_days: p.trialDays,
     version: p.version,
+    kind: p.kind ?? "individual",
+    seat_limit: p.seatLimit ?? null,
   };
 }
 
@@ -40,6 +42,10 @@ export function paywallWire(v: PaywallView) {
             free_months: v.marketing.freeMonths,
             saving: moneyWire(v.marketing.savingMinor),
           },
+    family_offer:
+      v.familyOffer === null
+        ? null
+        : { plan_code: v.familyOffer.planCode, seats: v.familyOffer.seats, saving: moneyWire(v.familyOffer.savingMinor) },
     auto_renew: true,
     cancel_path: "me/plus",
   };

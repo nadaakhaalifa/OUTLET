@@ -63,3 +63,8 @@ export {
   type ReturnEvent as ReturnMachineEvent,
   type ReturnState,
 } from "@outlet/domain";
+
+import { returnMachine as machine, RETURN_STATES as ALL_STATES, type ReturnState as RS } from "@outlet/domain";
+
+/** Every non-terminal state, derived from the machine's terminal set (never a second list of names). */
+export const OPEN_RETURN_STATES: readonly RS[] = ALL_STATES.filter((s) => !machine.isTerminal(s));

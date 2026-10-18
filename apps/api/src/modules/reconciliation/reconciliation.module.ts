@@ -14,15 +14,17 @@ import {
   RECON_CLEARING,
   RECON_ETA,
   RECON_FILE_PARSER,
+  RECON_FINANCE_VIEWS_ENABLED,
   RECON_FLAGS,
   RECON_INTEGRITY,
   RECON_NOW,
+  RECON_RAIL_INPUTS,
   RECON_STORE,
   RUN_RECONCILIATION,
   SCHEDULE_RECONCILIATION,
 } from "./adapters/tokens";
 import { IngestSettlementFile } from "./application/ingest";
-import { FinanceReconReadModel } from "./application/queries";
+import { FinanceReconReadModel, type RailInputs } from "./application/queries";
 import { RunReconciliation, ScheduleReconciliation, type ReconDeps } from "./application/run";
 import type {
   EtaSourcePort,
@@ -42,6 +44,10 @@ export interface ReconciliationModuleOverrides {
   readonly integrity?: IntegrityPort;
   readonly alerts?: ReconAlertPort;
   readonly flags?: ReconFlagsPort;
+  /** Provider readiness per rail, from the same registry as /v1/ready. Absent means every rail reports "unconfigured". */
+  readonly railInputs?: RailInputs;
+  /** release.admin.finance_views. Absent means BLOCKED: the B-2 fields are omitted from the summary. */
+  readonly financeViewsEnabled?: () => Promise<boolean> | boolean;
 }
 
 /** Thrown at boot when a non-test environment has no real source for a reconciliation suite. */
@@ -119,7 +125,13 @@ export class ReconciliationModule {
             return new ScheduleReconciliation(d, new RunReconciliation(d));
           },
         },
-        { provide: FINANCE_RECON_READ, inject: [RECON_STORE], useFactory: (s: ReconStore) => new FinanceReconReadModel(s) },
+        { provide: RECON_RAIL_INPUTS, useValue: overrides.railInputs ?? (() => ({})) },
+        { provide: RECON_FINANCE_VIEWS_ENABLED, useValue: overrides.financeViewsEnabled ?? (() => false) },
+        {
+          provide: FINANCE_RECON_READ,
+          inject: [RECON_STORE, RECON_NOW, RECON_RAIL_INPUTS],
+          useFactory: (s: ReconStore, now: () => number, rails: RailInputs) => new FinanceReconReadModel(s, now, rails),
+        },
       ],
       exports: [RECON_STORE, INGEST_SETTLEMENT_FILE, RUN_RECONCILIATION, SCHEDULE_RECONCILIATION, FINANCE_RECON_READ],
     };

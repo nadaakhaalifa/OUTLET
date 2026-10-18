@@ -211,3 +211,42 @@ describe("module boot", () => {
     expect(() => HubConsolidationModule.forRoot(loadConfig({ NODE_ENV: "test" }))).not.toThrow();
   });
 });
+
+describe("admin and seller consolidation views", () => {
+  const get = (path: string, token: string | null) => {
+    tick();
+    const r = h.http().get(path);
+    return token === null ? r : r.set(bearer(token));
+  };
+  it("admin lists parcels with a keyset page; roles and audiences enforced; bad cursor 400", async () => {
+    await openGroup();
+    for (const so of SO) await scan(so, TOKENS.opHub1);
+    const ok = await get("/v1/admin/hub/consolidations?limit=1", TOKENS.adminOps);
+    expect(ok.status).toBe(200);
+    expect(ok.body.items).toHaveLength(1);
+    expect(ok.body.items[0].shopper_fee).toEqual({ amount_minor: "6000", currency: "EGP" });
+    expect(ok.body.page.has_more).toBe(false);
+    expect((await get("/v1/admin/hub/consolidations", TOKENS.adminSupport)).status).toBe(403);
+    expect((await get("/v1/admin/hub/consolidations", TOKENS.shopperOnAdminAud)).status).toBe(403);
+    expect((await get("/v1/admin/hub/consolidations", TOKENS.sellerA)).status).toBe(401);
+    expect((await get("/v1/admin/hub/consolidations", null)).status).toBe(401);
+    expect((await get("/v1/admin/hub/consolidations?cursor=%%", TOKENS.adminOps)).status).toBe(400);
+  });
+  it("seller sees only own seller orders, no buyer PII; other store sees nothing; wrong audience 401", async () => {
+    await openGroup();
+    for (const so of SO) await scan(so, TOKENS.opHub1);
+    const mine = await get(`/v1/seller/hub/consolidations?order_group_id=${GROUP}`, TOKENS.sellerA);
+    expect(mine.status).toBe(200);
+    expect(mine.body.items).toHaveLength(1);
+    expect(mine.body.items[0].parcel).toMatchObject({ status: "READY" });
+    expect(JSON.stringify(mine.body)).not.toMatch(/phone|recipient|address|name|user_id/i);
+    const other = await get(`/v1/seller/hub/consolidations?order_group_id=${GROUP}`, TOKENS.sellerOther);
+    expect(other.body.items).toEqual([]);
+    expect((await get("/v1/seller/hub/consolidations", TOKENS.sellerOnBuyerAud)).status).toBe(401);
+    expect((await get("/v1/seller/hub/consolidations", TOKENS.shopper1)).status).toBe(401);
+    expect((await get("/v1/seller/hub/consolidations", TOKENS.opHub1)).status).toBe(401);
+    expect((await get("/v1/seller/hub/consolidations", null)).status).toBe(401);
+    expect((await get("/v1/seller/hub/consolidations?cursor=%%", TOKENS.sellerA)).status).toBe(400);
+    expect((await get("/v1/seller/hub/consolidations?order_group_id=nope", TOKENS.sellerA)).status).toBe(400);
+  });
+});
