@@ -63,3 +63,12 @@ describe("0045_ads", () => {
     ).rejects.toThrow(/check/);
   });
 });
+
+describe("0048_ad_click_reviews", () => {
+  it("passes the migration linter and keeps reviews append-only", async () => {
+    expect(lintMigration(migrationSql("0048_ad_click_reviews.sql"))).toEqual([]);
+    await pg.query(`insert into ad_click_reviews (click_id, decision, reason_code, decided_by) values ($1,'flag_store','bot_pattern',$2)`, [U(77), U(78)]);
+    await expect(pg.query(`update ad_click_reviews set decision = 'confirm_invalid' where click_id = $1`, [U(77)])).rejects.toThrow();
+    await expect(pg.query(`insert into ad_click_reviews (click_id, decision, reason_code, decided_by) values ($1,'refund','x1',$2)`, [U(79), U(78)])).rejects.toThrow(/check/);
+  });
+});

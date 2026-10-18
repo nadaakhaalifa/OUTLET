@@ -74,8 +74,21 @@ describe("KyselyAdminStore specifics", () => {
     expect(seqs.rows.map((r) => r.seq)).toEqual(["1", "2", "3"]);
     expect(new Set(seqs.rows.map((r) => r.chain_id)).size).toBe(1);
     expect(seqs.rows[0]?.chain_id).toMatch(/^admin:\d{4}-\d{2}$/);
+    await c.pg.query(`select set_config('app.role','system',false)`); // audit_log_verify is role-gated (0093)
     const problems = await c.pg.query(`select * from audit_log_verify('${seqs.rows[0]?.chain_id}')`);
     expect(problems.rows).toEqual([]);
+  });
+
+  it("the audit writer rejects P3 keys and PII-looking values before writing anything (fails closed)", async () => {
+    const c = await fresh();
+    await c.seedUser(U(1));
+    const base = { action: "x", actorId: U(1), targetType: null, targetId: null, reasonCode: "kyc_review", requestId: null, atMs: 1_800_000_000_000 };
+    await expect(c.audit.append({ ...base, diff: { phone_e164: "ok" } })).rejects.toThrow(/audit diff rejected/);
+    await expect(c.audit.append({ ...base, diff: { iban: "x" } })).rejects.toThrow(/audit diff rejected/);
+    await expect(c.audit.append({ ...base, diff: { note: "+201001234567" } })).rejects.toThrow(/audit diff rejected/);
+    await expect(c.audit.append({ ...base, diff: { fields: "phone" } })).resolves.toBeUndefined();
+    const n = await c.pg.query<{ n: string }>(`select count(*)::text as n from audit_log`);
+    expect(n.rows[0]?.n).toBe("1");
   });
 
   it("row level security: staff roles see what they should, shoppers and sellers see nothing", async () => {

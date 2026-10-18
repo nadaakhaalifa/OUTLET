@@ -49,6 +49,17 @@ export class PrivacyExportController {
     return exportWire(r.request, null);
   }
 
+  /** Declared before `:exportId` so "latest" is never parsed as an id. Keyed by the token subject. */
+  @Get("latest")
+  @AuthenticatedSelf()
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async latest(@Req() req: ApiRequest, @Res({ passthrough: true }) res: ApiResponse) {
+    const v = await this.getExport.latest(userIdOf(req));
+    if (v === null) throw Problems.notFound();
+    res.setHeader("Cache-Control", "private, no-store");
+    return exportWire(v.request, v.download);
+  }
+
   @Get(":exportId")
   @Authorize({ action: "read", resourceType: "dsar_export", resolver: EXPORT_RESOLVER, idParam: "exportId" })
   @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])

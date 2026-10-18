@@ -182,7 +182,7 @@ describe("bundle", () => {
   it("serialises bigint money exactly and writes a valid stored ZIP", () => {
     expect(stableJson({ n: 9_007_199_254_740_993n })).toContain('"9007199254740993"');
     const { bytes, manifest } = assembleExportZip({
-      collected: { tables: { t: [{ a: 1 }, { a: 2 }] }, exporterKeys: ["x"] },
+      collected: { tables: { t: [{ a: 1 }, { a: 2 }] }, exporterKeys: ["x"], gaps: [] },
       locale: "en",
       generatedAtMs: START_MS,
     });

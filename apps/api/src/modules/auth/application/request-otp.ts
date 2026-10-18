@@ -48,7 +48,9 @@ export type RequestOtpResult =
   | { readonly kind: "age_blocked"; readonly blockedUntilMs: number }
   | { readonly kind: "country_not_allowed" }
   | { readonly kind: "rate_limited"; readonly retryAfterMs: number | null }
-  | { readonly kind: "delivery_failed" };
+  | { readonly kind: "delivery_failed" }
+  /** Every sender is an Unconfigured production adapter: nothing was sent, answer 503 provider_not_configured. */
+  | { readonly kind: "provider_not_configured" };
 
 export class RequestOtp {
   constructor(private readonly deps: RequestOtpDeps) {}
@@ -90,7 +92,10 @@ export class RequestOtp {
       locale: input.language,
       idempotencyKey: input.sendKey,
     });
-    if (!sent.ok) return { kind: "delivery_failed" };
+    if (!sent.ok) {
+      const none = sent.attempts.length > 0 && sent.attempts.every((a) => a.reason === "provider_not_configured");
+      return { kind: none ? "provider_not_configured" : "delivery_failed" };
+    }
 
     const channel = chain.find((s) => s.id === sent.senderId)?.channel ?? "sms";
     await d.challenges.insert({ challenge, channel, deviceKey });

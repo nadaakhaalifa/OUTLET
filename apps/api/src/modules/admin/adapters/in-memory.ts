@@ -1,3 +1,4 @@
+import { assertAuditDiff } from "@outlet/privacy";
 import type { ElevationRecord, ApprovalRecord, KycState, SuspensionReview } from "../domain/bridge";
 import type {
   AdminAuditEntry,
@@ -131,6 +132,7 @@ export class InMemoryAdminAudit implements AdminAuditPort {
       this.failNext = false;
       throw new Error("audit unavailable");
     }
+    assertAuditDiff(e.diff);
     this.entries.push(e);
   }
 }

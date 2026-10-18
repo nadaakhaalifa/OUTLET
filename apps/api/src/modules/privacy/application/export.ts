@@ -48,9 +48,18 @@ export class GetExport {
     private readonly clock: Clock,
   ) {}
 
+  async latest(userId: string): Promise<ExportView | null> {
+    const r = await this.repo.findLatest(userId, "export");
+    return r === null ? null : this.view(r);
+  }
+
   async execute(input: { readonly userId: string; readonly id: string }): Promise<ExportView | null> {
     const r = await this.repo.get(input.id);
     if (r === null || r.kind !== "export" || r.userId !== input.userId) return null;
+    return this.view(r);
+  }
+
+  private async view(r: ExportRequest): Promise<ExportView> {
     const now = this.clock.nowMs();
     if (!isDownloadable(r, now) || r.objectRef === null) return { request: r, download: null };
     return { request: r, download: await this.store.signGetUrl(r.objectRef, SIGNED_URL_TTL_SECONDS, now) };
@@ -76,6 +85,9 @@ export class ProcessExport {
     const found = await this.repo.get(requestId);
     if (found === null || found.kind !== "export") return { kind: "not_found" };
     if (found.status !== "requested") return { kind: "skipped" };
+    // No real object store on this deployment: leave the request waiting (visible in /v1/ready as an
+    // unconfigured provider) instead of burning its attempts into `failed`.
+    if (this.store.configured === false) return { kind: "skipped" };
     const claimed = startExport(found, this.clock.nowMs());
     if ((await this.repo.update(claimed, [])) !== "ok") return { kind: "skipped" };
 

@@ -1,8 +1,11 @@
 import { Body, Controller, Get, HttpCode, Inject, Post, Query, Req } from "@nestjs/common";
 import { UuidSchema, toLanguage, DEFAULT_LOCALE, LocaleSchema } from "@outlet/validation";
 import { z } from "zod";
+import { sellerSessionBody } from "../seller/adapters/seller-auth.controller";
+import { SELLER_REFRESH } from "../seller/adapters/tokens";
+import type { SellerRefresh } from "../seller/application/sessions";
 import { AuthenticatedSelf, Public, RateLimit } from "../../../platform/decorators";
-import type { ApiRequest } from "../../../platform/http-types";
+import { headerValue, type ApiRequest } from "../../../platform/http-types";
 import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import type { AgeGate } from "../application/age-gate";
@@ -15,6 +18,7 @@ import {
   attestationFrom,
   attestationProblem,
   DeviceSchema,
+  PasskeyDeviceSchema,
   iso,
   tokenPair,
 } from "./http-common";
@@ -40,7 +44,8 @@ const SocialLoginSchema = z
 const RefreshSchema = z
   .object({
     refresh_token: z.string().min(16).max(256),
-    device_install_id: UuidSchema,
+    /** Mobile only. Web sessions are bound by the X-Admin-Install header instead and ignore this. */
+    device_install_id: UuidSchema.optional(),
   })
   .strict();
 
@@ -51,7 +56,7 @@ const PasskeyRegisterSchema = z
   .strict();
 
 const PasskeyAssertSchema = z
-  .object({ challenge_id: UuidSchema, credential: WebAuthnCredential, device: DeviceSchema })
+  .object({ challenge_id: UuidSchema, credential: WebAuthnCredential, device: PasskeyDeviceSchema })
   .strict();
 
 const SessionListQuerySchema = z
@@ -89,6 +94,7 @@ export class IdentityController {
     @Inject(REFRESH_SESSION) private readonly refresh: RefreshSession,
     @Inject(REVOKE_SESSION) private readonly revoke: RevokeSession,
     @Inject(LIST_SESSIONS) private readonly listSessions: ListSessions,
+    @Inject(SELLER_REFRESH) private readonly sellerRefresh: SellerRefresh,
   ) {}
 
   // ---- Age gate -------------------------------------------------------------------------
@@ -230,11 +236,15 @@ export class IdentityController {
       challengeId: body.challenge_id,
       credentialId: body.credential.id,
       response: body.credential,
-      installId: body.device.install_id,
+      installId: body.device.platform === "web" ? null : body.device.install_id,
       platform: body.device.platform,
-      attestation: attestationFrom(req, body.device.platform),
+      attestation: body.device.platform === "web" ? null : attestationFrom(req, body.device.platform),
     });
     switch (r.kind) {
+      case "web_sign_in_not_allowed":
+        throw new ProblemError(403, "web-sign-in-not-allowed", "Web sign-in is not available for this account", {
+          code: "web_sign_in_not_allowed",
+        });
       case "ok":
         return tokenPair(r);
       case "attestation_failed":
@@ -260,8 +270,12 @@ export class IdentityController {
     { dimension: "device", limit: 30, windowSeconds: 3_600 },
     { dimension: "ip", limit: 120, windowSeconds: 3_600 },
   ])
-  async refreshRoute(@Body(new ZodPipe(RefreshSchema)) body: z.infer<typeof RefreshSchema>) {
-    const r = await this.refresh.execute({ refreshToken: body.refresh_token, installId: body.device_install_id });
+  async refreshRoute(@Req() req: ApiRequest, @Body(new ZodPipe(RefreshSchema)) body: z.infer<typeof RefreshSchema>) {
+    const r = await this.refresh.execute({
+      refreshToken: body.refresh_token,
+      installId: body.device_install_id ?? null,
+      adminInstallToken: headerValue(req, "x-admin-install") ?? null,
+    });
     switch (r.kind) {
       case "ok":
         return tokenPair(r);
@@ -270,8 +284,16 @@ export class IdentityController {
           code: "refresh_conflict",
           headers: { "Retry-After": "1" },
         });
-      case "invalid":
+      case "invalid": {
+        // Seller refresh tokens share this endpoint: the token itself decides the audience.
+        if (body.device_install_id === undefined) throw invalidRefresh();
+        const sr = await this.sellerRefresh.execute({ refreshToken: body.refresh_token, installId: body.device_install_id });
+        if (sr.kind === "ok") return sellerSessionBody(sr);
+        if (sr.kind === "conflict") {
+          throw new ProblemError(409, "refresh-conflict", "Another refresh for this session is in progress", { code: "refresh_conflict", headers: { "Retry-After": "1" } });
+        }
         throw invalidRefresh();
+      }
     }
   }
 

@@ -26,7 +26,7 @@ export interface AdsDeps {
   readonly bots: BotScorePort;
   readonly attribution: AttributionPort;
   readonly secret: SecretPort;
-  /** B-8: PSP that collected the top-up, as named in the settlement files. Default "ads". */
+  /** B-8: PSP name in settlement files. No default: unset fails closed. */
   readonly topUpPsp?: string;
 }
 

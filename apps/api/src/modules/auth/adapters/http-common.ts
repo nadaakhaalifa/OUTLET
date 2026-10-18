@@ -15,6 +15,21 @@ export const DeviceSchema = z
   })
   .strict();
 
+/**
+ * Passkey assertion device. `web` is admitted here only (deny by default on every other route).
+ * A client-supplied install_id for web is accepted and ignored: the server mints it.
+ */
+export const PasskeyDeviceSchema = z.union([
+  DeviceSchema,
+  z
+    .object({
+      platform: z.literal("web"),
+      install_id: UuidSchema.optional(),
+      app_version: z.string().max(32).optional(),
+    })
+    .strict(),
+]);
+
 export const iso = (ms: number): string => new Date(ms).toISOString();
 
 /**
@@ -54,8 +69,8 @@ export function toMe(user: User): Record<string, unknown> {
     ...(user.phoneE164 !== null ? { phone_masked: maskPhone(user.phoneE164) } : {}),
     email: user.email,
     locale: user.language === "ar" ? DEFAULT_LOCALE : "en",
-    age_band: "unverified",
-    limited_capacity: false,
+    age_band: user.ageBand === null ? "unverified" : user.ageBand === "18_20" ? "18_20" : "21_plus",
+    limited_capacity: user.limitedCapacity,
     phone_verified: user.phoneE164 !== null,
     status: "active",
     created_at: iso(user.createdAtMs),
@@ -68,8 +83,14 @@ export function tokenPair(result: {
   refreshToken: string;
   refreshExpiresAtMs: number;
   user: User;
+  /** Web sign-in only: returned once, never stored in clear, never logged. */
+  installToken?: string;
+  /** OTP verify only: true when this call created the account. Omitted by every other flow. */
+  isNewAccount?: boolean;
 }): Record<string, unknown> {
   return {
+    ...(result.isNewAccount !== undefined ? { is_new_account: result.isNewAccount } : {}),
+    ...(result.installToken !== undefined ? { install_token: result.installToken } : {}),
     access_token: result.accessToken,
     access_expires_at: iso(result.accessExpiresAtMs),
     refresh_token: result.refreshToken,

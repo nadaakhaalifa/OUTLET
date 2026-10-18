@@ -3,12 +3,14 @@ import {
   type AttestationVerifier,
   type Csprng,
 } from "@outlet/auth-core";
-import type {
-  OtpChallengeRepository,
-  User,
-  UserDirectory,
-  UserLanguage,
+import {
+  AccountUnavailableError,
+  type OtpChallengeRepository,
+  type User,
+  type UserDirectory,
+  type UserLanguage,
 } from "../domain/ports";
+import type { AgeGate } from "./age-gate";
 import { attestDevice, type Attestation, type Clock } from "./common";
 import type { SessionIssuer } from "./session-issuer";
 
@@ -21,6 +23,8 @@ export interface VerifyOtpDeps {
   readonly rng: Csprng;
   readonly newId: () => string;
   readonly pepper: Uint8Array;
+  /** Supplies the age band recorded by the passed age gate for a new account. */
+  readonly ageGate?: AgeGate;
 }
 
 export interface VerifyOtpInput {
@@ -30,12 +34,19 @@ export interface VerifyOtpInput {
   readonly platform: "ios" | "android";
   readonly language: UserLanguage;
   readonly attestation: Attestation | null;
+  /**
+   * `create` (default, the checkout sign-up): a new number gets an account. `existing_only` (quiet sign-in, ADR-0055 G-9):
+   * a number with no account answers `no_account` and creates NOTHING (no user, device, session or token).
+   */
+  readonly mode?: "create" | "existing_only";
 }
 
 export type VerifyOtpResult =
   | {
       readonly kind: "ok";
       readonly user: User;
+      /** True only when create mode just created this user (never for an existing account or existing_only). */
+      readonly isNewAccount: boolean;
       readonly sessionId: string;
       readonly accessToken: string;
       readonly accessExpiresAtMs: number;
@@ -43,6 +54,10 @@ export type VerifyOtpResult =
       readonly refreshExpiresAtMs: number;
     }
   | { readonly kind: "attestation_failed" }
+  /** `existing_only` and no account for the verified number. The challenge is already consumed. */
+  | { readonly kind: "no_account" }
+  /** Create mode on a number whose account is suspended: nothing was created and no session opened. */
+  | { readonly kind: "account_unavailable" }
   /** Unknown challenge, wrong device, wrong code and replay are indistinguishable to the caller. */
   | { readonly kind: "invalid"; readonly attemptsRemaining: number | null }
   | { readonly kind: "expired" }
@@ -57,7 +72,7 @@ export class VerifyOtp {
     if (deviceKey === null) return { kind: "attestation_failed" };
 
     const record = await d.challenges.find(input.challengeId);
-    if (record === null || record.deviceKey !== deviceKey) return { kind: "invalid", attemptsRemaining: null };
+    if (record === null || record.deviceKey !== (await d.challenges.deviceKeyOf(deviceKey))) return { kind: "invalid", attemptsRemaining: null };
 
     const nowMs = d.clock.nowMs();
     const result = verifyOtp(record.challenge, input.code, nowMs, d.pepper);
@@ -70,18 +85,37 @@ export class VerifyOtp {
     if (!saved) return { kind: "invalid", attemptsRemaining: null };
     if (result.outcome === "wrong_code") return { kind: "invalid", attemptsRemaining: result.attemptsLeft };
 
-    const user = await d.users.findOrCreateByPhone({
-      phoneE164: record.challenge.phoneE164,
-      language: input.language,
-      newId: d.newId(),
-      nowMs,
-    });
+    let user: User | null;
+    let isNewAccount = false;
+    if (input.mode === "existing_only") {
+      // Read only. Reached solely after a CORRECT code, so existence is revealed only to the holder of the number.
+      // A suspended account is not "active" and is reported as no_account (the same answer, no extra oracle).
+      user = await d.users.findByPhone(record.challenge.phoneE164);
+      if (user === null) return { kind: "no_account" };
+    } else {
+      const age = d.ageGate === undefined ? null : await d.ageGate.passInfo(deviceKey);
+      const newId = d.newId();
+      try {
+        user = await d.users.findOrCreateByPhone({
+          age,
+          phoneE164: record.challenge.phoneE164,
+          language: input.language,
+          newId,
+          nowMs,
+        });
+      } catch (error) {
+        if (error instanceof AccountUnavailableError) return { kind: "account_unavailable" };
+        throw error;
+      }
+      // The directory returns the existing row on a repeat sign-in, so our fresh id survives only on creation.
+      isNewAccount = user.id === newId;
+    }
     const issued = await d.issuer.open({
       user,
       installId: input.installId,
       platform: input.platform,
       amr: [record.channel === "sms" ? "otp_sms" : "otp_whatsapp", "attestation"],
     });
-    return { kind: "ok", user, ...issued };
+    return { kind: "ok", user, isNewAccount, ...issued };
   }
 }

@@ -62,6 +62,15 @@ describe("POST/GET /v1/me/privacy/export", () => {
     expect(outbox.events.map((e) => e.type)).toEqual(expect.arrayContaining(["privacy.export_requested", "privacy.export_ready"]));
   });
 
+  it("GET /export/latest returns my most recent export, 401 without a token, and 404 when I never asked", async () => {
+    const mine = await h.http().get("/v1/me/privacy/export/latest").set(bearer(PRINCIPALS.alice));
+    expect(mine.status).toBe(200);
+    expect(mine.body).toMatchObject({ id: exportId, status: "ready" });
+    expect(mine.headers["cache-control"]).toBe("private, no-store");
+    expect((await h.http().get("/v1/me/privacy/export/latest")).status).toBe(401);
+    expect((await h.http().get("/v1/me/privacy/export/latest").set(bearer(PRINCIPALS.bob))).status).toBe(404);
+  });
+
   it("another user's export id is 404, exactly like an unknown id", async () => {
     const other = await h.http().get(`/v1/me/privacy/export/${exportId}`).set(bearer(PRINCIPALS.bob));
     const unknown = await h.http().get(`/v1/me/privacy/export/${MISSING}`).set(bearer(PRINCIPALS.bob));

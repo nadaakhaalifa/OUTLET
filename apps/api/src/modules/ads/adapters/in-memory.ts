@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { REVIEWABLE_INVALID_REASONS } from "../domain/ports";
 import { cairoDayKey, type AdsConfig, type Campaign, type CampaignStatus, type TargetingContext } from "../domain/bridge";
 import type {
   AdsFlagsPort,
@@ -12,6 +13,8 @@ import type {
   BotScorePort,
   ChargeIntentPort,
   ClickRecord,
+  ClickReviewRecord,
+  DecideClickReview,
   EnforcementPort,
   ImpressionRecord,
   LedgerPostingPort,
@@ -210,6 +213,23 @@ export class InMemoryAdsStore implements AdsStore {
   }
   async getClick(id: string) {
     return this.clicks.get(id) ?? null;
+  }
+  readonly reviews = new Map<string, ClickReviewRecord>();
+  async listInvalidClickQueue(q: { limit: number; after: { atMs: number; id: string } | null }) {
+    return [...this.clicks.values()]
+      .filter((c) => !c.valid && c.invalidReason !== null && (REVIEWABLE_INVALID_REASONS as readonly string[]).includes(c.invalidReason) && !this.reviews.has(c.id))
+      .filter((c) => q.after === null || c.atMs < q.after.atMs || (c.atMs === q.after.atMs && c.id < q.after.id))
+      .sort((a, b) => b.atMs - a.atMs || (a.id < b.id ? 1 : -1))
+      .slice(0, q.limit);
+  }
+  async decideClickReview(r: ClickReviewRecord): Promise<DecideClickReview> {
+    const c = this.clicks.get(r.clickId);
+    if (c === undefined) return { kind: "not_found" };
+    const prior = this.reviews.get(r.clickId);
+    if (prior !== undefined) return prior.decision === r.decision ? { kind: "replayed", review: prior } : { kind: "conflict", review: prior };
+    if (c.valid || c.invalidReason === null || !(REVIEWABLE_INVALID_REASONS as readonly string[]).includes(c.invalidReason)) return { kind: "not_reviewable" };
+    this.reviews.set(r.clickId, r);
+    return { kind: "decided", review: r };
   }
 
   async stats(i: { storeId: string; campaignId: string | null; fromMs: number; toMs: number }) {

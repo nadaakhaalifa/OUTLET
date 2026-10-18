@@ -1,6 +1,6 @@
-import { sql, type Kysely } from "kysely";
+import { sql } from "kysely";
 import { z } from "zod";
-import { emptyFunnelCounts, type FunnelCounts, type KCell, type SalesTotals } from "../domain/bridge";
+import { aggregateDeltas, emptyFunnelCounts, factDeltas, orderDeltas, type FunnelCounts, type KCell, type RollupDelta, type RollupKey, type RollupScope, type SalesTotals } from "../domain/bridge";
 import type {
   AnalyticsStore,
   FreshnessRow,
@@ -12,9 +12,20 @@ import type {
   SourceEvent,
   StockRow,
 } from "../domain/ports";
+import type {
+  CasOutcome,
+  DefaultPartitionRows,
+  NewKeyOutcome,
+  PartitionReport,
+  ReconciliationRecord,
+  RollupMaintenance,
+  RollupSnapshot,
+  RollupWindow,
+} from "../domain/rollup-ports";
+import type { SellerAnalyticsDb } from "./db";
+import { CONSUMER_WATERMARK, KyselyRollupMaintenance, advanceWatermark, applyRollupDeltas, type RollupHooks } from "./kysely-rollups";
 
-/** Raw SQL only, rows validated with Zod (same approach as the returns and cart adapters). */
-export type SellerAnalyticsDb = Kysely<Record<string, never>>;
+export type { SellerAnalyticsDb };
 
 const Num = z.union([z.number(), z.string()]).transform((v) => Number(v));
 const Big = z.union([z.bigint(), z.number(), z.string()]).transform((v) => BigInt(v));
@@ -59,8 +70,37 @@ const ts = (ms: number) => sql`to_timestamp(${ms}::double precision / 1000.0)`;
  * `app.role = 'seller'` and `app.store_ids = <the one store>` so RLS is on for every read AND each
  * query repeats `store_id = $1` (defence in depth).
  */
-export class KyselySellerAnalyticsStore implements AnalyticsStore {
-  constructor(private readonly db: SellerAnalyticsDb) {}
+export class KyselySellerAnalyticsStore implements AnalyticsStore, RollupMaintenance {
+  private readonly maintenance: KyselyRollupMaintenance;
+
+  constructor(
+    private readonly db: SellerAnalyticsDb,
+    private readonly hooks: RollupHooks = {},
+  ) {
+    this.maintenance = new KyselyRollupMaintenance(db, hooks);
+  }
+
+  snapshot(scope: RollupScope, w: RollupWindow): Promise<RollupSnapshot> {
+    return this.maintenance.snapshot(scope, w);
+  }
+  casRepair(key: RollupKey, expected: bigint, readVersion: bigint): Promise<CasOutcome> {
+    return this.maintenance.casRepair(key, expected, readVersion);
+  }
+  repairNewKey(key: RollupKey): Promise<NewKeyOutcome> {
+    return this.maintenance.repairNewKey(key);
+  }
+  record(rec: ReconciliationRecord): Promise<void> {
+    return this.maintenance.record(rec);
+  }
+  firstFactMs(): Promise<number | null> {
+    return this.maintenance.firstFactMs();
+  }
+  maintainPartitions(nowMs: number, ahead: number, retainMonths: number): Promise<PartitionReport> {
+    return this.maintenance.maintainPartitions(nowMs, ahead, retainMonths);
+  }
+  defaultPartitionRows(): Promise<readonly DefaultPartitionRows[]> {
+    return this.maintenance.defaultPartitionRows();
+  }
 
   private async asStore<X>(storeId: string, run: (trx: SellerAnalyticsDb) => Promise<X>): Promise<X> {
     return this.db.transaction().execute(async (trx) => {
@@ -76,7 +116,11 @@ export class KyselySellerAnalyticsStore implements AnalyticsStore {
       await sql`select set_config('app.role', 'system', true)`.execute(trx);
       let applied = 0;
       let duplicates = 0;
-      for (const e of events) {
+      const deltas: RollupDelta[] = [];
+      const erased = await this.erasedKeys(trx, events);
+      for (const e0 of events) {
+        // H3 step 3: an old outbox payload may still carry a shopper key that was erased after it was written.
+        const e: SourceEvent = e0.shopperKey !== null && erased.has(e0.shopperKey) ? { ...e0, shopperKey: null } : e0;
         const claimed = await sql<{ one: number }>`
           insert into inbox_processed (consumer, message_id) values (${consumer}, ${e.messageId}::uuid)
           on conflict do nothing returning 1 as one`.execute(trx);
@@ -85,6 +129,15 @@ export class KyselySellerAnalyticsStore implements AnalyticsStore {
           continue;
         }
         applied += 1;
+        if (e.kind === "purchase") {
+          // `orders` counts a seller order once, in the hour of its earliest purchase fact: read the history BEFORE inserting this fact.
+          const prev = await sql<{ ms: string | null }>`
+            select extract(epoch from min(occurred_at))::text as ms from seller_analytics_facts
+             where store_id = ${e.storeId}::uuid and kind = 'purchase' and seller_order_id = ${e.sellerOrderId}::uuid`.execute(trx);
+          const prevMs = prev.rows[0]?.ms;
+          deltas.push(...orderDeltas(e.storeId, prevMs === null || prevMs === undefined ? null : Math.round(Number(prevMs) * 1000), e.occurredAtMs));
+        }
+        deltas.push(...factDeltas(e));
         if (e.kind === "stock_snapshot") {
           await sql`
             insert into seller_analytics_stock (store_id, sku_id, product_id, size_label, on_hand, price_minor, listed_at, observed_at)
@@ -124,8 +177,18 @@ export class KyselySellerAnalyticsStore implements AnalyticsStore {
             last_event_at = greatest(seller_analytics_freshness.last_event_at, excluded.last_event_at),
             last_ingest_at = greatest(seller_analytics_freshness.last_ingest_at, excluded.last_ingest_at)`.execute(trx);
       }
+      // Keys sorted, one advisory lock and one upsert per key, inside this same transaction (spec section 6, consumer write rule).
+      await applyRollupDeltas(trx, aggregateDeltas(deltas), this.hooks);
+      await advanceWatermark(trx, CONSUMER_WATERMARK, nowMs);
       return { applied, duplicates };
     });
+  }
+
+  private async erasedKeys(trx: SellerAnalyticsDb, events: readonly SourceEvent[]): Promise<ReadonlySet<string>> {
+    const keys = [...new Set(events.flatMap((e) => (e.shopperKey === null ? [] : [e.shopperKey])))];
+    if (keys.length === 0) return new Set();
+    const r = await sql<{ shopper_key: string }>`select shopper_key from analytics_erased_keys where shopper_key in (${sql.join(keys)})`.execute(trx);
+    return new Set(r.rows.map((x) => x.shopper_key));
   }
 
   async trafficTotals(storeId: string, r: Range) {

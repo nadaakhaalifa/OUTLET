@@ -16,7 +16,7 @@ import type {
   SellerKycAdmin,
   ViewPii,
 } from "../application/admin";
-import { computeAccess, hasAnyRole, ROUTE_ROLES, type AdminAccess } from "../domain/access";
+import { adminGateDenial, computeAccess, hasAnyRole, ROUTE_ROLES, type AdminAccess } from "../domain/access";
 import {
   ADMIN_REASON_CODES,
   ADMIN_ROLE_NAMES,
@@ -177,10 +177,7 @@ export class AdminController {
     const now = this.clock.nowMs();
     const live = await this.store.liveElevations(actor.id, now);
     const access = computeAccess(actor, live, now);
-    let reason: "missing_role" | "passkey_required" | null = null;
-    if (access.standing.length === 0) reason = "missing_role";
-    else if (!access.passkey) reason = "passkey_required";
-    else if (allowed !== "any_standing" && !hasAnyRole(access.effective, allowed)) reason = "missing_role";
+    const reason = adminGateDenial(access, allowed);
     try {
       await this.audit.record({
         effect: reason === null ? "allow" : "deny",

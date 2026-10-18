@@ -27,6 +27,7 @@ export const RULE_PARAMS: Readonly<Record<string, RuleParams>> = {
   device_records: { period: { value: 13, unit: "months" }, after: "delete", purgeJob: "purge_stale_devices", purgeMetric: "privacy_devices_purged_total" },
   dsar_export_artifact: { period: { value: 7, unit: "days" }, after: "delete", purgeJob: "purge_dsar_exports", purgeMetric: "privacy_dsar_exports_purged_total" },
   dsar_records: { period: { value: 5, unit: "years" }, after: "delete", purgeJob: "purge_dsar_records", purgeMetric: "privacy_dsar_records_purged_total" },
+  ledger_integrity_samples: { period: { value: 25, unit: "months" }, after: "delete", purgeJob: "purge_ledger_integrity_samples", purgeMetric: "privacy_ledger_integrity_samples_purged_total" },
   fraud_signals: { period: { value: 24, unit: "months" }, after: "delete", purgeJob: "purge_fraud_signals", purgeMetric: "privacy_fraud_signals_purged_total" },
   gift_recipient_contact: { period: { value: 30, unit: "days" }, after: "delete", purgeJob: "purge_gift_recipient_contacts", purgeMetric: "privacy_gift_contacts_purged_total" },
   kyc_records: { period: { value: 5, unit: "years" }, after: "delete", purgeJob: "purge_expired_kyc", purgeMetric: "privacy_kyc_purged_total" },
@@ -47,6 +48,7 @@ export const RULE_PARAMS: Readonly<Record<string, RuleParams>> = {
   stock_unit_rows: { period: { value: 13, unit: "months" }, after: "delete", purgeJob: "purge_claimed_units", purgeMetric: "inventory_units_purged_total" },
   support_chats: { period: { value: 2, unit: "years" }, after: "delete", purgeJob: "purge_support_chats", purgeMetric: "privacy_support_chats_purged_total" },
   technical_dedup: { period: { value: 30, unit: "days" }, after: "delete", purgeJob: "purge_technical_dedup", purgeMetric: "privacy_technical_dedup_purged_total" },
+  visual_search_transient: { period: { value: 48, unit: "hours" }, after: "delete", purgeJob: "purge_visual_search_transient", purgeMetric: "visual_search_purged_total" },
   underage_block: { period: { value: 30, unit: "days" }, after: "delete", purgeJob: "purge_age_blocks", purgeMetric: "privacy_age_blocks_purged_total" },
   user_content: { period: null, after: "anonymize", purgeJob: "purge_user_content", purgeMetric: "privacy_user_content_purged_total" },
 };

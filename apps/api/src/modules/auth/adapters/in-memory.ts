@@ -12,6 +12,7 @@ import { checkAccessClaims, toHex } from "@outlet/auth-core";
 import type { Actor, Resource } from "@outlet/policy";
 import type {
   AccessTokenIssuer,
+  AgePassInfo,
   OtpChallengeRecord,
   OtpChallengeRepository,
   OtpSendLog,
@@ -21,7 +22,9 @@ import type {
   UserDirectory,
   UserLanguage,
 } from "../domain/ports";
+import { AccountUnavailableError } from "../domain/ports";
 import type { OtpChallenge } from "@outlet/auth-core";
+import type { SellerActorResolver } from "../seller/domain/ports";
 
 export interface DevMailboxEntry {
   readonly phoneE164: string;
@@ -70,6 +73,9 @@ export class InMemoryOtpChallengeRepository implements OtpChallengeRepository {
   async insert(record: OtpChallengeRecord): Promise<void> {
     this.rows.set(record.challenge.id, record);
   }
+  async deviceKeyOf(deviceKey: string): Promise<string> {
+    return deviceKey;
+  }
   async compareAndSet(previous: OtpChallenge, next: OtpChallengeRecord): Promise<boolean> {
     const cur = this.rows.get(previous.id);
     if (cur === undefined || cur.challenge.attempts !== previous.attempts || cur.challenge.status !== previous.status) {
@@ -97,10 +103,30 @@ export class InMemoryUserDirectory implements UserDirectory {
   private readonly byId = new Map<string, User>();
   private readonly byPhone = new Map<string, string>();
 
-  async findOrCreateByPhone(input: { phoneE164: string; language: UserLanguage; newId: string; nowMs: number }): Promise<User> {
+  async findByPhone(phoneE164: string): Promise<User | null> {
+    const id = this.byPhone.get(phoneE164);
+    const u = id === undefined ? undefined : this.byId.get(id);
+    return u !== undefined && u.status === "active" ? u : null;
+  }
+
+  /** Test helper: suspends an account (findByPhone then reports no active account). */
+  suspendForTest(id: string): void {
+    const u = this.byId.get(id);
+    if (u !== undefined) this.byId.set(id, { ...u, status: "suspended" as unknown as User["status"] });
+  }
+
+  /** Test helper: number of accounts (asserts that a sign-in-only verify created none). */
+  get size(): number {
+    return this.byId.size;
+  }
+
+  async findOrCreateByPhone(input: { phoneE164: string; language: UserLanguage; newId: string; nowMs: number; age?: AgePassInfo | null }): Promise<User> {
     const existingId = this.byPhone.get(input.phoneE164);
     const existing = existingId === undefined ? undefined : this.byId.get(existingId);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      if (existing.status !== "active") throw new AccountUnavailableError();
+      return existing;
+    }
     const user: User = {
       id: input.newId,
       phoneE164: input.phoneE164,
@@ -108,6 +134,8 @@ export class InMemoryUserDirectory implements UserDirectory {
       language: input.language,
       status: "active",
       createdAtMs: input.nowMs,
+      ageBand: input.age?.ageBand ?? null,
+      limitedCapacity: input.age?.ageBand === "18_20",
     };
     this.byId.set(user.id, user);
     this.byPhone.set(input.phoneE164, user.id);
@@ -122,6 +150,7 @@ export class InMemoryUserDirectory implements UserDirectory {
     language: UserLanguage;
     newId: string;
     nowMs: number;
+    age?: AgePassInfo | null;
   }): Promise<User> {
     const key = `${input.provider}:${input.subject}`;
     const existingId = this.byIdentity.get(key);
@@ -134,6 +163,8 @@ export class InMemoryUserDirectory implements UserDirectory {
       language: input.language,
       status: "active",
       createdAtMs: input.nowMs,
+      ageBand: input.age?.ageBand ?? null,
+      limitedCapacity: input.age?.ageBand === "18_20",
     };
     this.byId.set(user.id, user);
     this.byIdentity.set(key, user.id);
@@ -146,6 +177,10 @@ export class InMemoryUserDirectory implements UserDirectory {
 
 export class InMemorySessionRepository implements SessionRepository {
   private readonly rows = new Map<string, StoredSession>();
+  /** Test helper: number of sessions (asserts that a refused sign-in opened none). */
+  get size(): number {
+    return this.rows.size;
+  }
   async insert(stored: StoredSession): Promise<void> {
     this.rows.set(stored.session.id, stored);
   }
@@ -187,6 +222,7 @@ export class DevTokenService implements AccessTokenIssuer {
     private readonly rng: Csprng,
     private readonly sessions: SessionRepository,
     private readonly users: UserDirectory,
+    private readonly sellerActors?: SellerActorResolver,
   ) {}
 
   async issue(claims: AccessClaims): Promise<string> {
@@ -200,6 +236,11 @@ export class DevTokenService implements AccessTokenIssuer {
     if (raw === undefined) return null;
     const checked = checkAccessClaims(raw, raw.aud, nowMs);
     if (!checked.ok) return null;
+    if (checked.claims.aud === "seller_api") {
+      if (this.sellerActors === undefined) return null;
+      const actor = await this.sellerActors.resolve(checked.claims, nowMs);
+      return actor === null ? null : { claims: checked.claims, actor };
+    }
     const stored = await this.sessions.find(checked.claims.sid);
     if (stored === null || stored.session.revokedAtMs !== null) return null;
     const user = await this.users.findById(checked.claims.sub);

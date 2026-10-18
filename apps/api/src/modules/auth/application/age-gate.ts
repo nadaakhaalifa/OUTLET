@@ -9,7 +9,7 @@ import {
   type AttestationVerifier,
   type CalendarDate,
 } from "@outlet/auth-core";
-import type { AgeGateStore, AuthEventPublisher } from "../domain/ports";
+import type { AgeBand, AgeGateStore, AgePassInfo, AuthEventPublisher, FieldCipher } from "../domain/ports";
 import { attestDevice, type Attestation, type Clock } from "./common";
 
 /** How long a passed gate stays valid for the OTP / social sign-in that follows it. */
@@ -23,6 +23,14 @@ export interface AgeGateDeps {
   readonly clock: Clock;
   /** HMAC key for every identifier the store sees. Never logged, never returned. */
   readonly secret: Uint8Array;
+  /** Encrypts the DOB kept (24 h at most) with the pass so the account can store it as P3. Optional in dev. */
+  readonly cipher?: FieldCipher;
+}
+
+/** 18 to 20 year olds are `limited_capacity` (spec B6); 21 is the Civil Code majority. */
+export const ADULT_AGE_YEARS = 21;
+export function ageBandOf(ageYears: number): AgeBand {
+  return ageYears >= ADULT_AGE_YEARS ? "21_plus" : "18_20";
 }
 
 export type AgeGateSubmitResult =
@@ -85,7 +93,8 @@ export class AgeGate {
     const existing = await d.store.activeBlock([...deviceKeys, dobKey], nowMs);
     if (existing !== null) return { kind: "blocked", blockedUntilMs: existing };
 
-    if (ageOn(dob, today) < MINIMUM_AGE_YEARS) {
+    const age = ageOn(dob, today);
+    if (age < MINIMUM_AGE_YEARS) {
       const until = nowMs + AGE_BLOCK_MS;
       await d.store.block([...deviceKeys, dobKey], until);
       await d.events.publish({ type: "user.age_blocked", occurredAtMs: nowMs });
@@ -93,7 +102,8 @@ export class AgeGate {
     }
 
     const expiresAtMs = nowMs + AGE_GATE_PASS_TTL_MS;
-    await d.store.markPassed(this.attestedKey(input.attestedDeviceKey), expiresAtMs);
+    const dobCiphertext = d.cipher === undefined ? null : await d.cipher.encrypt(input.dob, "users.dob");
+    await d.store.markPassed(this.attestedKey(input.attestedDeviceKey), expiresAtMs, { ageBand: ageBandOf(age), dobCiphertext });
     return { kind: "passed", expiresAtMs };
   }
 
@@ -104,6 +114,11 @@ export class AgeGate {
     const blocked = await this.deps.store.activeBlock([key], nowMs);
     if (blocked !== null) return { kind: "blocked", blockedUntilMs: blocked };
     return (await this.deps.store.hasPassed(key, nowMs)) ? { kind: "cleared" } : { kind: "required" };
+  }
+
+  /** Age band (and encrypted DOB) of the pass this device holds, for the account created next. */
+  passInfo(attestedDeviceKey: string): Promise<AgePassInfo | null> {
+    return this.deps.store.passInfo(this.attestedKey(attestedDeviceKey), this.deps.clock.nowMs());
   }
 
   /** Same key derivation, exposed so tests and dev tooling can grant a pass without a request. */

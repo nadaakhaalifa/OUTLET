@@ -25,6 +25,8 @@ export interface PurgeTarget {
   readonly nullify?: readonly string[];
   /** Column holding an object-store reference deleted before the row (needs pk "id"). */
   readonly blobColumn?: string;
+  /** Rows per purge statement for this target; defaults to the runner's batch size. */
+  readonly batchSize?: number;
   /** Used only when the rule has no fixed period (event-driven rules): how long after the trigger the row goes. */
   readonly grace?: RetentionPeriod;
 }

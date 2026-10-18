@@ -76,6 +76,17 @@ export interface ExporterPort {
   readonly key: string;
   readonly tables: readonly string[];
   collect(userId: string): Promise<ExportSection>;
+  /**
+   * Declared tables this exporter cannot serve on this deployment (the owning module is not
+   * composed or the table does not exist yet). They are omitted from the archive and listed in
+   * its manifest `gaps`, never exported as an empty table that looks complete.
+   */
+  gaps?(): Promise<readonly string[]>;
+}
+
+/** Decrypt-only view of the field cipher (KMS envelope). P2/P3 fields are decrypted only through this port. */
+export interface FieldDecryptPort {
+  decrypt(ciphertext: Uint8Array, aad: string): Promise<Uint8Array>;
 }
 
 export interface SignedUrl {
@@ -84,9 +95,21 @@ export interface SignedUrl {
 }
 
 export interface ObjectStorePort {
+  /** False on a deployment without a real object store: exports then wait in `requested` instead of failing. */
+  readonly configured?: boolean;
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   delete(key: string): Promise<void>;
   signGetUrl(key: string, ttlSeconds: number, nowMs: number): Promise<SignedUrl>;
+}
+
+/**
+ * A step that must complete BEFORE the user's rows are erased (it needs the user id, which erasure tombstones): for
+ * example NULLing the pseudonymous shopper keys in seller-analytics facts (H3). MUST be idempotent. A throw makes the
+ * request fail this attempt (backoff, then parked for the DPO) and the erasure does not proceed.
+ */
+export interface PreErasureStepPort {
+  readonly name: string;
+  run(userId: string): Promise<void>;
 }
 
 /** Applies an erasure plan for one user. MUST be idempotent: a crashed run is resumed by re-running it. */

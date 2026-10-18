@@ -2,7 +2,10 @@
  * DEVELOPMENT AND TEST FIXTURES: per-process store, fakes for ports. The module refuses to boot
  * with these outside test mode (MissingSellerAnalyticsPortsError).
  */
-import { emptyFunnelCounts, type FunnelCounts, type KCell, type SalesTotals } from "../domain/bridge";
+import { aggregateDeltas, emptyFunnelCounts, factDeltas, orderDeltas, type AggregatableFact, type FunnelCounts, type KCell, type RollupDelta, type RollupKey, type RollupScope, type SalesTotals } from "../domain/bridge";
+import type { CasOutcome, DefaultPartitionRows, NewKeyOutcome, PartitionReport, ReconciliationRecord, RollupMaintenance, RollupSnapshot, RollupWindow } from "../domain/rollup-ports";
+import type { ShopperFactsEraser } from "../domain/erasure-ports";
+import { InMemoryRollups } from "./in-memory-rollups";
 import type {
   AnalyticsStore,
   AuditPort,
@@ -30,8 +33,9 @@ interface StockEntry extends StockRow {
   observedAtMs: number;
 }
 
-export class InMemoryAnalyticsStore implements AnalyticsStore {
+export class InMemoryAnalyticsStore implements AnalyticsStore, RollupMaintenance, ShopperFactsEraser {
   private readonly facts: SourceEvent[] = [];
+  readonly rollups = new InMemoryRollups(() => this.facts.map((f): AggregatableFact => ({ ...f, ...(f.kind === "purchase" ? { sellerOrderId: f.sellerOrderId } : {}) }) as AggregatableFact));
   private readonly processed = new Set<string>();
   private readonly stock = new Map<string, StockEntry>();
   private readonly fresh = new Map<string, FreshnessRow>();
@@ -39,7 +43,10 @@ export class InMemoryAnalyticsStore implements AnalyticsStore {
   async ingest(consumer: string, events: readonly SourceEvent[], nowMs: number): Promise<IngestResult> {
     let applied = 0;
     let duplicates = 0;
-    for (const e of events) {
+    const deltas: RollupDelta[] = [];
+    for (const e0 of events) {
+      // H3 step 3: a payload written before an erasure may still carry the erased key.
+      const e: SourceEvent = e0.shopperKey !== null && this.rollups.erasedKeys.has(e0.shopperKey) ? { ...e0, shopperKey: null } : e0;
       const key = `${consumer}:${e.messageId}`;
       if (this.processed.has(key)) {
         duplicates += 1;
@@ -47,6 +54,11 @@ export class InMemoryAnalyticsStore implements AnalyticsStore {
       }
       this.processed.add(key);
       applied += 1;
+      if (e.kind === "purchase") {
+        const prior = this.facts.filter((f): f is Purchase => f.kind === "purchase" && f.storeId === e.storeId && f.sellerOrderId === e.sellerOrderId);
+        deltas.push(...orderDeltas(e.storeId, prior.length === 0 ? null : Math.min(...prior.map((f) => f.occurredAtMs)), e.occurredAtMs));
+      }
+      deltas.push(...factDeltas(e));
       if (e.kind === "stock_snapshot") {
         const k = `${e.storeId}:${e.skuId}`;
         const cur = this.stock.get(k);
@@ -72,7 +84,63 @@ export class InMemoryAnalyticsStore implements AnalyticsStore {
         lastIngestMs: Math.max(f?.lastIngestMs ?? 0, nowMs),
       });
     }
+    this.rollups.apply(aggregateDeltas(deltas));
     return { applied, duplicates };
+  }
+
+  /** Test hook: forget everything (facts, inbox, stock, freshness, rollups). */
+  reset(): void {
+    this.facts.length = 0;
+    this.processed.clear();
+    this.stock.clear();
+    this.fresh.clear();
+    this.rollups.reset();
+  }
+
+  /** H3: remember erased keys (the consumer NULLs them on ingest for 31 days). */
+  async recordErasedKeys(keys: readonly string[], _atMs: number): Promise<void> {
+    for (const k of keys) this.rollups.erasedKeys.add(k);
+  }
+
+  /** H3: NULL `shopper_key` for matching facts (a fact is replaced, never mutated in place). */
+  async nullShopperKeys(keys: readonly string[], limit: number): Promise<number> {
+    const set = new Set(keys);
+    let n = 0;
+    for (let i = 0; i < this.facts.length && n < limit; i += 1) {
+      const f = this.facts[i];
+      if (f !== undefined && f.shopperKey !== null && set.has(f.shopperKey)) {
+        this.facts[i] = { ...f, shopperKey: null };
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  /** Test hook: shopper keys currently stored (never exposed by a read path). */
+  storedShopperKeys(): readonly string[] {
+    return this.facts.flatMap((f) => (f.shopperKey === null ? [] : [f.shopperKey]));
+  }
+
+  snapshot(scope: RollupScope, w: RollupWindow): Promise<RollupSnapshot> {
+    return this.rollups.snapshot(scope, w);
+  }
+  casRepair(key: RollupKey, expected: bigint, readVersion: bigint): Promise<CasOutcome> {
+    return this.rollups.casRepair(key, expected, readVersion);
+  }
+  repairNewKey(key: RollupKey): Promise<NewKeyOutcome> {
+    return this.rollups.repairNewKey(key);
+  }
+  record(rec: ReconciliationRecord): Promise<void> {
+    return this.rollups.record(rec);
+  }
+  firstFactMs(): Promise<number | null> {
+    return this.rollups.firstFactMs();
+  }
+  maintainPartitions(nowMs: number, ahead: number, retainMonths: number): Promise<PartitionReport> {
+    return this.rollups.maintainPartitions(nowMs, ahead, retainMonths);
+  }
+  defaultPartitionRows(): Promise<readonly DefaultPartitionRows[]> {
+    return this.rollups.defaultPartitionRows();
   }
 
   private scoped(storeId: string, r: Range): SourceEvent[] {

@@ -114,7 +114,7 @@ describe("KyselyPurgeExecutor against the real schema (PGlite)", () => {
     const key = (created: number, expires: number): Promise<unknown[]> =>
       q(`insert into idempotency_keys (actor_id, route, key, request_hash, created_at, expires_at) values ($1,'POST /x',$2,$3,$4,$5)`, [uuid(), uuid(), Buffer.alloc(32, 1), day(created), day(expires)]);
     await key(40, 39); // expired and past 30 days
-    await key(40, -5); // still valid: never purge a live key
+    await key(40, -4000); // still valid (~11 years past NOW, so real now() never catches up): never purge a live key
     await key(10, 9);
     expect((await runner.runTarget(target("idempotency.keys"))).purged).toBe(1);
     expect(await count("idempotency_keys")).toBe(2);

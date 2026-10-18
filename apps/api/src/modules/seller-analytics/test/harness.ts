@@ -7,10 +7,11 @@ import request from "supertest";
 import { configureApp } from "../../../app.setup";
 import { loadConfig } from "../../../config/env";
 import { AUTHENTICATOR, PlatformModule, createIdGenerator, nodeCsprng, type Authenticator, type Clock } from "../../../platform";
+import { StaticStoreStatusLookup } from "../adapters/store-status";
 import { InMemoryAnalyticsStore, InMemoryAudit, InMemoryEventSource, StaticProductStoreLookup } from "../adapters/in-memory";
 import * as T from "../adapters/tokens";
 import type { ConsumeSellerAnalytics } from "../application/consume";
-import { SellerAnalyticsModule } from "../seller-analytics.module";
+import { SellerAnalyticsModule, type SellerAnalyticsModuleOverrides } from "../seller-analytics.module";
 import { STORE_A, STORE_B, T0, U } from "./repository-contract";
 
 export class FakeClock implements Clock {
@@ -73,12 +74,13 @@ export interface AnalyticsHarness {
   readonly audit: InMemoryAudit;
   readonly source: InMemoryEventSource;
   readonly lookup: StaticProductStoreLookup;
+  readonly storeStatus: StaticStoreStatusLookup;
   readonly consumer: ConsumeSellerAnalytics;
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
 
-export async function createAnalyticsHarness(): Promise<AnalyticsHarness> {
+export async function createAnalyticsHarness(series: SellerAnalyticsModuleOverrides["series"] = {}): Promise<AnalyticsHarness> {
   const config = loadConfig({ NODE_ENV: "test" });
   const clock = new FakeClock();
   const ids = createIdGenerator(clock, nodeCsprng);
@@ -105,11 +107,14 @@ export async function createAnalyticsHarness(): Promise<AnalyticsHarness> {
   const audit = new InMemoryAudit();
   const source = new InMemoryEventSource();
   const lookup = new StaticProductStoreLookup();
+  const storeStatus = new StaticStoreStatusLookup();
+  storeStatus.set(STORE_A, "ACTIVE");
+  storeStatus.set(STORE_B, "ACTIVE");
   const moduleRef = await Test.createTestingModule({
     imports: [
       PlatformModule.forRoot(config, { clock, ids }),
       TestAuthModule.register(),
-      SellerAnalyticsModule.forRoot(config, { store, audit, source, productStore: lookup }),
+      SellerAnalyticsModule.forRoot(config, { store, audit, source, productStore: lookup, storeStatus, series }),
     ],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
@@ -122,6 +127,7 @@ export async function createAnalyticsHarness(): Promise<AnalyticsHarness> {
     audit,
     source,
     lookup,
+    storeStatus,
     consumer: app.get<ConsumeSellerAnalytics>(T.SELLER_ANALYTICS_CONSUMER, { strict: false }),
     http: () => request(app.getHttpServer()),
     close: () => app.close(),

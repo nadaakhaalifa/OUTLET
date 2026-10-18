@@ -2,6 +2,7 @@ import { Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Body } fro
 import { EgyptE164Schema, LocaleSchema, UuidSchema, toLanguage, DEFAULT_LOCALE } from "@outlet/validation";
 import { z } from "zod";
 import {
+  AuthenticatedSelf,
   Authorize,
   Idempotent,
   Public,
@@ -16,13 +17,16 @@ import {
   DeviceSchema,
   iso,
   tokenPair,
+  toMe,
 } from "./http-common";
 import { ProblemError, Problems } from "../../../platform/problem";
+import { assertGuestBrowsingEnabled, type PublicReadGate } from "../../../platform/public-read";
+import { GUEST_BROWSING_GATE } from "../../../platform/tokens";
 import { ZodPipe } from "../../../platform/zod.pipe";
-import type { GetSession, RevokeSession } from "../application/sessions";
+import type { GetMe, GetSession, RevokeSession } from "../application/sessions";
 import type { RequestOtp } from "../application/request-otp";
 import type { VerifyOtp } from "../application/verify-otp";
-import { GET_SESSION, REQUEST_OTP, REVOKE_SESSION, SESSION_RESOLVER, VERIFY_OTP } from "./tokens";
+import { GET_ME, GET_SESSION, REQUEST_OTP, REVOKE_SESSION, SESSION_RESOLVER, VERIFY_OTP } from "./tokens";
 
 const OtpRequestSchema = z
   .object({
@@ -37,6 +41,8 @@ const OtpVerifySchema = z
     challenge_id: UuidSchema,
     code: z.string().regex(/^[0-9]{6}$/),
     device: DeviceSchema,
+    /** Omitted = create (checkout sign-up). existing_only = quiet sign-in, never creates an account (G-9). */
+    mode: z.enum(["create", "existing_only"]).optional(),
   })
   .strict();
 
@@ -47,7 +53,31 @@ export class AuthController {
     @Inject(VERIFY_OTP) private readonly verifyOtp: VerifyOtp,
     @Inject(GET_SESSION) private readonly getSession: GetSession,
     @Inject(REVOKE_SESSION) private readonly revokeSession: RevokeSession,
+    @Inject(GET_ME) private readonly getMe: GetMe,
+    /** `flag.guest_browsing`: the sign-in-only mode is guest-specific and fails closed (404) while blocked. */
+    @Inject(GUEST_BROWSING_GATE) private readonly guestGate: PublicReadGate,
   ) {}
+
+  /** Profile summary of the caller (OpenAPI Me, minus P2 contact fields). Never P3. */
+  @Get("me")
+  @AuthenticatedSelf()
+  @RateLimit([{ dimension: "user", limit: 120, windowSeconds: 60 }])
+  async meRoute(@Req() req: ApiRequest) {
+    const userId = req.principal?.actor.id;
+    if (userId === undefined) throw Problems.unauthenticated();
+    const user = await this.getMe.execute(userId);
+    if (user === null) throw Problems.unauthenticated();
+    const full = toMe(user);
+    return {
+      id: full["id"],
+      locale: full["locale"],
+      age_band: full["age_band"],
+      limited_capacity: full["limited_capacity"],
+      phone_verified: full["phone_verified"],
+      status: full["status"],
+      created_at: full["created_at"],
+    };
+  }
 
   @Post("auth/otp/request")
   @HttpCode(202)
@@ -93,6 +123,8 @@ export class AuthController {
         throw Problems.rateLimited((result.retryAfterMs ?? 60_000) / 1000);
       case "delivery_failed":
         throw Problems.unavailable("otp_delivery_failed");
+      case "provider_not_configured":
+        throw Problems.unavailable("provider_not_configured");
     }
   }
 
@@ -108,6 +140,7 @@ export class AuthController {
     @Req() req: ApiRequest,
     @Body(new ZodPipe(OtpVerifySchema)) body: z.infer<typeof OtpVerifySchema>,
   ) {
+    if (body.mode === "existing_only") await assertGuestBrowsingEnabled(this.guestGate);
     const result = await this.verifyOtp.execute({
       challengeId: body.challenge_id,
       code: body.code,
@@ -115,10 +148,15 @@ export class AuthController {
       platform: body.device.platform,
       language: "ar",
       attestation: attestationFrom(req, body.device.platform),
+      mode: body.mode ?? "create",
     });
     switch (result.kind) {
       case "ok":
         return tokenPair(result);
+      case "account_unavailable":
+        throw new ProblemError(403, "account-unavailable", "This account is not available", { code: "account_unavailable" });
+      case "no_account":
+        throw new ProblemError(404, "no-account", "No account exists for this number", { code: "no_account" });
       case "attestation_failed":
         throw attestationProblem();
       case "expired":

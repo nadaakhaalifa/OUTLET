@@ -1,4 +1,5 @@
 import { sql, type Kysely } from "kysely";
+import { REVIEWABLE_INVALID_REASONS } from "../domain/ports";
 import { z } from "zod";
 import type { AdStatsRow, AdsConfig, Campaign, CampaignStatus } from "../domain/bridge";
 import type {
@@ -9,6 +10,8 @@ import type {
   ClickSignalsQuery,
   ClickSignalsResult,
   ClickRecord,
+  ClickReviewRecord,
+  DecideClickReview,
   IdPort,
   ImpressionRecord,
   OutboxDraft,
@@ -108,6 +111,10 @@ const TOPUP_COLS = sql`id::text as id, store_id::text as store_id, net::text as 
 const CLICK_COLS = sql`id::text as id, token_jti, campaign_id::text as campaign_id, store_id::text as store_id,
   product_id::text as product_id, impression_id::text as impression_id, session_hash, valid, invalid_reason,
   cost::text as cost, day_key, ${EPOCH("ts")} as ts_ms, posted_entry_id, credited_back::text as credited_back`;
+
+const CLICK_COLS_C = sql`c.id::text as id, c.token_jti, c.campaign_id::text as campaign_id, c.store_id::text as store_id,
+  c.product_id::text as product_id, c.impression_id::text as impression_id, c.session_hash, c.valid, c.invalid_reason,
+  c.cost::text as cost, c.day_key, ${EPOCH("c.ts")} as ts_ms, c.posted_entry_id, c.credited_back::text as credited_back`;
 
 const toCampaign = (raw: unknown): Campaign => {
   const r = CampaignRow.parse(raw);
@@ -554,6 +561,41 @@ export class KyselyAdsStore implements AdsStore {
     return this.tx(async (t) => {
       const r = await sql<unknown>`select ${CLICK_COLS} from ad_clicks where id = ${id}::uuid`.execute(t);
       return r.rows[0] === undefined ? null : toClick(r.rows[0]);
+    });
+  }
+
+  async listInvalidClickQueue(q: { limit: number; after: { atMs: number; id: string } | null }) {
+    return this.tx(async (t) => {
+      const reasons = sql.join(REVIEWABLE_INVALID_REASONS.map((x) => sql`${x}`));
+      const after =
+        q.after === null ? sql`true` : sql`(floor(extract(epoch from c.ts) * 1000)::bigint, c.id) < (${q.after.atMs}::bigint, ${q.after.id}::uuid)`;
+      const r = await sql<unknown>`select ${CLICK_COLS_C} from ad_clicks c
+        where not c.valid and c.invalid_reason in (${reasons}) and ${after}
+          and not exists (select 1 from ad_click_reviews v where v.click_id = c.id)
+        order by floor(extract(epoch from c.ts) * 1000)::bigint desc, c.id desc limit ${q.limit}`.execute(t);
+      return r.rows.map(toClick);
+    });
+  }
+
+  async decideClickReview(r: ClickReviewRecord): Promise<DecideClickReview> {
+    return this.tx(async (t) => {
+      const c = await sql<unknown>`select ${CLICK_COLS} from ad_clicks where id = ${r.clickId}::uuid for update`.execute(t);
+      if (c.rows[0] === undefined) return { kind: "not_found" as const };
+      const click = toClick(c.rows[0]);
+      const prior = await sql<{ decision: ClickReviewRecord["decision"]; reason_code: string; decided_by: string; at_ms: string }>`
+        select decision, reason_code, decided_by::text as decided_by, ${EPOCH("decided_at")} as at_ms
+        from ad_click_reviews where click_id = ${r.clickId}::uuid`.execute(t);
+      const p = prior.rows[0];
+      if (p !== undefined) {
+        const review: ClickReviewRecord = { clickId: r.clickId, decision: p.decision, reasonCode: p.reason_code, decidedBy: p.decided_by, decidedAtMs: Number(p.at_ms) };
+        return { kind: p.decision === r.decision ? ("replayed" as const) : ("conflict" as const), review };
+      }
+      if (click.valid || click.invalidReason === null || !(REVIEWABLE_INVALID_REASONS as readonly string[]).includes(click.invalidReason)) {
+        return { kind: "not_reviewable" as const };
+      }
+      await sql`insert into ad_click_reviews (click_id, decision, reason_code, decided_by, decided_at)
+        values (${r.clickId}::uuid, ${r.decision}, ${r.reasonCode}, ${r.decidedBy}::uuid, ${iso(r.decidedAtMs)}::timestamptz)`.execute(t);
+      return { kind: "decided" as const, review: r };
     });
   }
 

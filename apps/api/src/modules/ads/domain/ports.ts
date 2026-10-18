@@ -165,6 +165,24 @@ export interface ClickRecord {
   readonly creditedBack: bigint;
 }
 
+export const CLICK_REVIEW_DECISIONS = ["confirm_invalid", "flag_store"] as const;
+export type ClickReviewDecision = (typeof CLICK_REVIEW_DECISIONS)[number];
+/** Invalid reasons an admin can meaningfully review (fraud signals, not budget/token mechanics). */
+export const REVIEWABLE_INVALID_REASONS = ["too_fast", "duplicate_window", "burst", "self_click", "bot", "campaign_drain"] as const;
+
+export interface ClickReviewRecord {
+  readonly clickId: string;
+  readonly decision: ClickReviewDecision;
+  readonly reasonCode: string;
+  readonly decidedBy: string;
+  readonly decidedAtMs: number;
+}
+
+export type DecideClickReview =
+  | { readonly kind: "decided" | "replayed"; readonly review: ClickReviewRecord }
+  | { readonly kind: "conflict"; readonly review: ClickReviewRecord }
+  | { readonly kind: "not_found" | "not_reviewable" };
+
 export interface OutboxDraft {
   readonly type: "ad.click_valid" | "ad.budget_exhausted" | "ad.balance_topped_up" | "ad.campaign_status_changed";
   readonly aggregateType: "ad_campaign" | "ad_balance";
@@ -240,6 +258,10 @@ export interface AdsStore {
   listUnposted(limit: number): Promise<readonly ClickRecord[]>;
   markPosted(clickId: string, entryId: string): Promise<void>;
   getClick(id: string): Promise<ClickRecord | null>;
+  /** Unreviewed invalid clicks with a reviewable reason, newest first (ts desc, id desc), keyset paged. */
+  listInvalidClickQueue(q: { readonly limit: number; readonly after: { readonly atMs: number; readonly id: string } | null }): Promise<readonly ClickRecord[]>;
+  /** Once per click: same decision replays, a different one conflicts. Never moves money. */
+  decideClickReview(r: ClickReviewRecord): Promise<DecideClickReview>;
 
   stats(input: { readonly storeId: string; readonly campaignId: string | null; readonly fromMs: number; readonly toMs: number }): Promise<Omit<AdStatsRow, "attributedRevenue">>;
   productIdsFor(storeId: string, campaignId: string | null): Promise<readonly string[]>;

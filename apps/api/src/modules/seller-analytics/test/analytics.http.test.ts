@@ -266,3 +266,17 @@ describe("CSV export", () => {
     expect((await h.http().post(`${base(STORE_A)}/exports`).set(bearer(TOKENS.ownerA)).send({ report: "sales", store_id: STORE_B })).status).toBe(400);
   });
 });
+
+describe("GET /v1/seller/me", () => {
+  it("returns only the caller's memberships and roles; guards enforce audience and presence", async () => {
+    const own = await h.http().get("/v1/seller/me").set(auth(TOKENS.catalogA));
+    expect(own.status).toBe(200);
+    expect(own.body).toMatchObject({ memberships: [{ store_id: STORE_A, role: "catalog", store_status: "active" }] });
+    expect(JSON.stringify(own.body)).not.toContain(STORE_B);
+    expect((await h.http().get("/v1/seller/me").set(auth(TOKENS.ownerB))).body.memberships.map((m: { store_id: string; role: string }) => [m.store_id, m.role])).toEqual([[STORE_B, "owner"]]);
+    expect((await h.http().get("/v1/seller/me")).status).toBe(401);
+    expect((await h.http().get("/v1/seller/me").set(auth(TOKENS.buyerAudSeller))).status).toBe(401);
+    expect((await h.http().get("/v1/seller/me").set(auth(TOKENS.suspendedA))).status).toBe(403);
+    expect((await h.http().get("/v1/seller/me").set(auth(TOKENS.shopper))).status).toBe(403);
+  });
+});

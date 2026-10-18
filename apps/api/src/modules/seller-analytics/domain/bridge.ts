@@ -1,6 +1,27 @@
 /** Single seam to the pure seller-analytics domain (@outlet/domain namespace `sellerAnalytics`). Aliases only; no behaviour. */
 import { sellerAnalytics } from "@outlet/domain";
 
+export import PLATFORM_FACT_METRICS = sellerAnalytics.PLATFORM_FACT_METRICS;
+export import PLATFORM_ROLLUP_METRICS = sellerAnalytics.PLATFORM_ROLLUP_METRICS;
+export import SELLER_ROLLUP_METRICS = sellerAnalytics.SELLER_ROLLUP_METRICS;
+export type HourBucket = sellerAnalytics.HourBucket;
+export type HourBucketFn = sellerAnalytics.HourBucketFn;
+export type RollupDelta = sellerAnalytics.RollupDelta;
+export type RollupDiff = sellerAnalytics.RollupDiff;
+export type RollupFact = sellerAnalytics.RollupFact;
+export type RollupKey = sellerAnalytics.RollupKey;
+export type RollupRowState = sellerAnalytics.RollupRowState;
+export type RollupScope = sellerAnalytics.RollupScope;
+export type AggregatableFact = sellerAnalytics.AggregatableFact;
+export import aggregateFacts = sellerAnalytics.aggregateFacts;
+export import aggregateDeltas = sellerAnalytics.aggregateDeltas;
+export import compareKeys = sellerAnalytics.compareKeys;
+export import diffRollups = sellerAnalytics.diffRollups;
+export import factDeltas = sellerAnalytics.factDeltas;
+export import hourStart = sellerAnalytics.hourStart;
+export import keyString = sellerAnalytics.keyString;
+export import orderDeltas = sellerAnalytics.orderDeltas;
+export import repairedValues = sellerAnalytics.repairedValues;
 export import AGING_THRESHOLDS_DAYS = sellerAnalytics.AGING_THRESHOLDS_DAYS;
 export type AgingAlert = sellerAnalytics.AgingAlert;
 export type AgingSeverity = sellerAnalytics.AgingSeverity;

@@ -81,7 +81,7 @@ export class RunRetention {
 
   async runTarget(t: PurgeTarget, o: RunOptions = {}): Promise<TargetReport> {
     const dryRun = o.dryRun === true;
-    const batch = o.batchSize ?? BATCH_SIZE;
+    const batch = o.batchSize ?? t.batchSize ?? BATCH_SIZE;
     const maxBatches = o.maxBatches ?? DEFAULT_MAX_BATCHES;
     const now = this.d.clock.nowMs();
     const cutoff = effectiveCutoffMs(now, t.ruleId, periodFor(t), FINANCIAL_RULES.has(t.ruleId));

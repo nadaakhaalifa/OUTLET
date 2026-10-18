@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { ConfirmTopUp } from "./application/billing";
 import { ACCOUNTS } from "./domain/bridge";
 import { DAY, EGP, P_A1, P_B1, STORE_A, STORE_B, U, createRuntime, type Runtime } from "./test/harness";
 import type { SponsoredSelection } from "./application/selection";
@@ -336,6 +337,15 @@ describe("click billing", () => {
 });
 
 describe("top-ups", () => {
+  it("fails closed without a configured PSP: no credit, no posting, no silent default provider", async () => {
+    const rt = createRuntime();
+    const { topUpPsp: _omit, ...rest } = rt.d;
+    const bare = new ConfirmTopUp(rest);
+    const r = await rt.topUp.execute({ storeId: STORE_A, net: EGP(1000), idempotencyKey: "k-nopsp" });
+    if (r.kind !== "ok") throw new Error("top-up failed");
+    await expect(bare.execute({ topUpId: r.topUp.id, intentRef: r.topUp.intentRef ?? "" })).rejects.toThrow(/PSP not configured/);
+    expect((await rt.balance.execute(STORE_A)).balance).toBe(0n);
+  });
   it("adds VAT 14% once, posts a balanced entry and credits only the net", async () => {
     const rt = createRuntime();
     const r = await rt.topUp.execute({ storeId: STORE_A, net: EGP(1000), idempotencyKey: "k1" });

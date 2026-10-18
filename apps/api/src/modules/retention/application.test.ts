@@ -119,10 +119,13 @@ describe("RunRetention", () => {
     const job = new PurgeRetentionJob(runner);
     await expect(job.run("auth_credentials")).rejects.toThrow(/1 target/);
     const all = await runs.list("auth_credentials");
-    expect(all.map((r) => [r.targetId, r.status, r.errorCode])).toEqual([
+    // The rule has more targets than the two seeded here; every other one has nothing to purge and must still complete.
+    const seeded = ["auth.sessions", "auth.session_families"];
+    expect(all.filter((r) => seeded.includes(r.targetId)).map((r) => [r.targetId, r.status, r.errorCode])).toEqual([
       ["auth.sessions", "FAILED", "Error"],
       ["auth.session_families", "COMPLETED", null],
     ]);
+    expect(all.filter((r) => !seeded.includes(r.targetId)).every((r) => r.status === "COMPLETED")).toBe(true);
     expect(executor.remaining("auth.session_families")).toHaveLength(0);
   });
 

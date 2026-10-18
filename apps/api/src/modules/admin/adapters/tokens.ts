@@ -9,3 +9,5 @@ export const ROLE_ELEVATIONS = Symbol("admin.RoleElevations");
 export const VIEW_PII = Symbol("admin.ViewPii");
 export const FEATURE_FLAG_ADMIN = Symbol("admin.FeatureFlagAdmin");
 export const SELLER_KYC_ADMIN = Symbol("admin.SellerKycAdmin");
+
+export const ADMIN_IDENTITY = Symbol("admin.IdentityOptions");

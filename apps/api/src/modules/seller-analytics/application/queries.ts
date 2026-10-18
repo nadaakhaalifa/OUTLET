@@ -5,6 +5,7 @@ import {
   freshnessOf,
   kAnonymize,
   kAnonymizeAdditive,
+  K_ANONYMITY_MIN,
   snapToDays,
   recommendMarkdown,
   returnRateBps,
@@ -59,7 +60,8 @@ export type WithMeta<T> = T & { readonly meta: Meta };
 export interface TrafficReport {
   readonly storeViews: number;
   readonly productViews: number;
-  readonly uniqueVisitors: number;
+  /** null when fewer than K_ANONYMITY_MIN distinct shoppers (spec dashboard-foundations 4, M5). */
+  readonly uniqueVisitors: number | null;
   readonly bySource: KAnonymized<number>;
 }
 export interface FunnelReport {
@@ -117,7 +119,7 @@ export class SellerAnalyticsQueries {
     ]);
     // Source buckets are released only when >= 50 distinct shoppers; suppressed cells are folded into the smallest
     // released cell so totals minus released cells is 0 (no differencing). Cell shopper counts are not returned.
-    return { ...t, bySource: kAnonymizeAdditive(src, (a, b) => a + b), meta };
+    return { ...t, uniqueVisitors: t.uniqueVisitors >= K_ANONYMITY_MIN ? t.uniqueVisitors : null, bySource: kAnonymizeAdditive(src, (a, b) => a + b), meta };
   }
 
   async funnel(storeId: string, range: Range, productId: string | null): Promise<WithMeta<FunnelReport>> {

@@ -10,6 +10,27 @@ import type {
 /** Language codes domain packages distinguish. The wire locale is mapped at the HTTP edge. */
 export type UserLanguage = "ar" | "en";
 
+export type AgeBand = "18_20" | "21_plus";
+
+/** What a passed age gate leaves behind for the account created right after it (no DOB in clear). */
+export interface AgePassInfo {
+  readonly ageBand: AgeBand;
+  /** Envelope-encrypted YYYY-MM-DD (P3); null when no cipher is configured (dev fixtures). */
+  readonly dobCiphertext: Uint8Array | null;
+}
+
+/**
+ * Field-level envelope encryption and keyed blind indexes for P2/P3 columns (spec T5, ADR-0002).
+ * Production adapter: KMS-managed data keys (`kms.envelope`, Unconfigured until a KMS is chosen,
+ * so every call fails closed with 503). `aad` binds a ciphertext to its column.
+ */
+export interface FieldCipher {
+  encrypt(plaintext: string, aad: string): Promise<Uint8Array>;
+  decrypt(ciphertext: Uint8Array, aad: string): Promise<string>;
+  /** 32-byte HMAC blind index, domain separated by `purpose` (e.g. "phone", "otp-device"). */
+  blindIndex(purpose: string, value: string): Promise<Uint8Array>;
+}
+
 export interface User {
   readonly id: string;
   /** Null for accounts created through Apple, Google or a passkey before a phone is verified. */
@@ -18,6 +39,10 @@ export interface User {
   readonly language: UserLanguage;
   readonly status: "active";
   readonly createdAtMs: number;
+  /** Null for accounts created before the age band was recorded. */
+  readonly ageBand: AgeBand | null;
+  /** True for 18 to 20 year olds (spec B6): soft gates on 21+ capabilities. */
+  readonly limitedCapacity: boolean;
 }
 
 export interface OtpChallengeRecord {
@@ -29,7 +54,10 @@ export interface OtpChallengeRecord {
 
 export interface OtpChallengeRepository {
   find(id: string): Promise<OtpChallengeRecord | null>;
+  /** `record.deviceKey` is the raw attested key; stores may keep only a keyed hash of it. */
   insert(record: OtpChallengeRecord): Promise<void>;
+  /** The value `find().deviceKey` carries for this raw attested key (identity, or a keyed hash). */
+  deviceKeyOf(deviceKey: string): Promise<string>;
   /**
    * Optimistic update. Succeeds only if the stored challenge still equals `previous` on
    * (attempts, status), so two concurrent verifications cannot both consume one code.
@@ -42,12 +70,21 @@ export interface OtpSendLog {
   record(phoneE164: string, deviceKey: string, nowMs: number): Promise<void>;
 }
 
+/** The identity exists but its account is not active (for example suspended). Create mode must not create or reuse it. */
+export class AccountUnavailableError extends Error {
+  constructor() {
+    super("account unavailable");
+    this.name = "AccountUnavailableError";
+  }
+}
+
 export interface UserDirectory {
   findOrCreateByPhone(input: {
     phoneE164: string;
     language: UserLanguage;
     newId: string;
     nowMs: number;
+    age?: AgePassInfo | null;
   }): Promise<User>;
   /** Resolves `identities(provider, subject)`; creates the account on first sign-in. Never links by email. */
   findOrCreateByIdentity(input: {
@@ -57,14 +94,39 @@ export interface UserDirectory {
     language: UserLanguage;
     newId: string;
     nowMs: number;
+    age?: AgePassInfo | null;
   }): Promise<User>;
+  /** Read only: resolves an existing active account by verified phone; never creates anything. */
+  findByPhone(phoneE164: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
 }
+
+export type SessionPlatform = "ios" | "android" | "web";
 
 export interface StoredSession {
   readonly session: Session;
   readonly family: RefreshFamily;
-  readonly platform: "ios" | "android";
+  readonly platform: SessionPlatform;
+  /**
+   * True only when a passkey assertion opened the session and the verifier checked user
+   * verification (auth_sessions.uv, migration 0092). Absent means false.
+   */
+  readonly uv?: boolean;
+  /**
+   * Web sessions only: hex SHA-256 of the server-minted browser install token held by the session's
+   * device row (devices.install_secret_hash). Null once that device is revoked by a newer login.
+   * The token itself is never stored.
+   */
+  readonly installSecretHash?: string | null;
+}
+
+/**
+ * Whether a user holds at least one unexpired standing admin grant. The auth module only asks the
+ * yes/no question for the web sign-in gate (deny by default); roles are decided elsewhere. The
+ * production binding is Unconfigured (answers false) until a grant source is composed.
+ */
+export interface AdminGrantReader {
+  hasStandingAdminGrant(userId: string, nowMs: number): Promise<boolean>;
 }
 
 export interface SessionRepository {
@@ -96,8 +158,10 @@ export interface AgeGateStore {
   /** Latest `blockedUntilMs` over the given keys, or null when none is blocked at `nowMs`. */
   activeBlock(keys: readonly string[], nowMs: number): Promise<number | null>;
   block(keys: readonly string[], untilMs: number): Promise<void>;
-  markPassed(key: string, expiresAtMs: number): Promise<void>;
+  markPassed(key: string, expiresAtMs: number, info?: AgePassInfo): Promise<void>;
   hasPassed(key: string, nowMs: number): Promise<boolean>;
+  /** The band (and encrypted DOB) recorded with a still valid pass; null when none. */
+  passInfo(key: string, nowMs: number): Promise<AgePassInfo | null>;
 }
 
 // ---- Federated identity ---------------------------------------------------------------
@@ -132,6 +196,8 @@ export interface StoredPasskey {
   readonly credentialId: string;
   readonly publicKey: string;
   readonly signCount: number;
+  readonly backupEligible?: boolean;
+  readonly backedUp?: boolean;
   readonly status: "active" | "suspected_clone";
   readonly createdAtMs: number;
 }
@@ -150,7 +216,7 @@ export type AuthEvent =
       readonly sessionId: string;
       readonly userId: string;
       readonly familyId: string;
-      readonly reason: "logout" | "reuse_detected" | "device_mismatch" | "user_revoked" | "clone_suspected";
+      readonly reason: "logout" | "reuse_detected" | "device_mismatch" | "user_revoked" | "clone_suspected" | "web_login_rotated";
       /** True when the user must be told (refresh reuse): the notification journey keys off this. */
       readonly notifyUser: boolean;
       readonly occurredAtMs: number;

@@ -30,6 +30,7 @@ export const ADS_MIGRATION_FILES = [
   "0010_ledger_owner_bank.sql",
   "0011_ledger_account_types.sql",
   "0045_ads.sql",
+  "0048_ad_click_reviews.sql",
 ] as const;
 
 export const migrationSql = (file: string): string => readFileSync(resolve(MIGRATIONS, file), "utf8");

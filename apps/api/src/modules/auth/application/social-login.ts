@@ -77,7 +77,9 @@ export class SocialLogin {
     if (!fresh) return { kind: "rejected", reason: "nonce_reused" };
 
     const { identity } = verdict;
+    const age = await d.ageGate.passInfo(deviceKey);
     const user = await d.users.findOrCreateByIdentity({
+      age,
       provider: input.provider,
       subject: identity.subject,
       email: identity.emailVerified ? identity.email : null,

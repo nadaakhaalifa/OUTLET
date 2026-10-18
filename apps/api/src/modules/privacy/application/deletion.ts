@@ -19,7 +19,7 @@ import {
   type InventoryTable,
 } from "../domain/bridge";
 import { privacyEvents } from "../domain/events";
-import type { BlockersPort, ErasureExecutorPort, PrivacyRequestRepository } from "../domain/ports";
+import type { BlockersPort, ErasureExecutorPort, PreErasureStepPort, PrivacyRequestRepository } from "../domain/ports";
 
 export type RequestDeletionResult =
   | { readonly kind: "created" | "existing"; readonly request: DeletionRequest }
@@ -113,6 +113,7 @@ export class ProcessDeletions {
     private readonly pseudonymHasher: (input: string) => string,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
+    private readonly preErasureSteps: readonly PreErasureStepPort[] = [],
   ) {}
 
   async execute(requestId: string): Promise<ProcessDeletionResult> {
@@ -147,6 +148,8 @@ export class ProcessDeletions {
     const artifactKeys = [
       ...new Set(exports.flatMap((e) => [`exports/${e.userId}/${e.id}.zip`, ...(e.objectRef === null ? [] : [e.objectRef])])),
     ];
+    // Steps that need the user id run first; a failure here is retryable and stops the erasure before any row is touched.
+    for (const step of this.preErasureSteps) await step.run(r.userId);
     await this.executor.execute({
       userId: r.userId,
       pseudonym: pseudonymFor(r.userId, this.pseudonymHasher),

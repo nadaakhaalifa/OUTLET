@@ -8,7 +8,9 @@ import type {
   PasskeyVerifier,
 } from "@outlet/auth-core";
 import type {
+  AdminGrantReader,
   AgeGateStore,
+  AgePassInfo,
   AuthEvent,
   AuthEventPublisher,
   NonceStore,
@@ -21,6 +23,7 @@ import type {
 export class InMemoryAgeGateStore implements AgeGateStore {
   private readonly blocks = new Map<string, number>();
   private readonly passed = new Map<string, number>();
+  private readonly info = new Map<string, AgePassInfo>();
 
   async activeBlock(keys: readonly string[], nowMs: number): Promise<number | null> {
     let latest: number | null = null;
@@ -33,8 +36,12 @@ export class InMemoryAgeGateStore implements AgeGateStore {
   async block(keys: readonly string[], untilMs: number): Promise<void> {
     for (const k of keys) this.blocks.set(k, Math.max(this.blocks.get(k) ?? 0, untilMs));
   }
-  async markPassed(key: string, expiresAtMs: number): Promise<void> {
+  async markPassed(key: string, expiresAtMs: number, info?: AgePassInfo): Promise<void> {
     this.passed.set(key, expiresAtMs);
+    if (info !== undefined) this.info.set(key, info);
+  }
+  async passInfo(key: string, nowMs: number): Promise<AgePassInfo | null> {
+    return (this.passed.get(key) ?? 0) > nowMs ? (this.info.get(key) ?? null) : null;
   }
   async hasPassed(key: string, nowMs: number): Promise<boolean> {
     return (this.passed.get(key) ?? 0) > nowMs;
@@ -138,5 +145,30 @@ export class DevPasskeyVerifier implements PasskeyVerifier {
     const { signCount, userHandle } = r;
     if (typeof signCount !== "number" || typeof userHandle !== "string") return { ok: false, reason: "invalid_response" };
     return { ok: true, value: { credentialId: input.credential.credentialId, newSignCount: signCount, userHandle } };
+  }
+}
+
+/**
+ * Fail-closed production default: no admin grant source is composed yet, so no web session can be
+ * opened (403 web_sign_in_not_allowed) until composition supplies a real reader.
+ */
+export class UnconfiguredAdminGrantReader implements AdminGrantReader {
+  async hasStandingAdminGrant(): Promise<boolean> {
+    return false;
+  }
+}
+
+/** DEVELOPMENT AND TEST fixture: grants are added by test code. Per process. */
+export class InMemoryAdminGrantReader implements AdminGrantReader {
+  private readonly grants = new Map<string, number | null>();
+  grant(userId: string, expiresAtMs: number | null = null): void {
+    this.grants.set(userId, expiresAtMs);
+  }
+  revoke(userId: string): void {
+    this.grants.delete(userId);
+  }
+  async hasStandingAdminGrant(userId: string, nowMs: number): Promise<boolean> {
+    const exp = this.grants.get(userId);
+    return exp !== undefined && (exp === null || exp > nowMs);
   }
 }

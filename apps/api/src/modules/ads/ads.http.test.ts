@@ -222,5 +222,6 @@ describe("architecture and boot", () => {
     const cfg = { ...loadConfig({ NODE_ENV: "test" }), adapters: "postgres" } as unknown as ReturnType<typeof loadConfig>;
     expect(() => AdsModule.forRoot(cfg)).toThrow(NoProductionAdaptersError);
     expect(() => AdsModule.forRoot(cfg, { store: new InMemoryAdsStore() })).toThrow(MissingAdsPortsError);
+    expect(() => AdsModule.forRoot(cfg, { store: new InMemoryAdsStore() })).toThrow(/topUpPsp/);
   });
 });

@@ -3,6 +3,7 @@ import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock, IdGenerator } from "../../platform/ports";
 import { CLOCK, ID_GENERATOR } from "../../platform/tokens";
+import { AdsClickReviewController } from "./adapters/click-review.controller";
 import { AdsController } from "./adapters/ads.controller";
 import {
   FakeAdsFlags,
@@ -21,6 +22,7 @@ import * as T from "./adapters/tokens";
 import { ConfirmTopUp, FailTopUp, GetBalance, RequestTopUp } from "./application/billing";
 import { CreditBackClick, PostClickSpend, RecordClick } from "./application/clicks";
 import { ApplyEnforcement, ChangeCampaignStatus, CreateCampaign, EndExpiredCampaigns, GetCampaign, ListCampaigns, UpdateCampaign } from "./application/campaigns";
+import { DecideInvalidClick, ListInvalidClicks } from "./application/click-review";
 import { GetAdsConfig, PutAdsConfig } from "./application/config";
 import { GetAdReports } from "./application/reports";
 import { SelectSponsored } from "./application/selection";
@@ -78,6 +80,7 @@ export class AdsModule {
       if (o.bots === undefined) missing.push("bots (fraud score)");
       if (o.attribution === undefined) missing.push("attribution (orders)");
       if (o.secret === undefined) missing.push("secret (KMS HMAC key)");
+      if (production && o.topUpPsp === undefined) missing.push("topUpPsp (clearing PSP name for top-up postings)");
       if (missing.length > 0) throw new MissingAdsPortsError(missing);
     }
     const store = o.store ?? new InMemoryAdsStore();
@@ -93,7 +96,7 @@ export class AdsModule {
     };
 
     const runtime = (clock: Clock, ids: IdGenerator) => {
-      const d: AdsDeps = { store, clock, ids, ...ports, ...(o.topUpPsp !== undefined ? { topUpPsp: o.topUpPsp } : {}) };
+      const d: AdsDeps = { store, clock, ids, ...ports, ...(o.topUpPsp !== undefined ? { topUpPsp: o.topUpPsp } : production ? {} : { topUpPsp: "ads" }) };
       return {
         create: new CreateCampaign(d),
         update: new UpdateCampaign(d),
@@ -113,6 +116,8 @@ export class AdsModule {
         reports: new GetAdReports(d),
         getConfig: new GetAdsConfig(d),
         putConfig: new PutAdsConfig(d),
+        invalidClicks: new ListInvalidClicks(d),
+        decideClick: new DecideInvalidClick(d),
       };
     };
     const RUNTIME = Symbol("ads.Runtime");
@@ -121,7 +126,7 @@ export class AdsModule {
 
     return {
       module: AdsModule,
-      controllers: [AdsController],
+      controllers: [AdsController, AdsClickReviewController],
       providers: [
         AdStoreAccess,
         { provide: T.ADS_STORE, useValue: store },
@@ -141,6 +146,8 @@ export class AdsModule {
         from(T.GET_BALANCE, (r) => r.balance),
         from(T.SELECT_SPONSORED, (r) => r.select),
         from(T.RECORD_CLICK, (r) => r.click),
+        from(T.LIST_INVALID_CLICKS, (r) => r.invalidClicks),
+        from(T.DECIDE_INVALID_CLICK, (r) => r.decideClick),
         from(T.POST_CLICK_SPEND, (r) => r.post),
         from(T.CREDIT_BACK_CLICK, (r) => r.creditBack),
         from(T.GET_AD_REPORTS, (r) => r.reports),

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { dpoConsoleDenial } from "./access";
 import { DomainError } from "@outlet/domain";
 import { z } from "zod";
 import { AuthenticatedSelf, Idempotent, RateLimit } from "../../../platform/decorators";
@@ -51,10 +52,7 @@ export class DpoPrivacyController {
     const actor = req.principal?.actor;
     if (actor === undefined) throw Problems.unauthenticated();
     const now = this.clock.nowMs();
-    const hasRole = actor.grants.some(
-      (g) => g.kind === "admin" && g.role === "dpo" && (g.expiresAtMs === undefined || g.expiresAtMs > now),
-    );
-    const reason = !hasRole ? "missing_role" : actor.assurance !== "passkey" ? "passkey_required" : null;
+    const reason = dpoConsoleDenial(actor, now);
     await this.audit.record({
       effect: reason === null ? "allow" : "deny",
       actorId: actor.id,

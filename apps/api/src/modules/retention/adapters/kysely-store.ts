@@ -49,11 +49,14 @@ export class KyselyPurgeExecutor implements PurgeExecutor {
     const cutoff = iso(cutoffMs);
     const base = eligibleFrom(t, cutoff, "any");
     const hold = t.holdUser === undefined ? "false" : `EXISTS (SELECT 1 FROM retention_legal_holds h WHERE h.released_at IS NULL AND h.subject_type = 'user' AND h.subject_id = (${t.holdUser}))`;
-    const r = await sql<Record<string, unknown>>`
-      SELECT count(*) FILTER (WHERE NOT (${sql.raw(hold)}))::text AS eligible,
-             count(*) FILTER (WHERE ${sql.raw(hold)})::text AS held,
-             min(${sql.raw(t.age)}) FILTER (WHERE NOT (${sql.raw(hold)})) AS oldest
-      ${base}`.execute(this.db);
+    const r = await this.db.transaction().execute(async (trx) => {
+      await sql`SELECT set_config('app.role', 'system', true)`.execute(trx);
+      return sql<Record<string, unknown>>`
+        SELECT count(*) FILTER (WHERE NOT (${sql.raw(hold)}))::text AS eligible,
+               count(*) FILTER (WHERE ${sql.raw(hold)})::text AS held,
+               min(${sql.raw(t.age)}) FILTER (WHERE NOT (${sql.raw(hold)})) AS oldest
+        ${base}`.execute(trx);
+    });
     const row = CountRow.parse(r.rows[0]);
     return { eligible: row.eligible, held: row.held, oldestEligibleMs: row.oldest === null ? null : new Date(row.oldest).getTime() };
   }
@@ -63,6 +66,8 @@ export class KyselyPurgeExecutor implements PurgeExecutor {
     const cutoff = iso(cutoffMs);
     return this.db.transaction().execute(async (trx) => {
       await sql`SELECT set_config('statement_timeout', ${String(this.statementTimeoutMs)}, true)`.execute(trx);
+      // The purge is a system job: tables whose DELETE or UPDATE policy admits only app.role = 'system' (seller_analytics_facts) need it.
+      await sql`SELECT set_config('app.role', 'system', true)`.execute(trx);
       const from = eligibleFrom(t, cutoff, "unheld");
       if (t.pk === "id") return this.byId(trx, t, from, limit);
       return this.byCtid(trx, t, from, limit);

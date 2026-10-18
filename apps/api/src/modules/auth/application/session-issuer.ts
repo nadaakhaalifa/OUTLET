@@ -1,5 +1,5 @@
-import { buildAccessClaims, issueFamily, type Amr, type Csprng } from "@outlet/auth-core";
-import type { AccessTokenIssuer, SessionRepository, User } from "../domain/ports";
+import { buildAccessClaims, issueFamily, type Amr, type Audience, type Csprng } from "@outlet/auth-core";
+import type { AccessTokenIssuer, SessionPlatform, SessionRepository, User } from "../domain/ports";
 import type { Clock } from "./common";
 
 export interface SessionIssuerDeps {
@@ -26,8 +26,14 @@ export class SessionIssuer {
   async open(input: {
     readonly user: User;
     readonly installId: string;
-    readonly platform: "ios" | "android";
+    readonly platform: SessionPlatform;
     readonly amr: readonly Amr[];
+    /** Defaults to buyer_api. Web sessions are admin-only (shopper web is Phase 3). */
+    readonly audience?: Audience;
+    /** Passkey path only, after the verifier checked user verification. */
+    readonly uv?: boolean;
+    /** Web only: hex SHA-256 of the server-minted install token. */
+    readonly installSecretHash?: string;
   }): Promise<IssuedSession> {
     const d = this.deps;
     const nowMs = d.clock.nowMs();
@@ -43,7 +49,7 @@ export class SessionIssuer {
     const claims = buildAccessClaims({
       issuer: d.issuer,
       userId: input.user.id,
-      audience: "buyer_api",
+      audience: input.audience ?? "buyer_api",
       sessionId,
       jti: d.newId(),
       amr: input.amr,
@@ -62,6 +68,8 @@ export class SessionIssuer {
       },
       family,
       platform: input.platform,
+      ...(input.uv === true ? { uv: true } : {}),
+      ...(input.installSecretHash !== undefined ? { installSecretHash: input.installSecretHash } : {}),
     });
     return {
       sessionId,
@@ -77,12 +85,13 @@ export class SessionIssuer {
     readonly userId: string;
     readonly sessionId: string;
     readonly amr: readonly Amr[];
+    readonly audience?: Audience;
   }): Promise<{ accessToken: string; accessExpiresAtMs: number }> {
     const d = this.deps;
     const claims = buildAccessClaims({
       issuer: d.issuer,
       userId: input.userId,
-      audience: "buyer_api",
+      audience: input.audience ?? "buyer_api",
       sessionId: input.sessionId,
       jti: d.newId(),
       amr: input.amr,

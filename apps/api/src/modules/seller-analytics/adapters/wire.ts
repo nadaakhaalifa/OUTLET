@@ -60,6 +60,7 @@ export const trafficWire = (r: WithMeta<TrafficReport>) => ({
   store_views: r.storeViews,
   product_views: r.productViews,
   unique_visitors: r.uniqueVisitors,
+  unique_visitors_suppressed: r.uniqueVisitors === null,
   by_source: kWire(r.bySource, (events) => ({ events })),
   meta: metaWire(r.meta),
 });

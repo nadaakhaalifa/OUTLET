@@ -1,3 +1,4 @@
+import { assertAuditDiff } from "@outlet/privacy";
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 import {
@@ -379,6 +380,8 @@ export class KyselyAdminAudit implements AdminAuditPort {
 
   async append(e: AdminAuditEntry): Promise<void> {
     const targetId = e.targetId !== null && UUID.test(e.targetId) ? e.targetId : null;
+    // Fails closed before any write: an action whose audit diff carries P3 data must not happen.
+    const diff = assertAuditDiff(e.diff);
     await this.db.transaction().execute(async (trx) => {
       await sql`select set_config('app.role', 'system', true)`.execute(trx);
       await sql`
@@ -386,7 +389,7 @@ export class KyselyAdminAudit implements AdminAuditPort {
                                diff_redacted, request_id, reason_code)
         values (${iso(e.atMs)}::timestamptz, ${`admin:${YYYY_MM(e.atMs)}`},
                 ${e.actorId === null ? "system" : "staff"}, ${e.actorId}::uuid, ${e.action},
-                ${e.targetType}, ${targetId}::uuid, ${JSON.stringify(e.diff)}::jsonb, ${e.requestId}, ${e.reasonCode})`.execute(trx);
+                ${e.targetType}, ${targetId}::uuid, ${JSON.stringify(diff)}::jsonb, ${e.requestId}, ${e.reasonCode})`.execute(trx);
     });
   }
 }

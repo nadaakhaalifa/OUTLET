@@ -29,6 +29,8 @@ export interface ExportManifest {
   readonly locale: ExportLocale;
   readonly exporters: readonly string[];
   readonly tables: Readonly<Record<string, number>>;
+  /** Tables the platform could not export on this deployment; empty when the archive is complete. */
+  readonly gaps: readonly string[];
 }
 
 export function assembleExportZip(input: {
@@ -43,6 +45,7 @@ export function assembleExportZip(input: {
     locale: input.locale,
     exporters: input.collected.exporterKeys,
     tables: Object.fromEntries(Object.entries(input.collected.tables).map(([t, rows]) => [t, rows.length])),
+    gaps: input.collected.gaps,
   };
   const entries = [
     { path: "README.ar.txt", data: enc.encode(README_AR) },

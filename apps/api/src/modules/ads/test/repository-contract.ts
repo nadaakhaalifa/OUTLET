@@ -236,6 +236,28 @@ export function describeAdsStoreContract(name: string, fresh: () => Promise<Cont
       await c.store.putConfig(cfg, U(21));
       expect(await c.store.getConfig()).toEqual(cfg);
     });
+
+    it("invalid-click review queue: keyset order, reviewable reasons only, one decision per click", async () => {
+      const c = await fresh();
+      await c.store.insertCampaign(campaign(U(100)), [bid(U(100), U(700))]);
+      const bad = (n: number, reason: ClickRecord["invalidReason"], at: number) =>
+        c.store.billClick(click(U(800 + n), `jti-review-${n}-xxxx`, U(100), U(700), { valid: false, invalidReason: reason, cost: 0n, atMs: at }), { dailyBudget: 50_000n }, []);
+      await bad(1, "bot", T0 + 1_000);
+      await bad(2, "burst", T0 + 3_000);
+      await bad(3, "budget_exhausted", T0 + 4_000);
+      await bad(4, "self_click", T0 + 3_000);
+      const all = await c.store.listInvalidClickQueue({ limit: 10, after: null });
+      expect(all.map((x) => x.id)).toEqual([U(804), U(802), U(801)]);
+      const page = await c.store.listInvalidClickQueue({ limit: 1, after: { atMs: T0 + 3_000, id: U(804) } });
+      expect(page.map((x) => x.id)).toEqual([U(802)]);
+      const r = { clickId: U(802), decision: "confirm_invalid" as const, reasonCode: "bot_pattern", decidedBy: U(21), decidedAtMs: T0 + 9_000 };
+      expect((await c.store.decideClickReview(r)).kind).toBe("decided");
+      expect((await c.store.decideClickReview(r)).kind).toBe("replayed");
+      expect((await c.store.decideClickReview({ ...r, decision: "flag_store" })).kind).toBe("conflict");
+      expect((await c.store.decideClickReview({ ...r, clickId: U(803) })).kind).toBe("not_reviewable");
+      expect((await c.store.decideClickReview({ ...r, clickId: U(899) })).kind).toBe("not_found");
+      expect((await c.store.listInvalidClickQueue({ limit: 10, after: null })).map((x) => x.id)).toEqual([U(804), U(801)]);
+    });
   });
 }
 

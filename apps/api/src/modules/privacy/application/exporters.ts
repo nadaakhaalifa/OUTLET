@@ -7,6 +7,8 @@ export interface CollectedExport {
   /** Rows per table, tables sorted by name. Tables an exporter declared but had no rows for are present and empty. */
   readonly tables: Readonly<Record<string, readonly ExportRow[]>>;
   readonly exporterKeys: readonly string[];
+  /** Declared tables that could not be exported on this deployment (sorted). Empty when complete. */
+  readonly gaps: readonly string[];
 }
 
 /**
@@ -37,20 +39,26 @@ export class ExporterRegistry {
 
   async collect(userId: string): Promise<CollectedExport> {
     const out = new Map<string, readonly ExportRow[]>();
+    const gaps = new Set<string>();
     for (const e of this.exporters) {
       const declared = new Set(e.tables);
+      for (const g of (await e.gaps?.()) ?? []) {
+        if (!declared.has(g)) throw new ExporterRegistryError(`exporter ${e.key} reported a gap for undeclared table ${g}`);
+        gaps.add(g);
+      }
       const section = await e.collect(userId);
       for (const t of Object.keys(section.tables)) {
         if (!declared.has(t)) {
           throw new ExporterRegistryError(`exporter ${e.key} returned undeclared table ${t}`);
         }
       }
-      for (const t of e.tables) out.set(t, section.tables[t] ?? []);
+      for (const t of e.tables) if (!gaps.has(t)) out.set(t, section.tables[t] ?? []);
     }
     const sorted = [...out.keys()].sort();
     return {
       tables: Object.fromEntries(sorted.map((t) => [t, out.get(t) ?? []])),
       exporterKeys: this.exporters.map((e) => e.key),
+      gaps: [...gaps].sort(),
     };
   }
 }

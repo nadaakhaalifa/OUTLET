@@ -57,4 +57,33 @@ export const ROUTE_ROLES = {
   kycWrite: ["ops", "trust_safety"],
   kycReviewRead: ["ops", "trust_safety", "security"],
   elevationsAdmin: ["security", "super_admin"],
+  /** ADR-0049 item 3 (Proposed): safe default. Counts: ops, finance. Money: finance. One constant; the owner may widen. */
+  metricsCounts: ["ops", "finance"],
+  metricsMoney: ["finance"],
 } as const satisfies Readonly<Record<string, readonly AdminRoleName[]>>;
+
+export type GateDenial = "missing_role" | "passkey_required";
+
+/**
+ * The decision behind `AdminController.gate`: a standing grant, then a passkey session, then an
+ * effective role in `allowed` (or any standing grant when `allowed` is "any_standing"). Null means allow.
+ * Exported so the capability map evaluates the same code as the route.
+ */
+export function adminGateDenial(access: AdminAccess, allowed: readonly AdminRoleName[] | "any_standing"): GateDenial | null {
+  if (access.standing.length === 0) return "missing_role";
+  if (!access.passkey) return "passkey_required";
+  if (allowed !== "any_standing" && !hasAnyRole(access.effective, allowed)) return "missing_role";
+  return null;
+}
+
+export const canPassAdminGate = (access: AdminAccess, allowed: readonly AdminRoleName[] | "any_standing"): boolean =>
+  adminGateDenial(access, allowed) === null;
+
+/**
+ * The decision behind the brand review gate (same allow set as `adminGateDenial`, but the role is
+ * checked before the passkey, which only changes the reason text on a deny). Null means allow.
+ */
+export function brandReviewGateDenial(access: AdminAccess, allowed: readonly AdminRoleName[]): GateDenial | null {
+  if (access.standing.length === 0 || !hasAnyRole(access.effective, allowed)) return "missing_role";
+  return access.passkey ? null : "passkey_required";
+}

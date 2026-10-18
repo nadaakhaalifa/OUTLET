@@ -19,3 +19,6 @@ export const GET_ADS_CONFIG = Symbol("ads.GetAdsConfig");
 export const PUT_ADS_CONFIG = Symbol("ads.PutAdsConfig");
 export const CAMPAIGN_RESOLVER = Symbol("ads.CampaignResolver");
 export const ADS_ADMIN_RESOLVER = Symbol("ads.AdminResolver");
+
+export const LIST_INVALID_CLICKS = Symbol("ads.ListInvalidClicks");
+export const DECIDE_INVALID_CLICK = Symbol("ads.DecideInvalidClick");

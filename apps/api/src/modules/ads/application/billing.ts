@@ -74,6 +74,8 @@ export class ConfirmTopUp {
     const t = await d.store.getTopUp(input.topUpId);
     if (t === null) return { kind: "not_found" };
     if (t.intentRef !== null && t.intentRef !== input.intentRef) return { kind: "intent_mismatch" };
+    const psp = d.topUpPsp;
+    if (psp === undefined) throw new Error("ads top-up PSP not configured; refusing to post to a default clearing account");
     const nowMs = d.clock.nowMs();
     const events: OutboxDraft[] = [
       {
@@ -89,7 +91,7 @@ export class ConfirmTopUp {
       entryKey: `ads-topup:${t.id}`,
       kind: "ads_topup",
       refId: t.id,
-      postings: topUpPostings(t.storeId, { net: t.net, vat: t.vat, gross: t.gross }, d.topUpPsp ?? "ads").map((p) => ({
+      postings: topUpPostings(t.storeId, { net: t.net, vat: t.vat, gross: t.gross }, psp).map((p) => ({
         account: p.account,
         amount: p.amount.amount,
       })),

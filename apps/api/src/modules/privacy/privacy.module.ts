@@ -3,7 +3,6 @@ import type { Csprng } from "@outlet/auth-core";
 import { hmacSha256, toHex, utf8 } from "@outlet/auth-core";
 import { CONSENT_PURPOSES, type ConsentPurpose } from "@outlet/privacy";
 import type { AppConfig } from "../../config/env";
-import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock, IdGenerator } from "../../platform/ports";
 import { CLOCK, CSPRNG, ID_GENERATOR } from "../../platform/tokens";
 import {
@@ -58,13 +57,20 @@ import type {
   ErasureExecutorPort,
   ExporterPort,
   ObjectStorePort,
+  PreErasureStepPort,
   PrivacyRequestRepository,
 } from "./domain/ports";
 
 /**
- * Overrides for composition. Everything defaults to a DEVELOPMENT FIXTURE (in-memory repositories,
- * fake blockers, fake exporters returning no rows, a recording erasure executor), so
+ * Overrides for composition. In development everything defaults to a DEVELOPMENT FIXTURE (in-memory
+ * repositories, fake blockers, fake exporters returning no rows, a recording erasure executor), so
  * `PrivacyModule.forRoot(config)` keeps working unchanged in AppModule.
+ *
+ * In production (`config.adapters !== "in-memory-dev"`) nothing is defaulted: every port below must
+ * be supplied (Kysely repositories, real blockers, exporters, erasure executor, object store which
+ * may be an Unconfigured adapter, the resolved inventory and a pseudonym key) or forRoot throws
+ * MissingPrivacyPortsError naming what is absent. Domain events go through the repositories, which
+ * write them to the outbox in the same transaction as the state change.
  */
 export interface PrivacyModuleOptions {
   readonly consentRepository?: ConsentRepository;
@@ -74,6 +80,11 @@ export interface PrivacyModuleOptions {
   readonly objectStore?: ObjectStorePort;
   readonly exporters?: readonly ExporterPort[];
   readonly erasureExecutor?: ErasureExecutorPort;
+  /**
+   * Steps run before the subject's rows are erased (seller-analytics `forgetShopper`, H3). Optional so existing
+   * compositions keep working; a composition that produces analytics facts MUST supply it.
+   */
+  readonly preErasureSteps?: readonly PreErasureStepPort[];
   /** Resolved data inventory, drives the erasure plan. Empty means the deletion worker refuses to run. */
   readonly inventory?: readonly InventoryTable[];
   readonly coolingDays?: number;
@@ -81,10 +92,34 @@ export interface PrivacyModuleOptions {
   readonly pseudonymKey?: Uint8Array;
 }
 
+export class MissingPrivacyPortsError extends Error {
+  constructor(readonly missing: readonly string[]) {
+    super(`privacy needs ${missing.join(", ")} outside the development fixtures`);
+    this.name = "MissingPrivacyPortsError";
+  }
+}
+
 @Module({})
 export class PrivacyModule {
   static forRoot(config: AppConfig, options: PrivacyModuleOptions = {}): DynamicModule {
-    if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
+    const production = config.adapters !== "in-memory-dev";
+    if (production) {
+      const missing = [
+        ["consentRepository", options.consentRepository],
+        ["requestRepository", options.requestRepository],
+        ["breachRepository", options.breachRepository],
+        ["blockers", options.blockers],
+        ["objectStore", options.objectStore],
+        ["exporters", options.exporters],
+        ["erasureExecutor", options.erasureExecutor],
+        ["inventory", options.inventory],
+        ["pseudonymKey", options.pseudonymKey],
+      ]
+        .filter(([, v]) => v === undefined)
+        .map(([k]) => String(k));
+      if (missing.length > 0) throw new MissingPrivacyPortsError(missing);
+      if (options.inventory?.length === 0) throw new MissingPrivacyPortsError(["inventory (empty)"]);
+    }
     const versions = Object.fromEntries(
       CONSENT_PURPOSES.map((p) => [p, config.consentTextVersion]),
     ) as Record<ConsentPurpose, number>;
@@ -92,21 +127,23 @@ export class PrivacyModule {
       module: PrivacyModule,
       controllers: [PrivacyController, PrivacyExportController, PrivacyDeletionController, DpoPrivacyController],
       providers: [
-        { provide: PRIVACY_OUTBOX, useValue: new InMemoryPrivacyOutbox() },
+        // The in-memory outbox exists only for the development repositories; the Kysely repositories
+        // append to outbox_events inside their own transaction.
+        ...(production ? [] : [{ provide: PRIVACY_OUTBOX, useValue: new InMemoryPrivacyOutbox() }]),
         {
           provide: PRIVACY_CONSENT_REPOSITORY,
-          inject: [PRIVACY_OUTBOX],
-          useFactory: (o: InMemoryPrivacyOutbox) => options.consentRepository ?? new InMemoryConsentRepository(o),
+          inject: production ? [] : [PRIVACY_OUTBOX],
+          useFactory: (o?: InMemoryPrivacyOutbox) => options.consentRepository ?? new InMemoryConsentRepository(o),
         },
         {
           provide: PRIVACY_REQUEST_REPOSITORY,
-          inject: [PRIVACY_OUTBOX],
-          useFactory: (o: InMemoryPrivacyOutbox) => options.requestRepository ?? new InMemoryPrivacyRequestRepository(o),
+          inject: production ? [] : [PRIVACY_OUTBOX],
+          useFactory: (o?: InMemoryPrivacyOutbox) => options.requestRepository ?? new InMemoryPrivacyRequestRepository(o),
         },
         {
           provide: PRIVACY_BREACH_REPOSITORY,
-          inject: [PRIVACY_OUTBOX],
-          useFactory: (o: InMemoryPrivacyOutbox) => options.breachRepository ?? new InMemoryBreachRepository(o),
+          inject: production ? [] : [PRIVACY_OUTBOX],
+          useFactory: (o?: InMemoryPrivacyOutbox) => options.breachRepository ?? new InMemoryBreachRepository(o),
         },
         { provide: PRIVACY_BLOCKERS, useValue: options.blockers ?? new FakeBlockers() },
         {
@@ -200,6 +237,7 @@ export class PrivacyModule {
               (input) => toHex(hmacSha256(key, utf8(`pseudonym:v1:${input}`))),
               c,
               ids,
+              options.preErasureSteps ?? [],
             );
           },
         },

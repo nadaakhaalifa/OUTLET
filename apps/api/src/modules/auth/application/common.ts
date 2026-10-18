@@ -1,4 +1,5 @@
 import type { AttestationPlatform, AttestationVerifier } from "@outlet/auth-core";
+import { ProblemError } from "../../../platform/problem";
 
 export interface Clock {
   nowMs(): number;
@@ -29,7 +30,9 @@ export async function attestDevice(
       challenge: "",
     });
     return verdict.ok ? verdict.keyId : null;
-  } catch {
+  } catch (error) {
+    // An Unconfigured verifier is a 503, not "the device is untrusted": fail closed with the right status.
+    if (error instanceof ProblemError) throw error;
     return null;
   }
 }

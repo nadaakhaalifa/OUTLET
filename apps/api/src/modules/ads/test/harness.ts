@@ -64,7 +64,7 @@ export function createRuntime() {
   eligibility.seed({ productId: P_A1, storeId: STORE_A });
   eligibility.seed({ productId: P_A2, storeId: STORE_A, categoryIds: ["dresses"] });
   eligibility.seed({ productId: P_B1, storeId: STORE_B });
-  const d: AdsDeps = { store, clock, ids, flags, enforcement, eligibility, charges, ledger, bots, attribution, secret };
+  const d: AdsDeps = { store, clock, ids, flags, enforcement, eligibility, charges, ledger, bots, attribution, secret, topUpPsp: "ads" };
   return {
     d,
     clock,

@@ -1,5 +1,7 @@
 import {
+  constantTimeEqual,
   hashRefreshToken,
+  sha256Hex,
   revokeFamily,
   revokeSession,
   rotateRefreshToken,
@@ -94,16 +96,34 @@ export type RefreshResult =
 export class RefreshSession {
   constructor(private readonly deps: RefreshDeps) {}
 
-  async execute(input: { refreshToken: string; installId: string }): Promise<RefreshResult> {
+  /**
+   * `installId` is the client's install id for mobile sessions. For a web session it is ignored:
+   * the binding is the server-minted install token (`X-Admin-Install`, `adminInstallToken`), whose
+   * SHA-256 must equal the hash on the session's device row. A missing, wrong or revoked token
+   * is a device mismatch: the family is revoked and the caller gets the same 401 as any bad token.
+   */
+  async execute(input: { refreshToken: string; installId: string | null; adminInstallToken?: string | null }): Promise<RefreshResult> {
     const d = this.deps;
     const stored = await d.sessions.findByRefreshHash(hashRefreshToken(input.refreshToken));
     if (stored === null || stored.session.revokedAtMs !== null) return { kind: "invalid" };
+
+    let presentingDeviceId: string;
+    if (stored.platform === "web") {
+      const token = input.adminInstallToken ?? null;
+      const expected = stored.installSecretHash ?? null;
+      const matches = token !== null && expected !== null && constantTimeEqual(sha256Hex(token), expected);
+      // A value that cannot equal any device id turns the mismatch into the standard revoke path.
+      presentingDeviceId = matches ? stored.family.deviceId : `mismatch:${stored.family.deviceId}`;
+    } else {
+      if (input.installId === null) return { kind: "invalid" };
+      presentingDeviceId = input.installId;
+    }
 
     const nowMs = d.clock.nowMs();
     const result = rotateRefreshToken({
       family: stored.family,
       presentedToken: input.refreshToken,
-      presentingDeviceId: input.installId,
+      presentingDeviceId,
       newRecordId: d.newId(),
       rng: d.rng,
       nowMs,
@@ -145,6 +165,7 @@ export class RefreshSession {
       userId: stored.session.userId,
       sessionId: stored.session.id,
       amr: stored.session.amr,
+      ...(stored.platform === "web" ? { audience: "admin_api" as const } : {}),
     });
     const active = result.family.records.find((r) => r.status === "active");
     return {
@@ -155,5 +176,14 @@ export class RefreshSession {
       refreshToken: result.token,
       refreshExpiresAtMs: active?.expiresAtMs ?? nowMs,
     };
+  }
+}
+
+/** Profile summary for the signed-in user: no P3, no phone, no e-mail. */
+export class GetMe {
+  constructor(private readonly users: UserDirectory) {}
+
+  async execute(userId: string): Promise<User | null> {
+    return this.users.findById(userId);
   }
 }
