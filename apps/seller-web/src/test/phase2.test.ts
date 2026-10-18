@@ -12,6 +12,7 @@ import { normaliseShopDomain, parityWarnings, PARITY_FIX_WINDOW_MS, incidents } 
 import { checkStockEdit, editability, validateDrop, type DropDraft } from "../view-models/drops";
 import { markdownRows } from "../view-models/insights";
 import { navFor } from "../view-models/nav";
+import { permissionsFor } from "./permissions";
 import { resaleRows } from "../view-models/resale";
 import { slaCountdown } from "../view-models/sla";
 import { fakeTransport, json, UUID_A, UUID_B, UUID_C } from "./fake-transport";
@@ -224,10 +225,10 @@ describe("channels, incidents and parity", () => {
 });
 
 describe("navigation", () => {
-  it("lists the Phase 2 screens for owners and hides ads from finance", () => {
-    const owner = navFor("owner").map((i) => i.href);
+  it("lists the Phase 2 screens for owners and hides ads (store_settings.read) from finance", () => {
+    const owner = navFor(permissionsFor("owner")).map((i) => i.href);
     for (const h of ["/ads", "/drops", "/resale", "/insights", "/channels", "/hub"]) expect(owner).toContain(h);
-    expect(navFor("finance").map((i) => i.href)).not.toContain("/ads");
+    expect(navFor(permissionsFor("finance")).map((i) => i.href)).not.toContain("/ads");
   });
 });
 

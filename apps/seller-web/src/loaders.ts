@@ -3,7 +3,8 @@
  * No React and no Next imports, so they run under vitest with a fake Transport.
  */
 import type { SellerApi } from "./api/client";
-import type { TeamRole } from "./api/schemas";
+import type { SellerPermissions } from "./api/schemas-access";
+import type { SellerRole } from "./api/schemas-onboarding";
 import type { Locale, MessageKey } from "./i18n";
 import { formatDateTime, formatInt, formatMoney } from "./lib/format";
 import {
@@ -16,7 +17,10 @@ import { stateFromError, stateFromResult, type ScreenState } from "./view-models
 export interface Ctx {
   readonly api: SellerApi | null;
   readonly locale: Locale;
-  readonly role: TeamRole | null;
+  /** Server-decided role label for display only; never used to grant anything. */
+  readonly role: SellerRole | null;
+  /** Server permissions for the active store; absent or null = not enforced. */
+  readonly permissions?: SellerPermissions | null;
   readonly nowMs: number;
 }
 
@@ -117,7 +121,7 @@ export async function loadOrders(c: Ctx, cursor?: string): Promise<ScreenState<O
         paymentKey: o.payment_type === "cod" ? "orders.payment.cod" : "orders.payment.prepaid",
         governorate: governorateLabel(o.buyer?.governorate_code),
         deadlineIso: acceptDeadline(o),
-        actions: availableActions(o.status, c.role),
+        actions: availableActions(o.status, c.permissions ?? null),
       })),
     }),
     (v) => v.rows.length === 0,
@@ -130,6 +134,7 @@ export interface CatalogRowVM {
   readonly title: string;
   readonly statusKey: MessageKey;
   readonly claimKey: MessageKey;
+  readonly departmentKey: MessageKey;
   readonly price: string;
   readonly stock: string;
 }
@@ -156,6 +161,7 @@ export async function loadCatalog(c: Ctx, cursor?: string): Promise<ScreenState<
           title: c.locale === "ar" ? p.title.ar : (p.title.en ?? p.title.ar),
           statusKey: `catalog.status.${p.status}` as MessageKey,
           claimKey: `catalog.claim.${p.price_claim_state ?? "none"}` as MessageKey,
+          departmentKey: `editor.department.${p.department ?? "unisex"}` as MessageKey,
           price,
           stock: formatInt(p.skus.reduce((n, s) => n + s.on_hand, 0), c.locale),
         };
@@ -197,31 +203,34 @@ export async function loadReturns(c: Ctx, cursor?: string): Promise<ScreenState<
 
 /* ---------------- finance ---------------- */
 export interface FinanceVM {
+  /** Null while the store-scoped balance route is blocked (404) or unavailable: payouts and invoices still render. */
   readonly balance: {
-    readonly available: string; readonly pending: string; readonly held: string; readonly negativeCarry: string | null; readonly asOf: string;
-  };
+    readonly available: string; readonly pending: string; readonly held: string; readonly inTransit: string | null; readonly negativeCarry: string | null; readonly asOf: string;
+  } | null;
   readonly payouts: readonly { readonly id: string; readonly period: string; readonly amount: string; readonly statusKey: MessageKey }[];
-  readonly statements: readonly {
-    readonly id: string; readonly period: string; readonly gross: string; readonly commission: string; readonly vat: string | null;
-    readonly refunds: string | null; readonly net: string;
-  }[];
   readonly invoices: readonly { readonly id: string; readonly amount: string; readonly vat: string; readonly statusKey: MessageKey; readonly etaUuid: string | null; readonly createdAt: string }[];
 }
 
 export async function loadFinance(c: Ctx): Promise<ScreenState<FinanceVM>> {
   if (c.api === null) return notConfigured;
-  const [bal, payouts, statements, invoices] = await Promise.all([c.api.balance(), c.api.payouts(), c.api.statements(), c.api.invoices()]);
-  if (!bal.ok) return stateFromError(bal.error);
+  // The unscoped /v1/seller/balance is deprecated (ADR-0050): the store-scoped route needs the caller's store id.
+  const store = await c.api.store();
+  if (!store.ok) return stateFromError(store.error);
+  const [bal, payouts, invoices] = await Promise.all([c.api.balance(store.value.data.id), c.api.payouts(), c.api.invoices()]);
+  // A blocked flag answers 404 and a down ledger 503: show payouts and invoices without the balance tiles.
+  // Auth, rate-limit and offline failures still replace the whole screen.
+  const balanceMissing = !bal.ok && (bal.error.kind === "not_found" || (bal.error.kind === "server" && bal.error.status === 503));
+  if (!bal.ok && !balanceMissing) return stateFromError(bal.error);
   if (!payouts.ok) return stateFromError(payouts.error);
-  if (!statements.ok) return stateFromError(statements.error);
   if (!invoices.ok) return stateFromError(invoices.error);
-  const b = bal.value.data;
+  const b = bal.ok ? bal.value.data : null;
   const period = (a: string, z: string): string => `${formatDateTime(a, c.locale)} - ${formatDateTime(z, c.locale)}`;
   const vm: FinanceVM = {
-    balance: {
+    balance: b === null ? null : {
       available: formatMoney(b.available.minor, c.locale),
       pending: formatMoney(b.pending_release.minor, c.locale),
       held: formatMoney(b.held.minor, c.locale),
+      inTransit: b.in_transit === undefined ? null : formatMoney(b.in_transit.minor, c.locale),
       negativeCarry: b.negative_carry === undefined || b.negative_carry.minor === 0n ? null : formatMoney(b.negative_carry.minor, c.locale),
       asOf: formatDateTime(b.as_of, c.locale),
     },
@@ -229,19 +238,12 @@ export async function loadFinance(c: Ctx): Promise<ScreenState<FinanceVM>> {
       id: p.id, period: period(p.period_start, p.period_end), amount: formatMoney(p.amount.minor, c.locale),
       statusKey: `finance.payout.${p.status}` as MessageKey,
     })),
-    statements: statements.value.data.items.map((s) => ({
-      id: s.id, period: period(s.period_start, s.period_end), gross: formatMoney(s.gross_sales.minor, c.locale),
-      commission: formatMoney(s.commission.minor, c.locale),
-      vat: s.commission_vat === undefined ? null : formatMoney(s.commission_vat.minor, c.locale),
-      refunds: s.refunds === undefined ? null : formatMoney(s.refunds.minor, c.locale),
-      net: formatMoney(s.net.minor, c.locale),
-    })),
     invoices: invoices.value.data.items.map((i) => ({
       id: i.id, amount: formatMoney(i.amount.minor, c.locale), vat: formatMoney(i.vat.minor, c.locale),
       statusKey: `finance.invoice.${i.status}` as MessageKey, etaUuid: i.eta_uuid ?? null, createdAt: formatDateTime(i.created_at, c.locale),
     })),
   };
-  return { kind: "ready", data: vm, serverNowMs: bal.value.serverNowMs };
+  return { kind: "ready", data: vm, serverNowMs: payouts.value.serverNowMs };
 }
 
 /* ---------------- marketing ---------------- */
@@ -269,37 +271,6 @@ export async function loadMarketing(c: Ctx): Promise<ScreenState<MarketingVM>> {
         canPause: p.status === "active" || p.status === "scheduled",
         canResume: p.status === "paused",
       })),
-    }),
-    (v) => v.rows.length === 0,
-  );
-}
-
-/* ---------------- team ---------------- */
-export interface TeamVM {
-  readonly rows: readonly {
-    readonly id: string; readonly name: string; readonly emailMasked: string | null; readonly roleKey: MessageKey; readonly mfaKey: MessageKey;
-    readonly mfaMissing: boolean; readonly statusKey: MessageKey; readonly removable: boolean;
-  }[];
-}
-
-export async function loadTeam(c: Ctx): Promise<ScreenState<TeamVM>> {
-  if (c.api === null) return notConfigured;
-  const r = await c.api.team();
-  return stateFromResult(
-    r,
-    (page): TeamVM => ({
-      rows: page.items
-        .filter((m) => m.status !== "removed")
-        .map((m) => ({
-          id: m.id,
-          name: m.display_name ?? "",
-          emailMasked: m.email_masked ?? null,
-          roleKey: `team.role.${m.role}` as MessageKey,
-          mfaKey: `team.mfa.${m.mfa ?? "none"}` as MessageKey,
-          mfaMissing: (m.mfa ?? "none") === "none",
-          statusKey: `team.status.${m.status}` as MessageKey,
-          removable: m.role !== "owner",
-        })),
     }),
     (v) => v.rows.length === 0,
   );

@@ -84,50 +84,6 @@ export async function setPromotionStatusAction(_prev: ActionResult | null, form:
   return run("/marketing", (api) => api.setPromotionStatus(id.data, status.data));
 }
 
-export async function inviteMemberAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const parsed = z.object({ email: z.string().email().max(254), role: z.enum(["manager", "fulfilment", "catalog", "finance"]) }).safeParse({
-    email: form.get("email"),
-    role: form.get("role"),
-  });
-  if (!parsed.success) return { ok: false, messageKey: "state.error" };
-  return run("/team", (api) => api.inviteMember(parsed.data));
-}
-
-export async function removeMemberAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const id = idSchema.safeParse(form.get("id"));
-  if (!id.success) return { ok: false, messageKey: "state.error" };
-  return run("/team", (api) => api.removeMember(id.data));
-}
-
-export async function beginPasskeyAction(): Promise<
-  { readonly ok: true; readonly challengeId: string; readonly challenge: string; readonly rpId: string } | { readonly ok: false; readonly messageKey: MessageKey }
-> {
-  const { auth } = await getContext();
-  if (auth === null) return { ok: false, messageKey: "state.notConfigured" };
-  const r = await auth.beginPasskey();
-  if (!r.ok) return { ok: false, messageKey: r.error === "network" ? "state.offline" : "login.failed" };
-  return { ok: true, challengeId: r.value.challenge_id, challenge: r.value.challenge, rpId: r.value.rp_id };
-}
-
-export async function completePasskeyAction(challengeId: string, credential: unknown): Promise<ActionResult> {
-  const id = idSchema.safeParse(challengeId);
-  if (!id.success) return { ok: false, messageKey: "login.failed" };
-  const { auth } = await getContext();
-  if (auth === null) return { ok: false, messageKey: "state.notConfigured" };
-  const r = await auth.completePasskey(id.data, credential);
-  if (!r.ok) return { ok: false, messageKey: r.error === "network" ? "state.offline" : "login.failed" };
-  return { ok: true };
-}
-
-export async function verifyTotpAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const code = z.string().regex(/^\d{6}$/).safeParse(form.get("code"));
-  if (!code.success) return { ok: false, messageKey: "login.failed" };
-  const { auth } = await getContext();
-  if (auth === null) return { ok: false, messageKey: "state.notConfigured" };
-  const r = await auth.verifyTotp(code.data);
-  return r.ok ? { ok: true } : { ok: false, messageKey: "login.totpUnavailable" };
-}
-
 export async function signOutAction(): Promise<void> {
   const { session } = await getContext();
   await session?.signOut();
@@ -144,6 +100,7 @@ const draftSchema = z.object({
   titleAr: z.string().max(300), titleEn: z.string().max(300), descriptionAr: z.string().max(5000),
   categoryId: z.string().max(64),
   condition: z.enum(["new_with_tags", "new_without_tags", "sample", "minor_defect"]),
+  department: z.enum(["women", "men", "kids", "unisex"]).optional(),
   defectPhotoUploadIds: z.array(z.string().uuid()).max(10),
   imageUploadIds: z.array(z.string().uuid()).max(20),
   sizeChartId: z.string().max(64),

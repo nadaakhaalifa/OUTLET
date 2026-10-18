@@ -43,9 +43,9 @@ describe("seller api client", () => {
     expect(t.calls).toHaveLength(0);
   });
   it("carries problem code and request id, and violations", async () => {
-    const t = fakeTransport({ "POST /v1/seller/team": () => json({ title: "bad", code: "invalid", request_id: "req-7", errors: [{ pointer: "/email", code: "format" }] }, 422) });
+    const t = fakeTransport({ [`POST /v1/seller/orders/${UUID_A}/accept`]: () => json({ title: "bad", code: "invalid", request_id: "req-7", errors: [{ pointer: "/email", code: "format" }] }, 422) });
     const api = createSellerApi({ transport: t, session: new FakeSession({ initial: state }), newIdempotencyKey: () => "k" });
-    const r = await api.inviteMember({ email: "x", role: "catalog" });
+    const r = await api.acceptOrder(UUID_A);
     expect(r).toMatchObject({ ok: false, error: { kind: "validation", code: "invalid", requestId: "req-7", violations: [{ pointer: "/email", code: "format" }] } });
   });
   it("rejects a response that fails the schema as a contract error", async () => {

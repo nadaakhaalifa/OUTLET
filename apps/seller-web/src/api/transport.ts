@@ -79,3 +79,19 @@ export function createFetchTransport(options: { baseUrl: string; fetchImpl?: typ
     },
   };
 }
+
+/**
+ * One-shot GET of a signed image link for the same-origin relay (/media/file). No credentials, no redirects, 10 s cap.
+ * Returns null on any failure so the caller can answer 502 without leaking the storage host.
+ */
+export async function fetchImage(url: URL, maxBytes: number): Promise<{ type: string; bytes: ArrayBuffer } | null> {
+  try {
+    const r = await fetch(url, { redirect: "error", cache: "no-store", credentials: "omit", signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) return null;
+    const bytes = await r.arrayBuffer();
+    if (bytes.byteLength > maxBytes) return null;
+    return { type: r.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "", bytes };
+  } catch {
+    return null;
+  }
+}

@@ -11,38 +11,28 @@ export default async function FinancePage() {
       <ScreenFrame state={state} t={t}>
         {(vm) => (
           <>
-            <p className="hint">{t("common.asOf", { time: vm.balance.asOf })}</p>
-            <dl className="tiles">
-              <div className="tile"><dt>{t("finance.available")}</dt><dd>{vm.balance.available}</dd></div>
-              <div className="tile"><dt>{t("finance.pending")}</dt><dd>{vm.balance.pending}</dd></div>
-              <div className="tile"><dt>{t("finance.held")}</dt><dd>{vm.balance.held}</dd></div>
-              {vm.balance.negativeCarry === null ? null : (
-                <div className="tile"><dt>{t("finance.negative")}</dt><dd>{vm.balance.negativeCarry}</dd></div>
-              )}
-            </dl>
+            {vm.balance === null ? <p className="hint">{t("finance.balance.unavailable")}</p> : (
+              <>
+                <p className="hint">{t("common.asOf", { time: vm.balance.asOf })}</p>
+                <dl className="tiles">
+                  <div className="tile"><dt>{t("finance.available")}</dt><dd>{vm.balance.available}</dd></div>
+                  <div className="tile"><dt>{t("finance.pending")}</dt><dd>{vm.balance.pending}</dd></div>
+                  <div className="tile"><dt>{t("finance.held")}</dt><dd>{vm.balance.held}</dd></div>
+                  {vm.balance.inTransit === null ? null : (
+                    <div className="tile"><dt>{t("finance.inTransit")}</dt><dd>{vm.balance.inTransit}</dd></div>
+                  )}
+                  {vm.balance.negativeCarry === null ? null : (
+                    <div className="tile"><dt>{t("finance.negative")}</dt><dd>{vm.balance.negativeCarry}</dd></div>
+                  )}
+                </dl>
+              </>
+            )}
             <h3>{t("finance.payouts")}</h3>
             {vm.payouts.length === 0 ? <p className="hint">{t("state.empty")}</p> : (
               <div className="tablewrap"><table>
                 <caption className="vh">{t("finance.payouts")}</caption>
                 <thead><tr><th scope="col">{t("finance.col.period")}</th><th scope="col">{t("finance.col.amount")}</th><th scope="col">{t("finance.col.status")}</th></tr></thead>
                 <tbody>{vm.payouts.map((p) => <tr key={p.id}><th scope="row">{p.period}</th><td>{p.amount}</td><td>{t(p.statusKey)}</td></tr>)}</tbody>
-              </table></div>
-            )}
-            <h3>{t("finance.statements")}</h3>
-            {vm.statements.length === 0 ? <p className="hint">{t("state.empty")}</p> : (
-              <div className="tablewrap"><table>
-                <caption className="vh">{t("finance.statements")}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t("finance.col.period")}</th><th scope="col">{t("finance.col.gross")}</th><th scope="col">{t("finance.col.commission")}</th>
-                    <th scope="col">{t("finance.col.vat")}</th><th scope="col">{t("finance.col.refunds")}</th><th scope="col">{t("finance.col.net")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vm.statements.map((s) => (
-                    <tr key={s.id}><th scope="row">{s.period}</th><td>{s.gross}</td><td>{s.commission}</td><td>{s.vat ?? ""}</td><td>{s.refunds ?? ""}</td><td>{s.net}</td></tr>
-                  ))}
-                </tbody>
               </table></div>
             )}
             <h3>{t("finance.invoices")}</h3>

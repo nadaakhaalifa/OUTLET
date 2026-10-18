@@ -1,15 +1,16 @@
-import type { SellerOrderStatus, SellerOrderView, TeamRole } from "../api/schemas";
+import type { SellerOrderStatus, SellerOrderView } from "../api/schemas";
+import type { SellerPermissions } from "../api/schemas-access";
 
 export type OrderAction = "accept" | "reject" | "pack" | "create_shipment";
 
-/** Roles that may act on orders (UI hint only; the API policy is authoritative and answers 403). */
-const FULFILMENT_ROLES: ReadonlySet<TeamRole> = new Set(["owner", "manager", "fulfilment"]);
-
 const WAITING: ReadonlySet<SellerOrderStatus> = new Set(["PAID", "CONFIRMED_COD"]);
 
-export function availableActions(status: SellerOrderStatus, role: TeamRole | null): readonly OrderAction[] {
-  // Role unknown (no seller "me" endpoint yet): show by status; the API answers 403 for the rest.
-  if (role !== null && !FULFILMENT_ROLES.has(role)) return [];
+/**
+ * Order actions need `store_order.update` from the server permissions (never a role name).
+ * `null` = not enforced (flag blocked or me unavailable): show by status; the API answers 403 for the rest.
+ */
+export function availableActions(status: SellerOrderStatus, permissions: SellerPermissions | null): readonly OrderAction[] {
+  if (permissions !== null && !permissions["store_order.update"]) return [];
   if (WAITING.has(status)) return ["accept", "reject"];
   if (status === "ACCEPTED") return ["pack"];
   if (status === "PACKED") return ["create_shipment"];

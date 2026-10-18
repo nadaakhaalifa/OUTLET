@@ -3,6 +3,8 @@ import { err, ok, type Result } from "../lib/result";
 import type { SessionPort } from "../session/port";
 import * as S from "./schemas";
 import * as P from "./schemas-phase2";
+import * as P3 from "./schemas-phase3";
+import { sellerStoreMe } from "./schemas-access";
 import { NetworkError, type Transport, type TransportRequest } from "./transport";
 
 export type ApiErrorKind =
@@ -133,6 +135,7 @@ export function createSellerApi(deps: ClientDeps) {
   } as const;
 
   return {
+    storeMe: (storeId: string) => call(sellerStoreMe, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/me` }),
     store: () => call(S.sellerStore, { method: "GET", path: "/v1/seller/store" }),
     updateStore: (body: { free_delivery_threshold?: { amount: string; currency: "EGP" }; vacation_mode?: boolean }) =>
       call(S.sellerStore, { method: "PATCH", path: "/v1/seller/store", body }, true),
@@ -183,19 +186,13 @@ export function createSellerApi(deps: ClientDeps) {
     inspectReturn: (id: string, body: { result: "approve" } | { result: "reject"; rejection_reason: S.RejectionReason; photo_upload_ids: readonly string[]; note?: string }) =>
       call(S.inspectionDueReturn, { method: "POST", path: `/v1/seller/returns/${sid(id)}/inspect`, body }, true),
 
-    balance: () => call(S.sellerBalance, { method: "GET", path: "/v1/seller/balance" }),
+    balance: (storeId: string) => call(S.sellerBalance, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/balance` }),
     payouts: (cursor?: string) => call(S.payoutPage, { method: "GET", path: "/v1/seller/payouts", query: q(cursor) }),
-    statements: (cursor?: string) => call(S.statementPage, { method: "GET", path: "/v1/seller/statements", query: q(cursor) }),
     invoices: (cursor?: string) => call(S.taxInvoicePage, { method: "GET", path: "/v1/seller/invoices", query: q(cursor) }),
 
     promotions: (cursor?: string) => call(S.promotionPage, { method: "GET", path: "/v1/seller/promotions", query: q(cursor) }),
     setPromotionStatus: (id: string, status: "paused" | "active") =>
       call(S.promotion, { method: "PATCH", path: `/v1/seller/promotions/${sid(id)}`, body: { status } }, true),
-
-    team: (cursor?: string) => call(S.teamPage, { method: "GET", path: "/v1/seller/team", query: q(cursor) }),
-    inviteMember: (body: { email: string; role: Exclude<S.TeamRole, "owner"> }) =>
-      call(S.teamMember, { method: "POST", path: "/v1/seller/team", body }, true),
-    removeMember: (id: string) => noContent({ method: "DELETE", path: `/v1/seller/team/${sid(id)}` }),
 
     priceTrust: () => call(S.priceTrust, { method: "GET", path: "/v1/seller/price-trust" }),
     priceClaims: (cursor?: string) => call(S.priceClaimPage, { method: "GET", path: "/v1/seller/price-claims", query: q(cursor) }),
@@ -234,6 +231,23 @@ export function createSellerApi(deps: ClientDeps) {
     connectChannel: (body: { type: P.ChannelType; shop_domain: string; return_url?: string }) =>
       call(P.channelConnection, { method: "POST", path: "/v1/seller/channels", body }, true),
     crawlTargets: (storeId: string) => call(P.crawlTargetList, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/crawl-targets` }),
+
+    // Phase 3: product photo background removal (listSellerProductMedia, getSellerProductMediaJob, accept, use-original, rerun)
+    productMedia: (storeId: string) => call(P3.productMediaList, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/product-media` }),
+    productMediaJob: (storeId: string, jobId: string) => call(P3.productMediaJob, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/product-media/${sid(jobId)}` }),
+    acceptProductMedia: (storeId: string, jobId: string) =>
+      call(P3.productMediaJob, { method: "POST", path: `/v1/seller/stores/${sid(storeId)}/product-media/${sid(jobId)}/accept`, body: {} }, true),
+    useOriginalProductMedia: (storeId: string, jobId: string) =>
+      call(P3.productMediaJob, { method: "POST", path: `/v1/seller/stores/${sid(storeId)}/product-media/${sid(jobId)}/use-original`, body: {} }, true),
+    rerunProductMedia: (storeId: string, jobId: string, model: P3.MediaModel) =>
+      call(P3.productMediaJob, { method: "POST", path: `/v1/seller/stores/${sid(storeId)}/product-media/${sid(jobId)}/rerun`, body: { model } }, true),
+
+    // Phase 3: demand forecasts (getSellerStoresByStoreIdForecasts) and store stock/price channels (listStoreChannels, connectStoreChannel)
+    forecasts: (storeId: string, f: { scope?: P3.ForecastScope; horizon_days?: "7" | "14" | "28" } = {}) =>
+      call(P3.forecastList, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/forecasts`, query: { scope: f.scope, horizon_days: f.horizon_days, limit: 100 } }),
+    storeChannels: (storeId: string) => call(P3.storeChannelList, { method: "GET", path: `/v1/seller/stores/${sid(storeId)}/channels` }),
+    connectStoreChannel: (storeId: string, body: { kind: P3.StoreChannelKind; token_ref: string; kms_key_ref: string; target_id?: string | null }) =>
+      call(P3.storeChannel, { method: "POST", path: `/v1/seller/stores/${sid(storeId)}/channels`, body }, true),
 
     hubTracking: (orderGroupId: string) => call(P.hubTracking, { method: "GET", path: `/v1/me/orders/${sid(orderGroupId)}/tracking` }),
   };

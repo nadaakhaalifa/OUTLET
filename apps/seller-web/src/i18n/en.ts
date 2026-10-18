@@ -1,7 +1,11 @@
 /** Seller Center copy. Flat dotted keys: the type system enforces AR/EN parity (ar.ts is Record<keyof en>). */
+import { enAccess } from "./access-en";
+import { enOnboarding } from "./onboarding-en";
 import { enPhase2 } from "./phase2-en";
+import { enPhase3 } from "./phase3-en";
 
 export const en = {
+  "app.product": "Seller Center",
   "app.name": "Z-OUTLET Seller Center",
   "common.retry": "Try again",
   "common.loading": "Loading",
@@ -88,6 +92,12 @@ export const en = {
   "editor.descAr": "Arabic description (required)",
   "editor.category": "Category ID",
   "editor.condition": "Condition",
+  "editor.department": "Department",
+  "editor.department.women": "Women",
+  "editor.department.men": "Men",
+  "editor.department.kids": "Kids",
+  "editor.department.unisex": "Unisex",
+  "catalog.col.department": "Department",
   "editor.condition.new_with_tags": "New with tags",
   "editor.condition.new_without_tags": "New without tags",
   "editor.condition.sample": "Sample",
@@ -133,10 +143,13 @@ export const en = {
   "import.col.problem": "Problem",
   "import.err.missing_header": "A required column is missing from the header.",
   "import.err.unknown_header": "Unknown column.",
+  "import.err.title_ar_missing": "Arabic title is required (2+ characters, Arabic letters).",
+  "import.err.title_en_missing": "English title is required (2+ characters, Latin letters).",
   "import.err.title_ar_required": "Arabic title is required.",
   "import.err.title_ar_not_arabic": "Arabic title must contain Arabic letters.",
   "import.err.category_invalid": "Category must be a valid id.",
   "import.err.condition_invalid": "Condition is not one of the allowed values.",
+  "import.err.department_invalid": "Department must be women, men, kids or unisex.",
   "import.err.size_label_required": "Size label is required.",
   "import.err.price_invalid": "Price must be a whole number of piastres above zero.",
   "import.err.stock_invalid": "Stock must be a whole number, zero or more.",
@@ -209,6 +222,8 @@ export const en = {
   "finance.available": "Available",
   "finance.pending": "Pending release",
   "finance.held": "On hold",
+  "finance.inTransit": "On its way to your bank",
+  "finance.balance.unavailable": "Your balance is not available yet. Payouts and invoices are shown below.",
   "finance.negative": "Owed to the platform (netted from your next payout)",
   "finance.payouts": "Payouts",
   "finance.statements": "Statements",
@@ -303,6 +318,9 @@ export const en = {
   "settings.legalIdentity": "Legal identity shown to shoppers",
   "settings.health": "Seller health score",
   ...enPhase2,
+  ...enPhase3,
+  ...enOnboarding,
+  ...enAccess,
 } as const;
 
 export type MessageKey = keyof typeof en;

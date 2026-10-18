@@ -25,6 +25,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                   <tr>
                     <th scope="col">{t("catalog.col.title")}</th>
                     <th scope="col">{t("catalog.col.status")}</th>
+                    <th scope="col">{t("catalog.col.department")}</th>
                     <th scope="col">{t("catalog.col.price")}</th>
                     <th scope="col">{t("catalog.col.stock")}</th>
                     <th scope="col">{t("catalog.col.claim")}</th>
@@ -35,6 +36,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                     <tr key={r.id}>
                       <th scope="row">{r.title}</th>
                       <td>{t(r.statusKey)}</td>
+                      <td>{t(r.departmentKey)}</td>
                       <td>{r.price}</td>
                       <td>{r.stock}</td>
                       <td>{t(r.claimKey)}</td>

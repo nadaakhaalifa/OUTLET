@@ -1,4 +1,4 @@
-import type { Condition, SellerProductInputWire } from "../api/schemas";
+import type { Condition, Department, SellerProductInputWire } from "../api/schemas";
 import type { MessageKey } from "../i18n";
 
 export interface SkuDraft {
@@ -14,6 +14,8 @@ export interface ProductDraft {
   readonly descriptionAr: string;
   readonly categoryId: string;
   readonly condition: Condition;
+  /** Optional: the server defaults to unisex. */
+  readonly department?: Department;
   readonly defectPhotoUploadIds: readonly string[];
   readonly imageUploadIds: readonly string[];
   readonly sizeChartId: string;
@@ -76,6 +78,7 @@ export function validateProduct(d: ProductDraft): { errors: readonly FormError[]
     description: { ar: d.descriptionAr.trim() },
     category_id: d.categoryId,
     condition: d.condition,
+    ...(d.department !== undefined ? { department: d.department } : {}),
     ...(d.defectPhotoUploadIds.length > 0 ? { defect_photo_upload_ids: d.defectPhotoUploadIds } : {}),
     ...(d.imageUploadIds.length > 0 ? { image_upload_ids: d.imageUploadIds } : {}),
     ...(UUID.test(d.sizeChartId) ? { size_chart_id: d.sizeChartId } : {}),

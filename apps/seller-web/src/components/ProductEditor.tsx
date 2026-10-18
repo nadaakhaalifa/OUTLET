@@ -2,10 +2,11 @@
 import { useId, useMemo, useState } from "react";
 import { createTranslator, type Locale, type MessageKey } from "../i18n";
 import { validateProduct, type FormError, type ProductDraft, type SkuDraft } from "../view-models/product-form";
-import type { Condition } from "../api/schemas";
+import type { Condition, Department } from "../api/schemas";
 import { createProductAction } from "../app/actions";
 
 const CONDITIONS: readonly Condition[] = ["new_with_tags", "new_without_tags", "sample", "minor_defect"];
+const DEPARTMENTS: readonly Department[] = ["women", "men", "kids", "unisex"];
 const emptySku: SkuDraft = { sizeLabel: "", price: "", stock: "0" };
 
 /**
@@ -16,7 +17,7 @@ export function ProductEditor({ locale }: { locale: Locale }) {
   const t = createTranslator(locale);
   const uid = useId();
   const [draft, setDraft] = useState<ProductDraft>({
-    titleAr: "", titleEn: "", descriptionAr: "", categoryId: "", condition: "new_with_tags",
+    titleAr: "", titleEn: "", descriptionAr: "", categoryId: "", condition: "new_with_tags", department: "unisex",
     defectPhotoUploadIds: [], imageUploadIds: [], sizeChartId: "", skus: [emptySku],
   });
   const [submitted, setSubmitted] = useState(false);
@@ -74,6 +75,13 @@ export function ProductEditor({ locale }: { locale: Locale }) {
         <select {...p} value={draft.condition} onChange={(e) => set("condition", e.target.value as Condition)}>
           {CONDITIONS.map((c) => (
             <option key={c} value={c}>{t(`editor.condition.${c}`)}</option>
+          ))}
+        </select>
+      ))}
+      {field(`${uid}-dept`, t("editor.department"), undefined, (p) => (
+        <select {...p} value={draft.department ?? "unisex"} onChange={(e) => set("department", e.target.value as Department)}>
+          {DEPARTMENTS.map((d) => (
+            <option key={d} value={d}>{t(`editor.department.${d}`)}</option>
           ))}
         </select>
       ))}

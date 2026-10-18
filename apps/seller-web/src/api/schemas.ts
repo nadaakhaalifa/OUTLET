@@ -84,6 +84,8 @@ export type Shipment = z.infer<typeof shipment>;
 
 export const condition = z.enum(["new_with_tags", "new_without_tags", "sample", "minor_defect"]);
 export type Condition = z.infer<typeof condition>;
+export const department = z.enum(["women", "men", "kids", "unisex"]);
+export type Department = z.infer<typeof department>;
 
 export const sellerSku = z.object({
   id: uuid,
@@ -103,6 +105,7 @@ export const sellerProduct = z.object({
   category_id: uuid,
   brand_id: uuid.optional(),
   condition,
+  department: department.optional(),
   material: z.string().optional(),
   image_upload_ids: z.array(uuid).optional(),
   defect_photo_upload_ids: z.array(uuid).optional(),
@@ -120,6 +123,7 @@ export interface SellerProductInputWire {
   readonly description?: { readonly ar: string; readonly en?: string };
   readonly category_id: string;
   readonly condition: Condition;
+  readonly department?: Department;
   readonly defect_photo_upload_ids?: readonly string[];
   readonly image_upload_ids?: readonly string[];
   readonly size_chart_id?: string;
@@ -172,6 +176,7 @@ export const sellerBalance = z.object({
   available: moneySchema,
   pending_release: moneySchema,
   held: moneySchema,
+  in_transit: moneySchema.optional(),
   negative_carry: moneySchema.optional(),
   as_of: timestamp,
 });
@@ -186,18 +191,6 @@ export const payout = z.object({
 });
 export type Payout = z.infer<typeof payout>;
 export const payoutPage = page(payout);
-export const statement = z.object({
-  id: uuid,
-  period_start: timestamp,
-  period_end: timestamp,
-  gross_sales: moneySchema,
-  commission: moneySchema,
-  commission_vat: moneySchema.optional(),
-  refunds: moneySchema.optional(),
-  net: moneySchema,
-});
-export type Statement = z.infer<typeof statement>;
-export const statementPage = page(statement);
 export const taxInvoice = z.object({
   id: uuid,
   kind: z.enum(["commission_einvoice", "consumer_ereceipt"]),
@@ -227,16 +220,6 @@ export const promotionPage = page(promotion);
 
 export const teamRole = z.enum(["owner", "manager", "fulfilment", "catalog", "finance"]);
 export type TeamRole = z.infer<typeof teamRole>;
-export const teamMember = z.object({
-  id: uuid,
-  display_name: z.string().optional(),
-  email_masked: z.string().optional(),
-  role: teamRole,
-  mfa: z.enum(["passkey", "totp", "none"]).optional(),
-  status: z.enum(["invited", "active", "removed"]),
-});
-export type TeamMember = z.infer<typeof teamMember>;
-export const teamPage = page(teamMember);
 
 export const priceTrust = z.object({
   score: z.number(),
@@ -314,7 +297,8 @@ export type FunnelReport = z.infer<typeof funnelReport>;
 export const trafficReport = z.object({
   store_views: z.number().int(),
   product_views: z.number().int(),
-  unique_visitors: z.number().int(),
+  unique_visitors: z.number().int().nullable(),
+  unique_visitors_suppressed: z.boolean().optional(),
   by_source: z.object({
     items: z.array(z.object({ key: z.string(), events: z.number().int(), includes_suppressed: z.boolean().optional() })),
     suppressed_cells: z.number().int(),

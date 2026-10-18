@@ -99,16 +99,44 @@ describe("loadOrders", () => {
 describe("loadFinance", () => {
   it("renders bigint piastres exactly and hides a zero negative carry", async () => {
     const s = await loadFinance(ctx({
-      "GET /v1/seller/balance": () => json({ available: { amount: "123456789012345678", currency: "EGP" }, pending_release: { amount: "100", currency: "EGP" }, held: { amount: "0", currency: "EGP" }, negative_carry: { amount: "0", currency: "EGP" }, as_of: "2026-10-11T09:00:00Z" }),
+      "GET /v1/seller/store": () => json(store),
+      ["GET /v1/seller/stores/" + UUID_A + "/balance"]: () => json({ available: { amount: "123456789012345678", currency: "EGP" }, pending_release: { amount: "100", currency: "EGP" }, held: { amount: "0", currency: "EGP" }, negative_carry: { amount: "0", currency: "EGP" }, as_of: "2026-10-11T09:00:00Z" }),
       "GET /v1/seller/payouts": () => json({ items: [], page: { has_more: false } }),
-      "GET /v1/seller/statements": () => json({ items: [], page: { has_more: false } }),
       "GET /v1/seller/invoices": () => json({ items: [{ id: UUID_A, kind: "commission_einvoice", status: "accepted", amount: { amount: "11400", currency: "EGP" }, vat: { amount: "1400", currency: "EGP" }, eta_uuid: "ETA-1", created_at: "2026-10-01T00:00:00Z" }], page: { has_more: false } }),
     }));
     expect(s.kind).toBe("ready");
     if (s.kind !== "ready") return;
-    expect(s.data.balance.available).toContain("1,234,567,890,123,456.78");
-    expect(s.data.balance.negativeCarry).toBeNull();
+    expect(s.data.balance?.available).toContain("1,234,567,890,123,456.78");
+    expect(s.data.balance?.negativeCarry).toBeNull();
     expect(s.data.invoices[0]?.etaUuid).toBe("ETA-1");
+  });
+  it("while the balance route is blocked (404) or down (503) the balance is null and payouts and invoices still render", async () => {
+    for (const status of [404, 503]) {
+      const c = ctx({
+        "GET /v1/seller/store": () => json(store),
+        ["GET /v1/seller/stores/" + UUID_A + "/balance"]: () => json({ title: "x" }, status),
+        "GET /v1/seller/payouts": () => json({ items: [{ id: UUID_A, status: "PAID", amount: { amount: "5000", currency: "EGP" }, period_start: "2026-10-01T00:00:00Z", period_end: "2026-10-08T00:00:00Z" }], page: { has_more: false } }),
+        "GET /v1/seller/invoices": () => json({ items: [{ id: UUID_A, kind: "commission_einvoice", status: "accepted", amount: { amount: "11400", currency: "EGP" }, vat: { amount: "1400", currency: "EGP" }, eta_uuid: "ETA-1", created_at: "2026-10-01T00:00:00Z" }], page: { has_more: false } }),
+      });
+      const s = await loadFinance(c);
+      expect(s.kind).toBe("ready");
+      if (s.kind !== "ready") return;
+      expect(s.data.balance).toBeNull();
+      expect(s.data.payouts).toHaveLength(1);
+      expect(s.data.invoices[0]?.etaUuid).toBe("ETA-1");
+      expect(c.calls.some((x) => String(x.path ?? x).includes("/v1/seller/balance"))).toBe(false);
+    }
+  });
+  it("a 401 on the balance still replaces the screen, and in_transit is shown when present", async () => {
+    const routes = (b: () => ReturnType<typeof json>) => ({
+      "GET /v1/seller/store": () => json(store),
+      ["GET /v1/seller/stores/" + UUID_A + "/balance"]: b,
+      "GET /v1/seller/payouts": () => json({ items: [], page: { has_more: false } }),
+      "GET /v1/seller/invoices": () => json({ items: [], page: { has_more: false } }),
+    });
+    expect((await loadFinance(ctx(routes(() => json({ title: "x" }, 401))))).kind).not.toBe("ready");
+    const ok = await loadFinance(ctx(routes(() => json({ available: { amount: "1", currency: "EGP" }, pending_release: { amount: "2", currency: "EGP" }, held: { amount: "3", currency: "EGP" }, in_transit: { amount: "400", currency: "EGP" }, as_of: "2026-10-11T09:00:00Z" }))));
+    expect(ok.kind === "ready" && ok.data.balance?.inTransit).toBeTruthy();
   });
 });
 

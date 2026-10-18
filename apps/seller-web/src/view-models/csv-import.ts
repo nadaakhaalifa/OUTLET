@@ -5,14 +5,15 @@ import type { MessageKey } from "../i18n";
  * It never replaces the server dry run; it makes obvious errors visible before upload.
  * Prices are whole piastres (integer) so no decimal or float parsing is needed.
  */
-export const REQUIRED_COLUMNS = ["title_ar", "category_id", "condition", "size_label", "price_piastres"] as const;
-export const OPTIONAL_COLUMNS = ["title_en", "description_ar", "stock", "seller_sku", "barcode_gtin", "color"] as const;
+export const REQUIRED_COLUMNS = ["title_ar", "title_en", "category_id", "condition", "size_label", "price_piastres"] as const;
+export const OPTIONAL_COLUMNS = ["description_ar", "stock", "seller_sku", "barcode_gtin", "color", "department"] as const;
+export const DEPARTMENTS = ["women", "men", "kids", "unisex"] as const;
 export const MAX_IMPORT_ROWS = 5000;
 export const CONDITIONS = ["new_with_tags", "new_without_tags", "sample", "minor_defect"] as const;
 
 export type ImportErrorCode =
-  | "missing_header" | "unknown_header" | "title_ar_required" | "title_ar_not_arabic" | "category_invalid"
-  | "condition_invalid" | "size_label_required" | "price_invalid" | "stock_invalid" | "column_count"
+  | "missing_header" | "unknown_header" | "title_ar_missing" | "title_en_missing" | "category_invalid"
+  | "condition_invalid" | "department_invalid" | "size_label_required" | "price_invalid" | "stock_invalid" | "column_count"
   | "too_many_rows" | "empty";
 
 export interface ImportRowError {
@@ -110,10 +111,14 @@ export function checkCatalogCsv(text: string): ImportCheck {
     }
     const cell = (n: string): string => (cells[idx(n)] ?? "").trim();
     const titleAr = cell("title_ar");
-    if (titleAr === "") add("title_ar_required", "title_ar");
-    else if (!ARABIC.test(titleAr)) add("title_ar_not_arabic", "title_ar");
+    if (titleAr.length < 2 || !ARABIC.test(titleAr)) add("title_ar_missing", "title_ar");
+    const titleEn = cell("title_en");
+    if (titleEn.length < 2 || !/[A-Za-z]/.test(titleEn) || ARABIC.test(titleEn)) add("title_en_missing", "title_en");
     if (!UUID.test(cell("category_id"))) add("category_invalid", "category_id");
     if (!(CONDITIONS as readonly string[]).includes(cell("condition"))) add("condition_invalid", "condition");
+    if (idx("department") >= 0 && cell("department") !== "" && !(DEPARTMENTS as readonly string[]).includes(cell("department").toLowerCase())) {
+      add("department_invalid", "department");
+    }
     if (cell("size_label") === "") add("size_label_required", "size_label");
     const price = cell("price_piastres");
     if (!/^[1-9]\d{0,12}$/.test(price)) add("price_invalid", "price_piastres");

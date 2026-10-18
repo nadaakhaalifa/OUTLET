@@ -12,6 +12,7 @@ import { getContext } from "../server-context";
 import { validateCampaign } from "../view-models/ads";
 import { checkStockEdit, validateDrop } from "../view-models/drops";
 import { normaliseShopDomain } from "../view-models/channels";
+import { validateChannelRefs } from "../view-models/store-channels";
 import type { ActionResult } from "./actions";
 
 const id = z.string().uuid();
@@ -119,4 +120,12 @@ export async function connectChannelAction(_p: ActionResult | null, form: FormDa
   const next = await new RedirectOAuth().begin({ type: c.type, shopDomain: c.shop_domain, connectUrl: c.connect_url });
   if (!next.ok) return { ok: false, messageKey: "channels.err.untrusted" };
   redirect(next.value.redirectTo);
+}
+
+/** Odoo and Google Sheets connect with opaque KMS references; the secret itself is never typed into or returned by this app. */
+export async function connectStoreChannelAction(_p: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const storeId = id.safeParse(str(form, "storeId"));
+  const v = validateChannelRefs({ kind: str(form, "kind"), tokenRef: str(form, "token_ref"), kmsKeyRef: str(form, "kms_key_ref") });
+  if (!storeId.success || !v.ok) return { ok: false, messageKey: "channels.err.refs" };
+  return run("/channels", (api) => api.connectStoreChannel(storeId.data, v.value));
 }

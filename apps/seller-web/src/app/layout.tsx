@@ -3,10 +3,13 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { Shell } from "../components/Shell";
+import { TopBar } from "../components/TopBar";
 import { createTranslator, isRtl } from "../i18n";
+import { isBarePath } from "../lib/paths";
 import { getContext } from "../server-context";
 import { tokensCss } from "../styles/tokens-css";
 import "./globals.css";
+import "./onboarding.css";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +20,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { locale } = await getContext();
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const h = await headers();
+  const nonce = h.get("x-nonce") ?? undefined;
+  const bare = isBarePath(h.get("x-pathname") ?? "");
   const t = createTranslator(locale);
   return (
     <html lang={locale} dir={isRtl(locale) ? "rtl" : "ltr"}>
@@ -27,7 +32,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body>
         <a className="skip" href="#main">{t("common.skipToContent")}</a>
         <OfflineBanner locale={locale} />
-        <Shell locale={locale}>{children}</Shell>
+        {bare ? (
+          <div className="zm-page">
+            <TopBar locale={locale} />
+            <main id="main" className="zm-main" tabIndex={-1}>{children}</main>
+          </div>
+        ) : (
+          <Shell locale={locale}>{children}</Shell>
+        )}
       </body>
     </html>
   );

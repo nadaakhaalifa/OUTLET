@@ -8,12 +8,14 @@ export interface CspOptions {
   readonly isDev: boolean;
   /** Origin of the Seller API (scheme://host[:port]) or null when not configured. */
   readonly apiOrigin: string | null;
+  /** Origins that signed upload URLs point to (object storage). PUT only; never read with credentials. */
+  readonly uploadOrigins?: readonly string[];
   readonly reportUri?: string;
 }
 
 export function buildCsp(o: CspOptions): string {
   const script = ["'self'", `'nonce-${o.nonce}'`, "'strict-dynamic'", ...(o.isDev ? ["'unsafe-eval'"] : [])];
-  const connect = ["'self'", ...(o.apiOrigin === null ? [] : [o.apiOrigin])];
+  const connect = ["'self'", ...(o.apiOrigin === null ? [] : [o.apiOrigin]), ...(o.uploadOrigins ?? [])];
   const directives: [string, readonly string[]][] = [
     ["default-src", ["'self'"]],
     ["script-src", script],
@@ -59,4 +61,19 @@ export function apiOriginOf(baseUrl: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/** SELLER_UPLOAD_ORIGINS: comma-separated https origins of the signed-upload storage. Anything else is dropped. */
+export function uploadOriginsOf(raw: string | undefined): readonly string[] {
+  if (raw === undefined) return [];
+  const out: string[] = [];
+  for (const part of raw.split(",")) {
+    try {
+      const u = new URL(part.trim());
+      if (u.protocol === "https:" && !out.includes(u.origin)) out.push(u.origin);
+    } catch {
+      // ignore malformed entries
+    }
+  }
+  return out;
 }

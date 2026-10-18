@@ -1,8 +1,12 @@
 import type { MessageKey } from "./en";
+import { arAccess } from "./access-ar";
+import { arOnboarding } from "./onboarding-ar";
 import { arPhase2 } from "./phase2-ar";
+import { arPhase3 } from "./phase3-ar";
 
 /** Arabic is the default locale. Record<MessageKey, string> makes a missing key a compile error. */
 export const ar: Readonly<Record<MessageKey, string>> = {
+  "app.product": "مركز البائع",
   "app.name": "مركز البائع Z-OUTLET",
   "common.retry": "حاول مرة أخرى",
   "common.loading": "جارٍ التحميل",
@@ -89,6 +93,12 @@ export const ar: Readonly<Record<MessageKey, string>> = {
   "editor.descAr": "الوصف بالعربية (مطلوب)",
   "editor.category": "معرّف التصنيف",
   "editor.condition": "الحالة",
+  "editor.department": "القسم",
+  "editor.department.women": "النساء",
+  "editor.department.men": "الرجال",
+  "editor.department.kids": "الأطفال",
+  "editor.department.unisex": "للجنسين",
+  "catalog.col.department": "القسم",
   "editor.condition.new_with_tags": "جديد مع البطاقات",
   "editor.condition.new_without_tags": "جديد بدون بطاقات",
   "editor.condition.sample": "عينة",
@@ -134,10 +144,13 @@ export const ar: Readonly<Record<MessageKey, string>> = {
   "import.col.problem": "المشكلة",
   "import.err.missing_header": "عمود مطلوب غير موجود في الترويسة.",
   "import.err.unknown_header": "عمود غير معروف.",
+  "import.err.title_ar_missing": "العنوان بالعربية مطلوب (حرفان على الأقل وبحروف عربية).",
+  "import.err.title_en_missing": "العنوان بالإنجليزية مطلوب (حرفان على الأقل وبحروف لاتينية).",
   "import.err.title_ar_required": "العنوان بالعربية مطلوب.",
   "import.err.title_ar_not_arabic": "يجب أن يحتوي العنوان العربي على حروف عربية.",
   "import.err.category_invalid": "التصنيف يجب أن يكون معرّفًا صالحًا.",
   "import.err.condition_invalid": "الحالة ليست من القيم المسموحة.",
+  "import.err.department_invalid": "القسم يجب أن يكون نساء أو رجال أو أطفال أو للجنسين.",
   "import.err.size_label_required": "اسم المقاس مطلوب.",
   "import.err.price_invalid": "السعر يجب أن يكون عددًا صحيحًا من القروش أكبر من صفر.",
   "import.err.stock_invalid": "المخزون يجب أن يكون عددًا صحيحًا صفرًا أو أكثر.",
@@ -210,6 +223,8 @@ export const ar: Readonly<Record<MessageKey, string>> = {
   "finance.available": "المتاح",
   "finance.pending": "في انتظار الإفراج",
   "finance.held": "محجوز",
+  "finance.inTransit": "في الطريق إلى حسابك البنكي",
+  "finance.balance.unavailable": "رصيدك غير متاح بعد. تظهر الدفعات والفواتير أدناه.",
   "finance.negative": "مستحق للمنصة (يُخصم من دفعتك القادمة)",
   "finance.payouts": "الدفعات",
   "finance.statements": "كشوف الحساب",
@@ -304,4 +319,7 @@ export const ar: Readonly<Record<MessageKey, string>> = {
   "settings.legalIdentity": "الهوية القانونية الظاهرة للمتسوقين",
   "settings.health": "درجة صحة البائع",
   ...arPhase2,
+  ...arPhase3,
+  ...arOnboarding,
+  ...arAccess,
 };

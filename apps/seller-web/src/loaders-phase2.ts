@@ -138,3 +138,57 @@ export async function loadHub(c: Ctx, orderGroupId: string): Promise<ScreenState
   const r = await c.api.hubTracking(orderGroupId);
   return stateFromResult(r, (d) => hubRows(d, c.locale), (v) => v.parcels.length === 0 && !v.hasWaiting);
 }
+
+/* ---------------- Phase 3: demand forecasts and store channels ---------------- */
+import { forecastsView, type ForecastsVM, type Horizon } from "./view-models/forecasts";
+import { storeChannelRows, type StoreChannelRowVM } from "./view-models/store-channels";
+import type { ForecastScope } from "./api/schemas-phase3";
+
+export type ForecastsScreen =
+  | { readonly paused: true; readonly storeId: string }
+  | ({ readonly paused: false } & ForecastsVM);
+
+export async function loadForecasts(c: Ctx, f: { scope?: ForecastScope; horizon?: Horizon }): Promise<ScreenState<ForecastsScreen>> {
+  if (c.api === null) return notConfigured;
+  const store = await c.api.store();
+  if (!store.ok) return stateFromError(store.error);
+  const storeId = store.value.data.id;
+  const r = await c.api.forecasts(storeId, { ...(f.scope === undefined ? {} : { scope: f.scope }), ...(f.horizon === undefined ? {} : { horizon_days: f.horizon }) });
+  if (!r.ok) {
+    // 503 demand_forecasting_disabled: the kill switch is Blocked. Say so instead of a generic error.
+    if (r.error.status === 503) return { kind: "ready", serverNowMs: null, data: { paused: true, storeId } };
+    return stateFromError(r.error);
+  }
+  return { kind: "ready", serverNowMs: r.value.serverNowMs, data: { paused: false, ...forecastsView(r.value.data, c.locale) } };
+}
+
+export interface StoreChannelsVM { readonly storeId: string; readonly rows: readonly StoreChannelRowVM[] }
+export async function loadStoreChannels(c: Ctx): Promise<ScreenState<StoreChannelsVM>> {
+  if (c.api === null) return notConfigured;
+  const store = await c.api.store();
+  if (!store.ok) return stateFromError(store.error);
+  const storeId = store.value.data.id;
+  const r = await c.api.storeChannels(storeId);
+  if (!r.ok) return stateFromError(r.error);
+  return { kind: "ready", serverNowMs: r.value.serverNowMs, data: { storeId, rows: storeChannelRows(r.value.data.items, c.locale) } };
+}
+
+/* ---------------- Phase 3: product photo background removal ---------------- */
+import { mediaRows, type MediaRowVM } from "./view-models/product-media";
+export type MediaScreen =
+  | { readonly unavailable: true; readonly storeId: string }
+  | { readonly unavailable: false; readonly storeId: string; readonly rows: readonly MediaRowVM[] };
+
+export async function loadProductMedia(c: Ctx): Promise<ScreenState<MediaScreen>> {
+  if (c.api === null) return notConfigured;
+  const store = await c.api.store();
+  if (!store.ok) return stateFromError(store.error);
+  const storeId = store.value.data.id;
+  const r = await c.api.productMedia(storeId);
+  if (!r.ok) {
+    // Reads keep working when the switch is blocked; a 503 here still means "not available yet", never a raw error.
+    if (r.error.status === 503) return { kind: "ready", serverNowMs: null, data: { unavailable: true, storeId } };
+    return stateFromError(r.error);
+  }
+  return { kind: "ready", serverNowMs: r.value.serverNowMs, data: { unavailable: false, storeId, rows: mediaRows(r.value.data.items, c.locale) } };
+}

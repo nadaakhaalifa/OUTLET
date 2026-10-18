@@ -1,30 +1,59 @@
-import type { TeamRole } from "../api/schemas";
+import type { SellerPermissionKey, SellerPermissions } from "../api/schemas-access";
 import type { MessageKey } from "../i18n";
+import type { Access } from "./access";
 
 export interface NavItem {
   readonly href: string;
   readonly labelKey: MessageKey;
 }
 
-const ALL: readonly (NavItem & { readonly roles: readonly TeamRole[] })[] = [
-  { href: "/dashboard", labelKey: "nav.dashboard", roles: ["owner", "manager", "fulfilment", "catalog", "finance"] },
-  { href: "/catalog", labelKey: "nav.catalog", roles: ["owner", "manager", "catalog"] },
-  { href: "/orders", labelKey: "nav.orders", roles: ["owner", "manager", "fulfilment"] },
-  { href: "/returns", labelKey: "nav.returns", roles: ["owner", "manager", "fulfilment"] },
-  { href: "/finance", labelKey: "nav.finance", roles: ["owner", "manager", "finance"] },
-  { href: "/marketing", labelKey: "nav.marketing", roles: ["owner", "manager"] },
-  { href: "/ads", labelKey: "nav.ads", roles: ["owner", "manager"] },
-  { href: "/drops", labelKey: "nav.drops", roles: ["owner", "manager", "catalog"] },
-  { href: "/resale", labelKey: "nav.resale", roles: ["owner", "manager"] },
-  { href: "/insights", labelKey: "nav.insights", roles: ["owner", "manager", "catalog"] },
-  { href: "/channels", labelKey: "nav.channels", roles: ["owner", "manager", "catalog"] },
-  { href: "/hub", labelKey: "nav.hub", roles: ["owner", "manager", "fulfilment"] },
-  { href: "/price-trust", labelKey: "nav.priceTrust", roles: ["owner", "manager", "catalog"] },
-  { href: "/team", labelKey: "nav.team", roles: ["owner", "manager"] },
-  { href: "/settings", labelKey: "nav.settings", roles: ["owner", "manager"] },
+/**
+ * Every item is keyed on the permission its route already requires (docs/specs/dashboard-foundations.md
+ * section 2). Role names never appear: the server vocabulary (warehouse, support) and the old web one
+ * (fulfilment) both reduce to the permissions the policy engine evaluated.
+ * Where a page's API gate is a sibling of the listed one the sibling is used and noted here:
+ * drops, insights, media, forecasts, channels, price-trust gate on store_product.read; hub on store_order.read.
+ */
+const ALL: readonly (NavItem & { readonly needs: SellerPermissionKey })[] = [
+  { href: "/dashboard", labelKey: "nav.dashboard", needs: "analytics.read" },
+  { href: "/catalog", labelKey: "nav.catalog", needs: "store_product.read" },
+  { href: "/orders", labelKey: "nav.orders", needs: "store_order.read" },
+  { href: "/returns", labelKey: "nav.returns", needs: "store_return.read" },
+  { href: "/finance", labelKey: "nav.finance", needs: "store_payout.read" },
+  { href: "/marketing", labelKey: "nav.marketing", needs: "store_settings.read" },
+  { href: "/ads", labelKey: "nav.ads", needs: "store_settings.read" },
+  { href: "/drops", labelKey: "nav.drops", needs: "store_product.read" },
+  { href: "/resale", labelKey: "nav.resale", needs: "store_settings.read" },
+  { href: "/insights", labelKey: "nav.insights", needs: "store_product.read" },
+  { href: "/media", labelKey: "nav.media", needs: "store_product.read" },
+  { href: "/forecasts", labelKey: "nav.forecasts", needs: "store_product.read" },
+  { href: "/channels", labelKey: "nav.channels", needs: "store_product.read" },
+  { href: "/hub", labelKey: "nav.hub", needs: "store_order.read" },
+  { href: "/price-trust", labelKey: "nav.priceTrust", needs: "store_product.read" },
+  { href: "/team", labelKey: "nav.team", needs: "store_settings.read" },
+  { href: "/settings", labelKey: "nav.settings", needs: "store_settings.read" },
 ];
 
-/** Navigation filtered by role. Hiding a link is a convenience; routes still enforce through API 403/404. */
-export function navFor(role: TeamRole | null): readonly NavItem[] {
-  return ALL.filter((i) => role === null || i.roles.includes(role)).map(({ href, labelKey }) => ({ href, labelKey }));
+const strip = ({ href, labelKey }: NavItem): NavItem => ({ href, labelKey });
+
+/**
+ * Navigation from server permissions. `null` means "not enforced" (flag blocked): every link, and the
+ * routes still answer 403 or 404. Hiding a link is a convenience, never the control.
+ */
+export function navFor(permissions: SellerPermissions | null): readonly NavItem[] {
+  return ALL.filter((i) => permissions === null || permissions[i.needs]).map(strip);
+}
+
+/** Navigation for a resolved access state. Fails closed: when `me` is unavailable only the dashboard shows. */
+export function navForAccess(access: Access): readonly NavItem[] {
+  switch (access.kind) {
+    case "open":
+      return navFor(null);
+    case "granted":
+      return navFor(access.permissions);
+    case "unavailable":
+      return ALL.filter((i) => i.href === "/dashboard").map(strip);
+    case "no_access":
+      return [];
+  }
 }

@@ -5,7 +5,8 @@ import { checkCatalogCsv, parseCsv } from "../view-models/csv-import";
 import { checkChart, sortSizeRows } from "../view-models/size-chart";
 import { slaCountdown } from "../view-models/sla";
 import { availableActions } from "../view-models/orders";
-import { navFor } from "../view-models/nav";
+import { navFor, navForAccess } from "../view-models/nav";
+import { NO_PERMISSIONS, permissionsFor } from "./permissions";
 import { stateFromError } from "../view-models/screen-state";
 import { defaultRange } from "../view-models/analytics";
 
@@ -38,19 +39,22 @@ describe("slaCountdown", () => {
 
 describe("orders actions + nav", () => {
   it("maps status to the next allowed actions", () => {
-    expect(availableActions("PAID", "fulfilment")).toEqual(["accept", "reject"]);
+    expect(availableActions("PAID", permissionsFor("warehouse"))).toEqual(["accept", "reject"]);
     expect(availableActions("CONFIRMED_COD", null)).toEqual(["accept", "reject"]);
-    expect(availableActions("ACCEPTED", "owner")).toEqual(["pack"]);
-    expect(availableActions("PACKED", "manager")).toEqual(["create_shipment"]);
-    expect(availableActions("SHIPPED", "owner")).toEqual([]);
+    expect(availableActions("ACCEPTED", permissionsFor("owner"))).toEqual(["pack"]);
+    expect(availableActions("PACKED", permissionsFor("manager"))).toEqual(["create_shipment"]);
+    expect(availableActions("SHIPPED", permissionsFor("owner"))).toEqual([]);
   });
-  it("hides actions from roles that cannot fulfil", () => {
-    expect(availableActions("PAID", "finance")).toEqual([]);
-    expect(availableActions("PAID", "catalog")).toEqual([]);
+  it("hides actions without store_order.update (finance, catalog, support, suspended store)", () => {
+    expect(availableActions("PAID", permissionsFor("finance"))).toEqual([]);
+    expect(availableActions("PAID", permissionsFor("catalog"))).toEqual([]);
+    expect(availableActions("PAID", permissionsFor("support"))).toEqual([]);
+    expect(availableActions("PAID", NO_PERMISSIONS)).toEqual([]);
   });
-  it("filters nav by role and shows all when role unknown", () => {
-    expect(navFor("finance").map((i) => i.href)).toEqual(["/dashboard", "/finance"]);
-    expect(navFor(null).length).toBeGreaterThan(navFor("finance").length);
+  it("filters nav by permission and shows all when not enforced", () => {
+    expect(navFor(permissionsFor("finance")).map((i) => i.href)).toContain("/finance");
+    expect(navFor(null).length).toBeGreaterThan(navFor(permissionsFor("finance")).length);
+    expect(navForAccess({ kind: "open" }).length).toBe(navFor(null).length);
   });
 });
 
@@ -127,18 +131,22 @@ describe("size chart editor", () => {
 });
 
 describe("catalog csv import check", () => {
-  const H = "title_ar,category_id,condition,size_label,price_piastres,stock";
+  const H = "title_ar,title_en,category_id,condition,size_label,price_piastres,stock";
   it("parses quoted fields, doubled quotes and CRLF", () => {
     expect(parseCsv('a,"b,c","d""e"\r\nx,y,z\r\n')).toEqual([["a", "b,c", 'd"e'], ["x", "y", "z"]]);
   });
   it("reports row and column for each problem, with correct counts", () => {
-    const csv = [H, `فستان,${CAT},new_with_tags,M,64900,5`, `Dress,${CAT},new_with_tags,M,64900,5`, `فستان,bad,wat,,0,-1`].join("\n");
+    const csv = [H, `فستان,Dress,${CAT},new_with_tags,M,64900,5`, `Dress,Dress,${CAT},new_with_tags,M,64900,5`, `فستان,Dress,bad,wat,,0,-1`].join("\n");
     const r = checkCatalogCsv(csv);
     expect(r.rowsTotal).toBe(3);
     expect(r.rowsOk).toBe(1);
     expect(r.rowsFailed).toBe(2);
-    expect(r.errors.filter((e) => e.row === 3).map((e) => e.code)).toEqual(["title_ar_not_arabic"]);
+    expect(r.errors.filter((e) => e.row === 3).map((e) => e.code)).toEqual(["title_ar_missing"]);
     expect(r.errors.filter((e) => e.row === 4).map((e) => e.column)).toEqual(["category_id", "condition", "size_label", "price_piastres", "stock"]);
+  });
+  it("requires an English title per row", () => {
+    const r = checkCatalogCsv([H, `فستان,,${CAT},new_with_tags,M,64900,5`].join("\n"));
+    expect(r.errors.map((e) => [e.row, e.column, e.code])).toEqual([[2, "title_en", "title_en_missing"]]);
   });
   it("fails the file on missing or unknown headers and empty files", () => {
     expect(checkCatalogCsv("title_ar,price_piastres\nx,1").errors.map((e) => e.code)).toContain("missing_header");
