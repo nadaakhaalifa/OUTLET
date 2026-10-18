@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@outlet/ui-tokens";
-import { Banner, Button, Card, EmptyState, ErrorState, LoadingState, Screen, SwitchRow, Text, TextField } from "../../ui";
+import { Illustration } from "../../art";
+import { Banner, Button, Chip, EmptyState, ErrorState, Eyebrow, ProgressBar, Reveal, Screen, Skeleton, SwitchRow, Text, TextField } from "../../ui";
+import { Section } from "../account-ui";
 import { localizeDigits, type DisplayLocale } from "../money-display";
 import { opt } from "../search/optional";
-import { Chip } from "../search/Chip";
 import {
   FIT_PREFERENCES, MEASUREMENT_KEYS, advance, back, collectMeasurements, currentKey, enterValue,
   formatTenths, initialWizard, isFinished, isMeasuredLater, measureLaterProfile, profilesFailureState, quickStart, validateLabel,
@@ -35,31 +36,32 @@ function Wizard(props: { label: string; kind: ProfileKind; locale: DisplayLocale
       }
     };
     return (
-      <Card>
-        <Text variant="heading">{t("sizeProfile.reviewHeading")}</Text>
+      <Section title={t("sizeProfile.reviewHeading")}>
         {MEASUREMENT_KEYS.map((k) => {
           const v = measurements[k];
           return v === undefined ? null : <Text key={k}>{t("sizeProfile.reviewRow", { name: t(`sizeProfile.key.${k}`), value: localizeDigits(formatTenths(v), props.locale), unit: t(k === "weight" ? "sizeProfile.unitKg" : "sizeProfile.unitCm") })}</Text>;
         })}
         {issues.map((i) => <Banner key={i} tone="warning" message={t(`sizeProfile.issue.${i}`)} />)}
         <Text variant="caption" secondary>{t("sizeProfile.fitHeading")}</Text>
-        <View accessibilityRole="radiogroup" accessibilityLabel={t("sizeProfile.fitHeading")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {FIT_PREFERENCES.map((f) => <Chip key={f} role="radio" label={t(`sizeProfile.fit.${f}`)} selected={f === fit} onPress={() => setFit(f)} />)}
+        <View accessibilityRole="radiogroup" accessibilityLabel={t("sizeProfile.fitHeading")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {FIT_PREFERENCES.map((f) => <Chip key={f} label={t(`sizeProfile.fit.${f}`)} selected={f === fit} onPress={() => setFit(f)} />)}
         </View>
         <SwitchRow label={t("sizeProfile.modest")} value={modest} onValueChange={setModest} />
         <Button title={t("sizeProfile.save")} loading={saving} disabled={issues.length > 0} onPress={() => void save()} />
         <Button variant="secondary" title={t("sizeProfile.back")} onPress={() => setW(back(w))} />
-      </Card>
+      </Section>
     );
   }
   if (key === null) return null;
   const error = w.errors[key];
   const unit = t(key === "weight" ? "sizeProfile.unitKg" : "sizeProfile.unitCm");
   return (
-    <Card>
+    <Reveal index={0}><View style={{ gap: 14 }}>
+      <View style={{ alignItems: "center" }}><Illustration name="measureTape" size={112} /></View>
+      <ProgressBar current={w.index + 1} target={MEASUREMENT_KEYS.length} label={t("sizeProfile.stepOf", { current: num(w.index + 1), total: num(MEASUREMENT_KEYS.length) })} />
       <Text variant="caption" secondary>{t("sizeProfile.stepOf", { current: num(w.index + 1), total: num(MEASUREMENT_KEYS.length) })}</Text>
-      <Text variant="heading">{t(`sizeProfile.key.${key}`)}</Text>
-      <Text secondary>{t(`sizeProfile.tip.${key}`)}</Text>
+      <Text variant="display">{t(`sizeProfile.key.${key}`)}</Text>
+      <Text variant="lede" secondary>{t(`sizeProfile.tip.${key}`)}</Text>
       <TextField
         label={t("sizeProfile.valueLabel", { name: t(`sizeProfile.key.${key}`), unit })}
         value={w.values[key] ?? ""}
@@ -67,12 +69,12 @@ function Wizard(props: { label: string; kind: ProfileKind; locale: DisplayLocale
         onChangeText={(v) => setW(enterValue(w, key, v))}
         {...opt("error", error !== undefined && error !== "empty" ? t(`sizeProfile.error.${error}`) : undefined)}
       />
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <Button title={(w.values[key] ?? "").trim().length === 0 ? t("sizeProfile.skip") : t("sizeProfile.next")} onPress={() => setW(advance(w))} />
         {w.index > 0 ? <Button variant="secondary" title={t("sizeProfile.back")} onPress={() => setW(back(w))} /> : null}
         <Button variant="secondary" title={t("common.cancel")} onPress={props.onCancel} />
       </View>
-    </Card>
+    </View></Reveal>
   );
 }
 
@@ -89,25 +91,27 @@ function QuickStart(props: { label: string; kind: ProfileKind; onDone: (p: NewPr
   };
   const e = (k: string) => (errs.includes(k) ? t(`sizeProfile.quick.${k}`) : undefined);
   return (
-    <Card>
-      <Text variant="heading">{t("sizeProfile.quickHeading")}</Text>
+    <Section title={t("sizeProfile.quickHeading")}>
       <TextField label={t("sizeProfile.quick.height")} value={h} onChangeText={setH} keyboardType="numeric" {...opt("error", e("heightInvalid"))} />
       <TextField label={t("sizeProfile.quick.weight")} value={wt} onChangeText={setWt} keyboardType="numeric" {...opt("error", e("weightInvalid"))} />
       <TextField label={t("sizeProfile.quick.size")} helper={t("sizeProfile.quick.sizeHelper")} value={size} onChangeText={setSize} {...opt("error", e("sizeRequired"))} />
       <Button title={t("sizeProfile.save")} onPress={() => void go()} />
-    </Card>
+    </Section>
   );
 }
 
 type Mode = "list" | "guided" | "quick";
 
-export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
+/** `single`: the device-local guest profile: one profile named "Me", no kind picker, no second profile. */
+export function SizeProfileScreen(props: { port?: SizeProfilePort; single?: boolean }) {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port = useMemo<SizeProfilePort>(() => props.port ?? getFeaturePorts().sizeProfile, [props.port]);
   const [state, setState] = useState<ProfilesScreenState>({ status: "loading" });
   const [mode, setMode] = useState<Mode>("list");
-  const [label, setLabel] = useState("");
+  const single = props.single === true;
+  const [label, setLabel] = useState(single ? t("sizeProfile.kind.me") : "");
   const [kind, setKind] = useState<ProfileKind>("me");
   const [labelError, setLabelError] = useState<"required" | "tooLong" | null>(null);
   const [failed, setFailed] = useState(false);
@@ -127,7 +131,7 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
     try {
       await port.save(p);
       setMode("list");
-      setLabel("");
+      setLabel(single ? t("sizeProfile.kind.me") : "");
       await load();
     } catch {
       setFailed(true);
@@ -149,10 +153,16 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
   };
 
   return (
-    <Screen>
-      <Text variant="title">{t("sizeProfile.title")}</Text>
-      <Text secondary>{t("sizeProfile.privacy")}</Text>
-      {state.status === "loading" ? <LoadingState label={t("sizeProfile.loading")} /> : null}
+    <Screen title={t("sizeProfile.title")} onBack={() => router.back()} backLabel={t("common.back")}>
+      <Text variant="lede" secondary>{t("sizeProfile.privacy")}</Text>
+      {single ? <Text variant="caption" secondary>{t("guestMe.sizeLocalNote")}</Text> : null}
+      {state.status === "loading" ? (
+        <View accessibilityRole="progressbar" accessibilityLabel={t("sizeProfile.loading")} style={{ gap: 14 }}>
+          <Skeleton width="50%" height={28} />
+          <Skeleton height={44} radius={14} />
+          <Skeleton height={44} radius={14} />
+        </View>
+      ) : null}
       {state.status === "error" ? (
         <ErrorState
           offline={state.offline}
@@ -165,18 +175,17 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
       {failed ? <Banner tone="error" message={t("sizeProfile.actionFailed")} /> : null}
       {state.status === "ready" && mode === "list" ? (
         <>
-          {state.profiles.length === 0 ? <EmptyState title={t("sizeProfile.emptyTitle")} description={t("sizeProfile.emptyBody")} /> : null}
+          {state.profiles.length === 0 ? <EmptyState illustration={<Illustration name="measureTape" size={112} />} title={t("sizeProfile.emptyTitle")} description={t("sizeProfile.emptyBody")} /> : null}
           {state.profiles.map((p) => (
-            <Card key={p.id}>
-              <Text variant="heading">{p.label}</Text>
-              <Text variant="caption" secondary>{t(`sizeProfile.kind.${p.kind}`)}</Text>
+            <Section key={p.id}>
+              <Text variant="title1">{p.label}</Text>
+              <Eyebrow>{t(`sizeProfile.kind.${p.kind}`)}</Eyebrow>
               {isMeasuredLater(p) ? <Text secondary>{t("sizeProfile.measureLaterNote")}</Text> : null}
               {p.usualSize !== null ? <Text secondary>{t("sizeProfile.usualSize", { size: p.usualSize })}</Text> : null}
               <Button variant="secondary" title={t("sizeProfile.delete")} accessibilityLabel={t("sizeProfile.deleteName", { label: p.label })} onPress={() => void remove(p)} />
-            </Card>
+            </Section>
           ))}
-          <Card>
-            <Text variant="heading">{t("sizeProfile.addHeading")}</Text>
+          {single && state.profiles.length > 0 ? null : <Section title={t("sizeProfile.addHeading")}>
             <TextField
               label={t("sizeProfile.labelField")}
               helper={t("sizeProfile.labelHelper")}
@@ -184,11 +193,11 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
               onChangeText={setLabel}
               {...opt("error", labelError === null ? undefined : t(`sizeProfile.labelError.${labelError}`))}
             />
-            <View accessibilityRole="radiogroup" accessibilityLabel={t("sizeProfile.kindPicker")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-              {KINDS.map((k) => <Chip key={k} role="radio" label={t(`sizeProfile.kind.${k}`)} selected={k === kind} onPress={() => setKind(k)} />)}
-            </View>
+            {single ? null : <View accessibilityRole="radiogroup" accessibilityLabel={t("sizeProfile.kindPicker")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {KINDS.map((k) => <Chip key={k} label={t(`sizeProfile.kind.${k}`)} selected={k === kind} onPress={() => setKind(k)} />)}
+            </View>}
             {kind === "child" ? <Text variant="caption" secondary>{t("sizeProfile.childNote")}</Text> : null}
-            <Button title={t("sizeProfile.startGuided")} onPress={() => begin("guided")} />
+            <Button variant="brand" title={t("sizeProfile.startGuided")} onPress={() => begin("guided")} />
             <Button variant="secondary" title={t("sizeProfile.startQuick")} onPress={() => begin("quick")} />
             <Button
               variant="secondary"
@@ -199,7 +208,7 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
                 if (err === null) void persist(measureLaterProfile(label, kind));
               }}
             />
-          </Card>
+          </Section>}
         </>
       ) : null}
       {state.status === "ready" && mode === "guided" ? <Wizard label={label} kind={kind} locale={locale} onDone={persist} onCancel={() => setMode("list")} /> : null}
@@ -209,7 +218,6 @@ export function SizeProfileScreen(props: { port?: SizeProfilePort }) {
           <Button variant="secondary" title={t("common.cancel")} onPress={() => setMode("list")} />
         </>
       ) : null}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
     </Screen>
   );
 }

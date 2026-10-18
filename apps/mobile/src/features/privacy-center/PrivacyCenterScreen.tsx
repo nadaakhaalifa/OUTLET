@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@outlet/ui-tokens";
-import { Banner, Button, Card, Checkbox, Divider, ErrorState, LoadingState, Screen, SwitchRow, Text } from "../../ui";
+import { Banner, Button, Checkbox, Divider, ErrorState, Reveal, Screen, Skeleton, SwitchRow, Text } from "../../ui";
+import { SectionHead } from "../account-ui";
 import { formatMoney, localizeDigits, type DisplayLocale } from "../money-display";
 import { formatDay } from "../orders/model";
 import { uuidv7 } from "../checkout/model";
@@ -23,6 +24,7 @@ function newKey(): string {
 
 export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port = useMemo<PrivacyPort>(() => props.port ?? getFeaturePorts().privacy, [props.port]);
   const [state, setState] = useState<PrivacyScreenState>({ status: "loading" });
@@ -75,10 +77,15 @@ export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
   const blockerKey = { open_orders: "privacyCenter.blockerOrders", open_returns: "privacyCenter.blockerReturns", open_disputes: "privacyCenter.blockerDisputes" } as const;
 
   return (
-    <Screen>
-      <Text variant="title">{t("privacyCenter.title")}</Text>
-      <Text secondary>{t("privacyCenter.intro")}</Text>
-      {state.status === "loading" ? <LoadingState label={t("privacyCenter.loading")} /> : null}
+    <Screen title={t("privacyCenter.title")} onBack={() => router.back()} backLabel={t("common.back")}>
+      <Reveal index={0}><Text variant="lede" secondary>{t("privacyCenter.intro")}</Text></Reveal>
+      {state.status === "loading" ? (
+        <View accessibilityRole="progressbar" accessibilityLabel={t("privacyCenter.loading")} style={{ gap: 14 }}>
+          <Skeleton width="45%" height={28} />
+          <Skeleton height={48} radius={14} />
+          <Skeleton height={48} radius={14} />
+        </View>
+      ) : null}
       {state.status === "error" ? (
         <ErrorState offline={state.offline} title={t(state.offline ? "privacyCenter.offlineTitle" : "privacyCenter.errorTitle")}
           description={t(state.offline ? "privacyCenter.offlineBody" : "privacyCenter.errorBody")} retryTitle={t("common.retry")} onRetry={() => void load()} />
@@ -86,18 +93,18 @@ export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
       {message !== null ? <Banner tone={message.tone} message={message.text} /> : null}
       {snap !== null && del !== null ? (
         <>
-          <Text variant="heading">{t("privacyCenter.consentsHeading")}</Text>
+          <SectionHead first index={1} title={t("privacyCenter.consentsHeading")} />
           <Text variant="caption" secondary>{t("privacyCenter.consentsHint")}</Text>
           {snap.consents.map((c) => (
-            <Card key={c.purpose}>
+            <View key={c.purpose}>
               <SwitchRow label={t(`consent.purposes.${c.purpose}.title`)} value={c.granted} onValueChange={(v) => void toggle(c.purpose, v)} />
-              <Text variant="caption" secondary>{t(`consent.purposes.${c.purpose}.description`)}</Text>
-            </Card>
+              <Text variant="caption" secondary style={{ paddingBottom: 12 }}>{t(`consent.purposes.${c.purpose}.description`)}</Text>
+              <Divider />
+            </View>
           ))}
           {snap.pendingSync > 0 ? <Banner tone="info" message={t("privacyCenter.syncPending", { count: localizeDigits(String(snap.pendingSync), locale) })} /> : null}
 
-          <Divider />
-          <Text variant="heading">{t("privacyCenter.exportHeading")}</Text>
+          <SectionHead index={2} title={t("privacyCenter.exportHeading")} />
           <Text secondary>{t("privacyCenter.exportBody")}</Text>
           {snap.export.state === "none" ? <Text variant="caption" secondary>{t("privacyCenter.exportNone")}</Text> : null}
           {snap.export.state === "requested" ? <Banner tone="info" message={t("privacyCenter.exportRequested", { date: day(snap.export.dueAt) })} /> : null}
@@ -112,8 +119,7 @@ export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
           <Button variant="secondary" title={t("privacyCenter.exportRequest")} disabled={busy || snap.export.state === "requested"}
             onPress={() => void run(async () => patch({ export: await port.requestExport(newKey()) }))} />
 
-          <Divider />
-          <Text variant="heading">{t("privacyCenter.deleteHeading")}</Text>
+          <SectionHead index={3} title={t("privacyCenter.deleteHeading")} />
           <Text secondary>{t("privacyCenter.deleteIntro")}</Text>
           <Text secondary>{t("privacyCenter.deleteCooling", { days: localizeDigits(String(del.state === "eligible" ? del.coolingDays : 14), locale) })}</Text>
           <Text secondary>{t("privacyCenter.deleteLegal")}</Text>
@@ -143,13 +149,12 @@ export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
               onPress={() => void run(async () => { patch({ deletion: await port.cancelDeletion() }); setMessage({ tone: "info", text: t("privacyCenter.deleteCancelled") }); })} />
           ) : null}
 
-          <Divider />
-          <Text variant="heading">{t("privacyCenter.sessionsHeading")}</Text>
+          <SectionHead index={4} title={t("privacyCenter.sessionsHeading")} />
           {snap.sessions.length === 0 ? <Text variant="caption" secondary>{t("privacyCenter.sessionsEmpty")}</Text> : null}
           {sortSessions(snap.sessions).map((s) => (
-            <Card key={s.id}>
+            <View key={s.id} style={{ gap: 6 }}>
               <Text>{s.deviceLabel}</Text>
-              <View style={{ gap: spacing.xs }}>
+              <View style={{ gap: 2 }}>
                 {s.current ? <Text variant="caption" secondary>{t("privacyCenter.sessionCurrent")}</Text> : null}
                 <Text variant="caption" secondary>{t("privacyCenter.sessionLastUsed", { date: day(s.lastUsedAt) })}</Text>
               </View>
@@ -157,11 +162,11 @@ export function PrivacyCenterScreen(props: { port?: PrivacyPort }) {
                 <Button variant="secondary" disabled={busy} title={t("privacyCenter.sessionRevoke")} accessibilityLabel={t("privacyCenter.sessionRevokeName", { device: s.deviceLabel })}
                   onPress={() => void run(async () => { await port.revokeSession?.(s.id); patch({ sessions: snap.sessions.filter((x) => x.id !== s.id) }); })} />
               ) : null}
-            </Card>
+              <Divider />
+            </View>
           ))}
         </>
       ) : null}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
     </Screen>
   );
 }
