@@ -75,3 +75,18 @@ describe("submission", () => {
     expect(buildReturnRequest("l9", EMPTY_DRAFT, e)).toBeNull();
   });
 });
+
+import { FakePhotoUpload, readyUploadIds, uploadBlockers } from "./model";
+import { describe as d3, expect as e3, it as i3 } from "vitest";
+
+d3("photo uploads", () => {
+  i3("blocks while uploading or failed and lists ready ids", async () => {
+    const photos = [{ uri: "a" }, { uri: "b" }, { uri: "c" }];
+    e3(uploadBlockers(photos, { a: { state: "ready", uploadId: "u1" }, b: { state: "uploading" }, c: { state: "failed" } })).toEqual(["uploading", "uploadFailed"]);
+    e3(uploadBlockers(photos, { a: { state: "ready", uploadId: "u1" }, b: { state: "ready", uploadId: "u2" }, c: { state: "ready", uploadId: "u3" } })).toEqual([]);
+    e3(readyUploadIds(photos, { a: { state: "ready", uploadId: "u1" }, b: { state: "failed" } })).toEqual(["u1"]);
+    const up = new FakePhotoUpload(new Set(["bad"]));
+    e3((await up.upload("ok")).uploadId).toBe("up-1");
+    await e3(up.upload("bad")).rejects.toThrow();
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  SessionSnapshotSchema, bagFingerprint, firstBlockedStep, nextStep, previousStep, restoreSession, sessionSnapshot, sessionSnapshotKey, stepBlockers, summaryLines,
   FIXTURE_COVERAGE, FIXTURE_QUOTE, FakePaymentLauncher, InMemoryCheckoutPort, applyOrderStatus, applyPlaceFailure, applyPlaceResult,
   beginSubmit, buildPlaceRequest, computeTotals, initialSelection, installmentLine, needsReconfirmation, placeBlockers,
   requestFingerprint, setGovernorate, uuidv7, validateAddress, visiblePaymentMethods,
@@ -190,5 +191,94 @@ describe("placing and resuming", () => {
     const l = new FakePaymentLauncher("succeeded");
     expect(await l.launch({ type: "sdk_sheet", sessionToken: "tok" })).toBe("succeeded");
     expect(l.launched).toHaveLength(1);
+  });
+});
+
+
+describe("stepBlockers (ADR-0053)", () => {
+  const ready = withAddr(initialSelection(noDelta));
+  it("is empty on every step for a complete selection", () => {
+    for (const st of ["delivery", "payment", "review"] as const) expect(stepBlockers(st, noDelta, ready, null)).toEqual([]);
+    expect(firstBlockedStep(noDelta, ready, null)).toBeNull();
+  });
+  it("delivery checks address and delivery only", () => {
+    const sel = { ...ready, address: { ...goodAddress, street: "" }, paymentMethodId: null, delivery: {} };
+    expect(stepBlockers("delivery", noDelta, sel, null)).toEqual(["address", "delivery"]);
+    expect(stepBlockers("payment", noDelta, sel, null)).toEqual(["paymentMethod"]);
+    expect(firstBlockedStep(noDelta, sel, null)).toBe("delivery");
+  });
+  it("payment checks the method and its availability", () => {
+    expect(stepBlockers("payment", noDelta, { ...ready, paymentMethodId: null }, null)).toEqual(["paymentMethod"]);
+    expect(stepBlockers("payment", noDelta, { ...ready, paymentMethodId: "cod" }, null)).toContain("methodUnavailable");
+  });
+  it("review checks the price delta and the drop admission token", () => {
+    expect(stepBlockers("review", FIXTURE_QUOTE, ready, null)).toContain("reconfirm");
+    expect(stepBlockers("review", noDelta, ready, null, true)).toEqual(["admission"]);
+  });
+  it("an empty bag blocks every step", () => {
+    const empty: CheckoutQuote = { ...noDelta, shipments: noDelta.shipments.map((s) => ({ ...s, lines: [] })) };
+    for (const st of ["delivery", "payment", "review"] as const) expect(stepBlockers(st, empty, ready, null)).toContain("emptyBag");
+  });
+  it("walks the three steps in order", () => {
+    expect(nextStep("delivery")).toBe("payment");
+    expect(nextStep("review")).toBeNull();
+    expect(previousStep("delivery")).toBeNull();
+    expect(previousStep("review")).toBe("payment");
+  });
+});
+
+describe("session snapshot (resume)", () => {
+  const sel: CheckoutSelection = { ...initialSelection(noDelta), paymentMethodId: "card", voucherCodes: ["WELCOME"], useStoreCredit: false };
+  const t0 = 1_000_000;
+  const lockMs = noDelta.priceLockSeconds * 1000;
+  it("never carries typed address text", () => {
+    const snap = sessionSnapshot("payment", withAddr(sel), "addr-1", t0);
+    expect(JSON.stringify(snap)).not.toMatch(/Abbas|Mosque/);
+    expect(Object.keys(snap)).not.toContain("address");
+    expect(SessionSnapshotSchema.safeParse({ ...snap, address: goodAddress }).success).toBe(false);
+  });
+  it("restores within the price lock and drops it after", () => {
+    const snap = sessionSnapshot("payment", sel, null, t0);
+    expect(restoreSession(snap, noDelta, t0 + lockMs)?.step).toBe("payment");
+    expect(restoreSession(snap, noDelta, t0 + lockMs + 1)).toBeNull();
+    expect(restoreSession(snap, noDelta, t0 - 1)).toBeNull();
+    expect(restoreSession({ junk: true }, noDelta, t0)).toBeNull();
+  });
+  it("drops choices that no longer exist in the quote", () => {
+    const snap = sessionSnapshot("review", { ...sel, paymentMethodId: "fawry", voucherCodes: ["GONE"], delivery: { sh1: "nope" }, useStoreCredit: true }, null, t0);
+    const r = restoreSession(snap, { ...noDelta, vouchers: [], storeCreditBalance: 0n }, t0);
+    expect(r?.paymentMethodId).toBeNull();
+    expect(r?.voucherCodes).toEqual([]);
+    expect(r?.delivery).toEqual({});
+    expect(r?.useStoreCredit).toBe(false);
+  });
+  it("keys by bag fingerprint so a changed bag never finds the old snapshot", () => {
+    const changed: CheckoutQuote = { ...noDelta, shipments: noDelta.shipments.map((s, i) => (i === 0 ? { ...s, lines: s.lines.map((l) => ({ ...l, qty: l.qty + 1 })) } : s)) };
+    expect(bagFingerprint(changed)).not.toBe(bagFingerprint(noDelta));
+    expect(bagFingerprint(noDelta)).toBe(bagFingerprint({ ...noDelta, shipments: [...noDelta.shipments].reverse() }));
+    expect(sessionSnapshotKey(bagFingerprint(noDelta))).toMatch(/^checkout\.session\.v1\.[A-Za-z0-9._-]+$/);
+  });
+});
+
+describe("summary lines (identical on every step)", () => {
+  const sel = withAddr(initialSelection(noDelta));
+  it("shows merchandise, every store's delivery and every quote fee from the first step", () => {
+    const q: CheckoutQuote = { ...noDelta, fees: [{ id: "f1", name: { ar: "رسم", en: "Fee" }, amount: 500n }] };
+    const lines = summaryLines(q, sel);
+    expect(lines.filter((l) => l.kind === "delivery")).toHaveLength(q.shipments.length);
+    expect(lines.filter((l) => l.kind === "fee")).toHaveLength(1);
+    const total = lines.find((l) => l.kind === "total");
+    expect(total?.amount).toBe(computeTotals(q, sel).totalBeforeCredit);
+  });
+  it("is a pure function of quote and selection, so it is equal across steps", () => {
+    expect(summaryLines(noDelta, sel)).toEqual(summaryLines(noDelta, { ...sel }));
+  });
+  it("adds voucher and credit lines only once applied, and savings only when verified", () => {
+    const base = summaryLines(noDelta, sel);
+    expect(base.some((l) => l.kind === "voucher" || l.kind === "credit")).toBe(false);
+    const none: CheckoutQuote = { ...noDelta, shipments: noDelta.shipments.map((s) => ({ ...s, lines: s.lines.map((l) => ({ ...l, verifiedReferencePrice: null })) })) };
+    expect(summaryLines(none, sel).some((l) => l.kind === "saved")).toBe(false);
+    const withCredit = summaryLines(none, { ...sel, useStoreCredit: true });
+    if (none.storeCreditBalance > 0n) expect(withCredit.some((l) => l.kind === "credit")).toBe(true);
   });
 });

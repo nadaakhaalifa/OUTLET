@@ -23,6 +23,8 @@ export interface StoreSummary {
   readonly newestDropAtMs: number | null;
   readonly deliveryDays: number | null;
   readonly isFavourite: boolean;
+  /** Store verification badge (`verified_badge` on the wire). Absent in fixtures: then no glyph is drawn. */
+  readonly verified?: boolean;
 }
 
 export type PortFailure = "offline" | "failed";
@@ -178,4 +180,59 @@ export class InMemoryWorldPreference implements WorldPreferencePort {
   async save(p: { world: World; sort: StoreSort }) {
     this.value = p;
   }
+}
+
+/* ---- Explore: editorial category tiles (spec §3) ---- */
+
+export type CategoryId = "dresses" | "tops" | "denim" | "outerwear" | "shoes" | "bags" | "watches" | "eyewear" | "accessories" | "activewear" | "kids" | "modest";
+
+export interface CategoryTile {
+  readonly id: CategoryId;
+  /** Placeholder-art silhouette (ProductKind) until category photography exists. */
+  readonly kind: "dress" | "tee" | "jeans" | "jacket" | "sneaker" | "bag" | "watch" | "sunglasses" | "scarf" | "shorts" | "hoodie" | "shirt";
+}
+
+export const CATEGORY_TILES: readonly CategoryTile[] = [
+  { id: "dresses", kind: "dress" }, { id: "tops", kind: "tee" }, { id: "denim", kind: "jeans" }, { id: "outerwear", kind: "jacket" },
+  { id: "shoes", kind: "sneaker" }, { id: "bags", kind: "bag" }, { id: "watches", kind: "watch" }, { id: "eyewear", kind: "sunglasses" },
+  { id: "accessories", kind: "scarf" }, { id: "activewear", kind: "shorts" }, { id: "kids", kind: "hoodie" }, { id: "modest", kind: "shirt" },
+];
+
+/** Discover category grid: chunks of `perRow` tiles. A short last row is padded by the screen with spacers (start-aligned). */
+export const TILES_PER_ROW = 3;
+/** At accessibility text sizes the grid falls back to two per row. */
+export const TILES_PER_ROW_LARGE_TEXT = 2;
+export function rowsOf<T>(items: readonly T[], perRow: number): readonly (readonly T[])[] {
+  const n = Math.max(1, Math.floor(perRow));
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += n) rows.push(items.slice(i, i + n));
+  return rows;
+}
+
+/** Maps a static tile or department id to a category-tree node by slug (top level first); null when the tree has no such node. */
+export function nodeForSlug<N extends { readonly slug: string; readonly parentId: string | null }>(tree: readonly N[], slug: string): N | null {
+  return tree.find((n) => n.slug === slug && n.parentId === null) ?? tree.find((n) => n.slug === slug) ?? null;
+}
+
+/** Number of stores a sort/scope sheet would show (live count, spec §3). */
+export function storeCount(stores: readonly StoreSummary[], world: World): number {
+  return buildDirectory(stores, world, "az").rows.length;
+}
+
+/* ---- Discover: department avatars and navigation targets ---- */
+
+export type DiscoverDepartmentId = "women" | "men" | "kids" | "lifestyle";
+
+export interface DiscoverDepartment {
+  readonly id: DiscoverDepartmentId;
+  readonly kind: CategoryTile["kind"];
+}
+
+export const DISCOVER_DEPARTMENTS: readonly DiscoverDepartment[] = [
+  { id: "women", kind: "dress" }, { id: "men", kind: "shirt" }, { id: "kids", kind: "hoodie" }, { id: "lifestyle", kind: "bag" },
+];
+
+/** Women, Men and Kids use the product `department` attribute; Lifestyle is not a department, so it opens a text query. */
+export function departmentParams(id: DiscoverDepartmentId, label: string): Readonly<Record<string, string>> {
+  return id === "lifestyle" ? { q: label } : { department: id };
 }

@@ -3,6 +3,7 @@
  * piastres (bigint). The server quote is the source of truth: nothing here invents a price, a
  * saving, an installment or an availability. No card data ever enters this module.
  */
+import { z } from "zod";
 import { PortError, type PortFailure } from "../worlds/model";
 
 export { PortError };
@@ -505,4 +506,224 @@ export class FakePaymentLauncher implements PaymentLauncherPort {
 export class FakeMapPin implements MapPinPort {
   constructor(private readonly result: GeoPin | null = { lat: 30.0444, lng: 31.2357 }) {}
   async pick(): Promise<GeoPin | null> { return this.result; }
+}
+
+/* ---- saved addresses (GET /v1/me/addresses) ---- */
+
+export interface SavedAddress {
+  readonly id: string;
+  readonly label: string | null;
+  readonly recipientName: string;
+  /** E.164 (+20...), null when the server did not return one. */
+  readonly phone: string | null;
+  readonly isDefault: boolean;
+  readonly draft: AddressDraft;
+}
+
+/** What the address form submits (create and edit). */
+export interface AddressForm {
+  readonly label: string;
+  readonly recipientName: string;
+  readonly phone: string;
+  readonly draft: AddressDraft;
+}
+
+export interface AddressesPort {
+  list(): Promise<readonly SavedAddress[]>;
+  create(form: AddressForm, idempotencyKey: string): Promise<SavedAddress>;
+  update(id: string, form: AddressForm, idempotencyKey: string): Promise<SavedAddress>;
+  remove(id: string, idempotencyKey: string): Promise<void>;
+  setDefault(id: string, idempotencyKey: string): Promise<void>;
+  /** Governorates the couriers cover (cities empty until `cities` is called). */
+  governorates(): Promise<readonly Governorate[]>;
+  cities(governorateId: string): Promise<readonly City[]>;
+}
+
+export const FIXTURE_ADDRESSES: readonly SavedAddress[] = [
+  {
+    id: "a1", label: "Home", recipientName: "Mona Adel", phone: "+201012345678", isDefault: true,
+    draft: { governorateId: "cairo", cityId: "nasr", street: "Abbas El Akkad", building: "12", floor: "3", apartment: "9", landmark: "Next to City Stars", pin: { lat: 30.0726, lng: 31.3456 } },
+  },
+  {
+    id: "a2", label: "Work", recipientName: "Mona Adel", phone: "+201012345678", isDefault: false,
+    draft: { governorateId: "giza", cityId: "dokki", street: "Tahrir St", building: "40", floor: "", apartment: "", landmark: "", pin: null },
+  },
+];
+
+export class InMemoryAddressesPort implements AddressesPort {
+  private items: SavedAddress[];
+  private seq = 0;
+  constructor(items: readonly SavedAddress[] = FIXTURE_ADDRESSES) { this.items = [...items]; }
+  async list(): Promise<readonly SavedAddress[]> { return [...this.items]; }
+  async create(form: AddressForm, _idempotencyKey?: string): Promise<SavedAddress> {
+    this.seq += 1;
+    const made: SavedAddress = {
+      id: `new-${this.seq}`, label: form.label.trim() === "" ? null : form.label.trim(), recipientName: form.recipientName.trim(),
+      phone: form.phone, isDefault: this.items.length === 0, draft: form.draft,
+    };
+    this.items.push(made);
+    return made;
+  }
+  async update(id: string, form: AddressForm, _idempotencyKey?: string): Promise<SavedAddress> {
+    const cur = this.items.find((a) => a.id === id);
+    if (cur === undefined) throw new PortError("failed");
+    const next: SavedAddress = { ...cur, label: form.label.trim() === "" ? null : form.label.trim(), recipientName: form.recipientName.trim(), phone: form.phone, draft: form.draft };
+    this.items = this.items.map((a) => (a.id === id ? next : a));
+    return next;
+  }
+  async remove(id: string, _idempotencyKey?: string): Promise<void> {
+    const gone = this.items.find((a) => a.id === id);
+    this.items = this.items.filter((a) => a.id !== id);
+    const first = this.items[0];
+    if (gone?.isDefault === true && first !== undefined) this.items = this.items.map((a, i) => (i === 0 ? { ...a, isDefault: true } : a));
+  }
+  async setDefault(id: string, _idempotencyKey?: string): Promise<void> {
+    if (!this.items.some((a) => a.id === id)) throw new PortError("failed");
+    this.items = this.items.map((a) => ({ ...a, isDefault: a.id === id }));
+  }
+  async governorates(): Promise<readonly Governorate[]> { return FIXTURE_COVERAGE.map((g) => ({ ...g, cities: [] })); }
+  async cities(governorateId: string): Promise<readonly City[]> { return citiesFor(FIXTURE_COVERAGE, governorateId); }
+}
+
+/** One-line address for summaries: street building, city, governorate (names in the shopper's language). */
+export function addressSummary(a: AddressDraft, coverage: readonly Governorate[], lang: Lang): string {
+  const gov = coverage.find((g) => g.id === a.governorateId);
+  const city = gov?.cities.find((c) => c.id === a.cityId);
+  const street = [a.building.trim(), a.street.trim()].filter((s) => s.length > 0).join(" ");
+  return [street, city !== undefined ? pickText(city.name, lang) : "", gov !== undefined ? pickText(gov.name, lang) : ""].filter((s) => s.length > 0).join(", ");
+}
+
+/** Short, readable order reference from an order group id (never a secret). */
+export function orderNumber(orderGroupId: string): string {
+  return orderGroupId.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toUpperCase();
+}
+
+
+/* ---- step pages (ADR-0053): blockers per step, resumable session snapshot ---- */
+
+export const CHECKOUT_STEPS = ["delivery", "payment", "review"] as const;
+export type CheckoutStep = (typeof CHECKOUT_STEPS)[number];
+
+export type StepBlocker = PlaceBlocker | "admission";
+
+/**
+ * Blockers that stop Continue on one step. Built from `placeBlockers` (unchanged). Delivery: address and delivery.
+ * Payment: payment method and its availability. Review: price re-confirmation, empty bag and the drop admission token.
+ * An empty bag blocks every step.
+ */
+export function stepBlockers(
+  step: CheckoutStep,
+  q: CheckoutQuote,
+  sel: CheckoutSelection,
+  reconfirmedDelta: bigint | null,
+  admissionMissing = false,
+): readonly StepBlocker[] {
+  const all = placeBlockers(q, sel, reconfirmedDelta);
+  const keep: readonly PlaceBlocker[] =
+    step === "delivery" ? ["emptyBag", "address", "delivery"]
+    : step === "payment" ? ["emptyBag", "paymentMethod", "methodUnavailable"]
+    : ["emptyBag", "reconfirm"];
+  const out: StepBlocker[] = all.filter((b) => keep.includes(b));
+  if (step === "review" && admissionMissing) out.push("admission");
+  return out;
+}
+
+/** The first step (in order) that still has blockers, or null when the whole checkout is ready to place. */
+export function firstBlockedStep(q: CheckoutQuote, sel: CheckoutSelection, reconfirmedDelta: bigint | null): CheckoutStep | null {
+  for (const st of CHECKOUT_STEPS) if (stepBlockers(st, q, sel, reconfirmedDelta).length > 0) return st;
+  return null;
+}
+
+export function nextStep(step: CheckoutStep): CheckoutStep | null {
+  return CHECKOUT_STEPS[CHECKOUT_STEPS.indexOf(step) + 1] ?? null;
+}
+export function previousStep(step: CheckoutStep): CheckoutStep | null {
+  const i = CHECKOUT_STEPS.indexOf(step);
+  return i > 0 ? (CHECKOUT_STEPS[i - 1] ?? null) : null;
+}
+
+/** Changes whenever the bag changes (line, quantity or unit price). Order independent. */
+export function bagFingerprint(q: CheckoutQuote): string {
+  const parts = q.shipments.flatMap((s) => s.lines.map((l) => `${s.id}:${l.lineId}:${String(l.qty)}:${String(l.unitPrice)}`)).sort();
+  let h = 5381;
+  for (const ch of parts.join("|")) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+  return `${String(parts.length)}-${h.toString(36)}`;
+}
+
+export const SESSION_SNAPSHOT_KEY_PREFIX = "checkout.session.v1.";
+export const sessionSnapshotKey = (fingerprint: string): string => `${SESSION_SNAPSHOT_KEY_PREFIX}${fingerprint.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+
+/** Only non-personal choices. The typed address is never part of a snapshot (only a saved address id). */
+export const SessionSnapshotSchema = z.object({
+  step: z.enum(CHECKOUT_STEPS),
+  savedAddressId: z.string().max(100).nullable(),
+  delivery: z.record(z.string().max(100), z.string().max(100)),
+  paymentMethodId: z.string().max(100).nullable(),
+  voucherCodes: z.array(z.string().max(100)).max(20),
+  useStoreCredit: z.boolean(),
+  savedAtMs: z.number().int().nonnegative(),
+}).strict();
+export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
+
+export function sessionSnapshot(step: CheckoutStep, sel: CheckoutSelection, savedAddressId: string | null, nowMs: number): SessionSnapshot {
+  return {
+    step, savedAddressId, delivery: { ...sel.delivery }, paymentMethodId: sel.paymentMethodId,
+    voucherCodes: [...sel.voucherCodes], useStoreCredit: sel.useStoreCredit, savedAtMs: nowMs,
+  };
+}
+
+/**
+ * Parses a stored snapshot and drops it when malformed, older than the price lock, or from the future.
+ * Choices that no longer exist in the quote (option, method, voucher) are removed, never trusted.
+ * The caller keys storage by `bagFingerprint`, so a changed bag never finds the old snapshot.
+ */
+export function restoreSession(raw: unknown, q: CheckoutQuote, nowMs: number): SessionSnapshot | null {
+  const parsed = SessionSnapshotSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const snap = parsed.data;
+  const age = nowMs - snap.savedAtMs;
+  if (age < 0 || age > q.priceLockSeconds * 1000) return null;
+  const delivery: Record<string, string> = {};
+  for (const s of q.shipments) {
+    const chosen = snap.delivery[s.id];
+    if (chosen !== undefined && s.deliveryOptions.some((o) => o.id === chosen)) delivery[s.id] = chosen;
+  }
+  const method = visiblePaymentMethods(q).find((m) => m.id === snap.paymentMethodId);
+  return {
+    ...snap,
+    delivery,
+    paymentMethodId: method !== undefined && method.available ? method.id : null,
+    voucherCodes: snap.voucherCodes.filter((c) => q.vouchers.some((v) => v.code === c)),
+    useStoreCredit: snap.useStoreCredit && q.storeCreditBalance > 0n,
+  };
+}
+
+/* ---- summary lines (the sticky bar on every step reads exactly these) ---- */
+
+export type SummaryLine =
+  | { readonly kind: "merchandise"; readonly amount: bigint }
+  | { readonly kind: "delivery"; readonly shipmentId: string; readonly storeName: string; readonly amount: bigint }
+  | { readonly kind: "fee"; readonly id: string; readonly name: LocalizedText; readonly amount: bigint }
+  | { readonly kind: "voucher"; readonly amount: bigint }
+  | { readonly kind: "credit"; readonly amount: bigint }
+  | { readonly kind: "total"; readonly amount: bigint }
+  | { readonly kind: "payable"; readonly amount: bigint }
+  | { readonly kind: "saved"; readonly amount: bigint };
+
+/**
+ * Every line comes from `computeTotals` and the quote, never from the step. Merchandise, each store's delivery and every
+ * quote fee are present from the first step (no drip pricing). Voucher and credit lines appear once applied. "Saved" appears
+ * only for verified savings.
+ */
+export function summaryLines(q: CheckoutQuote, sel: CheckoutSelection): readonly SummaryLine[] {
+  const t = computeTotals(q, sel);
+  const out: SummaryLine[] = [{ kind: "merchandise", amount: t.merchandise }];
+  for (const s of t.shipments) out.push({ kind: "delivery", shipmentId: s.shipmentId, storeName: s.storeName, amount: s.delivery });
+  for (const f of q.fees) out.push({ kind: "fee", id: f.id, name: f.name, amount: f.amount });
+  if (t.voucherDiscount > 0n) out.push({ kind: "voucher", amount: t.voucherDiscount });
+  if (t.storeCreditApplied > 0n) out.push({ kind: "credit", amount: t.storeCreditApplied });
+  out.push({ kind: "total", amount: t.totalBeforeCredit });
+  if (t.storeCreditApplied > 0n) out.push({ kind: "payable", amount: t.payable });
+  if (t.verifiedSavings > 0n) out.push({ kind: "saved", amount: t.verifiedSavings });
+  return out;
 }

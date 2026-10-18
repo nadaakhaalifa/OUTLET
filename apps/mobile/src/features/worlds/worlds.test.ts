@@ -55,3 +55,45 @@ describe("preference and ports", () => {
     expect(failureState(new Error("x"))).toEqual({ status: "error", offline: false });
   });
 });
+
+import { CATEGORY_TILES, nodeForSlug, rowsOf, storeCount } from "./model";
+
+describe("explore tiles", () => {
+  it("lays out three tiles per row: 12 tiles make 4 full rows", () => {
+    const rows = rowsOf(CATEGORY_TILES, 3);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((r) => r.length === 3)).toBe(true);
+    expect(CATEGORY_TILES).toHaveLength(12);
+  });
+  it("covers every item exactly once, in order, with only the last row short", () => {
+    let seed = 7;
+    const rnd = (n: number) => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed % n; };
+    for (let run = 0; run < 200; run++) {
+      const items = Array.from({ length: rnd(41) }, (_, i) => i);
+      const n = 1 + rnd(4);
+      const rows = rowsOf(items, n);
+      expect(rows.flat()).toEqual(items);
+      rows.slice(0, -1).forEach((r) => expect(r).toHaveLength(n));
+      if (rows.length > 0) expect(rows[rows.length - 1]!.length).toBeLessThanOrEqual(n);
+    }
+  });
+  it("maps a tile slug to a tree node, top level first", () => {
+    const tree = [{ slug: "x", parentId: "p" }, { slug: "x", parentId: null }];
+    expect(nodeForSlug(tree, "x")).toBe(tree[1]);
+    expect(nodeForSlug(tree, "nope")).toBeNull();
+  });
+  it("counts only active stores of the scope", () => {
+    expect(storeCount(FIXTURE_STORES, "everything")).toBe(3);
+    expect(storeCount(FIXTURE_STORES, "myStores")).toBe(2);
+    expect(storeCount([], "local")).toBe(0);
+  });
+});
+
+import { DISCOVER_DEPARTMENTS, departmentParams } from "./model";
+describe("discover departments", () => {
+  it("uses the department attribute for women/men/kids and a text query for lifestyle", () => {
+    expect(DISCOVER_DEPARTMENTS.map((d) => d.id)).toEqual(["women", "men", "kids", "lifestyle"]);
+    expect(departmentParams("women", "Women")).toEqual({ department: "women" });
+    expect(departmentParams("lifestyle", "Lifestyle")).toEqual({ q: "Lifestyle" });
+  });
+});

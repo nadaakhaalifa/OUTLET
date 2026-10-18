@@ -58,3 +58,18 @@ describe("list", () => {
     expect(formatDay("garbage", (s) => s)).toBe("");
   });
 });
+
+import { FIXTURE_ORDERS as FX, filterOrders, groupStatusKey, orderBucket } from "./model";
+import { describe as d2, expect as e2, it as i2 } from "vitest";
+
+d2("order filters", () => {
+  i2("buckets groups honestly", () => {
+    e2(FX.map(orderBucket)).toEqual(["active", "delivered", "active"]);
+    e2(filterOrders(FX, "delivered").map((g) => g.id)).toEqual(["og-1"]);
+    e2(filterOrders(FX, "all")).toHaveLength(3);
+  });
+  i2("headline status is the least advanced active seller order", () => {
+    e2(groupStatusKey(FX[0]!)).toBe("PACKED");
+    e2(groupStatusKey(FX[2]!)).toBe("PENDING_PAYMENT");
+  });
+});

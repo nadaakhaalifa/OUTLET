@@ -54,6 +54,8 @@ export interface ReturnRequest {
   readonly orderLineId: string;
   readonly reason: ReturnReason;
   readonly photoUris: readonly string[];
+  /** Ids from the signed-upload port, in the same order as the photos that finished uploading. */
+  readonly photoUploadIds?: readonly string[];
   readonly method: ReturnMethod;
   readonly resolution: Resolution;
   readonly refundTarget: RefundTarget | null;
@@ -175,4 +177,40 @@ export class FakePhotoPicker implements PhotoPickerPort {
     this.n += 1;
     return { uri: `file:///fake/photo-${this.n}.jpg` };
   }
+}
+
+/* ---- photo upload (signed-upload port) ---- */
+
+export interface PhotoUploadPort {
+  /** Uploads one local photo through a signed upload and resolves its upload id. */
+  upload(uri: string): Promise<{ readonly uploadId: string }>;
+}
+
+export class FakePhotoUpload implements PhotoUploadPort {
+  uploaded: string[] = [];
+  constructor(private failUris: ReadonlySet<string> = new Set()) {}
+  async upload(uri: string): Promise<{ uploadId: string }> {
+    if (this.failUris.has(uri)) throw new PortError("failed");
+    this.uploaded.push(uri);
+    return { uploadId: `up-${this.uploaded.length}` };
+  }
+}
+
+export type UploadState = { readonly state: "uploading" } | { readonly state: "ready"; readonly uploadId: string } | { readonly state: "failed" };
+export type UploadMap = Readonly<Record<string, UploadState>>;
+
+/** Submission waits for in-flight uploads; a failed upload must be removed or retried first. */
+export function uploadBlockers(photos: readonly Photo[], uploads: UploadMap): readonly ("uploading" | "uploadFailed")[] {
+  const out: ("uploading" | "uploadFailed")[] = [];
+  const st = photos.map((p) => uploads[p.uri]?.state ?? "uploading");
+  if (st.includes("uploading")) out.push("uploading");
+  if (st.includes("failed")) out.push("uploadFailed");
+  return out;
+}
+
+export function readyUploadIds(photos: readonly Photo[], uploads: UploadMap): readonly string[] {
+  return photos.flatMap((p) => {
+    const u = uploads[p.uri];
+    return u !== undefined && u.state === "ready" ? [u.uploadId] : [];
+  });
 }

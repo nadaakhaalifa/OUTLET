@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { radius, spacing } from "@outlet/ui-tokens";
-import { Banner, Button, Card, Divider, ErrorState, LoadingState, Screen, Text, TextField, useTheme } from "../../ui";
+import { spacing } from "@outlet/ui-tokens";
+import { HeroArt, Illustration } from "../../art";
+import { Banner, Button, Chip, Divider, ErrorState, Eyebrow, PressScale, Reveal, Screen, Skeleton, Text, TextField, useTheme } from "../../ui";
+import { Section } from "../account-ui";
+import { DESIGN_ART } from "./designs";
 import { formatMoney, localizeDigits, type DisplayLocale } from "../money-display";
 import { formatCairoDate } from "../plus/model";
 import { newIdempotencyKey } from "../plus/idempotency";
 import { opt } from "../search/optional";
-import { Chip } from "../search/Chip";
 import {
   DELIVERY_CHANNELS, GIFT_DESIGNS, MAX_CARD_AMOUNT, MIN_CARD_AMOUNT, MIN_CONTRIBUTION,
   buildPurchaseRequest, canSubmitRedeem, parseAmountEgp, canVoid, codeProblem, expiryTerm, giftFailureState, giftVisibility, normaliseCode,
@@ -20,6 +23,34 @@ type Money = (minor: bigint) => string;
 type Num = (n: number) => string;
 
 const EMPTY_DRAFT: PurchaseDraft = { design: "birthday", amountText: "", message: "", channel: "inApp", recipientContact: "", scheduleDate: "" };
+
+function DesignPicker(props: { value: GiftDesign; onChange: (d: GiftDesign) => void }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 10 }}>
+      <Text secondary>{t("giftCards.purchase.designLabel")}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="radiogroup" accessibilityLabel={t("giftCards.purchase.designLabel")} contentContainerStyle={{ gap: 14 }}>
+        {GIFT_DESIGNS.map((d: GiftDesign) => {
+          const sel = d === props.value;
+          return (
+            <PressScale
+              key={d}
+              onPress={() => props.onChange(d)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: sel }}
+              accessibilityLabel={t(`giftCards.design.${d}`)}
+              innerStyle={{ width: 188, gap: 8, paddingBottom: 6, borderBottomWidth: 2, borderBottomColor: sel ? colors.accent : "transparent" }}
+            >
+              <View style={{ borderRadius: 18, overflow: "hidden" }}><HeroArt variant={DESIGN_ART[d]} aspect={1.5} /></View>
+              <Text variant="eyebrow" secondary={!sel} align="start" accessibilityRole="none">{t(`giftCards.design.${d}`)}</Text>
+            </PressScale>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
 
 function Purchase(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money; num: Num; now: number; onChanged: () => void }) {
   const { t } = useTranslation();
@@ -58,14 +89,8 @@ function Purchase(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money
   };
 
   return (
-    <Card>
-      <Text variant="heading">{t("giftCards.purchase.heading")}</Text>
-      <Text secondary>{t("giftCards.purchase.designLabel")}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={t("giftCards.purchase.designLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {GIFT_DESIGNS.map((d: GiftDesign) => (
-          <Chip key={d} role="radio" label={t(`giftCards.design.${d}`)} selected={d === draft.design} onPress={() => set("design", d)} />
-        ))}
-      </View>
+    <Section title={t("giftCards.purchase.heading")}>
+            <DesignPicker value={draft.design} onChange={(d) => set("design", d)} />
       <TextField
         label={t("giftCards.purchase.amountLabel", { currency: t("common.currency") })}
         helper={t("giftCards.purchase.amountHelper", { min: props.money(MIN_CARD_AMOUNT), max: props.money(MAX_CARD_AMOUNT) })}
@@ -83,7 +108,7 @@ function Purchase(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money
       <Text secondary>{t("giftCards.purchase.channelLabel")}</Text>
       <View accessibilityRole="radiogroup" accessibilityLabel={t("giftCards.purchase.channelLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {DELIVERY_CHANNELS.map((c: DeliveryChannel) => (
-          <Chip key={c} role="radio" label={t(`giftCards.channel.${c}`)} selected={c === draft.channel} onPress={() => set("channel", c)} />
+          <Chip key={c} label={t(`giftCards.channel.${c}`)} selected={c === draft.channel} onPress={() => set("channel", c)} />
         ))}
       </View>
       {draft.channel !== "inApp" ? (
@@ -107,8 +132,8 @@ function Purchase(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money
       <Text variant="caption" secondary>{t("giftCards.closedLoopNote")}</Text>
       {result !== null && result !== "created" ? <Banner tone="error" message={t(`giftCards.purchase.result.${result}`)} /> : null}
       {result === "created" ? <Banner tone="info" message={t("giftCards.purchase.result.created")} /> : null}
-      <Button title={t("giftCards.purchase.submit")} loading={busy} disabled={busy} onPress={() => void submit()} />
-    </Card>
+      <Button variant="brand" title={t("giftCards.purchase.submit")} loading={busy} disabled={busy} onPress={() => void submit()} />
+    </Section>
   );
 }
 
@@ -144,8 +169,7 @@ function Redeem(props: { port: GiftCardsPort; money: Money; num: Num; onChanged:
 
   const minutes = state.kind === "locked" && state.retryAfterSeconds !== null ? Math.max(1, Math.ceil(state.retryAfterSeconds / 60)) : null;
   return (
-    <Card>
-      <Text variant="heading">{t("giftCards.redeem.heading")}</Text>
+    <Section title={t("giftCards.redeem.heading")}>
       <TextField
         label={t("giftCards.redeem.codeLabel")}
         helper={t("giftCards.redeem.codeHelper")}
@@ -171,7 +195,7 @@ function Redeem(props: { port: GiftCardsPort; money: Money; num: Num; onChanged:
       {state.kind === "success" ? <Banner tone="info" message={t("giftCards.redeem.success", { amount: props.money(state.amount) })} /> : null}
       {failed ? <Banner tone="error" message={t("giftCards.actionFailed")} /> : null}
       <Button title={t("giftCards.redeem.submit")} loading={busy} disabled={busy || !canSubmitRedeem(state, code)} onPress={() => void submit()} />
-    </Card>
+    </Section>
   );
 }
 
@@ -182,9 +206,9 @@ function ProgressBar(props: { pct: number; name: string; value: string }) {
       accessibilityRole="progressbar"
       accessibilityLabel={props.name}
       accessibilityValue={{ min: 0, max: 100, now: props.pct, text: props.value }}
-      style={{ height: 8, borderRadius: radius.pill, backgroundColor: colors.border, overflow: "hidden" }}
+      style={{ height: 4, backgroundColor: colors.hairline, overflow: "hidden" }}
     >
-      <View style={{ width: `${props.pct}%`, height: 8, backgroundColor: colors.accent }} />
+      <View style={{ width: `${props.pct}%`, height: 4, backgroundColor: colors.accent }} />
     </View>
   );
 }
@@ -237,8 +261,7 @@ function Pots(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money; nu
   };
 
   return (
-    <Card>
-      <Text variant="heading">{t("giftCards.pots.heading")}</Text>
+    <Section title={t("giftCards.pots.heading")}>
       <Text variant="caption" secondary>{t("giftCards.pots.note")}</Text>
       {props.snap.pots.length === 0 ? <Text secondary>{t("giftCards.pots.empty")}</Text> : null}
       {props.snap.pots.map((p) => {
@@ -274,7 +297,7 @@ function Pots(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money; nu
       })}
       {props.canCreate ? (
         <>
-          <Text variant="heading">{t("giftCards.pots.newHeading")}</Text>
+          <Eyebrow color="textPrimary" secondary={false}>{t("giftCards.pots.newHeading")}</Eyebrow>
           <TextField label={t("giftCards.pots.titleLabel")} value={title} onChangeText={setTitle} {...opt("error", err("titleRequired"))} />
           <TextField
             label={t("giftCards.pots.targetLabel", { currency: t("common.currency") })}
@@ -294,7 +317,7 @@ function Pots(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money; nu
           <Button title={t("giftCards.pots.create")} onPress={() => void create()} />
         </>
       ) : null}
-    </Card>
+    </Section>
   );
 }
 
@@ -312,12 +335,11 @@ function MyCards(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money;
   };
   if (props.snap.cards.length === 0) return null;
   return (
-    <Card>
-      <Text variant="heading">{t("giftCards.mine.heading")}</Text>
+    <Section title={t("giftCards.mine.heading")}>
       {failed ? <Banner tone="error" message={t("giftCards.actionFailed")} /> : null}
       {props.snap.cards.map((c) => (
         <View key={c.id} style={{ gap: spacing.xs }}>
-          <Text>{t("giftCards.mine.line", { design: t(`giftCards.design.${c.design}`), last4: c.last4, amount: props.money(c.amount) })}</Text>
+          <Text variant="headline" numeric>{t("giftCards.mine.line", { design: t(`giftCards.design.${c.design}`), last4: c.last4, amount: props.money(c.amount) })}</Text>
           <Text variant="caption" secondary>
             {[
               t(`giftCards.status.${c.status}`),
@@ -335,7 +357,7 @@ function MyCards(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money;
           <Divider />
         </View>
       ))}
-    </Card>
+    </Section>
   );
 }
 
@@ -345,6 +367,7 @@ function MyCards(props: { snap: GiftSnapshot; port: GiftCardsPort; money: Money;
  */
 export function GiftCardsScreen(props: { port?: GiftCardsPort; now?: () => number }) {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port = useMemo<GiftCardsPort>(() => props.port ?? getFeaturePorts().giftCards, [props.port]);
   const [state, setState] = useState<GiftScreenState>({ status: "loading" });
@@ -368,21 +391,26 @@ export function GiftCardsScreen(props: { port?: GiftCardsPort; now?: () => numbe
     if (!vis.visible) return null;
     const snap = state.snapshot;
     return (
-      <Screen>
-        <Text variant="title">{t("giftCards.title")}</Text>
+      <Screen title={t("giftCards.title")} onBack={() => router.back()} backLabel={t("common.back")}>
+        <Reveal index={0}><View style={{ alignItems: "center" }}><Illustration name="giftBox" size={96} /></View></Reveal>
         {vis.redeem ? <Redeem port={port} money={money} num={num} onChanged={() => void load(true)} /> : null}
         {vis.purchase ? <Purchase snap={snap} port={port} money={money} num={num} now={now} onChanged={() => void load(true)} /> : null}
         <MyCards snap={snap} port={port} money={money} locale={locale} onChanged={() => void load(true)} />
         {vis.purchase || snap.pots.length > 0 ? (
           <Pots snap={snap} port={port} money={money} num={num} locale={locale} now={now} canCreate={vis.purchase} onChanged={() => void load(true)} />
         ) : null}
-        {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
       </Screen>
     );
   }
   return (
-    <Screen>
-      {state.status === "loading" ? <LoadingState label={t("giftCards.loading")} /> : null}
+    <Screen title={t("giftCards.title")} onBack={() => router.back()} backLabel={t("common.back")}>
+      {state.status === "loading" ? (
+        <View accessibilityRole="progressbar" accessibilityLabel={t("giftCards.loading")} style={{ gap: 14 }}>
+          <Skeleton height={140} radius={18} />
+          <Skeleton width="60%" height={20} />
+          <Skeleton height={48} radius={14} />
+        </View>
+      ) : null}
       {state.status === "error" ? (
         <ErrorState
           offline={state.offline}

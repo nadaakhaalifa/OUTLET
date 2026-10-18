@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatAmount, formatMoney } from "../money-display";
 import {
-  DEFAULT_FREE_DELIVERY_THRESHOLD as T, FIXTURE_BAG, InMemoryBagPort, applySaved, buildBag, priceChange, rankSuggestions,
+  DEFAULT_FREE_DELIVERY_THRESHOLD as T, FIXTURE_BAG, InMemoryBagPort, applyQty, applySaved, buildBag, changeHeadline, priceChange, rankSuggestions, suggestionHint,
   type BagLine, type BagSnapshot,
 } from "./model";
 
@@ -98,5 +98,30 @@ describe("money display", () => {
     expect(formatAmount(200_000n, "ar")).toBe("٢٬٠٠٠");
     expect(formatMoney(5_000n, "ar", "ج.م")).toBe("٥٠ ج.م");
     expect(formatAmount(-100n, "en")).toBe("-1");
+  });
+});
+
+describe("quantity, removal and suggestions", () => {
+  it("clamps quantity to 1..10 and re-prices the line total", async () => {
+    const port = new InMemoryBagPort();
+    await port.setQuantity("l1", 99);
+    expect((await port.load()).lines.find((l) => l.id === "l1")?.qty).toBe(10);
+    await port.setQuantity("l1", 0);
+    expect((await port.load()).lines.find((l) => l.id === "l1")?.qty).toBe(1);
+    const v = buildBag(applyQty(FIXTURE_BAG, "l1", 3));
+    expect(v.groups[0]?.lines[0]?.total).toBe(357_000n);
+  });
+  it("removes a line", async () => {
+    const port = new InMemoryBagPort();
+    await port.removeLine("l1");
+    expect((await port.load()).lines.some((l) => l.id === "l1")).toBe(false);
+  });
+  it("changeHeadline is null when unchanged and honest in both directions", () => {
+    expect(changeHeadline({ kind: "same" })).toBeNull();
+    expect(changeHeadline(priceChange({ unitPrice: 90n, priceAtAdd: 100n }))).toEqual({ direction: "dropped", delta: 10n });
+    expect(changeHeadline(priceChange({ unitPrice: 110n, priceAtAdd: 100n }))).toEqual({ direction: "rose", delta: 10n });
+  });
+  it("builds an add hint from the store and suggestion", () => {
+    expect(suggestionHint({ id: "s1", name: "S" }, { skuId: "x", title: "Belt", sizeLabel: "M", unitPrice: 5n })).toEqual({ storeId: "s1", storeName: "S", title: "Belt", sizeLabel: "M", unitPrice: 5n });
   });
 });

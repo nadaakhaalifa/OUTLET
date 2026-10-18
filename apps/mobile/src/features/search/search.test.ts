@@ -79,3 +79,58 @@ describe("runSearch", () => {
     expect(await p.count("", f)).toBe((await p.search("", f)).total);
   });
 });
+
+import { addRecent, decodeRecents, encodeRecents } from "./model";
+describe("recent searches", () => {
+  it("dedupes case-insensitively, caps at 8 and folds digits", () => {
+    expect(addRecent(["Jeans", "dress"], "  jeans ")).toEqual(["jeans", "dress"]);
+    expect(addRecent(["a"], "   ")).toEqual(["a"]);
+    let l: readonly string[] = [];
+    for (let i = 0; i < 12; i++) l = addRecent(l, `q${i}`);
+    expect(l).toHaveLength(8);
+    expect(l[0]).toBe("q11");
+    expect(addRecent([], "تحت ١٥٠٠")).toEqual(["تحت 1500"]);
+  });
+  it("round-trips and survives corrupt storage", () => {
+    expect(decodeRecents(encodeRecents(["a", "b"]))).toEqual(["a", "b"]);
+    expect(decodeRecents("{bad")).toEqual([]);
+    expect(decodeRecents(null)).toEqual([]);
+    expect(decodeRecents('[1,"x"]')).toEqual(["x"]);
+  });
+});
+
+import { groupSuggestions } from "./model";
+import { SORT_WIRE, filterToWire, readFacetCounts } from "./api";
+
+describe("groupSuggestions (inline search panel)", () => {
+  it("orders queries, then stores, then categories, capped at 5", () => {
+    const out = groupSuggestions({
+      queries: ["a", "b", "c"],
+      stores: [{ id: "s1", name: "Store 1" }, { id: "s2", name: "Store 2" }],
+      categories: [{ id: "c1", name: "Cat" }],
+    });
+    expect(out.map((x) => x.kind)).toEqual(["query", "query", "query", "store", "store"]);
+    expect(out).toHaveLength(5);
+  });
+  it("drops blanks and duplicates, trims, and fills from later kinds", () => {
+    const out = groupSuggestions({ queries: [" dress ", "dress", "  "], stores: [], categories: [{ id: "c1", name: "Dresses" }] });
+    expect(out).toEqual([{ kind: "query", id: null, label: "dress" }, { kind: "category", id: "c1", label: "Dresses" }]);
+  });
+  it("max 0 returns nothing", () => {
+    expect(groupSuggestions({ queries: ["a"], stores: [], categories: [] }, 0)).toEqual([]);
+  });
+});
+
+describe("wire: facet_counts and sort", () => {
+  it("maps typed facet buckets to records and keeps absence as undefined", () => {
+    expect(readFacetCounts(undefined)).toBeUndefined();
+    expect(readFacetCounts({ category_ids: [{ id: "a", count: 3 }, { id: "b", count: 1 }], store_ids: [] })).toEqual({ categoryIds: { a: 3, b: 1 }, storeIds: {} });
+  });
+  it("sort is a query parameter, never part of the filters JSON", () => {
+    const f: SearchFilter = { ...EMPTY_FILTER, sort: "discount" };
+    expect("sort" in filterToWire(f)).toBe(false);
+  });
+  it("sort ids map to the wire allow-list", () => {
+    expect(SORT_WIRE).toEqual({ priceLow: "price_asc", priceHigh: "price_desc", discount: "biggest_verified_discount" });
+  });
+});

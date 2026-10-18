@@ -75,3 +75,15 @@ describe("port", () => {
     expect(pdpFailureState(await port.load().catch((e: unknown) => e))).toEqual({ status: "error", offline: true });
   });
 });
+
+import { galleryIndex, gallerySlides } from "./model";
+describe("gallery", () => {
+  it("clamps slides and index", () => {
+    expect(gallerySlides(0)).toBe(1);
+    expect(gallerySlides(99)).toBe(10);
+    expect(galleryIndex(400, 200, 3)).toBe(2);
+    expect(galleryIndex(900, 200, 3)).toBe(2);
+    expect(galleryIndex(-5, 200, 3)).toBe(0);
+    expect(galleryIndex(10, 0, 3)).toBe(0);
+  });
+});

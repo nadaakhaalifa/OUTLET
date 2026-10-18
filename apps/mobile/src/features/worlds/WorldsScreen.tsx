@@ -1,147 +1,220 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { minTouchTarget, radius, spacing } from "@outlet/ui-tokens";
-import { Banner, Card, EmptyState, ErrorState, ListRow, LoadingState, Screen, Text, useTheme, Badge } from "../../ui";
+import { Button, Icon, PressScale, Reveal, Screen, SectionHeader, Text, useTheme } from "../../ui";
+import { ProductArt } from "../../art";
+import { radius } from "@outlet/ui-tokens";
+import { getFeaturePorts, getGuestStore } from "../../state/ports";
+import { withGuestStore } from "../guest";
+import { useGuestMode } from "../guest/useGuestMode";
 import { useServices } from "../../state/services";
-import { getFeaturePorts } from "../../state/ports";
-import { formatAmount, type DisplayLocale } from "../money-display";
+import { getApiRuntime, createAdapterContext } from "../../services/runtime";
+import { CategoryWindow } from "../category-window/CategoryWindow";
+import { loadCategoryCounts } from "../category-window/api";
+import { opensDirectly, shopAllParams, type CategoryCounts } from "../category-window/model";
+import { ApiDiscoverPort } from "../discover/api";
+import { DiscoverModules } from "../discover/DiscoverModules";
+import { EMPTY_DISCOVER, InMemoryDiscoverPort, discoverFailure, type DiscoverPort, type DiscoverScreenState } from "../discover/model";
+import { FilterButton } from "../filters/FilterButton";
+import { FilterSheet } from "../filters/FilterSheet";
+import { EMPTY_LISTING_FILTERS, badgeCount, toRouteParams, type ListingFilters } from "../filters/model";
+import { InlineSearch } from "../search/InlineSearch";
+import type { SearchPort } from "../search/model";
+import type { CategoryNode } from "../shop-all/model";
 import {
-  DEFAULT_SORT, DEFAULT_WORLD, STORE_SORTS, WORLDS, buildDirectory, decodePreference, encodePreference, failureState,
-  worldAfterWiden, type StoreSort, type StoreSummary, type World, type WorldsPort, type WorldsScreenState, type WorldPreferencePort,
-  } from "./model";
+  CATEGORY_TILES, DISCOVER_DEPARTMENTS, TILES_PER_ROW, TILES_PER_ROW_LARGE_TEXT, departmentParams, nodeForSlug, rowsOf, type StoreSummary,
+} from "./model";
 
-const PREF_KEY = "worlds.selection";
+const AVATAR = 72;
+/** At or above this font scale the tile grid falls back to two per row. */
+const LARGE_TEXT_SCALE = 1.35;
+const GUTTER = 20;
+const GAP = 12;
+/** Search bar and filter icon share one row: 85% / 15%. */
+const SEARCH_SHARE = 85;
+const FILTER_SHARE = 15;
 
-function Chip(props: { label: string; selected: boolean; onPress: () => void; role: "radio" | "button"; testID?: string }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      testID={props.testID}
-      accessibilityRole={props.role}
-      accessibilityLabel={props.label}
-      accessibilityState={{ selected: props.selected }}
-      onPress={props.onPress}
-      style={{
-        minHeight: minTouchTarget, minWidth: minTouchTarget, justifyContent: "center", paddingHorizontal: spacing.md,
-        borderRadius: radius.pill, borderWidth: 1,
-        borderColor: props.selected ? colors.accent : colors.border,
-        backgroundColor: props.selected ? colors.accent : "transparent",
-      }}
-    >
-      <Text style={{ color: props.selected ? colors.onAccent : colors.textPrimary, fontWeight: "600" }}>{props.label}</Text>
-    </Pressable>
-  );
+function useDiscoverPort(override?: DiscoverPort): DiscoverPort {
+  return useMemo(() => {
+    if (override !== undefined) return override;
+    const rt = getApiRuntime();
+    return rt !== null ? new ApiDiscoverPort(withGuestStore(createAdapterContext(rt), getGuestStore())) : new InMemoryDiscoverPort(EMPTY_DISCOVER);
+  }, [override]);
 }
 
-function StoreRow(props: { store: StoreSummary; locale: DisplayLocale }) {
+function CategoryTileView(props: { tile: (typeof CATEGORY_TILES)[number]; onPress: () => void }) {
   const { t } = useTranslation();
-  const s = props.store;
-  const parts: string[] = [];
-  if (s.maxVerifiedDiscountPct !== null) parts.push(t("worlds.discountUpTo", { pct: formatAmount(BigInt(s.maxVerifiedDiscountPct) * 100n, props.locale) }));
-  if (s.rating !== null) parts.push(t("worlds.rating", { value: s.rating.toFixed(1) }));
-  parts.push(t("worlds.followers", { count: s.followerCount }));
-  if (s.deliveryDays !== null) parts.push(t("worlds.delivery", { days: s.deliveryDays }));
+  const name = t(`worlds.category.${props.tile.id}`);
   return (
-    <ListRow
-      title={s.name}
-      subtitle={parts.join(" . ")}
-      accessibilityHint={t("worlds.openStore")}
-      trailing={
-        <View style={{ gap: spacing.xs }}>
-          {s.liveDrop ? <Badge tone="info" label={t("worlds.liveDrop")} /> : null}
-          {s.isFavourite ? <Badge tone="info" label={t("worlds.favourite")} /> : null}
+    <PressScale onPress={props.onPress} accessibilityRole="button" accessibilityLabel={t("worlds.browseCategory", { name })} style={{ flex: 1, minWidth: 96 }} scale={0.99} testID={`discover-tile-${props.tile.id}`}>
+      <View style={{ gap: 6 }}>
+        <View style={{ aspectRatio: 0.75, overflow: "hidden", borderRadius: radius.lg }}>
+          <ProductArt kind={props.tile.kind} seed={`cat-${props.tile.id}`} ratio="3:4" style={{ position: "absolute", top: 0, start: 0, end: 0, bottom: 0 }} />
         </View>
-      }
-      onPress={() => undefined}
-    />
+        <Text variant="caption" weight="600" numberOfLines={2} maxScale={1.5} accessibilityRole="none">{name}</Text>
+      </View>
+    </PressScale>
   );
 }
 
-/** Dev fixtures only; production wiring replaces the port when the API client lands. */
-export function WorldsScreen(props: { port?: WorldsPort }) {
-  const { t, i18n } = useTranslation();
+/** Discover tab ("For you"): inline search, department avatars, personal rails, a 3-up category grid, Style me and the store directory entry. */
+export function WorldsScreen(props: { searchPort?: SearchPort; discoverPort?: DiscoverPort }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { colors } = useTheme();
   const services = useServices();
-  const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
-  const port = useMemo<WorldsPort>(() => props.port ?? getFeaturePorts().worlds, [props.port]);
-  const prefs = useMemo<WorldPreferencePort>(() => ({
-    load: async () => decodePreference(await services.storage.getString(PREF_KEY)),
-    save: (p) => services.storage.setString(PREF_KEY, encodePreference(p)),
-  }), [services]);
-  const [world, setWorld] = useState<World>(DEFAULT_WORLD);
-  const [sort, setSort] = useState<StoreSort>(DEFAULT_SORT);
-  const [state, setState] = useState<WorldsScreenState>({ status: "loading" });
+  const { fontScale } = useWindowDimensions();
+  const search = useMemo(() => props.searchPort ?? getFeaturePorts().search, [props.searchPort]);
+  const discover = useDiscoverPort(props.discoverPort);
+  const guest = useGuestMode();
+  const [paused, setPaused] = useState(() => { try { return getGuestStore().getState().settings.historyPaused; } catch { return false; } });
+  const [searching, setSearching] = useState(false);
+  const [tree, setTree] = useState<readonly CategoryNode[]>([]);
+  const [treeFailed, setTreeFailed] = useState(false);
+  const [stores, setStores] = useState<readonly StoreSummary[]>([]);
+  const [state, setState] = useState<DiscoverScreenState>({ status: "loading" });
+  const [windowNode, setWindowNode] = useState<CategoryNode | null>(null);
+  const [counts, setCounts] = useState<CategoryCounts | undefined>(undefined);
+  const [filterSheet, setFilterSheet] = useState(false);
+  const [filters, setFilters] = useState<ListingFilters>(EMPTY_LISTING_FILTERS);
 
-  const load = useCallback(async () => {
+  const loadTree = useCallback(() => {
+    setTreeFailed(false);
+    getFeaturePorts().categories.tree().then(setTree, () => setTreeFailed(true));
+  }, []);
+  const loadDiscover = useCallback(() => {
     setState({ status: "loading" });
-    try {
-      setState({ status: "ready", stores: await port.listStores() });
-    } catch (e) {
-      setState(failureState(e));
-    }
-  }, [port]);
-
+    discover.load(null).then((data) => setState({ status: "ready", data }), (e: unknown) => setState(discoverFailure(e)));
+  }, [discover]);
   useEffect(() => {
-    void (async () => {
-      try {
-        const p = await prefs.load();
-        if (p !== null) {
-          setWorld(p.world);
-          setSort(p.sort);
-        }
-      } catch {
-        // Preference unreadable: keep defaults.
-      }
-    })();
-    void load();
-  }, [prefs, load]);
+    loadTree();
+    loadDiscover();
+    getFeaturePorts().worlds.listStores().then(setStores, () => undefined);
+  }, [loadTree, loadDiscover]);
 
-  const choose = (w: World, s: StoreSort) => {
-    setWorld(w);
-    setSort(s);
-    void prefs.save({ world: w, sort: s }).catch(() => undefined);
+  const perRow = fontScale >= LARGE_TEXT_SCALE ? TILES_PER_ROW_LARGE_TEXT : TILES_PER_ROW;
+  const rows = rowsOf(CATEGORY_TILES, perRow);
+
+  const openWindow = (slug: string, source: "discover_tile" | "discover_department", fallback: () => void) => {
+    const node = nodeForSlug(tree, slug);
+    if (node === null) { fallback(); return; }
+    if (opensDirectly(tree, node)) { router.push({ pathname: "/shop-all", params: shopAllParams(node) }); return; }
+    void services.analytics.track("category_window_opened", { category_id: node.id, source });
+    setCounts(undefined);
+    setWindowNode(node);
+    void loadCategoryCounts(search, {}).then(setCounts);
   };
 
-  const view = useMemo(() => (state.status === "ready" ? buildDirectory(state.stores, world, sort) : null), [state, world, sort]);
-
+  const track = services.analytics;
   return (
-    <Screen>
-      <Text variant="title">{t("worlds.title")}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={t("worlds.pickerLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {WORLDS.map((w) => (
-          <Chip key={w} testID={`world-${w}`} role="radio" label={t(`worlds.${w}`)} selected={w === world} onPress={() => choose(w, sort)} />
-        ))}
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, display: searching ? "none" : "flex" }}>
+        <Screen padded={false}>
+          <View style={{ gap: 28 }}>
+            <View style={{ paddingHorizontal: GUTTER, gap: 16 }}>
+              <Reveal index={0}><Text variant="display" accessibilityRole="header">{t("forYou.title")}</Text></Reveal>
+              {/* Search bar 85% + the single filter icon 15% */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: GAP }}>
+                <PressScale onPress={() => setSearching(true)} accessibilityRole="search" accessibilityLabel={t("forYou.searchPlaceholder")} testID="discover-search" style={{ flex: SEARCH_SHARE }}
+                  innerStyle={{ minHeight: 48, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Icon name="search-outline" size={20} color="textSecondary" />
+                  <Text variant="callout" secondary accessibilityRole="none" numberOfLines={1} style={{ flexShrink: 1 }}>{t("forYou.searchPlaceholder")}</Text>
+                </PressScale>
+                <View style={{ flex: FILTER_SHARE, alignItems: "center" }}>
+                  <FilterButton count={badgeCount(filters)} onPress={() => setFilterSheet(true)} testID="discover-filter-button" />
+                </View>
+              </View>
+            </View>
+
+            <View accessibilityLabel={t("worlds.discover.departmentsLabel")} style={{ paddingHorizontal: GUTTER, flexDirection: "row", justifyContent: "space-between" }}>
+              {DISCOVER_DEPARTMENTS.map((d) => {
+                const label = t(`worlds.discover.${d.id}`);
+                const go = () => router.push({ pathname: "/shop-all", params: departmentParams(d.id, label) });
+                return (
+                  <PressScale key={d.id} onPress={() => (d.id === "lifestyle" ? go() : openWindow(d.id, "discover_department", go))} accessibilityRole="button" accessibilityLabel={label} testID={`discover-dept-${d.id}`}
+                    innerStyle={{ alignItems: "center", gap: 8, minWidth: 44, minHeight: 44 }}>
+                    <View style={{ width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2, overflow: "hidden" }}>
+                      <ProductArt kind={d.kind} seed={`dept-${d.id}`} ratio="1:1" style={{ position: "absolute", top: 0, start: 0, end: 0, bottom: 0 }} />
+                    </View>
+                    <Text variant="caption" accessibilityRole="none">{label}</Text>
+                  </PressScale>
+                );
+              })}
+            </View>
+
+            <DiscoverModules state={state} onRetry={loadDiscover} onOpenSettings={() => router.push("/privacy-center")}
+              {...(guest ? { onClearLocalHistory: () => { getGuestStore().clearHistory(); loadDiscover(); }, historyPaused: paused, onTogglePause: (on: boolean) => { getGuestStore().setHistoryPaused(on); setPaused(on); loadDiscover(); } } : {})} />
+
+            <View style={{ gap: 14 }}>
+              <View style={{ paddingHorizontal: GUTTER }}><SectionHeader title={t("forYou.exploreCategories")} /></View>
+              <View style={{ gap: 16, paddingHorizontal: GUTTER }} testID="discover-category-grid">
+                {rows.map((r, ri) => (
+                  <Reveal key={r[0]?.id} index={ri} style={{ flexDirection: "row", gap: GAP }}>
+                    {r.map((c) => (
+                      <CategoryTileView key={c.id} tile={c} onPress={() => openWindow(c.id, "discover_tile", () => router.push({ pathname: "/shop-all", params: { q: t(`worlds.category.${c.id}`) } }))} />
+                    ))}
+                    {Array.from({ length: perRow - r.length }, (_, i) => <View key={`pad-${i}`} style={{ flex: 1, minWidth: 96 }} />)}
+                  </Reveal>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ paddingHorizontal: GUTTER }}>
+              <View style={{ borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 20, gap: 8 }}>
+                <Text variant="quote" accessibilityRole="header">{t("worlds.discover.styleMeTitle")}</Text>
+                <Text variant="callout" secondary>{t("worlds.discover.styleMeBody")}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <Button title={t("worlds.discover.styleMeCta")} onPress={() => router.push("/stylist")} testID="discover-style-me" />
+                </View>
+              </View>
+            </View>
+
+            <PressScale onPress={() => router.push("/stores")} accessibilityRole="button" accessibilityLabel={t("forYou.stores")} testID="discover-stores"
+              style={{ paddingHorizontal: GUTTER }} innerStyle={{ minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flex: 1 }}>
+                <Text variant="callout" weight="600" accessibilityRole="none">{t("worlds.discover.storesTitle")}</Text>
+                <Text variant="caption" secondary accessibilityRole="none">{t("worlds.discover.storesBody")}</Text>
+              </View>
+              <Icon name="chevron-forward" size={18} color="textSecondary" directional />
+            </PressScale>
+          </View>
+        </Screen>
       </View>
-      <View accessibilityLabel={t("worlds.sortLabel")} style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {STORE_SORTS.map((s) => (
-          <Chip key={s} role="button" label={t(`worlds.sort.${s}`)} selected={s === sort} onPress={() => choose(world, s)} />
-        ))}
-      </View>
-      {state.status === "loading" ? <LoadingState label={t("worlds.loading")} /> : null}
-      {state.status === "error" ? (
-        <ErrorState
-          offline={state.offline}
-          title={t(state.offline ? "worlds.offlineTitle" : "worlds.errorTitle")}
-          description={t(state.offline ? "worlds.offlineBody" : "worlds.errorBody")}
-          retryTitle={t("common.retry")}
-          onRetry={() => void load()}
+
+      {searching ? (
+        <InlineSearch
+          port={search} tree={tree} stores={stores}
+          onCancel={() => setSearching(false)}
+          onOpenProduct={(id) => router.push({ pathname: "/product/[id]", params: { id } })}
+          onSuggestionTapped={(e) => void track.track("search_suggestion_tapped", e)}
+          onSearched={(e) => {
+            void track.track("search_performed", { term_char_count: e.termChars, result_count: Math.min(e.resultCount, 1000), scope: "discover_inline", has_filters: e.hasFilters });
+            if (e.resultCount === 0) void track.track("search_no_result", { term_char_count: e.termChars, scope: "shop_everything", has_filters: e.hasFilters });
+          }}
         />
       ) : null}
-      {view !== null ? (
-        <>
-          {view.hiddenFavouriteCount > 0 ? <Banner tone="info" message={t("worlds.hiddenFavourites", { count: view.hiddenFavouriteCount })} /> : null}
-          {view.empty === null ? (
-            <Card>{view.rows.map((s) => <StoreRow key={s.id} store={s} locale={locale} />)}</Card>
-          ) : (
-            <EmptyState
-              title={t(view.empty === "noStores" ? "worlds.emptyStoresTitle" : view.empty === "noFavourites" ? "worlds.emptyFavouritesTitle" : "worlds.emptyHiddenTitle")}
-              description={t(view.empty === "noStores" ? "worlds.emptyStoresBody" : view.empty === "noFavourites" ? "worlds.emptyFavouritesBody" : "worlds.emptyHiddenBody")}
-              {...(view.canWiden ? { actionTitle: t("worlds.widen"), onAction: () => choose(worldAfterWiden(), sort) } : {})}
-            />
-          )}
-        </>
-      ) : null}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
-    </Screen>
+
+      <FilterSheet
+        visible={filterSheet} onClose={() => setFilterSheet(false)} filters={filters} tree={tree} treeFailed={treeFailed} stores={stores}
+        signedIn={false} budgetReady={false} onSetupBudget={() => undefined}
+        onApply={(next) => {
+          // Filters on Discover open the listing with them applied; Discover itself keeps no filter state beyond the badge.
+          setFilters(EMPTY_LISTING_FILTERS);
+          setFilterSheet(false);
+          router.push({ pathname: "/shop-all", params: toRouteParams(next) });
+        }}
+      />
+
+      <CategoryWindow
+        visible={windowNode !== null} onClose={() => setWindowNode(null)} node={windowNode} tree={tree} treeLoading={false} treeFailed={treeFailed}
+        onRetry={loadTree} counts={counts}
+        onSelect={(target, _row, hasCount) => {
+          void track.track("category_window_selected", { category_id: target.id, has_count: hasCount });
+          setWindowNode(null);
+          router.push({ pathname: "/shop-all", params: shopAllParams(target) });
+        }}
+      />
+    </View>
   );
 }

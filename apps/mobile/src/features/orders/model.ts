@@ -171,3 +171,37 @@ export function formatDay(iso: string, digits: (ascii: string) => string): strin
   const p = (n: number) => String(n).padStart(2, "0");
   return digits(`${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`);
 }
+
+export type OrderFilter = "all" | "active" | "delivered" | "closed";
+
+const ACTIVE_STATUSES: ReadonlySet<SellerOrderStatus> = new Set([
+  "PENDING_PAYMENT", "PAID", "CONFIRMED_COD", "ACCEPTED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERY_FAILED", "RTO",
+]);
+
+/** Which filter bucket a group falls in: unpaid and in-flight are active; delivered/closed; the rest are closed (cancelled, refunded...). */
+export function orderBucket(g: OrderGroup): Exclude<OrderFilter, "all"> {
+  if (g.state === "pending_payment") return "active";
+  if (g.state === "failed" || g.state === "expired") return "closed";
+  if (g.sellerOrders.length === 0) return "active";
+  if (g.sellerOrders.some((o) => ACTIVE_STATUSES.has(o.status))) return "active";
+  if (g.sellerOrders.some((o) => o.status === "DELIVERED" || o.status === "CLOSED")) return "delivered";
+  return "closed";
+}
+
+export function filterOrders(gs: readonly OrderGroup[], f: OrderFilter): readonly OrderGroup[] {
+  return f === "all" ? gs : gs.filter((g) => orderBucket(g) === f);
+}
+
+/** i18n key suffix for a group's headline status. */
+export function groupStatusKey(g: OrderGroup): SellerOrderStatus {
+  const first = g.sellerOrders[0];
+  if (g.state === "pending_payment") return "PENDING_PAYMENT";
+  if (g.state === "failed" || g.state === "expired") return "CANCELLED";
+  if (first === undefined) return g.state === "confirmed_cod" ? "CONFIRMED_COD" : "PAID";
+  // Mixed shipments: show the least advanced active status so the shopper is never told "delivered" early.
+  const active = g.sellerOrders.filter((o) => ACTIVE_STATUSES.has(o.status));
+  const order: readonly SellerOrderStatus[] = ["PENDING_PAYMENT", "PAID", "CONFIRMED_COD", "ACCEPTED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY"];
+  const rank = (s: SellerOrderStatus) => { const i = order.indexOf(s); return i < 0 ? order.length : i; };
+  if (active.length > 0) return [...active].sort((a, b) => rank(a.status) - rank(b.status))[0]?.status ?? first.status;
+  return first.status;
+}

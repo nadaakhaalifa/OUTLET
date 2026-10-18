@@ -60,6 +60,21 @@ export interface Product {
   readonly deliveryDaysMax: number | null;
   readonly returnPolicy: ReturnPolicy;
   readonly status: "active" | "paused";
+  /** Optional presentation fields: absent (undefined/null) means the UI hides them. */
+  readonly brand?: string | null;
+  readonly rating?: number | null;
+  readonly reviewCount?: number | null;
+  readonly colors?: readonly ProductColor[] | null;
+  /** Real photo URL; always wins over the dev fixture photo. */
+  readonly imageUrl?: string | null;
+  /** Dev fixtures only: render the bundled board photo when no imageUrl exists. */
+  readonly devPhoto?: boolean;
+}
+
+export interface ProductColor {
+  readonly name: string;
+  /** Theme colour token that paints the swatch (no raw colours in the model). */
+  readonly tone: "sand" | "fill" | "textSecondary";
 }
 
 export interface PdpPort {
@@ -125,6 +140,25 @@ export function buildRecommendation(p: Pick<Product, "recommendation" | "sizes">
   return { sizeLabel: r.sizeLabel, confidencePct, sure: r.confidence >= MIN_CONFIDENCE, inStock: size !== undefined && size.stock > 0 };
 }
 
+/**
+ * Guest size hint (device-local profile, spec section 2). The public product carries no size chart, so the only honest
+ * on-device match is the usual size the shopper saved on this phone. No confidence figure is invented.
+ */
+export function localFitHint(sizes: readonly SizeOption[], usualSize: string | null): { readonly sizeLabel: string; readonly inStock: boolean } | null {
+  if (usualSize === null) return null;
+  const want = usualSize.trim().toLowerCase();
+  const hit = sizes.find((z) => z.label.trim().toLowerCase() === want);
+  return hit === undefined ? null : { sizeLabel: hit.label, inStock: hit.stock > 0 };
+}
+
+/** A guest "Notify me" is offered only when the item is paused or sold out, so it is always a back-in-stock watch. */
+export const GUEST_WATCH_KIND = "restock" as const;
+
+/** The exact shape stored on the phone: ids and kind only, no title, price text or personal data. */
+export function guestWatchInput(productId: string, skuId: string | null): { readonly productId: string; readonly skuId: string | null; readonly kind: typeof GUEST_WATCH_KIND } {
+  return { productId, skuId, kind: GUEST_WATCH_KIND };
+}
+
 export function buildCommunityFit(c: CommunityFit | null): CommunityFit | null {
   return c !== null && c.sampleCount >= MIN_FIT_SAMPLE ? c : null;
 }
@@ -179,16 +213,18 @@ export function pdpFailureState(e: unknown): PdpScreenState {
 
 export const FIXTURE_PRODUCT: Product = {
   id: "p1",
-  title: "White linen dress",
-  price: 120_000n,
-  claim: { referencePrice: 171_500n, lowestIn30Days: true },
+  title: "Linen Blend Blazer",
+  price: 249_900n,
+  claim: { referencePrice: 499_900n, lowestIn30Days: false },
   isLaunchPrice: false,
   imageCount: 3,
   seller: { storeName: "Delta Dresses", legalName: "Delta Garments LLC", commercialRegisterNo: "000-000", taxCardNo: "000-000-000", governorate: "Cairo" },
   sizes: [
+    { sku: "p1-xs", label: "XS", stock: 9 },
     { sku: "p1-s", label: "S", stock: 0 },
     { sku: "p1-m", label: "M", stock: 2 },
     { sku: "p1-l", label: "L", stock: 14 },
+    { sku: "p1-xl", label: "XL", stock: 8 },
   ],
   recommendation: { sizeLabel: "M", confidence: 0.91 },
   communityFit: { direction: "runsSmall", sampleCount: 24 },
@@ -198,6 +234,15 @@ export const FIXTURE_PRODUCT: Product = {
   deliveryDaysMax: 4,
   returnPolicy: { kind: "standard", changeOfMindDays: 14, defectDays: 30 },
   status: "active",
+  brand: "ZARA",
+  rating: 4.6,
+  reviewCount: 124,
+  colors: [
+    { name: "Beige", tone: "sand" },
+    { name: "Sand", tone: "fill" },
+    { name: "Graphite", tone: "textSecondary" },
+  ],
+  devPhoto: true,
 };
 
 export class InMemoryPdpPort implements PdpPort {
@@ -222,4 +267,15 @@ export class InMemoryPdpPort implements PdpPort {
     this.check();
     this.saved.push({ productId, intent });
   }
+}
+
+/* ---- gallery (spec §5): at least one slide, never more than 10 ---- */
+export const MAX_GALLERY = 10;
+export function gallerySlides(imageCount: number): number {
+  return Math.max(1, Math.min(MAX_GALLERY, Math.floor(imageCount)));
+}
+/** Index from a horizontal scroll offset, clamped; RTL offsets are passed already normalised by the caller. */
+export function galleryIndex(offsetX: number, pageWidth: number, slides: number): number {
+  if (pageWidth <= 0) return 0;
+  return Math.max(0, Math.min(slides - 1, Math.round(offsetX / pageWidth)));
 }

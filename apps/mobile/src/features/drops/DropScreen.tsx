@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Banner, Button, Card, EmptyState, ErrorState, LoadingState, Screen, Text } from "../../ui";
+import { View } from "react-native";
+import { useRouter, type Href } from "expo-router";
+import { Banner, Button, Divider, Eyebrow, FullBleedHero, Reveal, Screen, Skeleton, Text } from "../../ui";
+import { HeroArt, type HeroVariant } from "../../art";
+import { OfflineBanner, StateScreen } from "../../components/states";
 import { localizeDigits, type DisplayLocale } from "../money-display";
+import { Ticker } from "../../components/Ticker";
 import { holdAdmission } from "./admissionStore";
+import { dropRenderKey } from "./tick";
 import {
   canJoin, clockFromServer, countdownParts, dropFailureState, dropPhase, nextPollDelay, serverNow, stockLabelCount, tokenState, waitingView,
-  type DropScreenState, type DropsPort, type QueueStatus, type RejectReason,
+  type DropScreenState, type DropSnapshot, type DropsPort, type QueueStatus, type RejectReason, type ServerClock,
 } from "./model";
 import { getFeaturePorts } from "../../state/ports";
 
@@ -18,7 +24,12 @@ const REJECT_KEY: Readonly<Record<RejectReason, string>> = {
   underAge: "drops.rejectAge",
 };
 
-export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () => number; onEnter?: (dropId: string) => void; newKey?: () => string }) {
+/** Module-level so the Reveal entrance does not replay on the 1 s countdown re-render. */
+function Block(p: { children: ReactNode; index?: number }) {
+  return <Reveal index={p.index ?? 0}><View style={{ gap: 12, paddingVertical: 8 }}>{p.children}</View></Reveal>;
+}
+
+export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () => number; onEnter?: (dropId: string) => void; newKey?: () => string; guest?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port = useMemo<DropsPort>(() => props.port ?? getFeaturePorts().drops, [props.port]);
@@ -26,6 +37,7 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
   const counter = useRef(0);
   const newKey = props.newKey ?? (() => `drop-${Date.now()}-${(counter.current += 1)}`);
   const num = (n: number) => localizeDigits(String(n), locale);
+  const guest = props.guest === true;
 
   const [state, setState] = useState<DropScreenState>({ status: "loading" });
   const [queue, setQueue] = useState<QueueStatus>({ state: "idle" });
@@ -45,9 +57,19 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
   }, [port, props.dropId]);
   useEffect(() => { void load(); }, [load]);
 
-  // One-second tick drives the countdown from the server-anchored offset (no animation).
+  // The screen re-renders only when the phase or token validity changes (see dropRenderKey). The 1 s
+  // countdown digits are ticked by a leaf <Ticker>, so the rest of the screen is not re-rendered each second.
+  const latest = useRef<{ drop: DropSnapshot | null; clock: ServerClock | null; queue: QueueStatus; admittedOffsetMs: number }>({
+    drop: null, clock: null, queue: { state: "idle" }, admittedOffsetMs: 0,
+  });
   useEffect(() => {
-    const id = setInterval(() => setTick(nowFn()), 1000);
+    const id = setInterval(() => {
+      const n = nowFn();
+      setTick((prev) => {
+        const l = latest.current;
+        return dropRenderKey({ ...l, nowMs: prev }) === dropRenderKey({ ...l, nowMs: n }) ? prev : n;
+      });
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -87,6 +109,7 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
   const ready = state.status === "ready" ? state : null;
   const nowSrv = ready !== null ? serverNow(ready.clock, tick) : 0;
   const phase = ready !== null ? dropPhase(ready.drop, nowSrv) : null;
+  const targetMs = phase !== null && "untilMs" in phase ? nowSrv + phase.untilMs : 0;
 
   // Server clock for the admitted token comes from the status response, then advances locally.
   const admittedClockRef = useRef<{ offsetMs: number } | null>(null);
@@ -96,6 +119,7 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
   if (queue.state !== "admitted") admittedClockRef.current = null;
   const token = queue.state === "admitted" ? tokenState(queue.token, tick + (admittedClockRef.current?.offsetMs ?? 0)) : null;
   const tokenExpired = token?.kind === "expired";
+  latest.current = { drop: ready?.drop ?? null, clock: ready?.clock ?? null, queue, admittedOffsetMs: admittedClockRef.current?.offsetMs ?? 0 };
 
   const enter = () => {
     if (queue.state !== "admitted") return;
@@ -104,75 +128,115 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
   };
 
   const parts = (ms: number) => countdownParts(ms);
-  const countdownText = (ms: number) => {
+  const segments = (ms: number) => {
     const p = parts(ms);
-    return t("drops.countdown", { days: num(p.days), hours: num(p.hours), minutes: num(p.minutes), seconds: num(p.seconds) });
+    const two = (n: number) => num(Math.min(99, n)).padStart(2, locale === "ar" ? "٠" : "0");
+    const out: { key: string; value: string; unit: string }[] = [];
+    if (p.days > 0) out.push({ key: "d", value: two(p.days), unit: t("drops.unitDays") });
+    out.push({ key: "h", value: two(p.hours), unit: t("drops.unitHours") });
+    out.push({ key: "m", value: two(p.minutes), unit: t("drops.unitMinutes") });
+    out.push({ key: "s", value: two(p.seconds), unit: t("drops.unitSeconds") });
+    return out;
   };
   const countdownName = (ms: number) => {
     const p = parts(ms);
     return t("drops.countdownName", { days: num(p.days), hours: num(p.hours), minutes: num(p.minutes), seconds: num(p.seconds) });
   };
 
+  const heroVariant: HeroVariant = ready?.drop.type === "members" ? "plus" : ready?.drop.type === "lastChance" ? "sale" : "drop";
+
+  const router = useRouter();
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)" as Href));
   return (
-    <Screen>
-      <Text variant="title">{ready !== null ? ready.drop.title : t("drops.title")}</Text>
-      {state.status === "loading" ? <LoadingState label={t("drops.loading")} /> : null}
+    <Screen onBack={goBack} backLabel={t("common.back")}>
+      <OfflineBanner visible={state.status === "error" && state.offline} message={t("common.offlineBanner")} />
+      {state.status === "loading" ? (
+        <View accessibilityRole="progressbar" accessibilityLabel={t("drops.loading")} style={{ gap: 14 }}>
+          <Skeleton height={380} radius={20} />
+          <Skeleton width="40%" height={12} />
+          <Skeleton width="85%" height={56} />
+        </View>
+      ) : null}
       {state.status === "error" ? (
-        <ErrorState
-          offline={state.offline}
+        <StateScreen
+          illustration={state.offline ? "offline" : "error"}
           title={t(state.offline ? "drops.offlineTitle" : "drops.errorTitle")}
           description={t(state.offline ? "drops.offlineBody" : "drops.errorBody")}
-          retryTitle={t("common.retry")}
-          onRetry={() => void load()}
+          actionTitle={t("common.retry")}
+          onAction={() => void load()}
         />
       ) : null}
-      {state.status === "notFound" ? <EmptyState title={t("drops.notFoundTitle")} description={t("drops.notFoundBody")} /> : null}
+      {state.status === "notFound" ? <StateScreen illustration="noResults" title={t("drops.notFoundTitle")} description={t("drops.notFoundBody")} /> : null}
 
       {ready !== null && phase !== null ? (
         <>
-          <Card>
-            <Text secondary>{t("drops.store", { store: ready.drop.storeName })}</Text>
-            <Text variant="caption" secondary>{t(`drops.type.${ready.drop.type}`)}</Text>
+          <FullBleedHero
+            imageNode={<HeroArt variant={heroVariant} style={{ width: "100%", height: "100%", aspectRatio: undefined }} />}
+            aspectRatio={0.9}
+            cornerRadius={20}
+            bleed={false}
+            eyebrow={`${ready.drop.storeName} · ${t(`drops.type.${ready.drop.type}`)}`}
+            title={ready.drop.title}
+          />
+          <Block index={1}>
             {phase.kind === "upcoming" || phase.kind === "earlyAccess" || phase.kind === "live" ? (
               <>
-                <Text>{t(phase.kind === "upcoming" ? "drops.phaseUpcoming" : phase.kind === "earlyAccess" ? "drops.phaseEarlyAccess" : "drops.phaseLive")}</Text>
-                <Text variant="heading" accessibilityRole="text">{countdownText(phase.untilMs)}</Text>
-                <Text variant="caption" secondary>{countdownName(phase.untilMs)}</Text>
+                <Eyebrow>{t(phase.kind === "upcoming" ? "drops.phaseUpcoming" : phase.kind === "earlyAccess" ? "drops.phaseEarlyAccess" : "drops.phaseLive")}</Eyebrow>
+                <Ticker
+                  nowFn={nowFn}
+                  render={(n) => {
+                    const until = Math.max(0, targetMs - serverNow(ready.clock, n));
+                    return (
+                    <View accessible accessibilityRole="timer" accessibilityLabel={countdownName(until)} testID="drop-countdown" style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                      {segments(until).map((sg, i) => (
+                        <View key={sg.key} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                          {i > 0 ? <Text variant="hero" color="textSecondary" accessibilityRole="none" style={{ fontWeight: "300" }}>:</Text> : null}
+                          <View style={{ alignItems: "center", gap: 2 }}>
+                            <Text variant="hero" numeric accessibilityRole="none">{sg.value}</Text>
+                            <Text variant="eyebrow" secondary accessibilityRole="none">{sg.unit}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                    );
+                  }}
+                />
                 <Text variant="caption" secondary>{t("drops.clockNote")}</Text>
               </>
             ) : null}
             {phase.kind === "soldOut" ? <Banner tone="warning" message={t("drops.phaseSoldOut")} /> : null}
             {phase.kind === "ended" ? <Banner tone="info" message={t("drops.phaseEnded")} /> : null}
             {phase.kind === "paused" ? <Banner tone="warning" message={t("drops.phasePaused")} /> : null}
+            <Divider />
             <Text variant="caption" secondary>{t("drops.limit", { count: num(ready.drop.perUserLimit) })}</Text>
             {stockLabelCount(ready.drop) !== null ? <Text variant="caption">{t("drops.stockLow", { count: num(stockLabelCount(ready.drop) ?? 0) })}</Text> : null}
-          </Card>
+          </Block>
 
           {queue.state === "waiting" ? (
-            <Card>
-              <Text variant="heading">{t("drops.waitingTitle")}</Text>
+            <Block index={2}>
+              <Eyebrow>{t("drops.waitingTitle")}</Eyebrow>
               {(() => {
                 const w = waitingView(queue);
                 return (
                   <>
-                    {w.position !== null ? <Text>{t("drops.waitingPosition", { position: num(w.position) })}</Text> : null}
+                    {w.position !== null ? <Text variant="display" numeric>{t("drops.waitingPosition", { position: num(w.position) })}</Text> : null}
                     {w.etaMinutes !== null ? <Text>{t("drops.waitingEta", { minutes: num(w.etaMinutes) })}</Text> : null}
                     {w.position === null && w.etaMinutes === null ? <Text secondary>{t("drops.waitingNoEstimate")}</Text> : null}
                   </>
                 );
               })()}
               <Text variant="caption" secondary>{t("drops.waitingKeepOpen")}</Text>
-              <LoadingState label={t("drops.waitingTitle")} />
+              <Skeleton height={4} radius={2} />
               <Button variant="secondary" title={t("drops.leave")} onPress={() => void leave()} />
-            </Card>
+            </Block>
           ) : null}
 
           {queue.state === "admitted" && token !== null && token.kind === "valid" ? (
-            <Card>
-              <Text variant="heading">{t("drops.admittedTitle")}</Text>
+            <Block index={2}>
+              <Eyebrow>{t("drops.admittedTitle")}</Eyebrow>
               <Text>{t("drops.admittedBody", { minutes: num(Math.max(1, Math.ceil(token.remainingMs / 60_000))) })}</Text>
-              <Button title={t("drops.enter")} onPress={enter} />
-            </Card>
+              <Button variant="brand" title={t("drops.enter")} onPress={enter} />
+            </Block>
           ) : null}
 
           {queue.state === "expired" || tokenExpired ? (
@@ -183,13 +247,13 @@ export function DropScreen(props: { dropId: string; port?: DropsPort; now?: () =
           {joinFailed ? <Banner tone="error" message={t("drops.joinFailed")} /> : null}
           {waitlisted ? <Banner tone="info" message={t("drops.waitlistDone")} /> : null}
 
-          {canJoin(phase, tokenExpired ? { state: "expired" } : queue) ? (
-            <Button title={t(busy ? "drops.joining" : "drops.join")} loading={busy} disabled={busy} onPress={() => void join()} />
+          {guest ? <Banner tone="info" message={t("guestMe.dropsNoBuy")} /> : null}
+          {!guest && canJoin(phase, tokenExpired ? { state: "expired" } : queue) ? (
+            <Button variant="brand" title={t(busy ? "drops.joining" : "drops.join")} loading={busy} disabled={busy} onPress={() => void join()} />
           ) : null}
-          {phase.kind === "soldOut" && !waitlisted ? <Button variant="secondary" title={t("drops.waitlist")} onPress={() => void waitlist()} /> : null}
+          {!guest && phase.kind === "soldOut" && !waitlisted ? <Button variant="secondary" title={t("drops.waitlist")} onPress={() => void waitlist()} /> : null}
         </>
       ) : null}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
     </Screen>
   );
 }
