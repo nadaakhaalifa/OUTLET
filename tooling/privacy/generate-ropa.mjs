@@ -24,7 +24,7 @@ const STATUS_NOTE = (inv) =>
 
 const uniq = (xs) => [...new Set(xs)];
 const sortStr = (xs) => [...xs].sort((a, b) => a.localeCompare(b));
-const esc = (s) => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const code = (xs) => (xs.length === 0 ? 'none' : xs.map((x) => `\`${x}\``).join(', '));
 
 function periodText(p) {

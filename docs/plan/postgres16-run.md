@@ -13,7 +13,7 @@ The TypeScript runner (`packages/db/src/runner.ts`) is not what applied the file
 | Area | Checked on PostgreSQL 16 | Result |
 |---|---|---|
 | Migrations | all 11 files apply; 0009 `CREATE INDEX CONCURRENTLY` runs for real; no invalid index left behind | pass |
-| 0011 | 17 account types seeded; `ledger_accounts_type_fk` validated; typo type rejected by FK | pass |
+| 0011 | 19 account types seeded; `ledger_accounts_type_fk` validated; typo type rejected by FK | pass |
 | Ledger | unbalanced entry rejected at COMMIT and leaves no rows; balanced entry commits; UPDATE, DELETE, TRUNCATE on postings and UPDATE on entries rejected; posting from a later transaction rejected; duplicate idempotency key rejected; account identity immutable; trial balance 0 | pass |
 | Outbox | claim query (see below) with `FOR UPDATE SKIP LOCKED`: two concurrent sessions each claimed a disjoint batch of 2 (one held its transaction open 3 s while the other claimed); a dead-lettered head blocks a later event with the same `ordering_key`; payload immutable | pass |
 | Audit chain | clean chain verifies; UPDATE rejected; modified row and removed middle row detected; 6 concurrent writers x 5 appends on one chain gave contiguous seq 1..30 and a clean verify | pass |

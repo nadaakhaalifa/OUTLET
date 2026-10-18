@@ -121,6 +121,36 @@ await Promise.all(Array.from({ length: CONNS + 2 }, () => pool.query("select 1")
 const q = (text, params) => admin.query(text, params).then((r) => r.rows);
 const num = async (text, params) => Number((await q(text, params))[0].n);
 
+// Warm-up (not counted, own SKU): every backend runs reserve + claim once so the plpgsql functions
+// are compiled and the catalog caches are populated before run 1. Without it, 100 cold backends
+// doing that at once on a small CI runner produced one 57014 (2 s statement_timeout) in run 1.
+{
+  const warmSku = uuid(0x0fff, 1);
+  await q(
+    `select inventory_apply_stock_sync($1::uuid,$2::uuid,$3::uuid,$4::uuid,'set',$5,'received',$6,null,null,'system','conc',now()) as r`,
+    [warmSku, LOC, STANDARD, STORE, CONNS + 2, "conc-warmup"],
+  );
+  const warmPlan = JSON.stringify([{ sku_id: warmSku, location_id: LOC, pool_id: STANDARD, store_id: STORE, qty: 1 }]);
+  await Promise.all(
+    Array.from({ length: CONNS + 2 }, async (_, i) => {
+      const c = await pool.connect();
+      try {
+        const og = uuid(0x0ffe, i + 1);
+        await c.query("begin");
+        await c.query("select set_config('app.role','system',true)");
+        await c.query(
+          `select inventory_reserve($1::uuid,$2::uuid,$3::uuid,$4::jsonb,600,$5::uuid,'CARD_WINDOW',$6,now())`,
+          [uuid(0x0ffd, i + 1), og, USER, warmPlan, POLICY, `${warmSku}:${LOC}:${STANDARD}:1`],
+        );
+        await c.query(`select inventory_claim($1::uuid, now())`, [og]);
+        await c.query("commit");
+      } finally {
+        c.release();
+      }
+    }),
+  );
+}
+
 const totals = { runs: 0, attempts: 0, claimed: 0, insufficient: 0, released: 0, errors: {}, deadlocks: 0, failures: [] };
 const latencies = [];
 const modes = ["A", "B", "C", "D", "E"];

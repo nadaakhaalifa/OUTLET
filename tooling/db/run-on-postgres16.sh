@@ -77,7 +77,7 @@ expect_value "outbox due index exists and is valid" "1" \
   "SELECT count(*) FROM pg_indexes i JOIN pg_index x ON x.indexrelid = ('public.' || i.indexname)::regclass WHERE i.indexname = 'outbox_events_due_idx' AND x.indisvalid"
 expect_value "ledger_accounts_type_fk validated" "t" \
   "SELECT convalidated FROM pg_constraint WHERE conname='ledger_accounts_type_fk'"
-expect_value "17 account types seeded" "17" "SELECT count(*) FROM ledger_account_types"
+expect_value "19 account types seeded" "19" "SELECT count(*) FROM ledger_account_types"
 
 echo "== ledger =="
 PA -c "INSERT INTO ledger_accounts (type, owner_type, currency, sub_key) VALUES ('psp_clearing','platform','EGP','a'),('platform_commission','platform','EGP','b')" >/dev/null
@@ -132,20 +132,20 @@ expect_error "outbox content immutable" "immutable" "UPDATE outbox_events SET pa
 
 echo "== audit hash chain =="
 for a in a b c d; do PA -c "INSERT INTO audit_log (chain_id, actor_type, action, diff_redacted) VALUES ('c1','system','$a','{\"k\":1}')" >/dev/null; done
-expect_value "clean chain verifies with no problems" "0" "SELECT count(*) FROM audit_log_verify('c1')"
+expect_value "clean chain verifies with no problems" "0" "SET app.role = 'system'; SELECT count(*) FROM audit_log_verify('c1')"
 expect_error "UPDATE audit_log rejected" "append-only" "UPDATE audit_log SET action='x';"
 PA -c "ALTER TABLE audit_log DISABLE TRIGGER audit_log_immutable_trg; UPDATE audit_log SET action='forged' WHERE chain_id='c1' AND seq=2; ALTER TABLE audit_log ENABLE TRIGGER audit_log_immutable_trg" >/dev/null
-expect_value "modified row detected" "t" "SELECT count(*) > 0 FROM audit_log_verify('c1') WHERE problem ~ 'modified'"
+expect_value "modified row detected" "t" "SET app.role = 'system'; SELECT count(*) > 0 FROM audit_log_verify('c1') WHERE problem ~ 'modified'"
 for a in a b c; do PA -c "INSERT INTO audit_log (chain_id, actor_type, action) VALUES ('c2','system','$a')" >/dev/null; done
 PA -c "ALTER TABLE audit_log DISABLE TRIGGER audit_log_immutable_trg; DELETE FROM audit_log WHERE chain_id='c2' AND seq=2; ALTER TABLE audit_log ENABLE TRIGGER audit_log_immutable_trg" >/dev/null
-expect_value "removed middle row detected" "t" "SELECT count(*) > 0 FROM audit_log_verify('c2') WHERE problem ~ 'gap'"
+expect_value "removed middle row detected" "t" "SET app.role = 'system'; SELECT count(*) > 0 FROM audit_log_verify('c2') WHERE problem ~ 'gap'"
 echo "-- concurrent appenders on one chain"
 for i in 1 2 3 4 5 6; do
   ( for j in 1 2 3 4 5; do PA -c "INSERT INTO audit_log (chain_id, actor_type, action) VALUES ('c3','system','w$i-$j')" >/dev/null; done ) &
 done
 wait
 expect_value "30 concurrent appends: contiguous seq 1..30, chain verifies" "30|30|0" \
-  "SELECT count(*) || '|' || max(seq) || '|' || (SELECT count(*) FROM audit_log_verify('c3')) FROM audit_log WHERE chain_id='c3'"
+  "SET app.role = 'system'; SELECT count(*) || '|' || max(seq) || '|' || (SELECT count(*) FROM audit_log_verify('c3')) FROM audit_log WHERE chain_id='c3'"
 
 echo "== RLS with a non-superuser role =="
 P -d outlet -c "CREATE ROLE app_login LOGIN NOSUPERUSER NOBYPASSRLS IN ROLE app_user" >/dev/null
@@ -165,7 +165,7 @@ expect_value "app_login is not superuser and does not bypass RLS" "false|false" 
 [ "$(rls1 00000000-0000-4000-8000-000000000a20 customer 'SELECT count(*) FROM ledger_accounts')" = "0" ] && ok "customer sees no platform ledger accounts" || bad "ledger rls"
 OUT="$(rls 00000000-0000-4000-8000-000000000a20 customer 'UPDATE postings SET amount = 1')"
 printf '%s' "$OUT" | grep -qi "permission denied" && ok "app_user cannot UPDATE postings (no grant)" || bad "postings grant"
-[ "$(rls1 00000000-0000-4000-8000-000000000a20 customer 'SELECT count(*) FROM ledger_account_types')" = "17" ] && ok "app_user can read ledger_account_types" || bad "types grant"
+[ "$(rls1 00000000-0000-4000-8000-000000000a20 customer 'SELECT count(*) FROM ledger_account_types')" = "19" ] && ok "app_user can read ledger_account_types" || bad "types grant"
 OUT="$(rls 00000000-0000-4000-8000-000000000a20 customer "INSERT INTO ledger_accounts (type, owner_type, currency) VALUES ('psp_clearing','platform','EGP')")"
 printf '%s' "$OUT" | grep -qi "row-level security" && ok "customer cannot insert ledger accounts (RLS WITH CHECK)" || bad "ledger insert rls"
 

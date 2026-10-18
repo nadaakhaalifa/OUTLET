@@ -7,13 +7,15 @@ import { APP, setLocaleOnly } from "./helpers";
 
 // Chart spike (docs/research/chart-spike-results.md). Admin only. Needs a PRODUCTION build served with ADMIN_CHART_SPIKE=1
 // (E2E_PROD=1 and ADMIN_CHART_SPIKE=1 with tooling/e2e/run.sh admin, or `next start` directly with E2E_BASE set).
-// It MEASURES per library (one library per page load) and writes /tmp/chart-spike-findings.json. With SPIKE_STRICT=1 it also
+// It MEASURES per library (one library per page load) and writes test-results/chart-spike-findings.json (override: SPIKE_OUT). With SPIKE_STRICT=1 it also
 // asserts zero CSP violations for the libraries listed in SPIKE_STRICT_LIBS (default: all but recharts-csr).
 test.skip(APP !== "admin", "admin only");
 
 const LIBS = ["none", "echarts", "svg", "recharts", "recharts-csr"] as const;
 type Lib = (typeof LIBS)[number];
-const OUT = process.env.SPIKE_OUT ?? "/tmp/chart-spike-findings.json";
+// Written inside the workspace (gitignored test-results), never a predictable name in the shared OS temp dir.
+const OUT = process.env.SPIKE_OUT ?? path.resolve(__dirname, "../../../test-results/chart-spike-findings.json");
+mkdirSync(path.dirname(OUT), { recursive: true });
 const findings: Record<string, unknown> = {};
 const shots = path.resolve(__dirname, "../../../docs/research/chart-spike-screenshots");
 

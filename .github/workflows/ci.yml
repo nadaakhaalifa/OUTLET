@@ -35,6 +35,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
 
   boundaries:
@@ -68,6 +69,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: node tooling/coverage/check.mjs
 
   i18n-parity:

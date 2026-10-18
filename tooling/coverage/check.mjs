@@ -38,7 +38,12 @@ for (const dir of dirs.sort()) {
       { cwd: abs, encoding: "utf8" },
     );
     results[dir] = { testsExit: r.status };
-    if (r.status !== 0) console.error(`[coverage] ${dir}: vitest exited ${r.status}`);
+    if (r.status !== 0) {
+      console.error(`[coverage] ${dir}: vitest exited ${r.status}`);
+      // Surface the real failure (the output is otherwise swallowed), without ANSI colour codes.
+      const out = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.replace(/\x1b\[[0-9;]*m/g, "");
+      console.error(out.split("\n").filter((l) => /FAIL|Error|×|✗|timed out|Timeout/.test(l)).slice(0, 40).join("\n"));
+    }
   } else results[dir] = { testsExit: null };
   if (existsSync(summary)) {
     const t = JSON.parse(readFileSync(summary, "utf8")).total;
@@ -79,7 +84,16 @@ if (existsSync(domainFinal)) {
   }
 }
 
-const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
+// Reads a JSON file, treating a missing file as "no data" without a check-then-use race.
+function readJsonIfPresent(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (e) {
+    if (e && e.code === "ENOENT") return fallback;
+    throw e;
+  }
+}
+const baseline = readJsonIfPresent(baselinePath, {});
 let failed = false;
 console.log("\npackage".padEnd(24) + "lines".padStart(8) + "branch".padStart(8) + "  status");
 for (const [dir, r] of Object.entries(results)) {

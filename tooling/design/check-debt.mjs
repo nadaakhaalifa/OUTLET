@@ -6,7 +6,7 @@
 //   node tooling/design/check-debt.mjs --init     write the baseline unconditionally (first run only)
 // Also regenerates docs/plan/design-debt.md.
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BASELINE_PATH, codeOf } from "./rules.mjs";
@@ -34,7 +34,16 @@ for (const f of results) {
 }
 const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))]));
 
-const baseline = existsSync(BASELINE_PATH) ? JSON.parse(readFileSync(BASELINE_PATH, "utf8")) : {};
+// Reads a JSON file, treating a missing file as "no data" without a check-then-use race.
+function readJsonIfPresent(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (e) {
+    if (e && e.code === "ENOENT") return fallback;
+    throw e;
+  }
+}
+const baseline = readJsonIfPresent(BASELINE_PATH, {});
 const grew = [];
 for (const [file, codes] of Object.entries(current)) {
   for (const [code, n] of Object.entries(codes)) {
