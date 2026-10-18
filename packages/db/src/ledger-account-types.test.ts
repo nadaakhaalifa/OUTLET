@@ -11,6 +11,10 @@ import { createTestDatabase } from './pglite';
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const migrationPath = join(repoRoot, 'packages/db/migrations/0011_ledger_account_types.sql');
 const sql = readFileSync(migrationPath, 'utf8');
+// Types added after 0011 shipped live in their own forward migrations (0011 is never rewritten).
+const LATER_SEEDS = ['0074_creator_ledger_accounts.sql'].map((f) =>
+  readFileSync(join(repoRoot, 'packages/db/migrations', f), 'utf8'),
+);
 
 interface SeedRow {
   code: string;
@@ -43,7 +47,7 @@ describe('ledger_account_types seed vs domain ACCOUNT_TYPES', () => {
         status: t.status,
       }))
       .sort((a, b) => a.code.localeCompare(b.code));
-    const actual = parseSeed(sql).sort((a, b) => a.code.localeCompare(b.code));
+    const actual = [sql, ...LATER_SEEDS].flatMap(parseSeed).sort((a, b) => a.code.localeCompare(b.code));
     expect(actual.length).toBeGreaterThan(0);
     expect(actual).toEqual(expected);
   });

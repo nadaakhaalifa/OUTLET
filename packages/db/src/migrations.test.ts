@@ -176,8 +176,11 @@ describe('audit log hash chain', () => {
     await db.query(`INSERT INTO audit_log (chain_id, actor_type, action, diff_redacted) VALUES ($1,'system',$2,'{"k":1}')`, [chain, action]);
   };
   const verify = async (chain: string): Promise<string[]> => {
-    const r = await db.query<{ problem: string }>(`SELECT problem FROM audit_log_verify($1)`, [chain]);
-    return r.rows.map((x) => x.problem);
+    return db.transaction(async (tx) => {
+      await tx.query(`SELECT set_config('app.role','system',true)`);
+      const r = await tx.query<{ problem: string }>(`SELECT problem FROM audit_log_verify($1)`, [chain]);
+      return r.rows.map((x) => x.problem);
+    });
   };
   /** Superuser-level tampering: disable the guard trigger like a compromised DBA would. */
   const tamper = async (sql: string): Promise<void> => {
@@ -297,6 +300,50 @@ describe('RLS skeleton', () => {
       return (await tx.query(`SELECT 1 FROM audit_log`)).rows.length;
     });
     expect(n).toBe(0);
+  });
+});
+
+describe('audit log access control (0093)', () => {
+  const asRole = async <T>(role: string | null, fn: (tx: { query: PGlite['query'] }) => Promise<T>): Promise<T> =>
+    db.transaction(async (tx) => {
+      await tx.exec(`SET LOCAL ROLE app_user`);
+      await tx.query(`SELECT set_config('app.role', $1, true), set_config('app.user_id', '', true)`, [role ?? '']);
+      return fn(tx as unknown as { query: PGlite['query'] });
+    });
+  const insert = (role: string | null) =>
+    asRole(role, (tx) => tx.query(`INSERT INTO audit_log (chain_id, actor_type, action, diff_redacted) VALUES ('rls-chain','system','t','{"k":1}')`));
+
+  it('only the system role may append; every other role (and no role) is refused by RLS', async () => {
+    await expect(insert('system')).resolves.toBeDefined();
+    for (const role of ['customer', 'seller', 'finance', 'dpo', 'security', 'super_admin', 'support', null]) {
+      await expect(insert(role), String(role)).rejects.toThrow(/row-level security/);
+    }
+  });
+
+  const verifyAs = (role: string | null, chain: string | null) =>
+    asRole(role, (tx) => tx.query(`SELECT * FROM audit_log_verify($1)`, [chain]));
+
+  it('audit_log_verify(NULL) is callable by system only', async () => {
+    await expect(verifyAs('system', null)).resolves.toBeDefined();
+    for (const role of ['dpo', 'security', 'super_admin', 'finance', 'customer', null]) {
+      await expect(verifyAs(role, null), String(role)).rejects.toThrow(/restricted to the system role/);
+    }
+  });
+
+  it('refusals carry SQLSTATE 42501 (finance included), not a generic error', async () => {
+    for (const chain of [null, 'rls-chain']) {
+      await expect(verifyAs('finance', chain)).rejects.toMatchObject({ code: '42501' });
+    }
+    await expect(insert('finance')).rejects.toThrow(/row-level security/);
+  });
+
+  it('a named chain is verifiable by dpo, security, super_admin and system only, and refusal is an error, never an empty result', async () => {
+    for (const role of ['dpo', 'security', 'super_admin', 'system']) {
+      await expect(verifyAs(role, 'rls-chain'), role).resolves.toBeDefined();
+    }
+    for (const role of ['finance', 'support', 'seller', 'customer', null]) {
+      await expect(verifyAs(role, 'rls-chain'), String(role)).rejects.toThrow(/restricted to dpo, security, super_admin and system/);
+    }
   });
 });
 

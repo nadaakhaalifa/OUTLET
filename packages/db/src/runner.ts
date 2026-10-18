@@ -52,15 +52,44 @@ export const parseMigration = (filename: string, sql: string): MigrationFile => 
   };
 };
 
+/** Reserved (temporarily unfilled) migration numbers: one number per line in migrations/RESERVED, `#` comments allowed. */
+export const loadReservedVersions = async (dir: string = defaultMigrationsDir()): Promise<Set<number>> => {
+  try {
+    const text = await readFile(join(dir, 'RESERVED'), 'utf8');
+    const out = new Set<number>();
+    for (const raw of text.split('\n')) {
+      const line = raw.replace(/#.*$/, '').trim();
+      if (line === '') continue;
+      if (!/^\d{1,4}$/.test(line)) throw new MigrationError('bad_filename', `RESERVED has an invalid line: ${line}`);
+      out.add(Number(line));
+    }
+    return out;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return new Set();
+    throw e;
+  }
+};
+
 export const loadMigrations = async (dir: string = defaultMigrationsDir()): Promise<MigrationFile[]> => {
   const names = (await readdir(dir)).filter((n) => n.endsWith('.sql')).sort();
   const files: MigrationFile[] = [];
   for (const n of names) files.push(parseMigration(n, await readFile(join(dir, n), 'utf8')));
-  files.forEach((f, i) => {
-    if (f.version !== i + 1) {
-      throw new MigrationError('sequence_gap', `expected migration ${String(i + 1).padStart(4, '0')} but found ${f.filename}`);
+  // Numbers listed in migrations/RESERVED are intentionally unfilled while an in-flight change owns them.
+  // Any other gap is an error, and a reserved number that is actually present is an error too.
+  const reserved = await loadReservedVersions(dir);
+  let expected = 1;
+  for (const f of files) {
+    while (reserved.has(expected)) expected += 1;
+    if (f.version !== expected) {
+      throw new MigrationError('sequence_gap', `expected migration ${String(expected).padStart(4, '0')} but found ${f.filename}`);
     }
-  });
+    expected += 1;
+  }
+  for (const r of reserved) {
+    if (files.some((f) => f.version === r)) {
+      throw new MigrationError('sequence_gap', `migration ${String(r).padStart(4, '0')} is listed in RESERVED but exists: remove it from RESERVED`);
+    }
+  }
   return files;
 };
 

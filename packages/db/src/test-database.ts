@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { withoutConcurrently } from './pglite.js';
-import { defaultMigrationsDir, loadMigrations, migrate, parseMigration, type MigrationFile } from './runner.js';
+import { defaultMigrationsDir, loadMigrations, loadReservedVersions, migrate, parseMigration, type MigrationFile } from './runner.js';
 
 /**
  * Migrates ONE PGlite instance once and hands out cheap isolated copies via
@@ -39,9 +39,14 @@ export const createTestDatabaseUpTo = async (maxVersion: number): Promise<PGlite
     const f = parseMigration(n, await readFile(join(dir, n), 'utf8'));
     if (f.version <= maxVersion) files.push(f);
   }
-  files.forEach((f, i) => {
-    if (f.version !== i + 1) throw new Error(`migration gap below ${maxVersion}: expected ${i + 1}, found ${f.filename}`);
-  });
+  // Numbers listed in migrations/RESERVED are intentionally unfilled while an in-flight change owns them.
+  const reserved = await loadReservedVersions(dir);
+  let expected = 1;
+  for (const f of files) {
+    while (reserved.has(expected)) expected += 1;
+    if (f.version !== expected) throw new Error(`migration gap below ${maxVersion}: expected ${expected}, found ${f.filename}`);
+    expected += 1;
+  }
   const db = new PGlite();
   await migrate(withoutConcurrently(db), files);
   return db;
