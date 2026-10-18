@@ -13,10 +13,13 @@
     "@outlet/domain": "workspace:*",
     "@outlet/i18n": "workspace:*",
     "@outlet/ui-tokens": "workspace:*",
+    "@outlet/ui-web": "workspace:*",
     "@outlet/validation": "workspace:*",
+    "echarts": "6.1.0",
     "next": "^16.4.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "recharts": "3.10.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {

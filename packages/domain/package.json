@@ -10,7 +10,16 @@
     "test": "vitest run",
     "mutation:inventory": "stryker run stryker.inventory.mjs",
     "mutation:cart": "stryker run stryker.cart.mjs",
-    "mutation:ledger-posting": "stryker run stryker.ledger-posting.mjs"
+    "mutation:ledger-posting": "stryker run stryker.ledger-posting.mjs",
+    "mutation:refunds": "stryker run stryker.refunds.mjs",
+    "mutation:promotions": "stryker run stryker.promotions.mjs",
+    "mutation:auto-buy": "stryker run stryker.auto-buy.mjs",
+    "mutation:creators": "stryker run stryker.creators.mjs",
+    "mutation:family-student": "stryker run stryker.family-student.mjs",
+    "mutation:payouts": "stryker run stryker.payouts.mjs",
+    "mutation:gift-cards": "stryker run stryker.gift-cards.mjs",
+    "mutation:store-credit": "stryker run stryker.store-credit.mjs",
+    "mutation:calendar-gap": "stryker run stryker.calendar-gap.mjs"
   },
   "devDependencies": {
     "fast-check": "^4.0.0",

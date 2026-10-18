@@ -13,6 +13,7 @@
     "@outlet/domain": "workspace:*",
     "@outlet/i18n": "workspace:*",
     "@outlet/ui-tokens": "workspace:*",
+    "@outlet/ui-web": "workspace:*",
     "@outlet/validation": "workspace:*",
     "next": "^16.4.0",
     "react": "19.2.3",

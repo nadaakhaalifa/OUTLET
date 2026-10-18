@@ -15,7 +15,15 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "expo-blur": "*",
+    "expo-haptics": "*",
+    "expo-image": "*",
+    "expo-linear-gradient": "*",
+    "react-native-reanimated": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-safe-area-context": "*",
+    "@expo/vector-icons": "*"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
