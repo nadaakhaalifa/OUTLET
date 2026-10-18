@@ -1,0 +1,9 @@
+export const SELLERS_SERVICE = Symbol("sellers.BrandApplicationService");
+export const SELLERS_ADMIN_PORT = Symbol("sellers.BrandApplicationsAdminPort");
+export const SELLERS_REPOSITORY = Symbol("sellers.BrandApplicationRepository");
+export const SELLERS_STORE = Symbol("sellers.BrandDocumentStore");
+export const SELLERS_SCANNER = Symbol("sellers.ScanPort");
+export const SELLERS_VERIFICATION = Symbol("sellers.VerificationLink");
+export const SELLERS_FUNNEL = Symbol("sellers.FunnelAnalyticsPort");
+export const SELLERS_CIPHER = Symbol("sellers.FieldCipherPort");
+export const SELLERS_NOW = Symbol("sellers.Now");

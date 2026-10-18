@@ -1,0 +1,15 @@
+export const PRODUCT_MEDIA_STORE = Symbol("product-media.Store");
+export const PRODUCT_MEDIA_BLOBS = Symbol("product-media.Blobs");
+export const PRODUCT_MEDIA_REMOVAL = Symbol("product-media.BackgroundRemoval");
+export const PRODUCT_MEDIA_FLAGS = Symbol("product-media.Flags");
+export const PRODUCT_MEDIA_RESOLVER = Symbol("product-media.JobResolver");
+export const PRODUCT_MEDIA_STORE_RESOLVER = Symbol("product-media.StoreResolver");
+export const ISSUE_PRODUCT_PHOTO_UPLOAD = Symbol("product-media.IssueUpload");
+export const PROCESS_PRODUCT_PHOTO = Symbol("product-media.Process");
+export const DECIDE_PRODUCT_PHOTO = Symbol("product-media.Decide");
+export const RERUN_PRODUCT_PHOTO = Symbol("product-media.Rerun");
+export const GET_PRODUCT_PHOTO = Symbol("product-media.Get");
+export const LIST_PRODUCT_PHOTOS = Symbol("product-media.List");
+export const REFINE_PRODUCT_PHOTO = Symbol("product-media.Refine");
+export const LIST_PRODUCT_VERSIONS = Symbol("product-media.ListVersions");
+export const RESTORE_PRODUCT_VERSION = Symbol("product-media.RestoreVersion");

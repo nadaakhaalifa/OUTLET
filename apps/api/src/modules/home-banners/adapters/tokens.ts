@@ -1,0 +1,13 @@
+export const HOME_BANNER_STORE = Symbol("home-banners.Store");
+export const HOME_BANNER_AUDIT = Symbol("home-banners.Audit");
+export const HOME_BANNER_FLAGS = Symbol("home-banners.Flags");
+export const HOME_BANNER_IMAGES = Symbol("home-banners.ImageUrls");
+export const HOME_BANNER_ADMIN_RESOLVER = Symbol("home-banners.AdminResolver");
+export const CREATE_HOME_BANNER = Symbol("home-banners.Create");
+export const UPDATE_HOME_BANNER = Symbol("home-banners.Update");
+export const CHANGE_HOME_BANNER_STATUS = Symbol("home-banners.ChangeStatus");
+export const DELETE_HOME_BANNER = Symbol("home-banners.Delete");
+export const LIST_HOME_BANNERS_ADMIN = Symbol("home-banners.ListAdmin");
+export const GET_HOME_BANNER_ADMIN = Symbol("home-banners.GetAdmin");
+export const LIST_ACTIVE_HOME_BANNERS = Symbol("home-banners.ListActive");
+export const PREVIEW_HOME_BANNERS = Symbol("home-banners.Preview");

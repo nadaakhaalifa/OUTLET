@@ -1,0 +1,9 @@
+export const SELLER_STORES = Symbol("auth.seller.Stores");
+export const SELLER_EVENTS = Symbol("auth.seller.Events");
+export const SELLER_ISSUER = Symbol("auth.seller.SessionIssuer");
+export const SELLER_OTP = Symbol("auth.seller.Otp");
+export const SELLER_PASSKEYS = Symbol("auth.seller.Passkeys");
+export const SELLER_TOTP = Symbol("auth.seller.Totp");
+export const SELLER_SESSIONS = Symbol("auth.seller.Sessions");
+export const SELLER_REFRESH = Symbol("auth.seller.Refresh");
+export const SELLER_MEMBERSHIPS = Symbol("auth.seller.Memberships");

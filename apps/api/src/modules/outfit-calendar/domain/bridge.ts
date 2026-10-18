@@ -1,0 +1,41 @@
+/**
+ * Single seam to the pure calendar domain (packages/domain/src/calendar). Aliases only, no behaviour.
+ */
+import { outfitCalendar, type stylist } from "@outlet/domain";
+export import DEFAULT_LOCAL_MINUTE = outfitCalendar.DEFAULT_LOCAL_MINUTE;
+export import EVENT_KINDS = outfitCalendar.EVENT_KINDS;
+export import EVENT_SOURCES = outfitCalendar.EVENT_SOURCES;
+export import KIND_FORMALITY = outfitCalendar.KIND_FORMALITY;
+export import MAX_FUTURE_EVENTS = outfitCalendar.MAX_FUTURE_EVENTS;
+export import MAX_NOTE_LENGTH = outfitCalendar.MAX_NOTE_LENGTH;
+export import MODESTY = outfitCalendar.MODESTY;
+export import OUTFIT_LINK_STATUSES = outfitCalendar.OUTFIT_LINK_STATUSES;
+export import QUIET_HOURS = outfitCalendar.QUIET_HOURS;
+export import addDaysToDateKey = outfitCalendar.addDaysToDateKey;
+export import cairoLocalToUtc = outfitCalendar.cairoLocalToUtc;
+export import cairoParts = outfitCalendar.cairoParts;
+export import canTransitionLink = outfitCalendar.canTransitionLink;
+export import capDecision = outfitCalendar.capDecision;
+export import combineFeasibility = outfitCalendar.combineFeasibility;
+export import deferOutOfQuietHours = outfitCalendar.deferOutOfQuietHours;
+export import deliveryFeasibility = outfitCalendar.deliveryFeasibility;
+export import inQuietHours = outfitCalendar.inQuietHours;
+export import isDateKey = outfitCalendar.isDateKey;
+export import isPast = outfitCalendar.isPast;
+export import outfitStatus = outfitCalendar.outfitStatus;
+export import ownedSlotsConsistent = outfitCalendar.ownedSlotsConsistent;
+export import planGap = outfitCalendar.planGap;
+export import planReminders = outfitCalendar.planReminders;
+export type EventKind = outfitCalendar.EventKind;
+export type EventSource = outfitCalendar.EventSource;
+export type EventStatus = outfitCalendar.EventStatus;
+export type Feasibility = outfitCalendar.Feasibility;
+export type GapOutfit = outfitCalendar.GapOutfit;
+export type GapPlan = outfitCalendar.GapPlan;
+export type Modesty = outfitCalendar.Modesty;
+export type OutfitLinkStatus = outfitCalendar.OutfitLinkStatus;
+export type OutfitStatus = outfitCalendar.OutfitStatus;
+export type ReminderPlan = outfitCalendar.ReminderPlan;
+export type Season = outfitCalendar.Season;
+export type Slot = outfitCalendar.Slot;
+export type MissingSlot = stylist.MissingSlot;
