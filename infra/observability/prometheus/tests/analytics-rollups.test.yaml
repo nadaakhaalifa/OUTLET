@@ -1,0 +1,76 @@
+# Hand-written promtool tests for rules/analytics-rollups.rules.yaml (dashboard foundations track 6).
+rule_files:
+  - ../rules/analytics-rollups.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # M2: DEFAULT partition rows for 10 minutes ticket; zero rows never alert
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_default_partition_rows{table="seller_analytics_hourly"}'
+        values: "0x5 1x30"
+    alert_rule_test:
+      - {eval_time: 5m, alertname: AnalyticsRollupDefaultPartitionRows, exp_alerts: []}
+      - {eval_time: 12m, alertname: AnalyticsRollupDefaultPartitionRows, exp_alerts: []}
+      - eval_time: 17m
+        alertname: AnalyticsRollupDefaultPartitionRows
+        exp_alerts:
+          - exp_labels: {table: seller_analytics_hourly, severity: ticket, service: analytics, notify: platform, tier: default-partition}
+            exp_annotations:
+              summary: Rollup rows landed in a DEFAULT partition
+              description: The rollup partition job is behind. Run analytics.maintain-rollup-partitions; it moves the rows into the new month.
+              runbook: docs/runbooks/analytics-rollups.md
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_default_partition_rows{table="platform_metrics_hourly"}'
+        values: "0x120"
+    alert_rule_test:
+      - {eval_time: 100m, alertname: AnalyticsRollupDefaultPartitionRows, exp_alerts: []}
+
+  # one dirty hourly run followed by a clean one does not alert; two dirty ones do
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="hourly"}'
+        values: "0x59 3x59 0x200"
+    alert_rule_test:
+      - {eval_time: 150m, alertname: AnalyticsRollupMismatchHourly, exp_alerts: []}
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="hourly"}'
+        values: "0x59 3x200"
+    alert_rule_test:
+      - {eval_time: 100m, alertname: AnalyticsRollupMismatchHourly, exp_alerts: []}
+      - eval_time: 190m
+        alertname: AnalyticsRollupMismatchHourly
+        exp_alerts:
+          - exp_labels: {scope: seller, mode: hourly, severity: ticket, service: analytics, notify: platform, tier: hourly-mismatch}
+            exp_annotations:
+              summary: Rollups differ from facts on consecutive hourly reconciliations
+              description: The reconciler repairs drift but it keeps recurring, which points at a consumer defect.
+              runbook: docs/runbooks/analytics-rollups.md
+
+  # nightly mismatch with a clean hourly run pages; with a dirty hourly run it does not (the hourly alert owns it)
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="nightly"}'
+        values: "2x10"
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="hourly"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AnalyticsRollupMismatchNightly
+        exp_alerts:
+          - exp_labels: {scope: seller, mode: nightly, severity: page, service: analytics, notify: platform, tier: nightly-mismatch}
+            exp_annotations:
+              summary: Nightly rollup reconciliation found drift that the hourly runs missed
+              description: A consumer defect is likely. Compare analytics_rollup_reconciliations rows for the scope.
+              runbook: docs/runbooks/analytics-rollups.md
+  - interval: 1m
+    input_series:
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="nightly"}'
+        values: "2x10"
+      - series: 'outlet_analytics_rollup_mismatches{scope="seller",mode="hourly"}'
+        values: "1x10"
+    alert_rule_test:
+      - {eval_time: 5m, alertname: AnalyticsRollupMismatchNightly, exp_alerts: []}

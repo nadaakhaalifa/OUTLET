@@ -1,0 +1,55 @@
+# HAND-WRITTEN: analytics rollup alerts, dashboard foundations track 6 (docs/specs/dashboard-foundations.md section 6,
+# ADR-0045). Gauges are exported by the partition job and the reconciliation job
+# (apps/api/src/modules/seller-analytics/adapters/telemetry-metrics.ts). Tests: ../tests/analytics-rollups.test.yaml.
+# Alert DELIVERY does not exist in the repo yet (launch blocker, spec section 8): these rules page no one until it does.
+groups:
+  - name: analytics-rollups-alerts
+    rules:
+      # M2: a row in a DEFAULT partition means the partition job fell behind.
+      - alert: AnalyticsRollupDefaultPartitionRows
+        expr: max by (table) (outlet_analytics_rollup_default_partition_rows) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          service: analytics
+          notify: platform
+          tier: default-partition
+        annotations:
+          summary: Rollup rows landed in a DEFAULT partition
+          description: The rollup partition job is behind. Run analytics.maintain-rollup-partitions; it moves the rows into the new month.
+          runbook: docs/runbooks/analytics-rollups.md
+      # Two consecutive hourly reconciliation runs with mismatches (the gauge holds the last run until the next one).
+      - alert: AnalyticsRollupMismatchHourly
+        expr: min_over_time(outlet_analytics_rollup_mismatches{mode="hourly"}[90m]) > 0
+        labels:
+          severity: ticket
+          service: analytics
+          notify: platform
+          tier: hourly-mismatch
+        annotations:
+          summary: Rollups differ from facts on consecutive hourly reconciliations
+          description: The reconciler repairs drift but it keeps recurring, which points at a consumer defect.
+          runbook: docs/runbooks/analytics-rollups.md
+      # A mismatch in the nightly run although the latest hourly run was clean means a consumer bug.
+      - alert: AnalyticsRollupMismatchNightly
+        expr: outlet_analytics_rollup_mismatches{mode="nightly"} > 0 and on (scope) outlet_analytics_rollup_mismatches{mode="hourly"} == 0
+        labels:
+          severity: page
+          service: analytics
+          notify: platform
+          tier: nightly-mismatch
+        annotations:
+          summary: Nightly rollup reconciliation found drift that the hourly runs missed
+          description: A consumer defect is likely. Compare analytics_rollup_reconciliations rows for the scope.
+          runbook: docs/runbooks/analytics-rollups.md
+      - alert: AnalyticsRollupReconcileError
+        expr: increase(outlet_analytics_rollup_reconciliations_total{outcome="error"}[1h]) > 0
+        labels:
+          severity: ticket
+          service: analytics
+          notify: platform
+          tier: reconcile-error
+        annotations:
+          summary: Rollup reconciliation run failed
+          description: The reconciliation job threw while reading or repairing. The next run retries.
+          runbook: docs/runbooks/analytics-rollups.md

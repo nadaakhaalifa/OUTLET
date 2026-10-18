@@ -1,0 +1,79 @@
+# HAND-WRITTEN (not generated from slos.yaml): ledger integrity result alerts, dashboard foundations
+# track 3, ADR-0046. The gauges are exported by the API process FROM THE TABLE on every collection
+# (apps/api/src/platform/telemetry/metrics.ts, registerIntegrityGauges), so a dead worker cannot freeze
+# or hide them. Tests: ../tests/ledger-integrity.test.yaml (CI: promtool job).
+#
+# Alert payloads carry no hash-chain or balance details (L3): no head hash, entry id, sequence number,
+# store-credit rows or amounts. The responder reads the run id from GET /v1/admin/ledger/integrity.
+# Alert DELIVERY (Alertmanager or an on-call vendor) does not exist in the repo yet: these rules are
+# verified but page no one until it does (launch blocker, docs/specs/dashboard-foundations.md section 8).
+groups:
+  - name: ledger-integrity-alerts
+    rules:
+      - alert: LedgerIntegrityFailed
+        expr: outlet_ledger_integrity_ok == 0
+        for: 1m
+        labels:
+          severity: page
+          service: ledger
+          notify: finance,security
+          tier: failed
+        annotations:
+          summary: Ledger integrity check failed
+          description: The latest completed ledger integrity run failed, or its audit evidence is missing. Open GET /v1/admin/ledger/integrity as finance for the run id and the state. Details are deliberately not part of this alert.
+          runbook: docs/runbooks/ledger-integrity.md
+      - alert: LedgerIntegrityStaleBatch
+        expr: outlet_ledger_integrity_last_completed_age_seconds{mode="batch"} > 93600
+        labels:
+          severity: page
+          service: ledger
+          notify: finance
+          tier: stale-batch
+        annotations:
+          summary: No completed ledger integrity run for more than 26 hours
+          description: The nightly run (02:30 Cairo) has not completed for more than 26 hours. The state is stale or error_only on GET /v1/admin/ledger/integrity.
+          runbook: docs/runbooks/ledger-integrity.md
+      - alert: LedgerIntegrityStaleEventMode
+        expr: outlet_ledger_integrity_last_completed_age_seconds{mode="event"} > 5400
+        labels:
+          severity: page
+          service: ledger
+          notify: finance
+          tier: stale-event
+        annotations:
+          summary: No completed ledger integrity run for more than 90 minutes in event mode
+          description: The 30-minute event-mode run has not completed for more than 90 minutes. The state is stale or error_only on GET /v1/admin/ledger/integrity.
+          runbook: docs/runbooks/ledger-integrity.md
+      - alert: LedgerIntegrityAbsent
+        expr: absent_over_time(outlet_ledger_integrity_ok[30m])
+        labels:
+          severity: page
+          service: ledger
+          notify: finance,platform
+          tier: absent
+        annotations:
+          summary: Ledger integrity gauge absent for 30 minutes
+          description: No completed integrity run exists, the API is not exporting the gauge, or the collector path is broken. An empty result table also reaches this state, so a ledger that was never checked cannot look healthy.
+          runbook: docs/runbooks/ledger-integrity.md
+      - alert: LedgerIntegrityRunErrors
+        expr: increase(outlet_ledger_integrity_runs_total{outcome=~"error|timeout"}[1h]) > 0
+        labels:
+          severity: ticket
+          service: ledger
+          notify: platform
+          tier: run-errors
+        annotations:
+          summary: Ledger integrity run errored or timed out in the last hour
+          description: An integrity attempt ended in error or timeout. The latest completed result is unchanged and the staleness alerts cover the gap.
+          runbook: docs/runbooks/ledger-integrity.md
+      - alert: LedgerIntegrityAuditFailed
+        expr: increase(outlet_ledger_integrity_audit_failed_total[1h]) > 0
+        labels:
+          severity: ticket
+          service: ledger
+          notify: platform
+          tier: audit-failed
+        annotations:
+          summary: A completed ledger integrity run was rolled back because its audit row could not be written
+          description: No completed row was stored, so the gauges age and the staleness alerts will fire. Check the audit log writer.
+          runbook: docs/runbooks/ledger-integrity.md
