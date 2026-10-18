@@ -3,6 +3,8 @@
 // no `any`, no ts-ignore, no non-null assertion outside tests, domain code pure.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import rtlRules from "./tooling/eslint/no-physical-direction.mjs";
+import { designConfig } from "./tooling/design/rules.mjs";
 
 const TEST_FILES = ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test/**", "**/__tests__/**"];
 
@@ -10,6 +12,8 @@ export default tseslint.config(
   {
     ignores: [
       "**/node_modules/**",
+      "**/.venv/**",
+      "**/venv/**",
       "**/dist/**",
       "**/build/output/**",
       "**/.expo/**",
@@ -99,6 +103,13 @@ export default tseslint.config(
     },
   },
   {
+    // RTL safety: logical start/end only in the mobile app and the native kit (tooling/eslint/no-physical-direction.mjs).
+    files: ["apps/mobile/src/**/*.{ts,tsx}", "packages/ui-native/src/**/*.{ts,tsx}", "packages/ui-web/src/**/*.{ts,tsx}", "apps/admin-web/src/app/spike/**/*.{ts,tsx}"],
+    ignores: TEST_FILES,
+    plugins: { rtl: rtlRules },
+    rules: { "rtl/no-physical-direction": "error" },
+  },
+  {
     // Plain JS/MJS tooling files: Node globals are fine, no TS rules.
     files: ["**/*.{js,mjs,cjs}"],
     languageOptions: {
@@ -130,6 +141,8 @@ export default tseslint.config(
     },
     rules: { "no-console": "off" },
   },
+  // Design-system guardrails (docs/design-system/ux-principles.md). Baseline: tooling/design/debt-baseline.json.
+  ...designConfig({ strict: process.env.DESIGN_STRICT === "1" }),
   {
     // Metro only loads CommonJS config files, so require() is unavoidable here.
     files: ["**/metro.config.js"],

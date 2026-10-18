@@ -260,11 +260,23 @@ jobs:
       - run: pnpm mutation
       - run: cd packages/domain && pnpm exec stryker run stryker.inventory.mjs
       - run: cd packages/domain && pnpm exec stryker run stryker.cart.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.refunds.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.promotions.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.auto-buy.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.creators.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.family-student.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.payouts.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.gift-cards.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.store-credit.mjs
+      - run: cd packages/domain && pnpm exec stryker run stryker.calendar-gap.mjs
+      - run: cd apps/api && pnpm exec stryker run stryker.refunds.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: mutation-report
-          path: packages/domain/reports/mutation/
+          path: |
+            packages/domain/reports/mutation/
+            apps/api/reports/mutation/
           retention-days: 14
 
   inventory-concurrency:
@@ -298,3 +310,43 @@ jobs:
           ATTEMPTS: "10000"
           CONNS: "100"
         run: bash tooling/db/inventory-concurrency.sh
+
+  promtool:
+    name: Prometheus rules (promtool check and test)
+    # The only CI step that parses PromQL and runs the rule unit tests. Before this job promtool ran only in
+    # tooling/infra/verify.sh. The binary is the official release tarball, pinned by version and sha256.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PROMETHEUS_VERSION: "3.5.0"
+      PROMETHEUS_SHA256: e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install promtool (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          archive="prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+          dir="$(mktemp -d)"
+          curl -fsSL -o "$dir/$archive" "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/${archive}"
+          echo "${PROMETHEUS_SHA256}  $dir/$archive" | sha256sum -c -
+          tar -xzf "$dir/$archive" -C "$dir" --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          sudo install -m 0755 "$dir/promtool" /usr/local/bin/promtool
+          promtool --version
+      - name: promtool check rules
+        run: promtool check rules infra/observability/prometheus/rules/*.yaml
+      - name: promtool test rules
+        run: |
+          set -euo pipefail
+          for t in infra/observability/prometheus/tests/*.test.yaml; do
+            echo "== $t"
+            promtool test rules "$t"
+          done
+      - name: Every rule file has a test
+        run: |
+          set -euo pipefail
+          for r in infra/observability/prometheus/rules/*.rules.yaml; do
+            base="$(basename "$r" .rules.yaml)"; base="${base#slo-}"
+            test -f "infra/observability/prometheus/tests/${base}.test.yaml" || { echo "no test for $r"; exit 1; }
+          done

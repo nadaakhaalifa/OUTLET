@@ -45,6 +45,28 @@ function unquote(ident) {
 }
 
 /**
+ * Columns removed by ALTER TABLE ... DROP COLUMN, as "table.column". The caller applies drops after the
+ * file's own additions so that a column dropped by a later migration is no longer expected in the inventory.
+ * @param {string} sql
+ * @returns {string[]}
+ */
+export function extractDroppedColumns(sql) {
+  const clean = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const out = new Set();
+  const alterRe = /alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?(?:[a-z0-9_"]+\.)?("?[a-z0-9_]+"?)\s+([^;]*)/gi;
+  const dropRe = /^\s*drop\s+column\s+(?:if\s+exists\s+)?("?[a-z0-9_]+"?)/i;
+  let m;
+  while ((m = alterRe.exec(clean)) !== null) {
+    const table = unquote(m[1]);
+    for (const clause of splitTopLevel(m[2] ?? '')) {
+      const col = dropRe.exec(clause);
+      if (col?.[1]) out.add(`${table}.${unquote(col[1])}`);
+    }
+  }
+  return [...out].sort();
+}
+
+/**
  * @param {string} sql
  * @returns {string[]} sorted unique "table.column" names
  */
@@ -74,9 +96,15 @@ export function extractColumns(sql) {
     }
   }
 
-  const alterRe = /alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?(?:[a-z0-9_"]+\.)?("?[a-z0-9_]+"?)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?("?[a-z0-9_]+"?)/gi;
+  // One ALTER TABLE may carry several comma-separated ADD COLUMN clauses; read every one.
+  const alterRe = /alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?(?:[a-z0-9_"]+\.)?("?[a-z0-9_]+"?)\s+([^;]*)/gi;
+  const addRe = /^\s*add\s+column\s+(?:if\s+not\s+exists\s+)?("?[a-z0-9_]+"?)/i;
   while ((m = alterRe.exec(clean)) !== null) {
-    found.add(`${unquote(m[1])}.${unquote(m[2])}`);
+    const table = unquote(m[1]);
+    for (const clause of splitTopLevel(m[2] ?? '')) {
+      const col = addRe.exec(clause);
+      if (col?.[1]) found.add(`${table}.${unquote(col[1])}`);
+    }
   }
   return [...found].sort();
 }

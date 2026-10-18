@@ -34,7 +34,7 @@ module.exports = {
       from: { path: "^(?:packages|apps)/([^/]+)/" },
       to: {
         path: "^packages/([^/]+)/",
-        pathNot: ["^packages/$1/", "^packages/[^/]+/src/index\\.ts$", "^packages/[^/]+/package\\.json$"],
+        pathNot: ["^packages/$1/", "^packages/[^/]+/src/index\\.ts$", "^packages/[^/]+/package\\.json$", "^packages/ui-web/src/css-entry\\.ts$"],
       },
     },
     {
@@ -51,8 +51,10 @@ module.exports = {
       name: "no-api-module-deep-import-from-outside",
       severity: "error",
       comment: "Code outside apps/api/src/modules must also use a module's public index.ts only.",
+      // apps/api/src/production is the production composition root: it wires adapters (KMS, secrets, comms)
+      // to module ports on purpose, together with its own tests.
       // Independent adversarial suites (adversarial.*.test.ts) probe module internals on purpose.
-      from: { path: "^apps/api/src/", pathNot: ["^apps/api/src/modules/", "^apps/api/src/adversarial\\.[^/]+\\.test\\.ts$"] },
+      from: { path: "^apps/api/src/", pathNot: ["^apps/api/src/modules/", "^apps/api/src/adversarial\\.[^/]+\\.test\\.ts$", "^apps/api/src/production/"] },
       to: { path: "^apps/api/src/modules/[^/]+/", pathNot: "^apps/api/src/modules/[^/]+/index\\.ts$" },
     },
 
@@ -65,9 +67,28 @@ module.exports = {
         "analytics, recommendations or ranking code (spec 12 Isolation, spec 17). Affordability reaches " +
         "feed, search and stylist only as a request-time price ceiling through AffordabilityFilterPort.",
       from: {
-        path: "^apps/api/src/modules/(promotions|ads|seller-analytics|recommendations|ranking)(/|$)",
+        path: "^apps/api/src/modules/(promotions|ads|seller-analytics|analytics-ingest|platform-metrics|recommendations|ranking|forecasting)(/|$)",
         pathNot: TEST_PATH,
       },
+      to: { path: "^(apps/api/src/modules/budget/|packages/domain/src/budget/)" },
+    },
+
+    // Mobile impression/view emitter: no budget, sizing or measurement data may reach analytics events (spec 5, B1).
+    {
+      name: "mobile-analytics-ingest-isolated-from-budget-and-sizing",
+      severity: "error",
+      comment: "The client analytics emitter may not import budget, size-profile or wallet code (P3 data never enters events).",
+      from: { path: "^apps/mobile/src/features/analytics-ingest/", pathNot: TEST_PATH },
+      to: { path: "^(apps/mobile/src/features/(budget|size-profile|wallet)/|apps/api/src/modules/budget/|packages/domain/src/budget/)" },
+    },
+
+    {
+      name: "budget-isolated-from-ranking-domain",
+      severity: "error",
+      comment:
+        "Pure ranking and recommendations domain code may not import the budget domain (spec 12 Privacy, " +
+        "master prompt 20.5): budget fit is a request-time filter, never a ranking feature.",
+      from: { path: "^packages/domain/src/(ranking|recommendations)/", pathNot: TEST_PATH },
       to: { path: "^(apps/api/src/modules/budget/|packages/domain/src/budget/)" },
     },
 
@@ -114,7 +135,8 @@ module.exports = {
       name: "packages-must-not-import-apps",
       severity: "error",
       comment: "Shared packages never depend on applications.",
-      from: { path: "^packages/" },
+      // The api-client contract test drives the real API through the in-process test harness (generated client vs server).
+      from: { path: "^packages/", pathNot: "^packages/api-client/src/contract\\.test\\.ts$" },
       to: { path: "^apps/" },
     },
     {
@@ -130,6 +152,33 @@ module.exports = {
       comment: "The mobile bundle must not pull in server-only packages (db, outbox, idempotency).",
       from: { path: "^apps/mobile/" },
       to: { path: "^packages/(db|outbox|idempotency)/" },
+    },
+    // ---- ADR-0055 owner rule R0: a guest is asked to create an account only at the Checkout gate ----
+    {
+      name: "no-sign-up-outside-gate",
+      severity: "error",
+      comment:
+        "Only the Checkout gate (features/checkout-gate), the sign-up route, the account-creation feature itself and the " +
+        "onboarding routes may import the account-creation screen or an onboarding route (spec guest-browsing R0, section 13).",
+      from: {
+        path: "^apps/mobile/src/",
+        pathNot: [TEST_PATH, "^apps/mobile/src/features/checkout-gate/", "^apps/mobile/src/app/sign-up\\.tsx$", "^apps/mobile/src/app/onboarding/", "^apps/mobile/src/features/account-creation/"],
+      },
+      to: { path: "^apps/mobile/src/(features/account-creation/|app/onboarding/)" },
+    },
+    {
+      name: "checkout-gate-opened-only-from-the-bag",
+      severity: "error",
+      comment: "Only the Bag screen (through features/checkout-gate/index.ts) and the sign-up route may use the Checkout gate.",
+      from: { path: "^apps/mobile/src/", pathNot: [TEST_PATH, "^apps/mobile/src/features/checkout-gate/", "^apps/mobile/src/app/sign-up\\.tsx$", "^apps/mobile/src/app/onboarding/_layout\\.tsx$", "^apps/mobile/src/features/bag/BagScreen\\.tsx$"] },
+      to: { path: "^apps/mobile/src/features/checkout-gate/" },
+    },
+    {
+      name: "bag-uses-only-the-gate-index",
+      severity: "error",
+      comment: "BagScreen may import only features/checkout-gate/index.ts.",
+      from: { path: "^apps/mobile/src/features/bag/BagScreen\\.tsx$" },
+      to: { path: "^apps/mobile/src/features/checkout-gate/", pathNot: "^apps/mobile/src/features/checkout-gate/index\\.ts$" },
     },
     {
       name: "production-code-must-not-import-tests",

@@ -12,7 +12,7 @@ const rootIdx = args.indexOf("--root");
 const root = resolve(rootIdx >= 0 ? args[rootIdx + 1] : join(here, "..", ".."));
 const explicit = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--root");
 
-const DEFAULT_ROOTS = ["packages/i18n/src", "apps/mobile/src", "apps/seller-web/src", "apps/admin-web/src"];
+const DEFAULT_ROOTS = ["packages/i18n/src", "apps/mobile/src", "apps/seller-web/src", "apps/admin-web/src", "apps/shopper-web/src"];
 const SKIP_DIR = new Set(["node_modules", ".next", ".expo", "dist", "build", "coverage", "__tests__", "test", "__mocks__", "fixtures"]);
 const isSource = (f) => /\.(ts|tsx)$/.test(f) && !/\.d\.ts$/.test(f) && !/\.(test|spec|stories)\.(ts|tsx)$/.test(f);
 

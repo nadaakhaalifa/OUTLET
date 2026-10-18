@@ -36,3 +36,8 @@
 
 # Decisions
 /docs/adr/                          @outlet-nk/engineering @outlet-nk/security
+
+# OpenAPI planned-operation allow-list and its ratchet (ADR-0050): Security and the Architect.
+# @outlet-nk/architects is a placeholder team like the others above; create it in the org.
+/docs/api/planned-operations.yaml                          @outlet-nk/security @outlet-nk/architects
+/apps/api/src/contract/openapi-drift/                      @outlet-nk/security @outlet-nk/architects

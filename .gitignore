@@ -31,3 +31,7 @@ next-env.d.ts
 *.tfstate.*
 *.tfplan
 .data/
+
+# local bg-removal model cache (downloaded, not committed)
+apps/ml-services/bg-removal/.models/
+test-results/

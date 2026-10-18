@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { validateInventory, checkRequired, checkColumns } from './inventory-schema.mjs';
-import { extractColumns } from './sql-columns.mjs';
+import { extractColumns, extractDroppedColumns } from './sql-columns.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..');
@@ -25,7 +25,9 @@ function readMigrationColumns(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
   const cols = new Set();
   for (const f of files) {
-    for (const c of extractColumns(readFileSync(join(dir, f), 'utf8'))) cols.add(c);
+    const sql = readFileSync(join(dir, f), 'utf8');
+    for (const c of extractColumns(sql)) cols.add(c);
+    for (const c of extractDroppedColumns(sql)) cols.delete(c);
   }
   return [...cols].sort();
 }

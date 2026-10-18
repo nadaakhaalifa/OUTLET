@@ -1,0 +1,302 @@
+{
+  "apps/mobile/src/app/__art.tsx": {
+    "DS-FONT": 6,
+    "DS-RADIUS": 1,
+    "DS-RN-COMPONENT": 1,
+    "DS-RN-RAW-SIZE": 11
+  },
+  "apps/mobile/src/app/__styleguide.tsx": {
+    "DS-FONT": 1,
+    "DS-RN-RAW-SIZE": 21
+  },
+  "apps/mobile/src/app/(tabs)/me.tsx": {
+    "DS-RN-RAW-SIZE": 24
+  },
+  "apps/mobile/src/components/DevBadge.tsx": {
+    "DS-COLOR": 7
+  },
+  "apps/mobile/src/features/account-creation/DobCalendarSheet.tsx": {
+    "DS-RADIUS": 2,
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/account-ui.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/addresses/AddressesScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/auto-buy/AutoBuyEntry.tsx": {
+    "DS-RN-RAW-SIZE": 12
+  },
+  "apps/mobile/src/features/auto-buy/AutoBuyScreen.tsx": {
+    "DS-RN-RAW-SIZE": 11
+  },
+  "apps/mobile/src/features/background-removal/CutoutPanel.tsx": {
+    "DS-RN-RAW-SIZE": 7
+  },
+  "apps/mobile/src/features/bag/BagScreen.tsx": {
+    "DS-RN-RAW-SIZE": 13
+  },
+  "apps/mobile/src/features/brand-apply/ceremony.tsx": {
+    "DS-MOTION-REANIMATED": 1,
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 3,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/brand-apply/components.tsx": {
+    "DS-MOTION-REANIMATED": 1,
+    "DS-RADIUS": 4,
+    "DS-RN-RAW-SIZE": 14
+  },
+  "apps/mobile/src/features/brand-apply/screens/CountryScreen.tsx": {
+    "DS-FONT": 2
+  },
+  "apps/mobile/src/features/brand-apply/screens/FactorScreen.tsx": {
+    "DS-FONT": 1,
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/brand-apply/screens/GateScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/brand-apply/screens/ReviewScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/brand-apply/screens/StatusScreen.tsx": {
+    "DS-FONT": 1,
+    "DS-RADIUS": 1,
+    "DS-RN-COMPONENT": 1,
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/brand-apply/screens/TypeScreen.tsx": {
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/brand-apply/screens/WebsiteScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/brand-mode/DashboardScreen.tsx": {
+    "DS-RN-RAW-SIZE": 46
+  },
+  "apps/mobile/src/features/brand-mode/kit.tsx": {
+    "DS-MOTION-REANIMATED": 1,
+    "DS-RN-RAW-SIZE": 6
+  },
+  "apps/mobile/src/features/brand-mode/OrdersScreen.tsx": {
+    "DS-RN-RAW-SIZE": 14
+  },
+  "apps/mobile/src/features/brand-mode/ProductFormScreen.tsx": {
+    "DS-RN-RAW-SIZE": 70,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/brand-mode/ProductsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 10
+  },
+  "apps/mobile/src/features/brand-mode/StoreScreen.tsx": {
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 20
+  },
+  "apps/mobile/src/features/budget/BudgetScreen.tsx": {
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/category-window/CategoryWindow.tsx": {
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/checkout/Choice.tsx": {
+    "DS-RN-RAW-SIZE": 6
+  },
+  "apps/mobile/src/features/checkout/DeliveryStep.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/checkout/DoneStates.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/checkout/ReviewStep.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/discover/DiscoverModules.tsx": {
+    "DS-RN-RAW-SIZE": 8
+  },
+  "apps/mobile/src/features/drops/DropScreen.tsx": {
+    "DS-FONT": 1,
+    "DS-RN-RAW-SIZE": 6
+  },
+  "apps/mobile/src/features/family/FamilyInviteScreen.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/family/FamilyPlansSection.tsx": {
+    "DS-RN-RAW-SIZE": 15
+  },
+  "apps/mobile/src/features/filters/AppliedChips.tsx": {
+    "DS-RN-RAW-SIZE": 3
+  },
+  "apps/mobile/src/features/filters/FilterSheet.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/filters/sections.tsx": {
+    "DS-RN-RAW-SIZE": 8
+  },
+  "apps/mobile/src/features/gift-cards/GiftCardsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 8
+  },
+  "apps/mobile/src/features/grid-density/DensityProductCard.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/help/HelpScreen.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/home-banners/OffersCarousel.tsx": {
+    "DS-MOTION-REANIMATED": 1,
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 13,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/home-banners/PromoBanners.tsx": {
+    "DS-RN-RAW-SIZE": 17,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/home-banners/QuickActions.tsx": {
+    "DS-RN-RAW-SIZE": 11
+  },
+  "apps/mobile/src/features/home/banner.tsx": {
+    "DS-FONT": 1,
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 22
+  },
+  "apps/mobile/src/features/home/HomeScreen.tsx": {
+    "DS-RN-RAW-SIZE": 21
+  },
+  "apps/mobile/src/features/home/parts.tsx": {
+    "DS-RN-RAW-SIZE": 19
+  },
+  "apps/mobile/src/features/home/sections.tsx": {
+    "DS-RN-RAW-SIZE": 18,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/legal/LegalScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/onboarding-extras/PrefStepScreen.tsx": {
+    "DS-RN-RAW-SIZE": 3
+  },
+  "apps/mobile/src/features/orders/OrdersScreen.tsx": {
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 8
+  },
+  "apps/mobile/src/features/pdp/PdpScreen.tsx": {
+    "DS-MOTION-REANIMATED": 2,
+    "DS-RADIUS": 1,
+    "DS-RN-RAW-SIZE": 57,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/plus/PlusScreen.tsx": {
+    "DS-RN-RAW-SIZE": 22
+  },
+  "apps/mobile/src/features/privacy-center/PrivacyCenterScreen.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/purchase/motion.tsx": {
+    "DS-MOTION-REANIMATED": 1
+  },
+  "apps/mobile/src/features/purchase/Section.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/returns/ReturnsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 7
+  },
+  "apps/mobile/src/features/rewards/RewardsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/role-choice/RoleChoiceScreen.tsx": {
+    "DS-RN-RAW-SIZE": 10
+  },
+  "apps/mobile/src/features/search/BoardControls.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/search/BoardResults.tsx": {
+    "DS-RN-RAW-SIZE": 17
+  },
+  "apps/mobile/src/features/search/InlineSearch.tsx": {
+    "DS-RN-RAW-SIZE": 9
+  },
+  "apps/mobile/src/features/search/SearchScreen.tsx": {
+    "DS-RN-RAW-SIZE": 30
+  },
+  "apps/mobile/src/features/settings/SettingsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/shop-all/BoardParts.tsx": {
+    "DS-RN-RAW-SIZE": 15
+  },
+  "apps/mobile/src/features/shop-all/BudgetSheet.tsx": {
+    "DS-RN-RAW-SIZE": 6
+  },
+  "apps/mobile/src/features/shop-all/CategorySheet.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/shop-all/ShopAllScreen.tsx": {
+    "DS-RN-RAW-SIZE": 20,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/shop-all/StoreFilterSheet.tsx": {
+    "DS-RN-RAW-SIZE": 2
+  },
+  "apps/mobile/src/features/size-profile/SizeProfileScreen.tsx": {
+    "DS-RN-RAW-SIZE": 5
+  },
+  "apps/mobile/src/features/stores-directory/LocationSheet.tsx": {
+    "DS-RN-RAW-SIZE": 7
+  },
+  "apps/mobile/src/features/stores-directory/StepScreens.tsx": {
+    "DS-RN-RAW-SIZE": 10
+  },
+  "apps/mobile/src/features/stores-directory/StoresScreen.tsx": {
+    "DS-RN-RAW-SIZE": 40
+  },
+  "apps/mobile/src/features/stylist-chat/StylistChatScreen.tsx": {
+    "DS-RN-RAW-SIZE": 4
+  },
+  "apps/mobile/src/features/stylist/StylistScreen.tsx": {
+    "DS-RN-RAW-SIZE": 9,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/visual-search/model.ts": {
+    "DS-RN-RAW-SIZE": 2
+  },
+  "apps/mobile/src/features/visual-search/VisuallySimilarRail.tsx": {
+    "DS-RN-RAW-SIZE": 2
+  },
+  "apps/mobile/src/features/visual-search/VisualSearchScreen.tsx": {
+    "DS-RN-RAW-SIZE": 7
+  },
+  "apps/mobile/src/features/wallet/WalletScreen.tsx": {
+    "DS-RN-RAW-SIZE": 15
+  },
+  "apps/mobile/src/features/wardrobe/WardrobeScreen.tsx": {
+    "DS-RN-RAW-SIZE": 1,
+    "DS-RN-WINDOW": 1
+  },
+  "apps/mobile/src/features/welcome-region/WelcomeRegionScreen.tsx": {
+    "DS-RN-RAW-SIZE": 17
+  },
+  "apps/mobile/src/features/wishlists/ListSettingsSheet.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/wishlists/SavedFilterSheet.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/wishlists/SavedRow.tsx": {
+    "DS-RN-RAW-SIZE": 1
+  },
+  "apps/mobile/src/features/wishlists/WishlistsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 2
+  },
+  "apps/mobile/src/features/worlds/WorldsScreen.tsx": {
+    "DS-RN-RAW-SIZE": 16,
+    "DS-RN-WINDOW": 1
+  },
+  "packages/ui-native/src/components/glass.tsx": {
+    "DS-RADIUS": 1
+  },
+  "packages/ui-native/src/logic/glass.ts": {
+    "DS-COLOR": 1
+  }
+}

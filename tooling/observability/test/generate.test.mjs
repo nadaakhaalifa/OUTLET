@@ -124,7 +124,9 @@ test('committed generated files match the generator output', () => {
   for (const [name, content] of Object.entries(generateDashboards(file))) {
     assert.equal(readFileSync(join(root, 'infra/observability/grafana/dashboards', name), 'utf8'), content, name);
   }
-  assert.equal(readdirSync(join(root, 'infra/observability/prometheus/rules')).length, 8);
+  // Files starting with `# HAND-WRITTEN` (own promtool tests) are not generated; every other rule file is.
+  const rulesDir = join(root, 'infra/observability/prometheus/rules');
+  assert.equal(readdirSync(rulesDir).filter((n) => !readFileSync(join(rulesDir, n), 'utf8').startsWith('# HAND-WRITTEN')).length, 8);
   assert.equal(readdirSync(join(root, 'infra/observability/grafana/dashboards')).length, 7);
 });
 

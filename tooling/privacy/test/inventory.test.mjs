@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { validateInventory, checkRequired, checkColumns, CONSENT_PURPOSES } from '../inventory-schema.mjs';
-import { extractColumns } from '../sql-columns.mjs';
+import { extractColumns, extractDroppedColumns } from '../sql-columns.mjs';
 import { renderAll } from '../generate-ropa.mjs';
 import { runChecks, DEFAULTS } from '../check-inventory.mjs';
 
@@ -272,6 +272,17 @@ test('extractColumns reads CREATE TABLE and ADD COLUMN, skipping constraints', (
   ]);
 });
 
+test('extractColumns reads every clause of a multi-column ALTER TABLE', () => {
+  const sql = `
+    ALTER TABLE jobs
+      ADD COLUMN a integer NOT NULL DEFAULT 0 CHECK (a >= 0),
+      ADD COLUMN IF NOT EXISTS "b" text CHECK (b IS NULL OR char_length(b) BETWEEN 10 AND 200),
+      ADD COLUMN c smallint;
+    ALTER TABLE usage ADD COLUMN d integer;
+  `;
+  assert.deepEqual(extractColumns(sql), ['jobs.a', 'jobs.b', 'jobs.c', 'usage.d']);
+});
+
 // ---- the real inventory ----
 
 const realRaw = parse(readFileSync(DEFAULTS.inventory, 'utf8'));
@@ -336,4 +347,11 @@ test('RoPA mentions every table and every purpose in use', () => {
   for (const t of r.inventory.tables) assert.ok(ropa.includes(`### \`${t.name}\``), `ropa missing ${t.name}`);
   const used = new Set(r.resolved.flatMap((f) => f.purpose ?? []));
   for (const p of used) assert.ok(ropa.includes(`(\`${p}\`)`), `ropa missing purpose ${p}`);
+});
+
+test('extractDroppedColumns reads DROP COLUMN clauses and ignores comments', () => {
+  assert.deepEqual(
+    extractDroppedColumns('-- ALTER TABLE x DROP COLUMN no;\nALTER TABLE t DROP COLUMN user_id, ADD COLUMN account_id uuid;'),
+    ['t.user_id'],
+  );
 });

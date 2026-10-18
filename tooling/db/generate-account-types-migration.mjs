@@ -19,6 +19,10 @@ const OWNER_TO_PERSISTED = {
   bank: 'bank', seller: 'store', shopper: 'user',
 };
 
+// Types added after 0011 shipped. Each has its own forward migration (INSERT ... ON CONFLICT);
+// 0011 is never rewritten, so the generator leaves them out of its output.
+export const POST_0011_TYPES = ['creator_payable', 'creator_commission_expense'];
+
 export const parseAccountTypes = (src) => {
   const start = src.indexOf('export const ACCOUNT_TYPES');
   if (start === -1) throw new Error('ACCOUNT_TYPES not found');
@@ -47,7 +51,7 @@ export const parseAccountTypes = (src) => {
     });
   }
   if (rows.length === 0) throw new Error('no account types parsed');
-  return rows;
+  return rows.filter((r) => !POST_0011_TYPES.includes(r.code));
 };
 
 export const render = (rows) => {

@@ -21,6 +21,10 @@ const wanted = [
   ...Object.entries(generateDashboards(file)).map(([n, c]) => [join(dashDir, n), c]),
 ];
 const check = process.argv.includes('--check');
+// Rule files written by hand, with their own promtool tests (not derived from slos.yaml). A rule file opts out of
+// the stale-file check only by starting with the marker line `# HAND-WRITTEN`; anything else that is not generated
+// is still flagged.
+const isHandWritten = (path) => path.endsWith('.rules.yaml') && readFileSync(path, 'utf8').startsWith('# HAND-WRITTEN');
 let drift = 0;
 for (const [path, content] of wanted) {
   if (check) {
@@ -37,7 +41,7 @@ if (check) {
   const known = new Set(wanted.map(([p]) => p));
   for (const dir of [rulesDir, dashDir]) {
     for (const n of existsSync(dir) ? readdirSync(dir) : []) {
-      if (!known.has(join(dir, n))) {
+      if (!known.has(join(dir, n)) && !isHandWritten(join(dir, n))) {
         console.error(`stale generated file: ${join(dir, n)}`);
         drift += 1;
       }
