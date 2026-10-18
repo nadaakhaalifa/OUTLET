@@ -85,12 +85,12 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
 function queryFingerprint(query: unknown): CanonicalValue {
   if (typeof query !== "object" || query === null) return null;
-  const out: Record<string, CanonicalValue> = {};
+  const entries: Array<[string, CanonicalValue]> = [];
   for (const [k, v] of Object.entries(query)) {
-    if (typeof v === "string") out[k] = v;
-    else if (Array.isArray(v) && v.every((x) => typeof x === "string")) out[k] = v as string[];
+    if (typeof v === "string") entries.push([k, v]);
+    else if (Array.isArray(v) && v.every((x) => typeof x === "string")) entries.push([k, v as string[]]);
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 
 

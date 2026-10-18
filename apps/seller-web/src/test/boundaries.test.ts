@@ -29,7 +29,7 @@ describe("architecture and security boundaries", () => {
   it("no inline <script> and no style attributes (strict CSP)", () => {
     for (const f of prod.filter((x) => x.endsWith(".tsx"))) {
       const src = readFileSync(f, "utf8");
-      expect(/<script[\s>]/.test(src), `script in ${rel(f)}`).toBe(false);
+      expect(/<script[\s>]/i.test(src), `script in ${rel(f)}`).toBe(false);
       expect(/\sstyle=\{/.test(src) || /\sstyle="/.test(src), `style attr in ${rel(f)}`).toBe(false);
     }
   });

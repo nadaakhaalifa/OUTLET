@@ -29,7 +29,7 @@ describe("security and honesty boundaries", () => {
   it("no inline executable <script> (only the JSON-LD data block) and no style attributes", () => {
     for (const f of prod.filter((x) => x.endsWith(".tsx"))) {
       const src = readFileSync(f, "utf8");
-      const scripts = src.match(/<script[\s>][^>]*>/g) ?? [];
+      const scripts = src.match(/<script[\s>][^>]*>/gi) ?? [];
       for (const s of scripts) expect(s, rel(f)).toContain('type="application/ld+json"');
       expect(/\sstyle=\{|\sstyle="/.test(src), `style attr in ${rel(f)}`).toBe(false);
     }

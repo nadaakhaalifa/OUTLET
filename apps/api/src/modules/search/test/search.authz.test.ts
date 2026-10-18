@@ -96,7 +96,7 @@ describe("route coverage", () => {
         expect(meta, `${name} must declare authorization`).toBeDefined();
         expect(meta?.kind).not.toBe("public");
         expect(Reflect.getMetadata(RATE_LIMIT_META, fn), `${name} must declare a rate limit`).toBeDefined();
-        const suffix = path === "/" || path === "" ? "" : `/${path.replace(/:savedSearchId/u, ":savedSearchId")}`;
+        const suffix = path === "/" || path === "" ? "" : `/${path}`;
         found.push(`${METHODS[method]} ${base}${suffix}`);
       }
     };

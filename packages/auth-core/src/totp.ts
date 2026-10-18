@@ -38,7 +38,9 @@ export function base32Encode(bytes: Uint8Array): string {
 }
 
 export function base32Decode(text: string): Uint8Array {
-  const clean = text.replace(/=+$/, "").toUpperCase();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "=") end -= 1;
+  const clean = text.slice(0, end).toUpperCase();
   let bits = 0;
   let value = 0;
   const out: number[] = [];

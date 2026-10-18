@@ -80,7 +80,10 @@ export class WishlistsModule {
     const eventLog = new InMemoryWishlistEventLog();
     const catalogPort: CatalogReadPort = options.catalog ?? new InMemoryCatalogRead();
     const ownersPort: OwnerProfilePort = options.owners ?? new InMemoryOwnerProfiles();
-    const baseUrl = (options.shareBaseUrl ?? DEFAULT_SHARE_BASE_URL).replace(/\/+$/, "");
+    const rawBaseUrl = options.shareBaseUrl ?? DEFAULT_SHARE_BASE_URL;
+    let baseEnd = rawBaseUrl.length;
+    while (baseEnd > 0 && rawBaseUrl[baseEnd - 1] === "/") baseEnd -= 1;
+    const baseUrl = rawBaseUrl.slice(0, baseEnd);
     return {
       module: WishlistsModule,
       controllers: [WishlistsController],

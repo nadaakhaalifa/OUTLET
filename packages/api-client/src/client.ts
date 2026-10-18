@@ -52,7 +52,9 @@ function serializeQuery(params: Record<string, unknown>): string {
  */
 export function createClient(config: ClientConfig): OutletClient {
   const doFetch = config.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init));
-  const base = config.baseUrl.replace(/\/+$/, "");
+  let baseEnd = config.baseUrl.length;
+  while (baseEnd > 0 && config.baseUrl[baseEnd - 1] === "/") baseEnd -= 1;
+  const base = config.baseUrl.slice(0, baseEnd);
   const clock = config.clock ?? (() => Date.now());
   const random = config.random ?? Math.random;
   const randomBytes = config.randomBytes ?? defaultRandomBytes;

@@ -134,7 +134,7 @@ describe("KyselyVisualIndex", () => {
 
   it("migration 0069 is a no-op without the vector extension and idempotent; 0068/0070 re-run cleanly", async () => {
     const { pg } = await fresh();
-    await pg.exec(migrationSql("0069_product_embeddings_pgvector.sql").replace(/CREATE INDEX IF NOT EXISTS/g, "CREATE INDEX IF NOT EXISTS"));
+    await pg.exec(migrationSql("0069_product_embeddings_pgvector.sql"));
     const col = await pg.query<{ n: string }>(`select count(*)::text n from information_schema.columns where table_name='product_embeddings' and column_name='vec_pg'`);
     expect(col.rows[0]?.n).toBe("0");
   });
