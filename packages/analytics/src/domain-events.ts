@@ -68,6 +68,18 @@ export const domainEvents = {
     shape: { attempt_id: opaqueId, reason: z.literal("under_18") },
     classes: { attempt_id: "P1", reason: "P1" },
   }),
+  "auth.step_up_required": defineDomainEvent("auth.step_up_required", {
+    aggregate: "auth_step_up", owner: "identity", version: 1, specRef: "§1", recordRetention: "operational_proposed_verify",
+    description: "A correct OTP was NOT enough (recycled-number step-up): no session was issued, a passkey assertion is required. install_id_hash is a SHA-256 of the install id.",
+    shape: { user_id: userId, install_id_hash: opaqueId },
+    classes: { user_id: "P2", install_id_hash: "P1" },
+  }),
+  "auth.step_up_completed": defineDomainEvent("auth.step_up_completed", {
+    aggregate: "auth_step_up", owner: "identity", version: 1, specRef: "§1", recordRetention: "operational_proposed_verify",
+    description: "The recycled-number step-up passkey assertion succeeded and a session was opened. install_id_hash is a SHA-256 of the install id.",
+    shape: { user_id: userId, install_id_hash: opaqueId },
+    classes: { user_id: "P2", install_id_hash: "P1" },
+  }),
   "consent.changed": defineDomainEvent("consent.changed", {
     aggregate: "consent", owner: "privacy", version: 1, specRef: "§1, §B1", recordRetention: "legal_proof_verify",
     analyticsMirror: "consent_changed",

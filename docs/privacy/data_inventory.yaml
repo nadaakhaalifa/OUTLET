@@ -865,6 +865,7 @@ tables:
       - {name: last_used_at, pii_class: P1, encryption: none}
       - {name: revoked_at, pii_class: P1, encryption: none}
       - {name: uv, pii_class: P1, encryption: none, note: "Migration 0092: true only when a passkey assertion with user verification opened the session. A session property, not biometric data."}
+      - {name: device_key_hash, pii_class: P2, encryption: blind_index_hmac, note: "Migration 0099: HMAC of the attested device key the session was opened from; the recycled-number step-up treats a device as known only when this matches (null = not known). Purging the row removes that evidence (see retention note)."}
 
   - name: otp_send_log
     spec_ref: "1 Rules (3 sends per 15 min per phone, 10 per day per device)"

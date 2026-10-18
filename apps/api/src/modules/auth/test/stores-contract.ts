@@ -53,6 +53,16 @@ async function newSession(f: StoresFixture): Promise<{ stored: StoredSession; to
 /** Behaviour every auth store implementation (in-memory and Kysely/PGlite) must share. */
 export function describeAuthStoresContract(name: string, make: () => Promise<StoresFixture>): void {
   describe(`auth stores contract: ${name}`, () => {
+    it("sessions: deviceKeyHash round-trips; absent reads back as null/undefined (legacy rows are not a known device)", async () => {
+      const f = await make();
+      const withKey = await newSession(f);
+      const keyed: StoredSession = { ...withKey.stored, session: { ...withKey.stored.session, id: randomUUID() }, family: { ...withKey.stored.family, familyId: randomUUID() }, deviceKeyHash: "ab".repeat(32) };
+      await f.sessions.insert(keyed);
+      expect((await f.sessions.find(keyed.session.id))?.deviceKeyHash).toBe("ab".repeat(32));
+      const legacy = await newSession(f);
+      expect((await f.sessions.find(legacy.stored.session.id))?.deviceKeyHash ?? null).toBeNull();
+    });
+
     it("users: find-or-create by phone is idempotent and distinct per phone", async () => {
       const f = await make();
       const p = phone();

@@ -3,7 +3,7 @@ import fc from "fast-check";
 import {
   OTP_POLICY, MS, sha256Hex, hmacSha256, toHex, utf8, generateOtp, createOtpChallenge, verifyOtp,
   evaluateOtpSend, resendDelayMs, isCountryAllowed, flagPrefixAnomaly, phonePrefix,
-  issueFamily, rotateRefreshToken, buildAccessClaims, checkAccessClaims, evaluateRecycledNumber,
+  issueFamily, rotateRefreshToken, buildAccessClaims, checkAccessClaims, evaluateRecycledNumber, isRecycledNumberStale,
   checkMergePreconditions, sendWithFailover, canRequestOtp, InvalidPhoneError,
   type RefreshFamily, type OtpSender, type Csprng,
 } from "./index";
@@ -185,6 +185,12 @@ describe("access token claims", () => {
 });
 
 describe("recycled number", () => {
+  it("isRecycledNumberStale: null is stale, exactly 180 days is not, 180 days + 1 ms is", () => {
+    const now = 1_800_000_000_000;
+    expect(isRecycledNumberStale(null, now)).toBe(true);
+    expect(isRecycledNumberStale(now - 180 * MS.day, now)).toBe(false);
+    expect(isRecycledNumberStale(now - 180 * MS.day - 1, now)).toBe(true);
+  });
   const now = 1000 * MS.day;
   const base = { nowMs: now, hasVerifiedEmail: true, hasPasskey: false };
   it("requires second factor only for stale account on new device", () => {

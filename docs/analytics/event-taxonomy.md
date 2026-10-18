@@ -138,6 +138,8 @@ Every domain event in a module's `Events` list is an outbox row (spec A2.7). Pay
 |---|---|---|---|---|---|---|---|---|---|---|
 | `user.registered` | 1 | user | identity | `user_id`, `auth_method`, `locale` | user_id=P2, auth_method=P1, locale=P1 | P2 | `strictly_necessary` | `account_lifetime_verify` | none | §1 |
 | `user.age_blocked` | 1 | age_gate | identity | `attempt_id`, `reason` | attempt_id=P1, reason=P1 | P1 | `strictly_necessary` | `operational_proposed_verify` | none | §1, §B6 |
+| `auth.step_up_required` | 1 | auth_step_up | identity | `user_id`, `install_id_hash` | user_id=P2, install_id_hash=P1 | P2 | `strictly_necessary` | `operational_proposed_verify` | none | §1 |
+| `auth.step_up_completed` | 1 | auth_step_up | identity | `user_id`, `install_id_hash` | user_id=P2, install_id_hash=P1 | P2 | `strictly_necessary` | `operational_proposed_verify` | none | §1 |
 | `consent.changed` | 1 | consent | privacy | `user_id`, `purpose`, `granted`, `consent_version`, `method` | user_id=P2, purpose=P1, granted=P1, consent_version=P1, method=P1 | P2 | `strictly_necessary` | `legal_proof_verify` | `consent_changed` | §1, §B1 |
 | `session.revoked` | 1 | session | identity | `user_id`, `session_id`, `reason` | user_id=P2, session_id=P1, reason=P1 | P2 | `strictly_necessary` | `operational_proposed_verify` | none | §1 |
 | `privacy.deletion_requested` | 1 | privacy_request | privacy | `user_id`, `request_id`, `cooling_off_ends_at` | user_id=P2, request_id=P1, cooling_off_ends_at=P1 | P2 | `strictly_necessary` | `legal_proof_verify` | none | §2 |

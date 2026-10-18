@@ -20,10 +20,10 @@ Z-OUTLET (spec name HAUL), spec B1 and T6.
 | Measure | Count |
 |---|---|
 | Tables | 334 |
-| Fields | 3200 |
+| Fields | 3201 |
 | P0 public | 282 |
 | P1 internal | 2332 |
-| P2 personal | 528 |
+| P2 personal | 529 |
 | P3 sensitive | 58 |
 | Fields flagged VERIFY BEFORE LAUNCH | 1180 |
 | Tables derived from spec prose, not named columns | 245 |
@@ -38,7 +38,7 @@ Create and authenticate accounts (phone OTP, Apple, Google, passkey), keep sessi
 
 - **Data subjects:** `seller_representative`, `shopper`, `visitor`
 - **Lawful basis:** `contract`, `legitimate_interest`
-- **PII classes:** `P1`, `P2`, `P3` across 187 fields in 23 tables
+- **PII classes:** `P1`, `P2`, `P3` across 188 fields in 23 tables
 - **Tables:** `auth_nonces`, `auth_sessions`, `devices`, `identities`, `otp_challenges`, `otp_send_log`, `passkey_challenges`, `passkey_credentials`, `seller_memberships`, `seller_otp_challenges`, `seller_otp_proofs`, `seller_otp_send_log`, `seller_passkey_challenges`, `seller_passkey_credentials`, `seller_recovery_codes`, `seller_refresh_tokens`, `seller_sessions`, `seller_staff_invites`, `seller_totp`, `seller_users`, `session_families`, `sessions`, `users`
 - **Recipients and processors:** `app_attestation`, `cloud_primary`, `email_provider`, `identity_providers`, `sms_provider`, `whatsapp_bsp`
 - **Retention:** `account_active` (event-driven (no fixed period)), `auth_credentials` (30 days), `device_records` (13 months)
@@ -660,6 +660,7 @@ Source: derived (confirm when the ERD is final) (1 Data (sessions: access token 
 | `last_used_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
 | `revoked_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
 | `uv` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `device_key_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary | approved_region | blind_index_hmac | none | delete |  |
 
 ### `otp_send_log`
 

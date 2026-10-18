@@ -12,11 +12,22 @@ export type RecycledNumberDecision = {
   readonly reason: "known_device" | "recently_used" | "stale_account_new_device" | "stale_account_no_factor_available";
 };
 
+/** True when the account has no recorded activity or was last used more than 180 days before `nowMs`. */
+export function isRecycledNumberStale(lastUsedAtMs: number | null, nowMs: number): boolean {
+  return lastUsedAtMs === null || nowMs - lastUsedAtMs > RECYCLED_NUMBER_THRESHOLD_MS;
+}
+
 /**
- * OTP login on a number unused for more than 180 days on a device not previously linked to
- * the account needs a second factor (email link or passkey) before any stored value is shown.
- * lastUsedAtMs null (never recorded) is treated as stale. With no factor enrolled the user may
- * proceed but sees no stored value; support recovery is a product decision (see report).
+ * Pure domain rule: OTP login on a number unused for more than 180 days on a device not previously linked
+ * to the account needs a second factor (email link or passkey) before any stored value is shown.
+ * lastUsedAtMs null (never recorded) is treated as stale. In this pure rule, with no factor enrolled the
+ * user may proceed but sees no stored value (`storedValueVisible: false`).
+ *
+ * Production (apps/api RecycledNumberStepUp) is STRICTER: it passes hasVerifiedEmail=false and
+ * hasPasskey=false so the answer never depends on the account, and it uses only `secondFactorRequired`:
+ * when true, NO session or token is issued until a passkey assertion bound to the account succeeds. It
+ * never takes the "proceed but hide stored value" branch. "Device known" there also needs the attested
+ * device key to match, not just the install id.
  */
 export function evaluateRecycledNumber(input: {
   lastUsedAtMs: number | null;
@@ -25,7 +36,7 @@ export function evaluateRecycledNumber(input: {
   hasVerifiedEmail: boolean;
   hasPasskey: boolean;
 }): RecycledNumberDecision {
-  const stale = input.lastUsedAtMs === null || input.nowMs - input.lastUsedAtMs > RECYCLED_NUMBER_THRESHOLD_MS;
+  const stale = isRecycledNumberStale(input.lastUsedAtMs, input.nowMs);
   if (input.deviceKnownToAccount) {
     return { secondFactorRequired: false, acceptableFactors: [], storedValueVisible: true, reason: "known_device" };
   }

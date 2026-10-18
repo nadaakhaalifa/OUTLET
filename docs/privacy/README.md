@@ -27,3 +27,7 @@ node --test 'tooling/privacy/test/*.test.mjs'   # unit tests
 3. Run the checker and the generator, commit both the YAML and the regenerated markdown.
 
 The checker reads `packages/db/migrations/*.sql` and fails on any `CREATE TABLE` or `ADD COLUMN` that has no inventory entry.
+
+## Note: `auth_sessions` purge and the recycled-number step-up
+
+The recycled-number step-up (VR-GUEST-06, docs/specs/guest-browsing.md) reads `auth_sessions` for two facts: the account's last use (180-day threshold) and whether an install with a matching attested `device_key_hash` already held a session. `purge_expired_sessions` (`auth_credentials`, 30 days, see the generated retention-schedule.md) deletes that evidence, so a purged account looks stale and a returning install looks unknown: it steps up once with a passkey. That is the fail-closed direction and is accepted. Do not change the purge window to "tune" step-up frequency without an owner/counsel decision: the two are coupled. Sessions created before migration 0099 have a NULL `device_key_hash` and are never a known device.

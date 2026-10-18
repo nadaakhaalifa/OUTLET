@@ -1,5 +1,5 @@
-import { evaluateRecycledNumber } from "@outlet/auth-core";
-import type { SessionRepository, User } from "../domain/ports";
+import { evaluateRecycledNumber, sha256Hex } from "@outlet/auth-core";
+import type { AuthEventPublisher, SessionRepository, User } from "../domain/ports";
 import type { ChallengeOptions } from "./passkeys";
 
 /**
@@ -24,6 +24,7 @@ export interface StepUpChallenge {
 
 export interface StepUpDeps {
   readonly sessions: SessionRepository;
+  readonly events: AuthEventPublisher;
   /** PasskeyService.issueChallenge: a challenge with `userId` set binds the assertion to that account. */
   readonly passkeyChallenges: { issueChallenge(purpose: "assert", userId: string): Promise<ChallengeOptions> };
 }
@@ -32,7 +33,7 @@ export class RecycledNumberStepUp {
   constructor(private readonly deps: StepUpDeps) {}
 
   /** Null when OTP alone may open a session; otherwise the challenge the client must answer with a passkey. */
-  async check(input: { readonly user: User; readonly installId: string; readonly nowMs: number }): Promise<StepUpChallenge | null> {
+  async check(input: { readonly user: User; readonly installId: string; readonly deviceKeyHash: string; readonly nowMs: number }): Promise<StepUpChallenge | null> {
     const sessions = await this.deps.sessions.listByUser(input.user.id);
     // Activity = the latest use of any session (revoked ones included: they still prove the owner was here).
     // With no session at all, the account creation time is the only evidence of use.
@@ -41,13 +42,18 @@ export class RecycledNumberStepUp {
     const decision = evaluateRecycledNumber({
       lastUsedAtMs: Number.isFinite(lastUsedAtMs) ? lastUsedAtMs : null,
       nowMs: input.nowMs,
-      deviceKnownToAccount: sessions.some((s) => s.session.deviceId === input.installId),
+      // Known = the install id matches AND the attested device key matches. install_id is client-supplied, so
+      // it alone proves nothing; a session with no recorded key (created before migration 0099) is NOT known.
+      deviceKnownToAccount: sessions.some(
+        (s) => s.session.deviceId === input.installId && s.deviceKeyHash !== undefined && s.deviceKeyHash !== null && s.deviceKeyHash === input.deviceKeyHash,
+      ),
       // Per-account factors are deliberately not consulted: the response is the same either way (no oracle),
       // and tokens are never issued without the second factor (stricter than the domain's "proceed, hide value").
       hasVerifiedEmail: false,
       hasPasskey: false,
     });
     if (!decision.secondFactorRequired) return null;
+    await this.deps.events.publish({ type: "auth.step_up_required", userId: input.user.id, installIdHash: sha256Hex(input.installId), occurredAtMs: input.nowMs });
     return { factors: ["passkey"], passkey: await this.deps.passkeyChallenges.issueChallenge("assert", input.user.id) };
   }
 }

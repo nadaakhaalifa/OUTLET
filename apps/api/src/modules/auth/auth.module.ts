@@ -230,7 +230,7 @@ export class AuthModule {
         },
         {
           provide: VERIFY_OTP,
-          inject: [CLOCK, CSPRNG, ID_GENERATOR, "AUTH_DEPS", SESSION_ISSUER, AUTH_ATTESTATION, AGE_GATE, PASSKEYS],
+          inject: [CLOCK, CSPRNG, ID_GENERATOR, "AUTH_DEPS", SESSION_ISSUER, AUTH_ATTESTATION, AGE_GATE, PASSKEYS, AUTH_EVENTS],
           useFactory: (
             clock: Clock,
             rng: Csprng,
@@ -240,6 +240,7 @@ export class AuthModule {
             attestation: AttestationVerifier,
             ageGate: AgeGate,
             passkeys: PasskeyService,
+            events: AuthEventPublisher,
           ) =>
             new VerifyOtp({
               attestation,
@@ -251,7 +252,7 @@ export class AuthModule {
               newId: () => ids.uuidV7(),
               pepper: deps.pepper,
               ageGate,
-              stepUp: new RecycledNumberStepUp({ sessions: deps.sessions, passkeyChallenges: passkeys }),
+              stepUp: new RecycledNumberStepUp({ sessions: deps.sessions, events, passkeyChallenges: passkeys }),
             }),
         },
         {
@@ -320,6 +321,7 @@ export class AuthModule {
               rng,
               newId: () => ids.uuidV7(),
               rpId: config.passkeyRpId,
+              deviceKeyOf: (k: string) => deps.challenges.deviceKeyOf(k),
             }),
         },
         {

@@ -123,6 +123,12 @@ export interface StoredSession {
    * The token itself is never stored.
    */
   readonly installSecretHash?: string | null;
+  /**
+   * Keyed hash of the ATTESTED device key (App Attest / Play Integrity) the session was opened from
+   * (auth_sessions.device_key_hash, migration 0099). Absent or null = unknown (sessions created before the
+   * column, web sessions, or no attested key on the path): the recycled-number step-up treats it as NOT known.
+   */
+  readonly deviceKeyHash?: string | null;
 }
 
 /**
@@ -226,7 +232,11 @@ export type AuthEvent =
       readonly notifyUser: boolean;
       readonly occurredAtMs: number;
     }
-  | { readonly type: "user.age_blocked"; readonly occurredAtMs: number };
+  | { readonly type: "user.age_blocked"; readonly occurredAtMs: number }
+  /** Recycled-number step-up demanded (no session issued). No PII: the install id is a SHA-256 hash. */
+  | { readonly type: "auth.step_up_required"; readonly userId: string; readonly installIdHash: string; readonly occurredAtMs: number }
+  /** The step-up passkey assertion succeeded and a session was opened. */
+  | { readonly type: "auth.step_up_completed"; readonly userId: string; readonly installIdHash: string; readonly occurredAtMs: number };
 
 /**
  * Domain event sink. Production adapter: transactional outbox row in the same transaction as the

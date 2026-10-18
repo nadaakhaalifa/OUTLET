@@ -178,6 +178,7 @@ const SessionRow = z.object({
   platform: z.enum(["ios", "android", "web"]),
   uv: z.boolean(),
   install_secret_hash: z.instanceof(Uint8Array).nullable(),
+  device_key_hash: z.instanceof(Uint8Array).nullable(),
   amr: z.array(z.string()),
   created_ms: Ms,
   used_ms: Ms,
@@ -202,7 +203,7 @@ export class KyselySessionRepository implements SessionRepository {
   constructor(private readonly db: AuthDb) {}
 
   private async load(trx: Tx, where: ReturnType<typeof sql>): Promise<StoredSession | null> {
-    const res = await sql`select s.id::text as id, s.family_id::text as family_id, s.user_id::text as user_id, d.install_id, s.platform, s.uv, d.install_secret_hash,
+    const res = await sql`select s.id::text as id, s.family_id::text as family_id, s.user_id::text as user_id, d.install_id, s.platform, s.uv, d.install_secret_hash, s.device_key_hash,
         s.amr, floor(extract(epoch from s.created_at) * 1000)::text as created_ms,
         floor(extract(epoch from s.last_used_at) * 1000)::text as used_ms,
         floor(extract(epoch from s.revoked_at) * 1000)::text as revoked_ms,
@@ -239,6 +240,7 @@ export class KyselySessionRepository implements SessionRepository {
       session,
       platform: r.platform,
       uv: r.uv,
+      deviceKeyHash: r.device_key_hash === null ? null : hex(r.device_key_hash),
       ...(r.platform === "web" ? { installSecretHash: r.install_secret_hash === null ? null : hex(r.install_secret_hash) } : {}),
       family: {
         familyId: r.family_id,
@@ -288,8 +290,9 @@ export class KyselySessionRepository implements SessionRepository {
       if (deviceUuid === undefined) throw new Error("device upsert failed");
       await sql`insert into session_families (id, user_id, device_id, created_at)
         values (${family.familyId}::uuid, ${session.userId}::uuid, ${deviceUuid}::uuid, ${iso(session.createdAtMs)}::timestamptz)`.execute(trx);
-      await sql`insert into auth_sessions (id, family_id, user_id, device_id, platform, uv, amr, created_at, last_used_at)
+      await sql`insert into auth_sessions (id, family_id, user_id, device_id, platform, uv, device_key_hash, amr, created_at, last_used_at)
         values (${session.id}::uuid, ${family.familyId}::uuid, ${session.userId}::uuid, ${deviceUuid}::uuid, ${platform}, ${stored.uv === true},
+          ${stored.deviceKeyHash === undefined || stored.deviceKeyHash === null ? null : Buffer.from(stored.deviceKeyHash, "hex")},
           ${sql.raw("ARRAY[")}${sql.join(session.amr.map((a) => sql`${a}`))}${sql.raw("]::text[]")},
           ${iso(session.createdAtMs)}::timestamptz, ${iso(session.lastUsedAtMs)}::timestamptz)`.execute(trx);
       await this.write(trx, stored);
@@ -636,7 +639,13 @@ export class KyselyAuthEventPublisher implements AuthEventPublisher {
               occurred_at: iso(event.occurredAtMs),
             },
           }
-        : { aggregate: "age_gate", aggregateId: id, payload: { occurred_at: iso(event.occurredAtMs) } };
+        : event.type === "auth.step_up_required" || event.type === "auth.step_up_completed"
+          ? {
+              aggregate: "auth_step_up",
+              aggregateId: id,
+              payload: { user_id: event.userId, install_id_hash: event.installIdHash, occurred_at: iso(event.occurredAtMs) },
+            }
+          : { aggregate: "age_gate", aggregateId: id, payload: { occurred_at: iso(event.occurredAtMs) } };
     await asSystem(this.db, async (trx) => {
       await sql`insert into outbox_events (id, occurred_at, aggregate_type, aggregate_id, event_type, ordering_key, payload)
         values (${id}::uuid, ${iso(event.occurredAtMs)}::timestamptz, ${row.aggregate}, ${row.aggregateId}::uuid, ${event.type},

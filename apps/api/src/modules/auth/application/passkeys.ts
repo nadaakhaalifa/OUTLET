@@ -39,6 +39,8 @@ export interface PasskeyDeps {
   readonly rng: Csprng;
   readonly newId: () => string;
   readonly rpId: string;
+  /** Keyed-hash of an attested device key, the same function the OTP challenge store uses (migration 0099). */
+  readonly deviceKeyOf?: (deviceKey: string) => Promise<string>;
 }
 
 export interface ChallengeOptions {
@@ -133,9 +135,11 @@ export class PasskeyService {
     const isWeb = input.platform === "web";
     // Browsers have no App Attest or Play Integrity: the WebAuthn origin check and the admin grant
     // below are the binding for web (ADR-0048 decision 6). Mobile keeps attestation and the age gate.
+    let deviceKeyHash: string | undefined;
     if (!isWeb) {
       const deviceKey = await attestDevice(d.attestation, input.attestation);
       if (deviceKey === null) return { kind: "attestation_failed" };
+      if (d.deviceKeyOf !== undefined) deviceKeyHash = await d.deviceKeyOf(deviceKey);
       const gate = await d.ageGate.status(deviceKey);
       if (gate.kind === "required") return { kind: "age_gate_required" };
       if (gate.kind === "blocked") return { kind: "age_blocked", blockedUntilMs: gate.blockedUntilMs };
@@ -149,6 +153,10 @@ export class PasskeyService {
     if (stored === null || stored.status !== "active") return { kind: "rejected", reason: "unknown_credential" };
     // A challenge bound to an account (the recycled-number step-up) is satisfied only by that account's credential.
     if (challenge.userId !== null && challenge.userId !== stored.userId) return { kind: "rejected", reason: "unknown_credential" };
+    // Resolve the owner (findById answers active accounts only) BEFORE any state change: a non-active account must not move the counter, flip backedUp
+    // or trigger clone handling on its credential.
+    const user = await d.users.findById(stored.userId);
+    if (user === null) return { kind: "rejected", reason: "unknown_credential" };
 
     let verified;
     try {
@@ -194,8 +202,6 @@ export class PasskeyService {
       backedUp: verified.value.backedUp ?? stored.backedUp ?? false,
     });
 
-    const user = await d.users.findById(stored.userId);
-    if (user === null) return { kind: "rejected", reason: "unknown_credential" };
     if (isWeb) return this.openWebSession(user, nowMs);
     if (input.installId === null) return { kind: "rejected", reason: "missing_install_id" };
     const issued = await d.issuer.open({
@@ -204,7 +210,11 @@ export class PasskeyService {
       platform: input.platform as "ios" | "android",
       amr: ["passkey", "attestation"],
       uv: true,
+      ...(deviceKeyHash !== undefined ? { deviceKeyHash } : {}),
     });
+    if (challenge.userId !== null) {
+      await d.events.publish({ type: "auth.step_up_completed", userId: user.id, installIdHash: sha256Hex(input.installId), occurredAtMs: nowMs });
+    }
     return { kind: "ok", user, ...issued };
   }
 

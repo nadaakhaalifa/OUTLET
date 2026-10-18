@@ -302,6 +302,64 @@ describe("VR-GUEST-06 recycled-number step-up", () => {
     expect(fresh.body.is_new_account).toBe(true);
   });
 
+  it("F1: a matching install_id with a DIFFERENT attested device key is not a known device (step-up)", async () => {
+    const acct = await staleAccount(400);
+    const a = { "X-App-Attest": `${DEV_ATTESTATION_PREFIX}other-key-${acct.p.slice(-6)}`, "X-Client-Platform": "ios" };
+    su.grantAgeGate(a["X-App-Attest"].slice(DEV_ATTESTATION_PREFIX.length));
+    su.clock.advance(180_000);
+    const sent = await su.http().post("/v1/auth/otp/request").set(a).send({ phone_e164: acct.p });
+    expect(sent.status).toBe(202);
+    const r = await su.http().post("/v1/auth/otp/verify").set(a).send({
+      challenge_id: sent.body.challenge_id,
+      code: su.mailbox.last(acct.p)?.code,
+      device: { platform: "ios", install_id: INSTALL_ID },
+    });
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe("step_up_required");
+  });
+
+  it("F1: a session created before the device-key column (null hash) is NOT a known device (fail closed)", async () => {
+    const acct = await staleAccount(400);
+    for (const s of await deps(su).sessions.listByUser(acct.userId)) await deps(su).sessions.save({ ...s, deviceKeyHash: null });
+    const r = await verifyOn(await otp(su, acct.p), INSTALL_ID);
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe("step_up_required");
+  });
+
+  it("F3: step-up publishes auth.step_up_required then auth.step_up_completed, with a hashed install id and no PII", async () => {
+    const acct = await staleAccount(300);
+    const before = su.events.events.length;
+    const o = await otp(su, acct.p);
+    const r = await verifyOn(o, NEW_INSTALL);
+    expect(r.status).toBe(403);
+    expect((await assertStepUp(r.body.passkey_challenge_id, r.body.passkey_challenge, acct, 1, o.a)).status).toBe(200);
+    const evs = su.events.events.slice(before).filter((e) => e.type.startsWith("auth.step_up"));
+    expect(evs.map((e) => e.type)).toEqual(["auth.step_up_required", "auth.step_up_completed"]);
+    for (const e of evs) {
+      const text = JSON.stringify(e);
+      expect(text).toContain(acct.userId);
+      expect(text).not.toContain(NEW_INSTALL);
+      expect(text).not.toContain(acct.p);
+      expect(text).toMatch(/"installIdHash":"[0-9a-f]{64}"/);
+    }
+  });
+
+  it("F2: a passkey of a suspended account is rejected before its counter or clone state is touched", async () => {
+    const acct = await staleAccount(181);
+    const creds = (su.app.get("AUTH_DEPS", { strict: false }) as { passkeyCredentials: { find(id: string): Promise<{ signCount: number; status: string } | null> } }).passkeyCredentials;
+    const before = await creds.find(acct.credentialId);
+    const o = await otp(su, acct.p);
+    const r = await verifyOn(o, NEW_INSTALL);
+    expect(r.status).toBe(403);
+    deps(su).users.suspendForTest(acct.userId);
+    // A rolled-back counter would normally mark the credential as a suspected clone; for a suspended account nothing may change.
+    const bad = await assertStepUp(r.body.passkey_challenge_id, r.body.passkey_challenge, acct, 5, o.a);
+    expect(bad.status).toBe(401);
+    const after = await creds.find(acct.credentialId);
+    expect(after?.signCount).toBe(before?.signCount);
+    expect(after?.status).toBe("active");
+  });
+
   it("no enumeration oracle: a wrong code on a recycled number answers exactly like a wrong code on an unknown number", async () => {
     const acct = await staleAccount(181);
     const a = await otp(su, acct.p);

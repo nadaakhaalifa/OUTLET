@@ -120,7 +120,7 @@ export class VerifyOtp {
     }
     // Only an account that existed before this call can be a recycled number. Fail closed: a read error throws.
     if (!isNewAccount) {
-      const challenge = await d.stepUp.check({ user, installId: input.installId, nowMs });
+      const challenge = await d.stepUp.check({ user, installId: input.installId, deviceKeyHash: record.deviceKey, nowMs });
       if (challenge !== null) return { kind: "step_up_required", challenge };
     }
     const issued = await d.issuer.open({
@@ -128,6 +128,7 @@ export class VerifyOtp {
       installId: input.installId,
       platform: input.platform,
       amr: [record.channel === "sms" ? "otp_sms" : "otp_whatsapp", "attestation"],
+      deviceKeyHash: record.deviceKey,
     });
     return { kind: "ok", user, isNewAccount, ...issued };
   }

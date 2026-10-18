@@ -34,6 +34,8 @@ export class SessionIssuer {
     readonly uv?: boolean;
     /** Web only: hex SHA-256 of the server-minted install token. */
     readonly installSecretHash?: string;
+    /** Keyed hash of the attested device key (mobile paths); recorded so the step-up can trust "known device". */
+    readonly deviceKeyHash?: string;
   }): Promise<IssuedSession> {
     const d = this.deps;
     const nowMs = d.clock.nowMs();
@@ -70,6 +72,7 @@ export class SessionIssuer {
       platform: input.platform,
       ...(input.uv === true ? { uv: true } : {}),
       ...(input.installSecretHash !== undefined ? { installSecretHash: input.installSecretHash } : {}),
+      ...(input.deviceKeyHash !== undefined ? { deviceKeyHash: input.deviceKeyHash } : {}),
     });
     return {
       sessionId,

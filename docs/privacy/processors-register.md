@@ -8,7 +8,7 @@ Every processor below has **DPA status unknown unless stated**. No contract exis
 
 | Id | Category | Candidates | Role | Location | DPA | Sub-processors | TIA | Contract | Fields served |
 |---|---|---|---|---|---|---|---|---|---|
-| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 3191 |
+| `cloud_primary` | cloud | Egypt-hosted provider (option A); AWS me-central-1 or eu-south-1 (option B); hybrid (option C) | processor | unknown (ADR-0002 not accepted) | unknown | unknown | unknown | not_started | 3192 |
 | `cdn_waf` | edge | to be chosen | processor | unknown | unknown | unknown | unknown | not_started | 7 |
 | `psp_primary` | psp | Paymob; Kashier | unknown | unknown | unknown | unknown | unknown | not_started | 230 |
 | `psp_failover_fawry` | psp | Fawry; second PSP | unknown | unknown | unknown | unknown | unknown | not_started | 49 |
