@@ -21,7 +21,7 @@ export function fieldView(s: FieldState, c: ColorTokens): FieldView {
   const hasError = typeof s.error === "string" && s.error.length > 0;
   const helper = typeof s.helper === "string" && s.helper.length > 0 ? s.helper : null;
   return {
-    borderColor: hasError ? c.danger : s.focused ? c.accent : c.border,
+    borderColor: hasError ? c.danger : s.focused ? c.brand : c.fieldBorder,
     borderWidth: s.focused || hasError ? 2 : 1,
     message: hasError ? (s.error ?? null) : helper,
     // Error text is never colour-only: callers prefix it with an icon/label.

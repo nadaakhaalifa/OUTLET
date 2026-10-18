@@ -13,9 +13,9 @@ export function scaleSize(base: number, fontScale: number): number {
   return Math.round(base * Math.max(1, clampFontScale(fontScale)));
 }
 
-/** Minimum height of an interactive control: at least 44pt and grows with text. */
-export function controlMinHeight(contentHeight: number, fontScale: number): number {
-  const padded = scaleSize(contentHeight, fontScale) + spacing.md * 2;
+/** Minimum height of an interactive control: at least 44pt (physical, never zoomed down) and grows with text. `verticalPad` is the (zoomed) padding. */
+export function controlMinHeight(contentHeight: number, fontScale: number, verticalPad: number = spacing.md): number {
+  const padded = scaleSize(contentHeight, fontScale) + verticalPad * 2;
   return Math.max(minTouchTarget, padded);
 }
 
