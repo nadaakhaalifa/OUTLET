@@ -4,6 +4,8 @@ import { Tabs, useGlobalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabBar, TabBarInsetContext, ThemeProvider, tabBarInset, useTheme, type IconName, type TabBarItem } from "@outlet/ui-native";
+import { EmptyState } from "../../ui";
+import { useGuestGateMode } from "../../features/me/useGuest";
 import { BrandSessionProvider } from "../../features/brand-mode/kit";
 import { BRAND_TABS } from "../../features/brand-mode/tabs";
 
@@ -45,6 +47,24 @@ function DevPreview(props: { children: ReactNode }) {
 
 /** Brand mode: its own flat tab bar (Dashboard / Products / Orders / Store), separate from the shopping tabs. */
 export default function BrandTabsLayout() {
+  const mode = useGuestGateMode();
+  if (mode === "unknown") return null;
+  // A guest has no brand account: an honest state, not a failed session call (no 401 screen, no sign-up prompt).
+  if (mode === "guest") return <BrandGuestState />;
+  return <BrandTabs />;
+}
+
+function BrandGuestState() {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center", padding: spacing.xl }}>
+      <EmptyState title={t("brandMode.common.noBrandTitle")} description={t("brandMode.common.noBrandBody")} />
+    </View>
+  );
+}
+
+function BrandTabs() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
