@@ -7,7 +7,6 @@ import type {
   OwnerProfilePort,
   ProductSummaryView,
   TokenEntropy,
-  WishlistEventPublisher,
   WishlistRepository,
 } from "../domain/ports";
 import type { Wishlist, WishlistIntent } from "../domain/types";
@@ -25,7 +24,6 @@ export class CreateShareLink {
     private readonly repo: WishlistRepository,
     private readonly clock: Clock,
     private readonly entropy: TokenEntropy,
-    private readonly events: WishlistEventPublisher,
     private readonly baseUrl: string,
   ) {}
 
@@ -46,14 +44,9 @@ export class CreateShareLink {
     const link = newShareLink({ tokenHash: hashShareToken(token), ...input }, nowMs);
     if (!link.ok) return { kind: "invalid_expiry" };
     // Rotation: overwriting the share columns invalidates the previous token at once.
-    await this.repo.save({ ...list, share: link.value, updatedAtMs: nowMs });
-    await this.events.publish({
-      type: "wishlist.shared",
-      wishlistId: list.id,
-      userId,
-      expiresAtMs: input.expiresAtMs,
-      hidePrices: input.hidePrices,
-    });
+    await this.repo.save({ ...list, share: link.value, updatedAtMs: nowMs }, [
+      { type: "wishlist.shared", wishlistId: list.id, userId, expiresAtMs: input.expiresAtMs, hidePrices: input.hidePrices },
+    ]);
     return {
       kind: "created",
       url: `${this.baseUrl}/${token}`,
@@ -67,7 +60,6 @@ export class RevokeShareLink {
   constructor(
     private readonly repo: WishlistRepository,
     private readonly clock: Clock,
-    private readonly events: WishlistEventPublisher,
   ) {}
 
   async execute(userId: string, wishlistId: string): Promise<{ readonly kind: "revoked" } | NotFound> {
@@ -76,8 +68,9 @@ export class RevokeShareLink {
     // Revoking when nothing is shared is a no-op that still answers 204 (idempotent DELETE).
     if (list.share === null || list.share.revokedAtMs !== null) return { kind: "revoked" };
     const nowMs = this.clock.nowMs();
-    await this.repo.save({ ...list, share: revokeShare(list.share, nowMs), updatedAtMs: nowMs });
-    await this.events.publish({ type: "wishlist.share_revoked", wishlistId: list.id, userId });
+    await this.repo.save({ ...list, share: revokeShare(list.share, nowMs), updatedAtMs: nowMs }, [
+      { type: "wishlist.share_revoked", wishlistId: list.id, userId },
+    ]);
     return { kind: "revoked" };
   }
 }

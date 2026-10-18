@@ -100,6 +100,24 @@ export function describeCatalogRepositoryContract(label: string, make: () => Pro
       expect((await h.products.findInStore(STORE_A, p.id))?.title.ar).toBe("فستان جديد");
     });
 
+    it("persists job-backed image variants with insert and replace, and keeps one job on one image", async () => {
+      const job = newUuid();
+      const up = newUuid();
+      const p = makeProduct(STORE_A, { imageUploadIds: [up, job] });
+      const v = { jobId: job, imageRef: "catalog/2026/10/img-0001", cutoutRef: "catalog/2026/10/cut-0001" };
+      await h.products.insert(p, [], [v]);
+      expect((await h.products.imageVariants([p.id])).get(p.id)).toEqual([v]);
+      expect((await h.products.imageVariants([newUuid()])).size).toBe(0);
+      // Replace rewrites the gallery with exactly the variants given (none = plain images only).
+      const v2: Product = { ...p, version: 2, imageUploadIds: [up] };
+      expect(await h.products.replace(v2, 1, [], [])).toBe(true);
+      expect((await h.products.imageVariants([p.id])).size).toBe(0);
+      // The same job on another product's image is refused by the unique index (kysely) or by the claim (port).
+      const q = makeProduct(STORE_A, { imageUploadIds: [job] });
+      await h.products.insert(q, [], [v]);
+      expect((await h.products.imageVariants([q.id])).get(q.id)).toEqual([v]);
+    });
+
     it("replace publishes and pauses with the status and published time persisted", async () => {
       const p = makeProduct(STORE_A);
       await h.products.insert(p);
@@ -111,6 +129,23 @@ export function describeCatalogRepositoryContract(label: string, make: () => Pro
       const paused: Product = { ...live, status: "paused", version: 3 };
       expect(await h.products.replace(paused, 2)).toBe(true);
       expect((await h.products.findInStore(STORE_A, p.id))?.status).toBe("paused");
+    });
+
+    it("listActiveStubs returns only active products across stores, ordered by id, with offset paging", async () => {
+      const draft = makeProduct(STORE_A);
+      const a1 = makeProduct(STORE_A);
+      const b1 = makeProduct(STORE_B);
+      for (const p of [draft, a1, b1]) await h.products.insert(p);
+      for (const p of [a1, b1]) {
+        expect(await h.products.replace({ ...p, status: "active", version: 2, publishedAtMs: T0 + 1, updatedAtMs: T0 + 1 }, 1)).toBe(true);
+      }
+      const all = await h.products.listActiveStubs(0, 50);
+      const ids = all.map((s) => s.id);
+      expect(ids).toEqual([a1.id, b1.id].sort());
+      expect(ids).not.toContain(draft.id);
+      for (const s of all) expect(Object.keys(s).sort()).toEqual(["id", "storeId", "updatedAtMs"]);
+      expect((await h.products.listActiveStubs(1, 50)).map((s) => s.id)).toEqual(ids.slice(1));
+      expect(await h.products.listActiveStubs(0, 1)).toHaveLength(1);
     });
 
     it("takenGtinVariants is per store and keyed by gtin, colour and size", async () => {

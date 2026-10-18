@@ -37,3 +37,5 @@ export type {
 } from "./domain/ports";
 export { jwtAdmissionCodec } from "./adapters/jwt";
 export type { AdmissionCodec } from "./domain/ports";
+export { CheckoutDropAdmission } from "./adapters/checkout-admission";
+export { WaitingRoomOpsCounters } from "./adapters/ops-counters";

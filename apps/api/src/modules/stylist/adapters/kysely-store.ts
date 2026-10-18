@@ -66,6 +66,8 @@ const OUTFIT_COLS = sql`id::text as id, generation_id::text as generation_id, us
   complete, items, request, scores, total_piastres::text as total, budget_piastres::text as budget,
   ${EPOCH_MS("created_at")} as created_ms, ${EPOCH_MS("added_to_bag_at")} as added_ms`;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const InclusionRow = z.object({ store_id: z.string(), outfits: z.string(), shoppers: z.string(), added: z.string() });
 const toItemJson = (i: StoredItem) => ({
   itemId: i.itemId,
   storeId: i.storeId,
@@ -128,6 +130,31 @@ export class KyselyStylistStore implements StylistStore {
         values (${this.ids.uuidV7()}::uuid, ${agg.type}, ${agg.id}::uuid, ${e.type},
                 ${`${agg.type}:${agg.id}`}, ${JSON.stringify(e)}::jsonb)`.execute(trx);
     }
+  }
+
+  async inclusionByStore(storeIds: readonly string[], fromMs: number, toMs: number) {
+    const stores = storeIds.filter((x) => UUID_RE.test(x));
+    if (stores.length === 0) return [];
+    return this.tx(async (trx) => {
+      const res = await sql`
+        select it.v->>'storeId' as store_id, count(distinct o.id)::text as outfits,
+               count(distinct o.user_id)::text as shoppers,
+               count(distinct o.id) filter (where o.added_to_bag_at is not null)::text as added
+        from outfits o cross join lateral jsonb_array_elements(o.items) as it(v)
+        where (it.v->>'storeId') = any(${stores}::text[])
+          and o.created_at >= to_timestamp(${fromMs}::double precision / 1000)
+          and o.created_at < to_timestamp(${toMs}::double precision / 1000)
+        group by 1`.execute(trx);
+      const by = new Map<string, { outfits: number; shoppers: number; added: number }>();
+      for (const raw of res.rows) {
+        const r = InclusionRow.parse(raw);
+        by.set(r.store_id, { outfits: Number(r.outfits), shoppers: Number(r.shoppers), added: Number(r.added) });
+      }
+      return stores.map((storeId) => {
+        const v = by.get(storeId);
+        return { storeId, outfits: v?.outfits ?? 0, distinctShoppers: v?.shoppers ?? 0, addedToBagOutfits: v?.added ?? 0 };
+      });
+    });
   }
 
   async insertOutfits(records: readonly OutfitRecord[], events: readonly StylistEvent[]): Promise<void> {

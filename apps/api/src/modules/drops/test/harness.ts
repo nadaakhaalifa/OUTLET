@@ -17,6 +17,7 @@ import {
   InMemoryAdmissionStore,
   InMemoryQueue,
   WaitingRoomModule,
+  WaitingRoomOpsCounters,
   ADMIT_FROM_QUEUE,
   type AdmitFromQueue,
   jwtAdmissionCodec,
@@ -186,7 +187,7 @@ export async function createDropsHarness(): Promise<DropsHarness> {
       PlatformModule.forRoot(config, { clock, ids }),
       TestAuthModule.register(),
       WaitingRoomModule.forRoot(config, { queue, store: room, gate, secrets, bot, attest, entitlements, switches: roomSwitches }),
-      DropsModule.forRoot(config, { store, inventory, flags, signals, switches: dropSwitches, verifier }),
+      DropsModule.forRoot(config, { store, inventory, flags, signals, switches: dropSwitches, verifier, ops: new WaitingRoomOpsCounters(queue, room, clock) }),
     ],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });

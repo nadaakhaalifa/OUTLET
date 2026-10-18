@@ -36,3 +36,6 @@ export {
   KyselySizeProfileRepository,
   type SizingDb,
 } from "./adapters/kysely-store";
+export { EnvelopeFieldCipher, type KmsPort } from "./adapters/envelope-cipher";
+export { PrivacyMeasurementsConsent } from "./adapters/privacy-consent";
+export type { SizeChartRepository, StoredChart } from "./domain/ports";

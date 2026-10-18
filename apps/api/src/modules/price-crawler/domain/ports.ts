@@ -100,6 +100,32 @@ export interface IncidentRecord {
   /** sha256 hex of the URL. URLs themselves are never stored. */
   readonly urlHash: string;
   readonly detail: string | null;
+  /** Set by the writer; stores fall back to their own clock when absent. */
+  readonly createdAtMs?: number;
+}
+
+export interface IncidentRow extends IncidentRecord {
+  readonly createdAtMs: number;
+}
+
+export interface IncidentQuery {
+  /** null = platform-wide (admin), a uuid = that store only (seller, RLS-aligned). */
+  readonly storeId: string | null;
+  readonly kind: IncidentKind | null;
+  readonly limit: number;
+  /** Keyset position: rows strictly older than (atMs, id) in (created desc, id desc) order. */
+  readonly after: { readonly atMs: number; readonly id: string } | null;
+}
+
+/** A cross-channel price finding opened by price-integrity (read model; 48h to fix, then auto-pause). */
+export interface ParityWarning {
+  readonly skuId: string;
+  readonly openedAtMs: number;
+}
+
+/** Reads open cross-channel findings from price-integrity's public service. Never writes. */
+export interface ParityWarningsPort {
+  openFor(storeId: string): Promise<readonly ParityWarning[]>;
 }
 
 /** Outbox events. Payloads carry ids, enums and integers only. */
@@ -140,6 +166,8 @@ export interface CrawlStore {
   labelStats(): Promise<{ readonly pairs: number; readonly kappaMilli: number }>;
 
   addIncident(i: IncidentRecord, events: readonly CrawlEvent[]): Promise<void>;
+  /** Newest first, keyset paged. Rows never carry URLs, only host + url hash. */
+  listIncidents(q: IncidentQuery): Promise<readonly IncidentRow[]>;
 }
 
 // ---- ports owned by other systems (always faked here, no real HTTP) ----

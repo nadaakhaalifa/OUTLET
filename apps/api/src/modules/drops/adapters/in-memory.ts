@@ -12,6 +12,7 @@ import {
   type SwitchKey,
   type SwitchPort,
   type UnitsSnapshot,
+  type DropOpsSource,
 } from "../domain/ports";
 
 const byStartDesc = (a: Drop, b: Drop): number => b.startsAtMs - a.startsAtMs || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
@@ -208,5 +209,22 @@ export class FakeDropSwitches implements SwitchPort {
   }
   async allowed(k: SwitchKey): Promise<boolean> {
     return !this.off.has(k);
+  }
+}
+
+/** Test source for the ops view. Unset drops read as unmeasured (null depth). */
+export class FakeDropOps implements DropOpsSource {
+  private readonly depth = new Map<string, number>();
+  private readonly counts = new Map<string, { admitted: number; rejected: number; abandoned: number }>();
+  set(dropId: string, depth: number | null, counts: { admitted: number; rejected: number; abandoned: number }): void {
+    if (depth === null) this.depth.delete(dropId);
+    else this.depth.set(dropId, depth);
+    this.counts.set(dropId, counts);
+  }
+  async queueDepth(dropId: string): Promise<number | null> {
+    return this.depth.get(dropId) ?? null;
+  }
+  async windowCounts(dropId: string): Promise<{ admitted: number; rejected: number; abandoned: number }> {
+    return this.counts.get(dropId) ?? { admitted: 0, rejected: 0, abandoned: 0 };
   }
 }

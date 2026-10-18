@@ -15,6 +15,8 @@ export class InMemoryWishlistRepository implements WishlistRepository {
   private readonly itemsById = new Map<string, WishlistItem>();
   private readonly dedupe = new Map<string, string>();
 
+  constructor(private readonly sink?: WishlistEventPublisher) {}
+
   async countByUser(userId: string): Promise<number> {
     return [...this.lists.values()].filter((l) => l.userId === userId).length;
   }
@@ -27,7 +29,7 @@ export class InMemoryWishlistRepository implements WishlistRepository {
     return this.lists.get(id) ?? null;
   }
 
-  async save(list: Wishlist): Promise<void> {
+  async save(list: Wishlist, events: readonly WishlistEvent[] = []): Promise<void> {
     const cur = this.lists.get(list.id);
     if (cur === undefined || cur.userId !== list.userId) return;
     const keepRevoked =
@@ -38,6 +40,7 @@ export class InMemoryWishlistRepository implements WishlistRepository {
         ? { ...list, share: { ...list.share, revokedAtMs: cur.share.revokedAtMs } }
         : list,
     );
+    for (const e of events) await this.sink?.publish(e);
   }
 
   async delete(id: string): Promise<void> {
@@ -100,9 +103,10 @@ export class InMemoryWishlistRepository implements WishlistRepository {
     return [...this.itemsById.values()].filter((i) => i.productId === productId);
   }
 
-  async claimAlert(dedupeKey: string, wishlistId: string): Promise<boolean> {
+  async claimAlert(dedupeKey: string, wishlistId: string, events: readonly WishlistEvent[] = []): Promise<boolean> {
     if (this.dedupe.has(dedupeKey)) return false;
     this.dedupe.set(dedupeKey, wishlistId);
+    for (const e of events) await this.sink?.publish(e);
     return true;
   }
 }

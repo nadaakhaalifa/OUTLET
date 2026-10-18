@@ -27,6 +27,17 @@ export interface NewPriceEvent {
   readonly idempotencyKey: string;
 }
 
+/** What the `price.changed` outbox event says about the new price (auto-buy consumer contract). */
+export interface PriceChangeSignal {
+  /** True only when the engine allows a discount claim for the price now in force. Fails closed. */
+  readonly verified: boolean;
+  /** True when the engine saw manipulation (pre-drop inflation, inflation reset) or could not decide. */
+  readonly anomaly: boolean;
+}
+
+/** Computes the signal from the SKU history that already includes the new event. Pure and synchronous. */
+export type PriceChangeSignalFn = (history: readonly PriceEvent[]) => PriceChangeSignal;
+
 /** Append-only. There is no update or delete anywhere in this port, by design. */
 export interface PriceEventStore {
   /**
@@ -34,7 +45,14 @@ export interface PriceEventStore {
    * PriceEventConflictError for another store's SKU, a back-dated event, or a reused key with
    * a different payload.
    */
-  append(e: NewPriceEvent): Promise<{ readonly event: PriceEvent; readonly created: boolean }>;
+  append(
+    e: NewPriceEvent,
+    /**
+     * When given and the event is newly created, a `price.changed` outbox event is written in the
+     * SAME transaction as the insert (transactional outbox, A2.7). A replay writes nothing.
+     */
+    signal?: PriceChangeSignalFn,
+  ): Promise<{ readonly event: PriceEvent; readonly created: boolean }>;
   history(skuId: string): Promise<readonly PriceEvent[]>;
   historyMany(skuIds: readonly string[]): Promise<ReadonlyMap<string, readonly PriceEvent[]>>;
   /** Owning store of a SKU that has price history, else null. */
@@ -92,6 +110,8 @@ export interface EnforcementStore {
   resolveCrossChannel(skuId: string, atMs: number): Promise<number>;
   openCrossChannelCount(storeId: string): Promise<number>;
   recent(storeId: string, limit: number): Promise<readonly EnforcementRecord[]>;
+  /** Open cross-channel findings for the store, ordered by sku id, keyset-paged (no 20-record cap). */
+  openCrossChannel(storeId: string, afterSkuId: string | null, limit: number): Promise<readonly EnforcementRecord[]>;
 }
 
 export interface ProductSkus {

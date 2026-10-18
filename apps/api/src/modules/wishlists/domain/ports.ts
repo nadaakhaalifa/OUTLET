@@ -53,7 +53,11 @@ export interface WishlistRepository {
   countByUser(userId: string): Promise<number>;
   insert(list: Wishlist): Promise<void>;
   get(id: string): Promise<Wishlist | null>;
-  save(list: Wishlist): Promise<void>;
+  /**
+   * `events` are appended to the outbox in the SAME transaction as the write (Postgres) so state
+   * and event commit or roll back together.
+   */
+  save(list: Wishlist, events?: readonly WishlistEvent[]): Promise<void>;
   /** Removes the list, its items and its alert dedupe rows. */
   delete(id: string): Promise<void>;
   listByUser(userId: string, page: { readonly after: { readonly createdAtMs: number; readonly id: string } | null; readonly limit: number }): Promise<readonly Wishlist[]>;
@@ -67,8 +71,8 @@ export interface WishlistRepository {
   clearCoolOff(wishlistId: string): Promise<void>;
   itemsByProduct(productId: string): Promise<readonly WishlistItem[]>;
 
-  /** Claims a dedupe key. True only for the first claim. */
-  claimAlert(dedupeKey: string, wishlistId: string): Promise<boolean>;
+  /** Claims a dedupe key and appends `events` in the same transaction. True only for the first claim (events are written only then). */
+  claimAlert(dedupeKey: string, wishlistId: string, events?: readonly WishlistEvent[]): Promise<boolean>;
 }
 
 export type WishlistEvent =
@@ -76,7 +80,7 @@ export type WishlistEvent =
   | { readonly type: "wishlist.share_revoked"; readonly wishlistId: string; readonly userId: string }
   | { readonly type: "wishlist.alert_due"; readonly alert: PlannedAlert };
 
-/** Production adapter writes the outbox row in the same transaction as the state change. */
+/** In-memory sink only. Postgres writes the outbox row inside the repository transaction (save/claimAlert). */
 export interface WishlistEventPublisher {
   publish(event: WishlistEvent): Promise<void>;
 }

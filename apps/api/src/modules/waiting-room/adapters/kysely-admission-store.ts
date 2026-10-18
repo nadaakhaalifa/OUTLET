@@ -108,6 +108,17 @@ export class KyselyAdmissionStore implements AdmissionStore {
     });
   }
 
+  async countsSince(dropId: string, sinceMs: number): Promise<{ admitted: number; rejected: number; abandoned: number }> {
+    return this.tx(async (trx) => {
+      const r = await sql<{ state: string; n: string }>`
+        select state, count(*)::text as n from queue_tickets
+        where drop_id = ${dropId}::uuid and ended_at >= ${iso(sinceMs)}::timestamptz
+        group by state`.execute(trx);
+      const n = (s: string): number => Number(r.rows.find((x) => x.state === s)?.n ?? "0");
+      return { admitted: n("admitted"), rejected: n("rejected"), abandoned: n("abandoned") };
+    });
+  }
+
   async consume(jti: string, nowMs: number): Promise<"used" | "already_used" | "unknown" | "expired"> {
     return this.tx(async (trx) => {
       const upd = await sql<{ jti: string }>`

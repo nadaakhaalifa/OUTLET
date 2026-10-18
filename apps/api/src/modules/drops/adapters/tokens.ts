@@ -24,3 +24,4 @@ export const RESERVE_DROP_UNITS = Symbol("drops.ReserveDropUnits");
 export const RELEASE_DROP_UNITS = Symbol("drops.ReleaseDropUnits");
 export const CLAIM_DROP_UNITS = Symbol("drops.ClaimDropUnits");
 export const DROP_GATE = Symbol("drops.DropGate");
+export const ADMIN_DROPS_OPS = Symbol("drops.AdminDropsOps");

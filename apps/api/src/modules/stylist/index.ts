@@ -33,3 +33,19 @@ export type {
   StylistLlmPort,
   StylistStore,
 } from "./domain/ports";
+
+// Stylist chat (spec P3-07)
+export { InMemoryChatStore, FakeChatIntent, NullChatIntent } from "./adapters/in-memory-chat";
+export { KyselyStylistChatStore, type ChatDb } from "./adapters/kysely-chat-store";
+export { GatewayChatIntent, InjectionSignalingLlm } from "./adapters/gateway-chat";
+export { StylistChat, DEFAULT_CHAT_CONFIG, type ChatConfig } from "./application/chat";
+export { FLAG_CHAT } from "./application/shared";
+export type {
+  ChatEvent,
+  ChatIntentInput,
+  ChatIntentOutcome,
+  ChatSessionRecord,
+  ChatTurnRecord,
+  StylistChatIntentPort,
+  StylistChatStore,
+} from "./domain/chat-ports";

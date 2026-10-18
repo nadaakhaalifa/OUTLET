@@ -6,6 +6,8 @@ import { search } from "@outlet/domain";
 
 export const CONCEPTS = search.CONCEPTS;
 export const CONDITIONS = search.CONDITIONS;
+export const DEPARTMENTS = search.DEPARTMENTS;
+export const departmentMatches = search.departmentMatches;
 export const DEFAULT_PAGE_SIZE = search.DEFAULT_PAGE_SIZE;
 export const MAX_FACETS = search.MAX_FACETS;
 export const MAX_PAGE_SIZE = search.MAX_PAGE_SIZE;
@@ -41,6 +43,7 @@ export const vocabulary = search.vocabulary;
 export type Concept = search.Concept;
 export type ConceptKind = search.ConceptKind;
 export type Condition = search.Condition;
+export type Department = search.Department;
 export type FilterKey = search.FilterKey;
 export type ParsedQuery = search.ParsedQuery;
 export type RelaxableKey = search.RelaxableKey;

@@ -1,11 +1,23 @@
+import { createHash } from "node:crypto";
 import type { NotificationTemplate } from "../domain/types";
+import { brandTemplates } from "./brand-templates";
+import { calendarTemplates } from "./calendar-templates";
+import { autoBuyTemplates } from "./auto-buy-templates";
 
 type Seed = Omit<NotificationTemplate, "id" | "validFromMs" | "active" | "version"> & { version?: number };
 
-let n = 0;
+/** Deterministic UUID (v5-shaped) from the template identity, so seeds can be inserted into Postgres uuid columns and re-seeding is idempotent. */
+const seedId = (key: string, channel: string, version: number): string => {
+  const h = createHash("sha256").update(`z-outlet.notification-template:${key}:${channel}:${version}`).digest();
+  h[6] = ((h[6] ?? 0) & 0x0f) | 0x50;
+  h[8] = ((h[8] ?? 0) & 0x3f) | 0x80;
+  const x = h.subarray(0, 16).toString("hex");
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+};
+
 const mk = (s: Seed): NotificationTemplate => ({
   ...s,
-  id: `seed-${(n += 1)}`,
+  id: seedId(s.key, s.channel, s.version ?? 1),
   version: s.version ?? 1,
   active: true,
   validFromMs: 0,
@@ -59,5 +71,11 @@ export function seedTemplates(): NotificationTemplate[] {
     mk({ ...base, key: "promo_drop", channel: "whatsapp", category: "marketing", type: "PROMOTIONS",
       bodyAr: "وصلت مجموعة جديدة من متاجرك المفضلة.", bodyEn: "A new drop from your favourite stores arrived.",
       providerTemplateId: "wa_promo_drop_v1" }),
+    // Brand onboarding (transactional; see brand-templates.ts).
+    ...brandTemplates(),
+    // Outfit calendar reminders (service messages; see calendar-templates.ts).
+    ...calendarTemplates(),
+    // Price-drop auto-buy notices (transactional; see auto-buy-templates.ts).
+    ...autoBuyTemplates(),
   ];
 }

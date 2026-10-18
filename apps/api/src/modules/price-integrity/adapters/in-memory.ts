@@ -1,3 +1,4 @@
+import { priceChangedEvent } from "../domain/price-changed";
 import type { EnforcementAction, ExternalEvidence, PriceEvent, ViolationKind } from "../domain/domain";
 import {
   PriceEventConflictError,
@@ -8,6 +9,7 @@ import {
   type EnforcementStore,
   type ExternalEvidencePort,
   type NewPriceEvent,
+  type PriceChangeSignalFn,
   type PriceEventStore,
   type ProductSkus,
   type SkuDirectory,
@@ -21,8 +23,10 @@ interface Stored {
 
 export class InMemoryPriceEventStore implements PriceEventStore {
   private readonly bySku = new Map<string, Stored[]>();
+  /** `price.changed` events this store would have written to the outbox (dev and tests). */
+  readonly outbox: { readonly eventType: "price.changed"; readonly payload: Readonly<Record<string, unknown>> }[] = [];
 
-  async append(e: NewPriceEvent): Promise<{ event: PriceEvent; created: boolean }> {
+  async append(e: NewPriceEvent, signal?: PriceChangeSignalFn): Promise<{ event: PriceEvent; created: boolean }> {
     const list = this.bySku.get(e.skuId) ?? [];
     const same = list.find((s) => s.key === e.idempotencyKey);
     if (same !== undefined) {
@@ -46,6 +50,15 @@ export class InMemoryPriceEventStore implements PriceEventStore {
     };
     list.push({ event, storeId: e.storeId, key: e.idempotencyKey });
     this.bySku.set(e.skuId, list);
+    if (signal !== undefined) {
+      let s: { verified: boolean; anomaly: boolean };
+      try {
+        s = signal(list.map((x) => x.event));
+      } catch {
+        s = { verified: false, anomaly: true };
+      }
+      this.outbox.push({ eventType: "price.changed", payload: priceChangedEvent(event, s).payload });
+    }
     return { event, created: true };
   }
 
@@ -138,6 +151,12 @@ export class InMemoryEnforcementStore implements EnforcementStore {
   }
   async openCrossChannelCount(storeId: string): Promise<number> {
     return this.rows.filter((r) => r.storeId === storeId && r.kind === "cross_channel_cheaper" && r.resolvedAtMs === null).length;
+  }
+  async openCrossChannel(storeId: string, afterSkuId: string | null, limit: number): Promise<readonly EnforcementRecord[]> {
+    return this.rows
+      .filter((r) => r.storeId === storeId && r.kind === "cross_channel_cheaper" && r.resolvedAtMs === null && r.skuId !== null && (afterSkuId === null || r.skuId > afterSkuId))
+      .sort((a, b) => ((a.skuId ?? "") < (b.skuId ?? "") ? -1 : 1))
+      .slice(0, limit);
   }
   async recent(storeId: string, limit: number): Promise<readonly EnforcementRecord[]> {
     return this.rows

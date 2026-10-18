@@ -21,7 +21,13 @@ import {
   StaticProviderRegistry,
 } from "./adapters/in-memory";
 import type {
+  AnalyticsPort,
+  ConsentPort,
+  ContactPort,
   DeliveryLogRepository,
+  InboxProcessedPort,
+  NotificationEventPublisher,
+  ProviderRegistry,
   FrequencyStore,
   InboxRepository,
   PreferenceRepository,
@@ -60,6 +66,10 @@ import { ListInbox, MarkInboxRead, RegisterPushToken } from "./application/inbox
 import { NotificationPreferences } from "./application/preferences";
 import { ProcessDue, SendNotification } from "./application/send-notification";
 
+const failClosed = (): ProviderRegistry => {
+  throw new NoProductionAdaptersError();
+};
+
 export interface NotificationsRepositories {
   readonly templates: TemplateRepository;
   readonly requests: RequestRepository;
@@ -74,6 +84,19 @@ export interface NotificationsRepositories {
 export interface NotificationsModuleOptions {
   /** Postgres repositories (KyselyNotifications*). Omitted means the in-memory fixtures. */
   readonly repositories?: NotificationsRepositories;
+  /**
+   * Required when config.adapters is "production": consent (privacy), contacts, providers
+   * (Unconfigured adapters that fail at call time), events, analytics and inbox dedupe.
+   * There is no default, so a production boot cannot get a FakeProvider.
+   */
+  readonly production?: {
+    readonly consent: ConsentPort;
+    readonly contacts: ContactPort;
+    readonly providers: ProviderRegistry;
+    readonly events: NotificationEventPublisher;
+    readonly analytics: AnalyticsPort;
+    readonly inboxProcessed: InboxProcessedPort;
+  };
   /** Contact returned for users with no explicit entry. Development only; omitted means unknown users are gone. */
   readonly defaultContact?: { readonly locale: "ar" | "en"; readonly phone: string | null; readonly email: string | null };
 }
@@ -81,16 +104,19 @@ export interface NotificationsModuleOptions {
 @Module({})
 export class NotificationsModule {
   static forRoot(config: AppConfig, options: NotificationsModuleOptions = {}): DynamicModule {
-    if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
+    const prod = options.production;
+    const devMode = config.adapters === "in-memory-dev";
+    if (!devMode && (prod === undefined || options.repositories === undefined)) throw new NoProductionAdaptersError();
     const r = options.repositories;
     const templates: TemplateRepository = r?.templates ?? new InMemoryTemplateRepository();
-    if (r === undefined) void Promise.all(seedTemplates().map((t) => templates.save(t)));
-    const providers = new StaticProviderRegistry({
+    if (r === undefined && devMode) void Promise.all(seedTemplates().map((t) => templates.save(t)));
+    // FakeProvider is built only on the dev branch; production uses `prod.providers` and nothing else.
+    const providers: ProviderRegistry = prod?.providers ?? (!devMode ? failClosed() : new StaticProviderRegistry({
       push: [new FakeProvider("expo_push", "push")],
       whatsapp: [new FakeProvider("wa_bsp", "whatsapp")],
       sms: [new FakeProvider("sms_primary", "sms"), new FakeProvider("sms_backup", "sms")],
       email: [new FakeProvider("email_primary", "email")],
-    });
+    }));
     return {
       module: NotificationsModule,
       controllers: [NotificationsController],
@@ -103,15 +129,15 @@ export class NotificationsModule {
         { provide: NOTIFICATION_SUPPRESSIONS, useValue: r?.suppressions ?? new InMemorySuppressionRepository() },
         { provide: NOTIFICATION_INBOX_REPO, useValue: r?.inbox ?? new InMemoryInboxRepository() },
         { provide: NOTIFICATION_PUSH_TOKENS, useValue: r?.pushTokens ?? new InMemoryPushTokenRepository() },
-        { provide: NOTIFICATION_CONSENT, useValue: new InMemoryConsentPort() },
+        { provide: NOTIFICATION_CONSENT, useValue: prod?.consent ?? new InMemoryConsentPort() },
         {
           provide: NOTIFICATION_CONTACTS,
-          useValue: new InMemoryContactPort(options.defaultContact ?? null),
+          useValue: prod?.contacts ?? new InMemoryContactPort(options.defaultContact ?? null),
         },
         { provide: NOTIFICATION_PROVIDERS, useValue: providers },
-        { provide: NOTIFICATION_EVENTS, useValue: new InMemoryNotificationEvents() },
-        { provide: NOTIFICATION_ANALYTICS, useValue: new InMemoryAnalytics() },
-        { provide: NOTIFICATION_INBOX_PROCESSED, useValue: new InMemoryInboxProcessed() },
+        { provide: NOTIFICATION_EVENTS, useValue: prod?.events ?? new InMemoryNotificationEvents() },
+        { provide: NOTIFICATION_ANALYTICS, useValue: prod?.analytics ?? new InMemoryAnalytics() },
+        { provide: NOTIFICATION_INBOX_PROCESSED, useValue: prod?.inboxProcessed ?? new InMemoryInboxProcessed() },
         {
           provide: SEND_NOTIFICATION,
           inject: [
@@ -123,17 +149,17 @@ export class NotificationsModule {
           useFactory: (
             templatesRepo: TemplateRepository,
             requests: RequestRepository,
-            log: InMemoryDeliveryLog,
+            log: DeliveryLogRepository,
             frequency: FrequencyStore,
             preferences: PreferenceRepository,
             suppressions: SuppressionRepository,
             inbox: InboxRepository,
             tokens: PushTokenRepository,
-            consent: InMemoryConsentPort,
-            contacts: InMemoryContactPort,
-            registry: StaticProviderRegistry,
-            events: InMemoryNotificationEvents,
-            analytics: InMemoryAnalytics,
+            consent: ConsentPort,
+            contacts: ContactPort,
+            registry: ProviderRegistry,
+            events: NotificationEventPublisher,
+            analytics: AnalyticsPort,
             clock: Clock,
             ids: IdGenerator,
           ) =>
@@ -150,7 +176,7 @@ export class NotificationsModule {
         {
           provide: HANDLE_DOMAIN_EVENT,
           inject: [NOTIFICATION_INBOX_PROCESSED, SEND_NOTIFICATION, NOTIFICATION_SUPPRESSIONS],
-          useFactory: (p: InMemoryInboxProcessed, s: SendNotification, sup: SuppressionRepository) =>
+          useFactory: (p: InboxProcessedPort, s: SendNotification, sup: SuppressionRepository) =>
             new HandleDomainEvent(p, s, sup),
         },
         {
@@ -159,7 +185,7 @@ export class NotificationsModule {
           useFactory: (
             p: PreferenceRepository,
             s: SuppressionRepository,
-            c: InMemoryConsentPort,
+            c: ConsentPort,
             clock: Clock,
           ) => new NotificationPreferences(p, s, c, clock),
         },

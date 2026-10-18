@@ -2,6 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, describe, expect, it } from "vitest";
 import { createPgliteDatabase, type PgliteInstance } from "../../../platform/db";
 import { describeSearchIndexContract, doc, req, P } from "../test/index-contract";
+import { describeSortAndFacetContract } from "../test/sort-facets-contract";
 import { describeSavedSearchContract } from "../test/saved-contract";
 import { createSearchDatabase } from "../test/pg-fixture";
 import { KyselySavedSearchRepository } from "./kysely-saved-searches";
@@ -25,6 +26,12 @@ describeSearchIndexContract("postgres fts + trigram / pglite", async () => {
   const port = await PostgresFtsSearchPort.create(db);
   return { port, writer: port };
 });
+
+describeSortAndFacetContract("postgres fts / pglite", async () => {
+  const { db } = await fresh(false);
+  const port = await PostgresFtsSearchPort.create(db);
+  return { port, writer: port };
+}, 4);
 
 describeSavedSearchContract("kysely / pglite", async () => {
   const { raw, db } = await fresh(false);

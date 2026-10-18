@@ -15,7 +15,17 @@ import {
   InMemorySizingEventLog,
   SizingStoreResolver,
 } from "./adapters/in-memory";
-import type { DemandRepository, FeedbackRepository, SizeChartRepository, SizeProfileRepository } from "./domain/ports";
+import type {
+  DemandRepository,
+  FeedbackRepository,
+  FieldCipherPort,
+  FitCatalogPort,
+  MeasurementsConsentPort,
+  OrderLineFitPort,
+  SizeChartRepository,
+  SizeProfileRepository,
+  SizingEventPublisher,
+} from "./domain/ports";
 import { SizingController } from "./adapters/sizing.controller";
 import {
   CREATE_SIZE_CHART,
@@ -61,12 +71,30 @@ export interface SizingModuleOptions {
     readonly feedback: FeedbackRepository;
     readonly demand: DemandRepository;
   };
+  /**
+   * Required when config.adapters is "production". The cipher is the KMS envelope cipher; there is
+   * NO default, so a production boot without one throws and the dev AES key can never be reached.
+   */
+  readonly production?: {
+    readonly cipher: FieldCipherPort;
+    readonly consent: MeasurementsConsentPort;
+    readonly fitCatalog: FitCatalogPort;
+    readonly orderLines: OrderLineFitPort;
+    readonly events: SizingEventPublisher;
+  };
 }
 
 @Module({})
 export class SizingModule {
   static forRoot(config: AppConfig, options: SizingModuleOptions = {}): DynamicModule {
-    if (config.adapters !== "in-memory-dev") throw new NoProductionAdaptersError();
+    const prod = options.production;
+    if (config.adapters !== "in-memory-dev" && (prod === undefined || options.repositories === undefined)) {
+      throw new NoProductionAdaptersError();
+    }
+    // The dev cipher exists only on the in-memory-dev branch; production never falls back to it.
+    const dev = config.adapters === "in-memory-dev" ? { cipher: new DevAesGcmFieldCipher() } : null;
+    const cipher: FieldCipherPort | undefined = prod?.cipher ?? dev?.cipher;
+    if (cipher === undefined) throw new NoProductionAdaptersError();
     return {
       module: SizingModule,
       controllers: [SizingController],
@@ -75,21 +103,21 @@ export class SizingModule {
         { provide: SIZE_CHART_REPOSITORY, useValue: options.repositories?.charts ?? new InMemorySizeChartRepository() },
         { provide: FIT_FEEDBACK_REPOSITORY, useValue: options.repositories?.feedback ?? new InMemoryFeedbackRepository() },
         { provide: SIZE_DEMAND_REPOSITORY, useValue: options.repositories?.demand ?? new InMemoryDemandRepository() },
-        { provide: FIELD_CIPHER, useValue: new DevAesGcmFieldCipher() },
-        { provide: MEASUREMENTS_CONSENT, useValue: new InMemoryMeasurementsConsent() },
-        { provide: FIT_CATALOG, useValue: new InMemoryFitCatalog() },
-        { provide: ORDER_LINE_FIT, useValue: new InMemoryOrderLines() },
-        { provide: SIZING_EVENTS, useValue: new InMemorySizingEventLog() },
+        { provide: FIELD_CIPHER, useValue: cipher },
+        { provide: MEASUREMENTS_CONSENT, useValue: prod?.consent ?? new InMemoryMeasurementsConsent() },
+        { provide: FIT_CATALOG, useValue: prod?.fitCatalog ?? new InMemoryFitCatalog() },
+        { provide: ORDER_LINE_FIT, useValue: prod?.orderLines ?? new InMemoryOrderLines() },
+        { provide: SIZING_EVENTS, useValue: prod?.events ?? new InMemorySizingEventLog() },
         { provide: SIZING_STORE_RESOLVER, useValue: new SizingStoreResolver() },
-        { provide: CODEC, inject: [FIELD_CIPHER], useFactory: (c: DevAesGcmFieldCipher) => new ProfileCodec(c) },
+        { provide: CODEC, inject: [FIELD_CIPHER], useFactory: (c: FieldCipherPort) => new ProfileCodec(c) },
         {
           provide: CREATE_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, CODEC, MEASUREMENTS_CONSENT, SIZING_EVENTS, CLOCK, ID_GENERATOR],
           useFactory: (
             r: SizeProfileRepository,
             c: ProfileCodec,
-            consent: InMemoryMeasurementsConsent,
-            ev: InMemorySizingEventLog,
+            consent: MeasurementsConsentPort,
+            ev: SizingEventPublisher,
             clock: Clock,
             ids: IdGenerator,
           ) => new CreateSizeProfile(r, c, consent, ev, clock, ids),
@@ -110,15 +138,15 @@ export class SizingModule {
           useFactory: (
             r: SizeProfileRepository,
             c: ProfileCodec,
-            consent: InMemoryMeasurementsConsent,
-            ev: InMemorySizingEventLog,
+            consent: MeasurementsConsentPort,
+            ev: SizingEventPublisher,
             clock: Clock,
           ) => new UpdateSizeProfile(r, c, consent, ev, clock),
         },
         {
           provide: DELETE_SIZE_PROFILE,
           inject: [SIZE_PROFILE_REPOSITORY, FIT_FEEDBACK_REPOSITORY, SIZING_EVENTS],
-          useFactory: (r: SizeProfileRepository, f: FeedbackRepository, ev: InMemorySizingEventLog) =>
+          useFactory: (r: SizeProfileRepository, f: FeedbackRepository, ev: SizingEventPublisher) =>
             new DeleteSizeProfile(r, f, ev),
         },
         {
@@ -137,12 +165,12 @@ export class SizingModule {
           useFactory: (
             p: SizeProfileRepository,
             codec: ProfileCodec,
-            consent: InMemoryMeasurementsConsent,
-            cat: InMemoryFitCatalog,
+            consent: MeasurementsConsentPort,
+            cat: FitCatalogPort,
             charts: SizeChartRepository,
             fb: FeedbackRepository,
             demand: DemandRepository,
-            ev: InMemorySizingEventLog,
+            ev: SizingEventPublisher,
             clock: Clock,
           ) => new RecommendFit(p, codec, consent, cat, charts, fb, demand, ev, clock),
         },
@@ -150,10 +178,10 @@ export class SizingModule {
           provide: SUBMIT_FIT_FEEDBACK,
           inject: [ORDER_LINE_FIT, FIT_FEEDBACK_REPOSITORY, SIZE_PROFILE_REPOSITORY, SIZING_EVENTS, CLOCK, ID_GENERATOR],
           useFactory: (
-            lines: InMemoryOrderLines,
+            lines: OrderLineFitPort,
             fb: FeedbackRepository,
             p: SizeProfileRepository,
-            ev: InMemorySizingEventLog,
+            ev: SizingEventPublisher,
             clock: Clock,
             ids: IdGenerator,
           ) => new SubmitFitFeedback(lines, fb, p, ev, clock, ids),
@@ -161,7 +189,7 @@ export class SizingModule {
         {
           provide: CREATE_SIZE_CHART,
           inject: [SIZE_CHART_REPOSITORY, SIZING_EVENTS, CLOCK, ID_GENERATOR],
-          useFactory: (r: SizeChartRepository, ev: InMemorySizingEventLog, clock: Clock, ids: IdGenerator) =>
+          useFactory: (r: SizeChartRepository, ev: SizingEventPublisher, clock: Clock, ids: IdGenerator) =>
             new CreateSizeChart(r, ev, clock, ids),
         },
         {

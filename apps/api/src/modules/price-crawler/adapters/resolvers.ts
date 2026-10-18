@@ -23,3 +23,10 @@ export class MatchingConfigResolver implements ResourceResolver {
     return { type: "feature_flag", id: "00000000-0000-4000-8000-0000000000c1", state: "active" };
   }
 }
+
+/** Admin console reads are not object scoped; role is checked in the controller. */
+export class CrawlAdminResolver implements ResourceResolver {
+  async resolve(): Promise<Resource | null> {
+    return { type: "admin_console", id: "price-crawler", state: "active" };
+  }
+}

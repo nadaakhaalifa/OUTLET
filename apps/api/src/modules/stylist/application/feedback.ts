@@ -56,8 +56,13 @@ export class SubmitFeedback {
 
 /** History clear / consent withdrawal (spec 13): erase outfits, feedback and the style vector. */
 export class ClearStylistHistory {
-  constructor(private readonly d: StylistDeps) {}
+  /** `chat` is the stylist chat store: chat sessions and turns follow the same consent and clear (spec P3-07). */
+  constructor(
+    private readonly d: StylistDeps,
+    private readonly chat?: { eraseForUser(userId: string): Promise<void> },
+  ) {}
   async execute(userId: string): Promise<void> {
     await this.d.store.eraseForUser(userId);
+    if (this.chat !== undefined) await this.chat.eraseForUser(userId);
   }
 }

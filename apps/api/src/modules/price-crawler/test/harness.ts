@@ -8,6 +8,7 @@ import { configureApp } from "../../../app.setup";
 import { loadConfig } from "../../../config/env";
 import { AUTHENTICATOR, PlatformModule, createIdGenerator, nodeCsprng, type Authenticator } from "../../../platform";
 import { FakeDomainVerifier, FakeTokenVault, InMemoryCrawlStore } from "../adapters/in-memory";
+import type { ParityWarning } from "../domain/ports";
 import { PriceCrawlerModule } from "../price-crawler.module";
 import { FakeClock, STORE_A, STORE_B, U } from "./fixtures";
 
@@ -60,6 +61,7 @@ export interface CrawlHarness {
   readonly verifier: FakeDomainVerifier;
   readonly vault: FakeTokenVault;
   readonly clock: FakeClock;
+  readonly parity: { items: ParityWarning[] };
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
@@ -89,11 +91,12 @@ export async function createCrawlHarness(): Promise<CrawlHarness> {
   const store = new InMemoryCrawlStore();
   const verifier = new FakeDomainVerifier();
   const vault = new FakeTokenVault();
+  const parity = { items: [] as ParityWarning[] };
   const moduleRef = await Test.createTestingModule({
-    imports: [PlatformModule.forRoot(config, { clock, ids }), TestAuthModule.register(), PriceCrawlerModule.forRoot(config, { store, verifier, vault })],
+    imports: [PlatformModule.forRoot(config, { clock, ids }), TestAuthModule.register(), PriceCrawlerModule.forRoot(config, { store, verifier, vault, parity: { openFor: async () => parity.items } })],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, config);
   await app.init();
-  return { app, store, verifier, vault, clock, http: () => request(app.getHttpServer()), close: () => app.close() };
+  return { app, store, verifier, vault, clock, parity, http: () => request(app.getHttpServer()), close: () => app.close() };
 }

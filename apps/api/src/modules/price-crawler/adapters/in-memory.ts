@@ -16,7 +16,9 @@ import type {
   FetchResponse,
   FingerprintSource,
   HttpFetchPort,
+  IncidentQuery,
   IncidentRecord,
+  IncidentRow,
   MatchRecord,
   MatchingConfigRecord,
   OfferParserPort,
@@ -34,7 +36,7 @@ export class InMemoryCrawlStore implements CrawlStore {
   readonly channels = new Map<string, ChannelRecord>();
   readonly snapshots: SnapshotRecord[] = [];
   readonly matches = new Map<string, MatchRecord>();
-  readonly incidents: IncidentRecord[] = [];
+  readonly incidents: IncidentRow[] = [];
   readonly configChanges: ConfigChange[] = [];
   readonly outbox: CrawlEvent[] = [];
   config: MatchingConfigRecord = { tauBp: 9_200, shadowOnly: true, version: 1 };
@@ -114,8 +116,15 @@ export class InMemoryCrawlStore implements CrawlStore {
     return this.labels;
   }
   async addIncident(i: IncidentRecord, events: readonly CrawlEvent[]) {
-    this.incidents.push(i);
+    this.incidents.push({ ...i, createdAtMs: i.createdAtMs ?? Date.now() });
     this.outbox.push(...events);
+  }
+  async listIncidents(q: IncidentQuery): Promise<readonly IncidentRow[]> {
+    return this.incidents
+      .filter((i) => (q.storeId === null || i.storeId === q.storeId) && (q.kind === null || i.kind === q.kind))
+      .filter((i) => q.after === null || i.createdAtMs < q.after.atMs || (i.createdAtMs === q.after.atMs && i.id < q.after.id))
+      .sort((a, b) => b.createdAtMs - a.createdAtMs || (a.id < b.id ? 1 : -1))
+      .slice(0, q.limit);
   }
 }
 

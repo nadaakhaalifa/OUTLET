@@ -57,6 +57,37 @@ afterAll(async () => {
   await h.close();
 });
 
+describe("admin ops view", () => {
+  it("is role and audience gated, paginated by keyset and never invents unmeasured values", async () => {
+    const id = await liveDrop();
+    expect((await h.http().get("/v1/admin/drops/ops")).status).toBe(401);
+    expect((await h.http().get("/v1/admin/drops/ops").set(bearer(TOKENS.shopperOnAdminAud))).status).toBe(403);
+    expect((await h.http().get("/v1/admin/drops/ops").set(bearer(TOKENS.adminSupport))).status).toBe(403);
+    expect((await h.http().get("/v1/admin/drops/ops").set(bearer(shopperToken(0)))).status).toBe(401);
+    expect((await h.http().get("/v1/admin/drops/ops").set(bearer(TOKENS.ownerA))).status).toBe(401);
+    expect((await h.http().get("/v1/admin/drops/ops?cursor=!!!").set(bearer(TOKENS.moderator))).status).toBe(400);
+    expect((await h.http().get("/v1/admin/drops/ops?limit=0").set(bearer(TOKENS.moderator))).status).toBe(400);
+    const r = await h.http().get("/v1/admin/drops/ops?limit=50").set(bearer(TOKENS.moderator));
+    expect(r.status).toBe(200);
+    const row = (r.body.items as { drop_id: string; queue_depth: number | null; admitted_last_minute: number | null; bot_block_rate_bps: number | null; admission_health: string }[]).find((x) => x.drop_id === id);
+    expect(row).toBeDefined();
+    expect(row?.admission_health).toBe("healthy");
+    expect(row?.bot_block_rate_bps).toBeNull();
+    expect(row?.admitted_last_minute).toBe(0);
+  });
+
+  it("paginates with a keyset cursor", async () => {
+    await liveDrop();
+    const first = await h.http().get("/v1/admin/drops/ops?limit=1").set(bearer(TOKENS.moderator));
+    expect(first.status).toBe(200);
+    expect(first.body.items).toHaveLength(1);
+    expect(first.body.page.has_more).toBe(true);
+    const second = await h.http().get(`/v1/admin/drops/ops?limit=1&cursor=${first.body.page.next_cursor as string}`).set(bearer(TOKENS.moderator));
+    expect(second.status).toBe(200);
+    expect(second.body.items[0].drop_id).not.toBe(first.body.items[0].drop_id);
+  });
+});
+
 describe("seller CRUD and authorization", () => {
   it("creates a DRAFT, returns money as strings", async () => {
     const r = await createDrop();

@@ -21,6 +21,7 @@ export type {
   ContactPort,
   EmailProvider,
   ProviderMessage,
+  ProviderRegistry,
   ProviderResult,
   PushProvider,
   SmsProvider,
@@ -37,3 +38,12 @@ export {
   KyselyTemplateRepository,
   type NotificationsDb,
 } from "./adapters/kysely-store";
+export {
+  DroppingAnalytics,
+  KyselyInboxProcessed,
+  LogNotificationEvents,
+  PrivacyConsentPort,
+  UnconfiguredChannelProvider,
+  unconfiguredProviderRegistry,
+} from "./adapters/production-adapters";
+export { seedTemplates } from "./adapters/seed-templates";

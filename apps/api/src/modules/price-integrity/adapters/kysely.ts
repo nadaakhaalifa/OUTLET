@@ -1,6 +1,6 @@
 import { sql, type Transaction } from "kysely";
 import { z } from "zod";
-import type { KyselyTransactionRunner, PlatformTables, RlsSession } from "../../../platform/db";
+import type { DbTx, KyselyTransactionRunner, PlatformTables, RlsSession } from "../../../platform/db";
 import {
   PRICE_EVENT_SOURCES,
   VIOLATION_KINDS,
@@ -9,6 +9,7 @@ import {
   type PriceEvent,
   type ViolationKind,
 } from "../domain/domain";
+import { priceChangedEvent } from "../domain/price-changed";
 import {
   PriceEventConflictError,
   type ClaimRecord,
@@ -18,7 +19,10 @@ import {
   type EnforcementStore,
   type ExternalEvidencePort,
   type NewPriceEvent,
+  type PriceChangeSignalFn,
   type PriceEventStore,
+  type ProductSkus,
+  type SkuDirectory,
 } from "../domain/ports";
 
 /** Raw SQL with Zod-validated rows (same approach as inventory and wishlists, ADR-0020). */
@@ -67,11 +71,16 @@ abstract class Base {
   protected run<T>(process: string, fn: (db: Transaction<PriceIntegrityDb>) => Promise<T>, session: RlsSession = this.session()): Promise<T> {
     return this.runner.run({ session, process, profile: "default" }, (tx) => fn(tx.db));
   }
+  /** Same as `run` but hands the unit-of-work handle over so the callback can `emit` to the outbox. */
+  protected runTx<T>(process: string, fn: (tx: DbTx<PriceIntegrityDb>) => Promise<T>, session: RlsSession = this.session()): Promise<T> {
+    return this.runner.run({ session, process, profile: "default" }, fn);
+  }
 }
 
 export class KyselyPriceEventStore extends Base implements PriceEventStore {
-  async append(e: NewPriceEvent): Promise<{ event: PriceEvent; created: boolean }> {
-    return this.run("price_integrity.append", async (db) => {
+  async append(e: NewPriceEvent, signal?: PriceChangeSignalFn): Promise<{ event: PriceEvent; created: boolean }> {
+    return this.runTx("price_integrity.append", async (tx) => {
+      const db = tx.db;
       const latest = await sql<{ valid_ms: string; store_id: string }>`
         select floor(extract(epoch from valid_from) * 1000)::text as valid_ms, store_id::text as store_id
         from price_events where sku_id = ${e.skuId}::uuid order by valid_from desc, id desc limit 1`.execute(db);
@@ -94,7 +103,20 @@ export class KyselyPriceEventStore extends Base implements PriceEventStore {
         values (${e.id}::uuid, ${e.skuId}::uuid, ${e.storeId}::uuid, ${e.priceAmount.toString()}::bigint, ${iso(e.validFromMs)}::timestamptz,
                 ${e.source}, ${e.actorId}::uuid, ${e.idempotencyKey})
         returning ${EVENT_COLS}`.execute(db);
-      return { event: toEvent(EventRow.parse(inserted.rows[0])), created: true };
+      const event = toEvent(EventRow.parse(inserted.rows[0]));
+      if (signal !== undefined) {
+        // Same transaction as the insert. The signal is computed from the history that includes
+        // the new row; any failure fails closed (verified=false, anomaly=true), never blocks the price.
+        let s: { verified: boolean; anomaly: boolean };
+        try {
+          const all = await sql`select ${EVENT_COLS} from price_events where sku_id = ${e.skuId}::uuid order by valid_from, id`.execute(db);
+          s = signal(all.rows.map((x) => toEvent(EventRow.parse(x))));
+        } catch {
+          s = { verified: false, anomaly: true };
+        }
+        await tx.emit(priceChangedEvent(event, s));
+      }
+      return { event, created: true };
     });
   }
 
@@ -245,6 +267,31 @@ export class KyselyEnforcementStore extends Base implements EnforcementStore {
     });
   }
 
+  async openCrossChannel(storeId: string, afterSkuId: string | null, limit: number): Promise<readonly EnforcementRecord[]> {
+    if (!UUID.test(storeId) || (afterSkuId !== null && !UUID.test(afterSkuId))) return [];
+    const n = Math.min(Math.max(Math.trunc(limit), 1), 500);
+    return this.run("price_integrity.open_findings_page", async (db) => {
+      const r = await sql`select ${ENF_COLS} from price_enforcement_actions
+        where store_id = ${storeId}::uuid and kind = 'cross_channel_cheaper' and resolved_at is null and sku_id is not null
+          and (${afterSkuId}::uuid is null or sku_id > ${afterSkuId}::uuid)
+        order by sku_id limit ${n}`.execute(db);
+      return r.rows.map((raw) => {
+        const row = EnfRow.parse(raw);
+        return {
+          id: row.id,
+          storeId: row.store_id,
+          skuId: row.sku_id,
+          kind: row.kind,
+          actions: ActionsSchema.parse(row.actions) as unknown as EnforcementAction[],
+          violationsInWindow: row.violations_in_window,
+          dedupeKey: row.dedupe_key,
+          openedAtMs: row.opened_ms,
+          resolvedAtMs: row.resolved_ms,
+        };
+      });
+    });
+  }
+
   async recent(storeId: string, limit: number): Promise<readonly EnforcementRecord[]> {
     if (!UUID.test(storeId)) return [];
     const n = Math.min(Math.max(Math.trunc(limit), 1), 100);
@@ -271,3 +318,35 @@ export class KyselyEnforcementStore extends Base implements EnforcementStore {
 }
 
 export type { ExternalEvidence, ExternalEvidencePort };
+
+/**
+ * Read-only SKU directory over the catalog's products and skus tables (system session, RLS select
+ * policy). The catalog module has no public product-to-SKU read yet, so this is the narrow query
+ * the price-integrity module needs: owning store, SKUs that are not delisted, and whether the
+ * product is `active` (only active listings expose evidence publicly).
+ */
+export class KyselySkuDirectory extends Base implements SkuDirectory {
+  async forProduct(productId: string): Promise<ProductSkus | null> {
+    if (!UUID.test(productId)) return null;
+    return this.run("price_integrity.sku_directory", async (db) => {
+      const p = await sql<{ store_id: string; status: string }>`
+        select store_id::text as store_id, status from products where id = ${productId}::uuid`.execute(db);
+      const product = p.rows[0];
+      if (product === undefined) return null;
+      const s = await sql<{ id: string }>`
+        select id::text as id from skus where product_id = ${productId}::uuid and status <> 'delisted' order by id`.execute(db);
+      return { storeId: product.store_id, skuIds: s.rows.map((r) => r.id), active: product.status === "active" };
+    });
+  }
+}
+
+/**
+ * Shadow-only external evidence: nothing is consulted from channels or crawlers, so every SKU has
+ * no external reference and claims rest on the internal price ledger alone (the strictest
+ * reference, spec 9.3). It never invents evidence; the crawler path stays Unconfigured elsewhere.
+ */
+export class ShadowExternalEvidence implements ExternalEvidencePort {
+  async lookup(): Promise<ReadonlyMap<string, ExternalEvidence>> {
+    return new Map();
+  }
+}

@@ -47,6 +47,7 @@ export interface ProductsTable {
   description_en: string | null;
   condition: "new_with_tags" | "new_without_tags" | "sample" | "minor_defect";
   status: Generated<"draft" | "active" | "paused" | "auto_paused_price_parity" | "delisted">;
+  department: Generated<"women" | "men" | "kids" | "unisex">;
   material: string | null;
   size_chart_id: string | null;
   offer_group_id: string | null;
@@ -84,6 +85,10 @@ export interface ProductMediaTable {
   position: number;
   blurhash: string | null;
   image_version: Generated<number>;
+  /** Background-removal job backing this image (migration 0085). image_ref/cutout_ref are catalog-purpose object keys. */
+  media_job_id: string | null;
+  image_ref: string | null;
+  cutout_ref: string | null;
   created_at: Generated<Date>;
 }
 
@@ -148,9 +153,9 @@ const cols = <T>(m: Record<keyof T, true>): readonly string[] => Object.keys(m).
 export const CATALOG_COLUMNS: Record<keyof CatalogTables, readonly string[]> = {
   brands: cols<BrandsTable>({ id: true, slug: true, name_ar: true, name_en: true, origin: true, authorization_required: true, active: true, created_at: true, updated_at: true }),
   categories: cols<CategoriesTable>({ id: true, parent_id: true, slug: true, name_ar: true, name_en: true, product_type: true, tax_category_code: true, return_class: true, requires_size_chart: true, sort_order: true, active: true, created_at: true, updated_at: true }),
-  products: cols<ProductsTable>({ id: true, store_id: true, brand_id: true, category_id: true, title_ar: true, title_en: true, description_ar: true, description_en: true, condition: true, status: true, material: true, size_chart_id: true, offer_group_id: true, facets: true, modest: true, version: true, published_at: true, created_at: true, updated_at: true }),
+  products: cols<ProductsTable>({ id: true, store_id: true, brand_id: true, category_id: true, title_ar: true, title_en: true, description_ar: true, description_en: true, condition: true, department: true, status: true, material: true, size_chart_id: true, offer_group_id: true, facets: true, modest: true, version: true, published_at: true, created_at: true, updated_at: true }),
   skus: cols<SkusTable>({ id: true, product_id: true, store_id: true, seller_sku: true, gtin: true, color_code: true, size_label: true, list_price_amount: true, currency: true, status: true, weight_grams: true, created_at: true, updated_at: true }),
-  product_media: cols<ProductMediaTable>({ id: true, product_id: true, store_id: true, sku_id: true, media_asset_id: true, kind: true, position: true, blurhash: true, image_version: true, created_at: true }),
+  product_media: cols<ProductMediaTable>({ id: true, product_id: true, store_id: true, sku_id: true, media_asset_id: true, kind: true, position: true, blurhash: true, image_version: true, media_job_id: true, image_ref: true, cutout_ref: true, created_at: true }),
   product_defects: cols<ProductDefectsTable>({ id: true, product_id: true, store_id: true, sku_id: true, description_ar: true, description_en: true, media_asset_id: true, created_at: true }),
   catalog_imports: cols<CatalogImportsTable>({ id: true, store_id: true, actor_id: true, upload_id: true, status: true, dry_run: true, rows_total: true, rows_ok: true, rows_failed: true, created_at: true, updated_at: true }),
   catalog_import_errors: cols<CatalogImportErrorsTable>({ id: true, import_id: true, store_id: true, row_number: true, column_name: true, code: true }),

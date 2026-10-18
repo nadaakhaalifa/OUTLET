@@ -210,7 +210,7 @@ export class CrawlProduct {
 
   private async incident(t: TargetRecord, kind: IncidentKind, host: string, url: string, detail: string | null): Promise<void> {
     const id = this.d.ids.uuidV7();
-    await this.d.store.addIncident({ id, targetId: t.id, storeId: t.storeId, kind, host, urlHash: sha256Hex(url), detail }, [
+    await this.d.store.addIncident({ id, targetId: t.id, storeId: t.storeId, kind, host, urlHash: sha256Hex(url), detail, createdAtMs: this.d.clock.nowMs() }, [
       { type: "crawl.incident", incidentId: id, kind },
     ]);
     this.d.metrics.increment("crawl_incident", { kind });

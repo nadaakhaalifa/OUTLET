@@ -26,6 +26,20 @@ export const rec = (n: number, over: Partial<Parameters<AdmissionStore["recordAd
 
 export function describeAdmissionStoreContract(name: string, make: () => Promise<StoreFixture>): void {
   describe(`admission store contract: ${name}`, () => {
+    it("counts ended tickets by state since a time", async () => {
+      const f = await make();
+      await f.ensureDrop(U(100));
+      await f.ensureUser(U(1));
+      await f.ensureUser(U(2));
+      await f.store.recordAdmission(rec(1), []);
+      await f.store.recordEnded(
+        { ticketId: U(399), dropId: U(100), userId: U(2), deviceHash: DEV(2), joinedAtMs: T0 - 9_000, state: "rejected", atMs: T0 + 1_000 },
+        [],
+      );
+      expect(await f.store.countsSince(U(100), T0)).toEqual({ admitted: 1, rejected: 1, abandoned: 0 });
+      expect(await f.store.countsSince(U(100), T0 + 2_000)).toEqual({ admitted: 0, rejected: 0, abandoned: 0 });
+    });
+
     it("records an admission once and returns the latest for the user", async () => {
       const f = await make();
       await f.ensureDrop(U(100));

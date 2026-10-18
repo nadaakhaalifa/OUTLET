@@ -328,3 +328,87 @@ describe("ParseSearchQuery and SuggestQueries", () => {
     expect(f.stores).toHaveLength(1);
   });
 });
+
+describe("sort, facet counts and brand (WP-API)", () => {
+  const seed = async (e: Env) => {
+    for (let i = 1; i <= 8; i += 1) {
+      await e.index.upsert(doc(i, { storeId: S(1 + (i % 2)), categoryIds: [`00000000-0000-4000-c000-00000000000${1 + (i % 3)}`], priceAmount: BigInt(i * 7 % 5 + 1) * 10_000n, listedAtMs: T0 - i * 1000 }));
+      e.facts.set(facts(i));
+    }
+  };
+  const withIndexPrimary = (): Env => {
+    const e = make();
+    const uc = new SearchProducts({
+      primary: e.index,
+      fallback: e.index,
+      killSwitch: e.kill,
+      facts: e.facts,
+      scope: e.scope,
+      events: e.events,
+      clock: { nowMs: () => T0 },
+    });
+    return { ...e, uc };
+  };
+
+  it("price_asc paging is stable, disjoint and complete", async () => {
+    const e = withIndexPrimary();
+    await seed(e);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const r = await e.uc.execute({ userId: USER, q: "", filter: {}, limit: 3, sort: "price_asc", ...(cursor !== undefined ? { cursor } : {}) });
+      seen.push(...r.items.map((i) => i.facts.productId));
+      cursor = r.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    expect(new Set(seen).size).toBe(8);
+    const prices = seen.map((id) => Number(id.slice(-12)) * 7 % 5);
+    expect([...prices].sort((a, b) => a - b)).toEqual(prices);
+  });
+
+  it("a cursor from one sort is rejected under another", async () => {
+    const e = withIndexPrimary();
+    await seed(e);
+    const r = await e.uc.execute({ userId: USER, q: "", filter: {}, limit: 3, sort: "price_asc" });
+    await expect(e.uc.execute({ userId: USER, q: "", filter: {}, limit: 3, sort: "price_desc", cursor: r.nextCursor ?? "" })).rejects.toBeInstanceOf(InvalidCursorError);
+  });
+
+  it("facet counts ignore the facet's own selection and are absent when degraded", async () => {
+    const e = withIndexPrimary();
+    await seed(e);
+    const cat1 = "00000000-0000-4000-c000-000000000001";
+    const r = await e.uc.execute({ userId: USER, q: "", filter: { categoryIds: [cat1], storeIds: [S(1)] } });
+    const cats = r.facetCounts?.categories ?? [];
+    expect(cats.reduce((n, b) => n + b.count, 0)).toBe(4); // store S1 docs, any category
+    const inCat1 = [1, 2, 3, 4, 5, 6, 7, 8].filter((n) => n % 3 === 0).length; // category c...01 is i%3==0
+    expect((r.facetCounts?.stores ?? []).reduce((n, b) => n + b.count, 0)).toBe(inCat1);
+    const degraded = make();
+    await seed(degraded);
+    const d = await degraded.uc.execute({ userId: USER, q: "", filter: {} });
+    expect(d.degraded).toBe(true);
+    expect(d.facetCounts).toBeUndefined();
+  });
+
+  it("omits counts on later pages and with live-only filters", async () => {
+    const e = withIndexPrimary();
+    await seed(e);
+    const first = await e.uc.execute({ userId: USER, q: "", filter: {}, limit: 3 });
+    expect(first.facetCounts).toBeDefined();
+    const second = await e.uc.execute({ userId: USER, q: "", filter: {}, limit: 3, cursor: first.nextCursor ?? "" });
+    expect(second.facetCounts).toBeUndefined();
+    for (let i = 1; i <= 8; i += 1) e.facts.set(facts(i, { codAvailable: true }));
+    const live = await e.uc.execute({ userId: USER, q: "", filter: { codAvailable: true } });
+    expect(live.items.length).toBeGreaterThan(0);
+    expect(live.facetCounts).toBeUndefined();
+  });
+
+  it("brand filter matches only documents that carry brand data", async () => {
+    const e = withIndexPrimary();
+    const B = "00000000-0000-4000-d000-000000000001";
+    await e.index.upsert(doc(1, { brandId: B }));
+    await e.index.upsert(doc(2));
+    e.facts.set(facts(1));
+    e.facts.set(facts(2));
+    const r = await e.uc.execute({ userId: USER, q: "", filter: { brandIds: [B] } });
+    expect(r.items.map((i) => i.facts.productId)).toEqual([P(1)]);
+  });
+});

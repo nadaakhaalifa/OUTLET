@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProfileCodec, CipherUnavailableError } from "./application/codec";
+import { ProfileCodec, CiphertextIntegrityError } from "./application/codec";
 import { explain } from "./application/explain";
 import { isoWeek } from "./application/recommend";
 import { DevAesGcmFieldCipher } from "./adapters/in-memory";
@@ -33,7 +33,7 @@ describe("ProfileCodec", () => {
 
   it("round trips and the ciphertext is bound to the profile id and field", async () => {
     const codec = new ProfileCodec(new DevAesGcmFieldCipher());
-    const sealed = await codec.seal("p1", {
+    const sealed = await codec.seal("u1", "p1", {
       label: "Nada",
       measurements: { waist_cm: 70 },
       usualSize: { brandId: null, sizeLabel: "M" },
@@ -42,15 +42,15 @@ describe("ProfileCodec", () => {
     expect(view.label).toBe("Nada");
     expect(view.measurements).toEqual({ waist_cm: 70 });
     expect(view.usualSize).toEqual({ brandId: null, sizeLabel: "M" });
-    // moved to another profile id: authentication fails, so it fails closed
-    await expect(codec.open(rec({ ...sealed, id: "p2" }))).rejects.toBeInstanceOf(CipherUnavailableError);
+    // moved to another profile id: authentication fails, so it fails closed as an integrity fault (not an outage)
+    await expect(codec.open(rec({ ...sealed, id: "p2" }))).rejects.toBeInstanceOf(CiphertextIntegrityError);
     // label ciphertext swapped into the measurements slot fails too
-    await expect(codec.open(rec({ ...sealed, measurementsEnc: sealed.labelEnc }))).rejects.toBeInstanceOf(CipherUnavailableError);
+    await expect(codec.open(rec({ ...sealed, measurementsEnc: sealed.labelEnc }))).rejects.toBeInstanceOf(CiphertextIntegrityError);
   });
 
   it("never stores plaintext fields", async () => {
     const codec = new ProfileCodec(new DevAesGcmFieldCipher());
-    const sealed = await codec.seal("p1", { label: "Sara", measurements: { hip_cm: 99.5 }, usualSize: null });
+    const sealed = await codec.seal("u1", "p1", { label: "Sara", measurements: { hip_cm: 99.5 }, usualSize: null });
     const text = Buffer.from(sealed.measurementsEnc ?? new Uint8Array()).toString("latin1");
     expect(text).not.toContain("hip_cm");
     expect(sealed.quickStartEnc).toBeNull();

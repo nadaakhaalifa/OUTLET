@@ -73,7 +73,7 @@ export class CreateSizeProfile {
     if ((await this.repo.countLive(userId)) >= MAX_PROFILES_PER_USER) return { kind: "limit_reached" };
     const id = this.ids.uuidV7();
     const now = this.clock.nowMs();
-    const sealed = await this.codec.seal(id, { label, measurements, usualSize: input.usualSize ?? null });
+    const sealed = await this.codec.seal(userId, id, { label, measurements, usualSize: input.usualSize ?? null });
     const record: ProfileRecord = {
       id,
       userId,
@@ -163,7 +163,7 @@ export class UpdateSizeProfile {
       measurements = r.value;
     }
     const usualSize = patch.usualSize ?? current.usualSize;
-    const sealed = await this.codec.seal(profileId, { label, measurements, usualSize });
+    const sealed = await this.codec.seal(userId, profileId, { label, measurements, usualSize });
     const next: ProfileRecord = {
       ...rec,
       ...sealed,

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Inject, Logger, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import { sha256Hex } from "@outlet/idempotency";
 import { UuidSchema } from "@outlet/validation";
 import { z } from "zod";
@@ -7,7 +7,7 @@ import { headerValue, type ApiRequest, type ApiResponse } from "../../../platfor
 import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import type { CreateSizeChart, GetSizeDemand, ListSizeCharts } from "../application/charts";
-import { CipherUnavailableError, type ProfileView } from "../application/codec";
+import { CipherUnavailableError, CiphertextIntegrityError, type ProfileView } from "../application/codec";
 import type { SubmitFitFeedback } from "../application/feedback";
 import type {
   CreateSizeProfile,
@@ -221,12 +221,24 @@ function failRecommend(o: Exclude<RecommendOutcome, { kind: "ok" }>): never {
   }
 }
 
-/** A cipher outage must never fall back to plaintext: the request fails closed with 503. */
+const integrityLogger = new Logger("SizingIntegrity");
+
+/**
+ * A cipher outage must never fall back to plaintext: the request fails closed with 503.
+ * Stored ciphertext that fails authentication is a data integrity fault: a distinct 500 Problem,
+ * logged by event name only (no ciphertext, AAD, identifiers or measurements).
+ */
 async function guardCipher<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
     if (e instanceof CipherUnavailableError) throw Problems.unavailable("encryption_unavailable");
+    if (e instanceof CiphertextIntegrityError) {
+      integrityLogger.error("sizing.ciphertext_integrity_failure");
+      throw new ProblemError(500, "ciphertext-integrity", "Stored profile data failed its integrity check", {
+        code: "ciphertext_integrity",
+      });
+    }
     throw e;
   }
 }

@@ -1,7 +1,7 @@
 import { sql, type Selectable, type Transaction } from "kysely";
 import type { KyselyTransactionRunner } from "../../../../platform/db";
 import { gtinVariantKey, type Product, type Sku } from "../../domain/catalog-domain";
-import type { CatalogEvent, ProductPage, ProductRepository } from "../../domain/ports";
+import type { ActiveProductStub, CatalogEvent, ProductImageVariant, ProductPage, ProductRepository } from "../../domain/ports";
 import type { DbTx } from "../../../../platform/db";
 import type { CatalogDb, ProductsTable, SkusTable } from "./schema";
 import type { SessionProvider } from "./session";
@@ -53,7 +53,7 @@ export class KyselyProductRepository implements ProductRepository {
     }
   }
 
-  async insert(product: Product, events: readonly CatalogEvent[] = []): Promise<void> {
+  async insert(product: Product, events: readonly CatalogEvent[] = [], variants: readonly ProductImageVariant[] = []): Promise<void> {
     if (product.status !== "draft") throw new Error("a product is inserted as draft");
     await this.runTx("catalog.product_insert", async (tx) => {
       const trx = tx.db;
@@ -69,6 +69,7 @@ export class KyselyProductRepository implements ProductRepository {
           description_ar: product.description?.ar ?? null,
           description_en: product.description?.en ?? null,
           condition: product.condition,
+          department: product.department,
           status: "draft",
           material: product.material ?? null,
           size_chart_id: product.sizeChartId ?? null,
@@ -78,12 +79,12 @@ export class KyselyProductRepository implements ProductRepository {
           updated_at: isoOf(product.updatedAtMs),
         })
         .execute();
-      await this.writeChildren(trx, product);
+      await this.writeChildren(trx, product, variants);
       await this.emitAll(tx, events);
     });
   }
 
-  private async writeChildren(trx: Trx, p: Product): Promise<void> {
+  private async writeChildren(trx: Trx, p: Product, variants: readonly ProductImageVariant[]): Promise<void> {
     if (p.skus.length > 0) {
       await trx
         .insertInto("skus")
@@ -103,10 +104,11 @@ export class KyselyProductRepository implements ProductRepository {
         )
         .execute();
     }
-    await this.writeMedia(trx, p);
+    await this.writeMedia(trx, p, variants);
   }
 
-  private async writeMedia(trx: Trx, p: Product): Promise<void> {
+  private async writeMedia(trx: Trx, p: Product, variants: readonly ProductImageVariant[]): Promise<void> {
+    const byJob = new Map(variants.map((v) => [v.jobId, v]));
     if (p.imageUploadIds.length > 0) {
       await trx
         .insertInto("product_media")
@@ -118,6 +120,9 @@ export class KyselyProductRepository implements ProductRepository {
             media_asset_id: id,
             position,
             blurhash: null,
+            media_job_id: byJob.get(id)?.jobId ?? null,
+            image_ref: byJob.get(id)?.imageRef ?? null,
+            cutout_ref: byJob.get(id)?.cutoutRef ?? null,
           })),
         )
         .execute();
@@ -155,6 +160,20 @@ export class KyselyProductRepository implements ProductRepository {
     });
   }
 
+  async listActiveStubs(offset: number, limit: number): Promise<readonly ActiveProductStub[]> {
+    return this.run("catalog.product_sitemap", async (trx) => {
+      const rows = await trx
+        .selectFrom("products")
+        .select(["id", "store_id", "updated_at"])
+        .where("status", "=", "active")
+        .orderBy("id", "asc")
+        .limit(limit)
+        .offset(offset)
+        .execute();
+      return rows.map((r) => ({ id: r.id, storeId: r.store_id, updatedAtMs: r.updated_at.getTime() }));
+    });
+  }
+
   async listByStore(
     storeId: string,
     cursor: { readonly createdAtMs: number; readonly id: string } | null,
@@ -174,7 +193,29 @@ export class KyselyProductRepository implements ProductRepository {
     });
   }
 
-  async replace(next: Product, expectedVersion: number, events: readonly CatalogEvent[] = []): Promise<boolean> {
+  async imageVariants(productIds: readonly string[]): Promise<ReadonlyMap<string, readonly ProductImageVariant[]>> {
+    const out = new Map<string, ProductImageVariant[]>();
+    if (productIds.length === 0) return out;
+    const rows = await this.run("catalog.product_image_variants", (trx) =>
+      trx
+        .selectFrom("product_media")
+        .select(["product_id", "media_job_id", "image_ref", "cutout_ref", "position"])
+        .where("product_id", "in", [...productIds])
+        .where("kind", "=", "image")
+        .where("media_job_id", "is not", null)
+        .orderBy("position")
+        .execute(),
+    );
+    for (const r of rows) {
+      if (r.media_job_id === null || r.image_ref === null) continue;
+      const list = out.get(r.product_id) ?? [];
+      list.push({ jobId: r.media_job_id, imageRef: r.image_ref, cutoutRef: r.cutout_ref });
+      out.set(r.product_id, list);
+    }
+    return out;
+  }
+
+  async replace(next: Product, expectedVersion: number, events: readonly CatalogEvent[] = [], variants: readonly ProductImageVariant[] = []): Promise<boolean> {
     try {
       await this.runTx("catalog.product_replace", async (tx) => {
         const trx = tx.db;
@@ -190,7 +231,7 @@ export class KyselyProductRepository implements ProductRepository {
         // Children first so the database publish gate sees the new gallery.
         await trx.deleteFrom("product_media").where("product_id", "=", next.id).execute();
         await trx.deleteFrom("product_defects").where("product_id", "=", next.id).execute();
-        await this.writeMedia(trx, next);
+        await this.writeMedia(trx, next, variants);
         for (const s of next.skus) {
           const updated = await trx
             .updateTable("skus")
@@ -234,6 +275,7 @@ export class KyselyProductRepository implements ProductRepository {
             description_ar: next.description?.ar ?? null,
             description_en: next.description?.en ?? null,
             condition: next.condition,
+            department: next.department,
             status: next.status,
             material: next.material ?? null,
             size_chart_id: next.sizeChartId ?? null,
@@ -291,6 +333,7 @@ export class KyselyProductRepository implements ProductRepository {
         categoryId: r.category_id,
         ...(r.brand_id !== null ? { brandId: r.brand_id } : {}),
         condition: r.condition,
+        department: r.department,
         ...(r.material !== null ? { material: r.material } : {}),
         imageUploadIds: media.filter((m) => m.product_id === r.id).map((m) => m.media_asset_id),
         defectPhotoUploadIds: defects.filter((d) => d.product_id === r.id).map((d) => d.media_asset_id),

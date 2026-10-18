@@ -22,7 +22,7 @@ import type {
   UpdateSavedSearch,
 } from "../application/saved-searches";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_QUERY_LENGTH } from "../domain/bridge";
-import { SearchFilterSchema, filterToWire } from "../domain/schema";
+import { SearchFilterSchema, SearchSortSchema, filterToWire } from "../domain/schema";
 import {
   CREATE_SAVED_SEARCH,
   DELETE_SAVED_SEARCH,
@@ -55,6 +55,7 @@ const SearchQuery = z
   .object({
     q: z.string().max(MAX_QUERY_LENGTH).optional(),
     filters: FiltersParam.optional(),
+    sort: SearchSortSchema.optional(),
     cursor: z.string().min(1).max(1024).optional(),
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   })
@@ -142,6 +143,7 @@ export class SearchController {
         q: q.q ?? "",
         filter: q.filters ?? {},
         limit: q.limit,
+        ...(q.sort !== undefined ? { sort: q.sort } : {}),
         ...(q.cursor !== undefined ? { cursor: q.cursor } : {}),
       }),
     );

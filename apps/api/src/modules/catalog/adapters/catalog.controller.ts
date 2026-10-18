@@ -7,8 +7,8 @@ import { headerValue, type ApiRequest, type ApiResponse } from "../../../platfor
 import { ProblemError, Problems } from "../../../platform/problem";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import type { CreateImport, GetImport } from "../application/imports";
-import type { CreateProduct, GetPublicProduct, GetSellerProduct, ListSellerProducts, UpdateProduct } from "../application/products";
-import type { Condition, ProductDraft, ProductPatch, SkuDraft } from "../domain/catalog-domain";
+import type { CreateProduct, GetPublicProduct, ListSellerCategories, GetSellerProduct, ListSellerProducts, UpdateProduct } from "../application/products";
+import type { Condition, Department, ProductDraft, ProductPatch, SkuDraft } from "../domain/catalog-domain";
 import {
   CREATE_IMPORT,
   CREATE_PRODUCT,
@@ -16,6 +16,7 @@ import {
   GET_PUBLIC_PRODUCT,
   GET_SELLER_PRODUCT,
   IMPORT_RESOLVER,
+  LIST_SELLER_CATEGORIES,
   LIST_SELLER_PRODUCTS,
   PRODUCT_RESOLVER,
   UPDATE_PRODUCT,
@@ -24,7 +25,35 @@ import { StoreAccess } from "./store-access";
 import { importWire, issuesToViolations, publicEtag, publicProductWire, sellerEtag, sellerProductWire } from "./wire";
 
 const CONDITION = z.enum(["new_with_tags", "new_without_tags", "sample", "minor_defect"]);
+const DEPARTMENT = z.enum(["women", "men", "kids", "unisex"]);
 const LocalizedIn = z.strictObject({ ar: z.string().min(1).max(2000), en: z.string().max(2000).optional() });
+
+/**
+ * One product image. Exactly one of `upload_id` (a plain upload) or `media_job_id` (an accepted or
+ * use-original background-removal job of this store). Additive: `image_upload_ids` keeps working.
+ */
+const ImageEntry = z
+  .strictObject({ upload_id: UuidSchema.optional(), media_job_id: UuidSchema.optional() })
+  .refine((v) => (v.upload_id === undefined) !== (v.media_job_id === undefined), { message: "exactly one of upload_id or media_job_id" });
+const ImagesField = z.array(ImageEntry).max(12);
+
+/** Normalises `images` into the id list the domain uses (a job id stands in for its image) plus the job ids. */
+function imagesOf(b: { image_upload_ids?: string[] | undefined; images?: z.output<typeof ImagesField> | undefined }): {
+  ids: string[] | undefined;
+  jobs: string[];
+} {
+  if (b.images === undefined) return { ids: b.image_upload_ids, jobs: [] };
+  const ids = b.images.map((i) => ((i.media_job_id ?? i.upload_id) as string).toLowerCase());
+  return { ids, jobs: b.images.flatMap((i) => (i.media_job_id !== undefined ? [i.media_job_id.toLowerCase()] : [])) };
+}
+
+function mediaJobProblem(code: string, index: number): ProblemError {
+  const pointer = `/images/${index}/media_job_id`;
+  if (code === "media_job_not_found") return Problems.notFound();
+  if (code === "media_job_attached_elsewhere") return new ProblemError(409, "media-job-attached", "This photo is already used by another product", { code });
+  if (code === "media_unavailable") return Problems.unavailable("provider_not_configured");
+  return unprocessable("catalog-validation-failed", "catalog_validation_failed", [{ pointer, code }]);
+}
 
 const CreateSchema = z.strictObject({
   title: LocalizedIn,
@@ -32,8 +61,10 @@ const CreateSchema = z.strictObject({
   category_id: UuidSchema,
   brand_id: UuidSchema.optional(),
   condition: CONDITION,
+  department: DEPARTMENT.default("unisex"),
   material: z.string().max(120).optional(),
   image_upload_ids: z.array(UuidSchema).max(12).optional(),
+  images: ImagesField.optional(),
   defect_photo_upload_ids: z.array(UuidSchema).max(12).optional(),
   size_chart_id: UuidSchema.optional(),
   skus: z
@@ -57,10 +88,13 @@ const UpdateSchema = z
     description: LocalizedIn.optional(),
     status: z.enum(["active", "paused"]).optional(),
     condition: CONDITION.optional(),
+    department: DEPARTMENT.optional(),
     material: z.string().max(120).optional(),
     size_chart_id: UuidSchema.optional(),
     image_upload_ids: z.array(UuidSchema).max(12).optional(),
+    images: ImagesField.optional(),
   })
+  .refine((v) => v.images === undefined || v.image_upload_ids === undefined, { message: "image_upload_ids and images are mutually exclusive" })
   .refine((v) => Object.keys(v).length > 0, { message: "at least one property is required" });
 
 const ImportSchema = z.strictObject({ upload_id: UuidSchema, dry_run: z.boolean().default(true) });
@@ -78,8 +112,9 @@ function toDraft(b: z.output<typeof CreateSchema>): ProductDraft {
     categoryId: b.category_id,
     ...(b.brand_id !== undefined ? { brandId: b.brand_id } : {}),
     condition: b.condition as Condition,
+    department: b.department as Department,
     ...(b.material !== undefined ? { material: b.material } : {}),
-    imageUploadIds: b.image_upload_ids ?? [],
+    imageUploadIds: imagesOf(b).ids ?? [],
     defectPhotoUploadIds: b.defect_photo_upload_ids ?? [],
     ...(b.size_chart_id !== undefined ? { sizeChartId: b.size_chart_id } : {}),
     skus: b.skus.map(
@@ -100,9 +135,10 @@ function toPatch(b: z.output<typeof UpdateSchema>): ProductPatch {
     ...(b.title !== undefined ? { title: localized(b.title) } : {}),
     ...(b.description !== undefined ? { description: localized(b.description) } : {}),
     ...(b.condition !== undefined ? { condition: b.condition as Condition } : {}),
+    ...(b.department !== undefined ? { department: b.department as Department } : {}),
     ...(b.material !== undefined ? { material: b.material } : {}),
     ...(b.size_chart_id !== undefined ? { sizeChartId: b.size_chart_id } : {}),
-    ...(b.image_upload_ids !== undefined ? { imageUploadIds: b.image_upload_ids } : {}),
+    ...(imagesOf(b).ids !== undefined ? { imageUploadIds: imagesOf(b).ids as string[] } : {}),
   };
 }
 
@@ -167,9 +203,29 @@ export class SellerCatalogController {
     @Inject(LIST_SELLER_PRODUCTS) private readonly listProducts: ListSellerProducts,
     @Inject(GET_SELLER_PRODUCT) private readonly getProduct: GetSellerProduct,
     @Inject(UPDATE_PRODUCT) private readonly updateProduct: UpdateProduct,
+    @Inject(LIST_SELLER_CATEGORIES) private readonly listCategories: ListSellerCategories,
     @Inject(CREATE_IMPORT) private readonly createImport: CreateImport,
     @Inject(GET_IMPORT) private readonly getImport: GetImport,
   ) {}
+
+  @Get("categories")
+  @AuthenticatedSelf("seller_api")
+  @RateLimit([{ dimension: "user", limit: 120, windowSeconds: 60 }])
+  async categories(@Req() req: ApiRequest, @Headers("x-store-id") storeHeader: string | undefined) {
+    await this.access.resolve(actorOf(req), "read", storeHeader);
+    const items = await this.listCategories.execute();
+    return {
+      items: items.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        name: { ar: c.nameAr, ...(c.nameEn !== undefined ? { en: c.nameEn } : {}) },
+        ...(c.parentId !== undefined ? { parent_id: c.parentId } : {}),
+        product_type: c.productType,
+        return_class: c.returnClass,
+        requires_size_chart: c.requiresSizeChart,
+      })),
+    };
+  }
 
   @Get("products")
   @AuthenticatedSelf("seller_api")
@@ -181,9 +237,9 @@ export class SellerCatalogController {
   ) {
     const storeId = await this.access.resolve(actorOf(req), "read", storeHeader);
     const cursor = q.cursor === undefined ? null : decodeCursor(CursorSchema.parse(q.cursor));
-    const { page, levels } = await this.listProducts.execute({ storeId, cursor, limit: q.limit });
+    const { page, levels, mediaJobIds } = await this.listProducts.execute({ storeId, cursor, limit: q.limit });
     return {
-      items: page.items.map((p) => sellerProductWire(p, levels)),
+      items: page.items.map((p) => sellerProductWire(p, levels, undefined, mediaJobIds.get(p.id) ?? [])),
       page: { next_cursor: page.nextCursor === null ? null : encodeCursor(page.nextCursor), has_more: page.nextCursor !== null },
     };
   }
@@ -200,10 +256,12 @@ export class SellerCatalogController {
   ) {
     const actor = actorOf(req);
     const storeId = await this.access.resolve(actor, "create", storeHeader);
-    const result = await this.createProduct.execute({ storeId, actorId: actor.id, draft: toDraft(body) });
+    const result = await this.createProduct.execute({ storeId, actorId: actor.id, draft: toDraft(body), mediaJobIds: imagesOf(body).jobs });
     switch (result.kind) {
       case "ok":
-        return sellerProductWire(result.product, result.levels);
+        return sellerProductWire(result.product, result.levels, undefined, result.mediaJobIds);
+      case "media_job":
+        throw mediaJobProblem(result.code, result.index);
       case "invalid":
         throw unprocessable("catalog-validation-failed", "catalog_validation_failed", issuesToViolations(result.issues));
       case "conflict":
@@ -225,7 +283,7 @@ export class SellerCatalogController {
     res.setHeader("ETag", etag);
     res.setHeader("Cache-Control", "private, no-cache");
     if (matchesList(headerValue(req, "if-none-match"), etag)) throw new ProblemError(304, "not-modified", "Not modified");
-    return sellerProductWire(found.product, found.levels);
+    return sellerProductWire(found.product, found.levels, undefined, found.mediaJobIds);
   }
 
   @Patch("products/:productId")
@@ -254,11 +312,14 @@ export class SellerCatalogController {
       actorId: actor.id,
       expectedVersion: current.product.version,
       patch: toPatch(body),
+      mediaJobIds: imagesOf(body).jobs,
       ...(body.status !== undefined ? { status: body.status } : {}),
     });
     switch (result.kind) {
       case "ok":
-        return sellerProductWire(result.product, result.levels);
+        return sellerProductWire(result.product, result.levels, undefined, result.mediaJobIds);
+      case "media_job":
+        throw mediaJobProblem(result.code, result.index);
       case "not_found":
         throw Problems.notFound();
       case "stale":

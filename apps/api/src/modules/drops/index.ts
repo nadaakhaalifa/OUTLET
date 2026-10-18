@@ -2,6 +2,7 @@
 export { DropsModule, MissingDropsPortsError, type DropsModuleOptions } from "./drops.module";
 export * from "./adapters/tokens";
 export {
+  FakeDropOps,
   FakeDropSwitches,
   FakeSocialSignals,
   InMemoryDropInventory,
@@ -16,6 +17,7 @@ export { DEFAULT_DROPS_CONFIG, type DropsConfig, type DropDeps } from "./applica
 export type {
   AdmissionVerifierPort,
   DropInventoryPort,
+  DropOpsSource,
   DropOutboxEvent,
   DropStore,
   PurchaseRecord,
@@ -25,3 +27,4 @@ export type {
   SwitchPort,
   UnitsSnapshot,
 } from "./domain/ports";
+export { AdminDropsOps, admissionHealth, type DropOpsRow, type OpsPage } from "./application/ops";

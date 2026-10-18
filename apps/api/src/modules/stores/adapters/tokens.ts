@@ -9,3 +9,6 @@ export const GET_NEW_COUNTS = Symbol("stores.GetNewCounts");
 export const MARK_FAVORITE_SEEN = Symbol("stores.MarkFavoriteSeen");
 export const APPLY_SELLER_KYC_EVENT = Symbol("stores.ApplySellerKycEvent");
 export const CHANGE_STORE_STATUS = Symbol("stores.ChangeStoreStatus");
+export const LIST_PUBLIC_STORES = Symbol("stores.ListPublicStores");
+export const GET_PUBLIC_STORE = Symbol("stores.GetPublicStore");
+export const LIST_PUBLIC_STORE_SITEMAP = Symbol("stores.ListPublicStoreSitemap");

@@ -32,7 +32,7 @@ describe("catalog module over Kysely + PGlite (RLS as app_user)", () => {
       .set(bearer(PRINCIPALS.ownerA))
       .set("Idempotency-Key", idemKey())
       .send({
-        title: { ar: "فستان كتان أبيض" },
+        title: { ar: "فستان كتان أبيض", en: "White linen dress" },
         description: { ar: "فستان صيفي خفيف" },
         category_id: SEED.categoryDresses,
         condition: "new_with_tags",

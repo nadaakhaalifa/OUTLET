@@ -13,14 +13,18 @@ import {
 } from "./adapters/kysely";
 import { devSeedStores } from "./adapters/dev-seed";
 import { InMemoryFavoriteRepository, InMemoryStoreActivityFeed, InMemoryStoreRepository } from "./adapters/in-memory";
+import { PublicStoresController } from "./adapters/public.controller";
 import { FavoriteStoresController, StoresController } from "./adapters/stores.controller";
 import {
   APPLY_SELLER_KYC_EVENT,
   CHANGE_STORE_STATUS,
   FAVORITE_REPOSITORY,
   GET_NEW_COUNTS,
+  GET_PUBLIC_STORE,
   GET_STORE,
   LIST_FAVORITES,
+  LIST_PUBLIC_STORE_SITEMAP,
+  LIST_PUBLIC_STORES,
   LIST_STORES,
   MARK_FAVORITE_SEEN,
   REPLACE_FAVORITES,
@@ -28,6 +32,7 @@ import {
   STORE_REPOSITORY,
 } from "./adapters/tokens";
 import { GetStore, ListStores } from "./application/directory";
+import { GetPublicStore, ListPublicStores, ListPublicStoreSitemap } from "./application/public";
 import { GetNewCounts, ListFavorites, MarkFavoriteSeen, ReplaceFavoriteStores } from "./application/favorites";
 import { ApplySellerKycEvent, ChangeStoreStatus } from "./application/seller-lifecycle";
 import type { FavoriteRepository, StoreActivityFeed, StoreRepository } from "./domain/ports";
@@ -57,7 +62,7 @@ export class StoresModule {
     const feed = p ? new KyselyStoreActivityFeed(p.runner, p.session) : new InMemoryStoreActivityFeed();
     return {
       module: StoresModule,
-      controllers: [StoresController, FavoriteStoresController],
+      controllers: [StoresController, FavoriteStoresController, PublicStoresController],
       providers: [
         { provide: STORE_REPOSITORY, useValue: stores },
         { provide: FAVORITE_REPOSITORY, useValue: favorites },
@@ -71,6 +76,21 @@ export class StoresModule {
           provide: GET_STORE,
           inject: [STORE_REPOSITORY, FAVORITE_REPOSITORY],
           useFactory: (s: StoreRepository, f: FavoriteRepository) => new GetStore(s, f),
+        },
+        {
+          provide: LIST_PUBLIC_STORES,
+          inject: [STORE_REPOSITORY, FAVORITE_REPOSITORY],
+          useFactory: (s: StoreRepository, f: FavoriteRepository) => new ListPublicStores(s, f),
+        },
+        {
+          provide: GET_PUBLIC_STORE,
+          inject: [STORE_REPOSITORY, FAVORITE_REPOSITORY],
+          useFactory: (s: StoreRepository, f: FavoriteRepository) => new GetPublicStore(s, f),
+        },
+        {
+          provide: LIST_PUBLIC_STORE_SITEMAP,
+          inject: [STORE_REPOSITORY],
+          useFactory: (s: StoreRepository) => new ListPublicStoreSitemap(s),
         },
         {
           provide: LIST_FAVORITES,
@@ -106,6 +126,8 @@ export class StoresModule {
           useFactory: (s: StoreRepository) => new ChangeStoreStatus(s),
         },
       ],
+      // The brand onboarding composition provisions stores through the repository (composition/brand-wiring.ts).
+      exports: [STORE_REPOSITORY],
     };
   }
 }

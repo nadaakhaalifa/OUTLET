@@ -16,3 +16,4 @@ export const LIST_SAVED_SEARCHES = Symbol("search.ListSavedSearches");
 export const GET_SAVED_SEARCH = Symbol("search.GetSavedSearch");
 export const UPDATE_SAVED_SEARCH = Symbol("search.UpdateSavedSearch");
 export const DELETE_SAVED_SEARCH = Symbol("search.DeleteSavedSearch");
+export const SEARCH_SYNC_EVENT_CONSUMER = Symbol("search.SyncEventConsumer");

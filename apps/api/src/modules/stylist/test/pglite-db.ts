@@ -16,7 +16,7 @@ export interface PgliteLike {
   close(): Promise<void>;
 }
 
-/** 0039 needs users (0006) and the helper functions and roles (0002, 0007). */
+/** 0039 (and the chat tables 0066, 0067) need users (0006) and the helper functions and roles (0002, 0007). */
 export const STYLIST_MIGRATION_FILES = [
   "0001_extensions.sql",
   "0002_roles_and_helpers.sql",
@@ -30,6 +30,8 @@ export const STYLIST_MIGRATION_FILES = [
   "0010_ledger_owner_bank.sql",
   "0011_ledger_account_types.sql",
   "0039_stylist.sql",
+  "0066_stylist_chat.sql",
+  "0067_stylist_chat_settings_quota.sql",
 ] as const;
 
 export const migrationSql = (file: string): string => readFileSync(resolve(MIGRATIONS, file), "utf8");

@@ -1,4 +1,5 @@
 import type {
+  ActiveProductStub,
   CatalogEvent,
   CatalogEventPublisher,
   CategoryRecord,
@@ -8,6 +9,7 @@ import type {
   MediaUrl,
   MediaUrlResolver,
   PriceBlockReader,
+  ProductImageVariant,
   ProductPage,
   ProductRepository,
   SizeChartStatusReader,
@@ -19,6 +21,8 @@ import type {
   TaxonomyRepository,
   UploadReader,
 } from "../domain/ports";
+import { CatalogListingSnapshots } from "./production";
+import type { CatalogClock } from "../domain/ports";
 import { gtinVariantKey, type PriceBlockInput, type Product, type SizeChartStatus } from "../domain/catalog-domain";
 
 /** DEVELOPMENT FIXTURE: lost on restart, single process. Production adapters are Postgres (migration 0012). */
@@ -27,8 +31,11 @@ export class InMemoryProductRepository implements ProductRepository {
 
   constructor(private readonly sink?: CatalogEventPublisher) {}
 
-  async insert(product: Product, events: readonly CatalogEvent[] = []): Promise<void> {
+  private readonly variants = new Map<string, readonly ProductImageVariant[]>();
+
+  async insert(product: Product, events: readonly CatalogEvent[] = [], variants: readonly ProductImageVariant[] = []): Promise<void> {
     this.rows.set(product.id, product);
+    this.variants.set(product.id, [...variants]);
     await this.sink?.publish(events);
   }
   async findInStore(storeId: string, id: string): Promise<Product | null> {
@@ -54,12 +61,28 @@ export class InMemoryProductRepository implements ProductRepository {
     const more = start + limit < all.length;
     return { items, nextCursor: more && last !== undefined ? `${last.createdAtMs}:${last.id}` : null };
   }
-  async replace(next: Product, expectedVersion: number, events: readonly CatalogEvent[] = []): Promise<boolean> {
+  async imageVariants(productIds: readonly string[]): Promise<ReadonlyMap<string, readonly ProductImageVariant[]>> {
+    const out = new Map<string, readonly ProductImageVariant[]>();
+    for (const id of productIds) {
+      const v = this.variants.get(id);
+      if (v !== undefined && v.length > 0) out.set(id, v);
+    }
+    return out;
+  }
+  async replace(next: Product, expectedVersion: number, events: readonly CatalogEvent[] = [], variants: readonly ProductImageVariant[] = []): Promise<boolean> {
     const cur = this.rows.get(next.id);
     if (cur === undefined || cur.version !== expectedVersion) return false;
     this.rows.set(next.id, next);
+    this.variants.set(next.id, [...variants]);
     await this.sink?.publish(events);
     return true;
+  }
+  async listActiveStubs(offset: number, limit: number): Promise<readonly ActiveProductStub[]> {
+    return [...this.rows.values()]
+      .filter((p) => p.status === "active")
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(offset, offset + limit)
+      .map((p) => ({ id: p.id, storeId: p.storeId, updatedAtMs: p.updatedAtMs }));
   }
   async takenGtinVariants(storeId: string): Promise<ReadonlySet<string>> {
     const out = new Set<string>();
@@ -215,7 +238,7 @@ export const SEED_CATEGORIES: readonly CategoryRecord[] = [
   { id: SEED.categoryDresses, slug: "dresses", nameAr: "فساتين", nameEn: "Dresses", productType: "dress", returnClass: "standard", requiresSizeChart: false, active: true },
   { id: SEED.categoryUnderwear, slug: "underwear", nameAr: "ملابس داخلية", nameEn: "Underwear", productType: "underwear", returnClass: "hygiene", requiresSizeChart: false, active: true },
   { id: SEED.categoryShoesChart, slug: "shoes", nameAr: "أحذية", nameEn: "Shoes", productType: "shoes", returnClass: "standard", requiresSizeChart: true, active: true },
-  { id: SEED.categoryInactive, slug: "retired", nameAr: "قسم متوقف", productType: "misc", returnClass: "standard", requiresSizeChart: false, active: false },
+  { id: SEED.categoryInactive, slug: "retired", nameAr: "قسم متوقف", nameEn: "Retired section", productType: "misc", returnClass: "standard", requiresSizeChart: false, active: false },
 ];
 export const SEED_BRANDS: readonly BrandRecord[] = [{ id: SEED.brandAcme, slug: "acme", nameAr: "أكمي", nameEn: "Acme" }];
 
@@ -246,4 +269,22 @@ export function createCatalogDevFixtures(): CatalogDevFixtures {
     media: new InMemoryMedia(),
     events,
   };
+}
+
+/** Dev only: listing snapshots over the in-memory fixtures (same read model as the HTTP product page). */
+export function createCatalogDevListingSnapshots(f: CatalogDevFixtures, clock: CatalogClock): CatalogListingSnapshots {
+  return new CatalogListingSnapshots({
+    products: f.products,
+    taxonomy: f.taxonomy,
+    uploads: f.uploads,
+    stock: f.stock,
+    stockSeeder: f.stock,
+    prices: f.prices,
+    stores: f.stores,
+    sizeCharts: f.sizeCharts,
+    media: f.media,
+    events: f.events,
+    clock,
+    ids: { uuidV7: () => { throw new Error("listing snapshots never create ids"); } },
+  });
 }

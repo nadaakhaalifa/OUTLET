@@ -18,6 +18,9 @@ import {
   InMemoryStylistStore,
   StaticStylistFlags,
 } from "../adapters/in-memory";
+import { FakeChatIntent, InMemoryChatStore } from "../adapters/in-memory-chat";
+import { DEFAULT_CHAT_CONFIG, type ChatConfig } from "../application/chat";
+import { FLAG_CHAT } from "../application/shared";
 import { StylistModule } from "../stylist.module";
 import { DEFAULT_STYLIST_CONFIG, type StylistConfig } from "../application/shared";
 import { FLAG_LLM, FLAG_ML } from "../application/shared";
@@ -72,6 +75,9 @@ const seller = (id: string): Actor => ({
 
 export const USERS = { a: U(1), b: U(2), seller: U(11) };
 export const TOKENS = {
+  sellerFresh: "token-seller-fresh-00000000000024",
+  sellerA: "token-seller-a-00000000000000021",
+  sellerOther: "token-seller-other-0000000000022",
   a: "token-shopper-a-000000000000001",
   b: "token-shopper-b-000000000000002",
   sellerOnBuyerAud: "token-seller-on-buyer-aud-0000011",
@@ -90,11 +96,13 @@ export interface StylistHarness {
   readonly bag: FakeBag;
   readonly flags: StaticStylistFlags;
   readonly llm: FakeStylistLlm;
+  readonly chat: InMemoryChatStore;
+  readonly chatIntent: FakeChatIntent;
   http(): ReturnType<typeof request>;
   close(): Promise<void>;
 }
 
-export async function createStylistHarness(over: { config?: StylistConfig } = {}): Promise<StylistHarness> {
+export async function createStylistHarness(over: { config?: StylistConfig; chatConfig?: ChatConfig } = {}): Promise<StylistHarness> {
   const config = loadConfig({ NODE_ENV: "test" });
   const clock = new FakeClock();
   const ids = createIdGenerator(clock, nodeCsprng);
@@ -102,6 +110,9 @@ export async function createStylistHarness(over: { config?: StylistConfig } = {}
   tokens.add(TOKENS.a, { actor: shopper(USERS.a), aud: "buyer_api" });
   tokens.add(TOKENS.b, { actor: shopper(USERS.b), aud: "buyer_api" });
   tokens.add(TOKENS.sellerOnBuyerAud, { actor: seller(USERS.seller), aud: "buyer_api" });
+  tokens.add(TOKENS.sellerA, { actor: seller(U(21)), aud: "seller_api" });
+  tokens.add(TOKENS.sellerOther, { actor: { ...seller(U(22)), grants: [{ kind: "brand", storeId: U(9777), role: "owner" }] }, aud: "seller_api" });
+  tokens.add(TOKENS.sellerFresh, { actor: { ...seller(U(24)), grants: [{ kind: "brand", storeId: U(9555), role: "owner" }] }, aud: "seller_api" });
   tokens.add(TOKENS.shopperOnSellerAud, { actor: shopper(USERS.a), aud: "seller_api" });
 
   @Global()
@@ -121,7 +132,9 @@ export async function createStylistHarness(over: { config?: StylistConfig } = {}
   const live = new FakeLivePrices();
   for (const c of candidates.items) live.prices.set(c.itemId, { pricePiastres: c.pricePiastres, storeId: c.storeId, inStockInSize: true });
   const bag = new FakeBag();
-  const flags = new StaticStylistFlags(new Set([FLAG_ML, FLAG_LLM]));
+  const flags = new StaticStylistFlags(new Set([FLAG_ML, FLAG_LLM, FLAG_CHAT]));
+  const chat = new InMemoryChatStore();
+  const chatIntent = new FakeChatIntent();
   const llm = new FakeStylistLlm();
 
   const moduleRef = await Test.createTestingModule({
@@ -139,6 +152,9 @@ export async function createStylistHarness(over: { config?: StylistConfig } = {}
         flags,
         llm,
         config: over.config ?? DEFAULT_STYLIST_CONFIG,
+        chatStore: chat,
+        chatIntent,
+        chatConfig: over.chatConfig ?? DEFAULT_CHAT_CONFIG,
       }),
     ],
   }).compile();
@@ -157,6 +173,8 @@ export async function createStylistHarness(over: { config?: StylistConfig } = {}
     bag,
     flags,
     llm,
+    chat,
+    chatIntent,
     http: () => request(app.getHttpServer()),
     close: () => app.close(),
   };

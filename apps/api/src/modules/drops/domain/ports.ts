@@ -112,3 +112,10 @@ export interface AdmissionVerifierPort {
 }
 
 export const ACTIVE_STATES: readonly DropState[] = ["SCHEDULED", "EARLY_ACCESS", "LIVE"];
+
+/** Stored waiting-room counters (the waiting-room module's WaitingRoomOpsCounters, seen structurally). */
+export interface DropOpsSource {
+  /** null = the queue backend could not be read (unmeasured). */
+  queueDepth(dropId: string): Promise<number | null>;
+  windowCounts(dropId: string, windowMs: number): Promise<{ readonly admitted: number; readonly rejected: number; readonly abandoned: number }>;
+}

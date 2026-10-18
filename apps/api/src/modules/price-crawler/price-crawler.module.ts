@@ -17,7 +17,9 @@ import {
   StaticCrawlFlags,
 } from "./adapters/in-memory";
 import { CrawlerController } from "./adapters/crawler.controller";
-import { CrawlStoreResolver, MatchingConfigResolver } from "./adapters/resolvers";
+import { CrawlIncidentsController, CrawlStoreAccess } from "./adapters/incidents.controller";
+import { ListCrawlIncidents, ListParityWarnings } from "./application/incidents";
+import { CrawlAdminResolver, CrawlStoreResolver, MatchingConfigResolver } from "./adapters/resolvers";
 import * as T from "./adapters/tokens";
 import {
   ChangeMatchingConfig,
@@ -43,6 +45,7 @@ import type {
   FingerprintSource,
   HttpFetchPort,
   OfferParserPort,
+  ParityWarningsPort,
   TokenVaultPort,
 } from "./domain/ports";
 
@@ -62,6 +65,8 @@ export interface PriceCrawlerOptions {
   readonly attributes?: AttributeCheckPort;
   readonly fingerprints?: FingerprintSource;
   readonly metrics?: CrawlMetrics;
+  /** Open cross-channel findings from price-integrity (PriceIntegrityParityAdapter). Default: none. */
+  readonly parity?: ParityWarningsPort;
   /** Labelled validation split used to justify tau before leaving shadow mode. Empty fails closed. */
   readonly validationPairs?: () => Promise<readonly { readonly confBp: number; readonly same: boolean }[]>;
 }
@@ -103,6 +108,7 @@ export class PriceCrawlerModule {
     const fingerprints = o.fingerprints ?? new FakeFingerprints();
     const metrics = o.metrics ?? new InMemoryCrawlMetrics();
     const pacer = new DomainPacer();
+    const parity: ParityWarningsPort = o.parity ?? { openFor: async () => [] };
 
     const RUNTIME = Symbol("crawler.Runtime");
     const runtime = (clock: Clock, ids: IdGenerator) => {
@@ -124,7 +130,7 @@ export class PriceCrawlerModule {
     const from = (token: symbol, pick: (r: Runtime) => unknown) => ({ provide: token, inject: [RUNTIME], useFactory: (r: Runtime) => pick(r) });
     return {
       module: PriceCrawlerModule,
-      controllers: [CrawlerController],
+      controllers: [CrawlerController, CrawlIncidentsController],
       providers: [
         { provide: T.CRAWL_STORE, useValue: store },
         { provide: T.CRAWL_FLAGS, useValue: flags },
@@ -140,6 +146,11 @@ export class PriceCrawlerModule {
         { provide: T.CRAWL_STORE_RESOLVER, useValue: new CrawlStoreResolver("store_settings") },
         { provide: T.CRAWL_STORE_PRODUCT_RESOLVER, useValue: new CrawlStoreResolver("store_product") },
         { provide: T.CRAWL_CONFIG_RESOLVER, useValue: new MatchingConfigResolver() },
+        CrawlStoreAccess,
+        { provide: T.CRAWL_PARITY, useValue: parity },
+        { provide: T.CRAWL_ADMIN_RESOLVER, useValue: new CrawlAdminResolver() },
+        { provide: T.CRAWL_LIST_INCIDENTS, useValue: new ListCrawlIncidents(store) },
+        { provide: T.CRAWL_LIST_PARITY, inject: [CLOCK], useFactory: (c: Clock) => new ListParityWarnings(parity, () => c.nowMs()) },
         { provide: RUNTIME, inject: [CLOCK, ID_GENERATOR], useFactory: (c: Clock, ids: IdGenerator) => runtime(c, ids) },
         from(T.REGISTER_CRAWL_TARGET, (r) => r.register),
         from(T.VERIFY_CRAWL_TARGET, (r) => r.verify),

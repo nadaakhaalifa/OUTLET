@@ -1,3 +1,4 @@
+import { AdminDropsOps } from "./application/ops";
 import { Module, type DynamicModule } from "@nestjs/common";
 import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
@@ -28,6 +29,7 @@ import type {
   DropInventoryPort,
   DropStore,
   SocialSignalsPort,
+  DropOpsSource,
   SoldOutFlagPort,
   SwitchPort,
 } from "./domain/ports";
@@ -41,6 +43,8 @@ export interface DropsModuleOptions {
   readonly signals?: SocialSignalsPort;
   readonly switches?: SwitchPort;
   readonly verifier?: AdmissionVerifierPort;
+  /** Stored waiting-room counters for GET /v1/admin/drops/ops; absent = those fields are null (unmeasured). */
+  readonly ops?: DropOpsSource;
 }
 
 export class MissingDropsPortsError extends Error {
@@ -96,6 +100,7 @@ export class DropsModule {
         reserve: new ReserveDropUnits(d),
         release: new ReleaseDropUnits(d),
         claim: new ClaimDropUnits(d),
+        ops: new AdminDropsOps(store, o.ops ?? null, clock),
       };
     };
     type Runtime = ReturnType<typeof runtime>;
@@ -132,6 +137,7 @@ export class DropsModule {
         from(T.RESERVE_DROP_UNITS, (r) => r.reserve),
         from(T.RELEASE_DROP_UNITS, (r) => r.release),
         from(T.CLAIM_DROP_UNITS, (r) => r.claim),
+        from(T.ADMIN_DROPS_OPS, (r) => r.ops),
       ],
       exports: [T.DROP_GATE, T.ADVANCE_DROPS, T.RESERVE_DROP_UNITS, T.RELEASE_DROP_UNITS, T.CLAIM_DROP_UNITS],
     };

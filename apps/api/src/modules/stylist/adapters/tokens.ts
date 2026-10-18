@@ -16,3 +16,11 @@ export const PLAN_CAPSULE = Symbol("stylist.PlanCapsule");
 export const ADD_OUTFIT_TO_BAG = Symbol("stylist.AddOutfitToBag");
 export const SUBMIT_FEEDBACK = Symbol("stylist.SubmitFeedback");
 export const CLEAR_STYLIST_HISTORY = Symbol("stylist.ClearStylistHistory");
+export const STYLIST_SELLER_RESOLVER = Symbol("stylist.SellerResolver");
+export const GET_STORE_INCLUSION = Symbol("stylist.GetStoreInclusion");
+
+// Stylist chat (spec P3-07)
+export const STYLIST_CHAT_STORE = Symbol("stylist.StylistChatStore");
+export const STYLIST_CHAT_INTENT_PORT = Symbol("stylist.StylistChatIntentPort");
+export const STYLIST_CHAT = Symbol("stylist.StylistChat");
+export const STYLIST_CHAT_SESSION_RESOLVER = Symbol("stylist.ChatSessionResolver");

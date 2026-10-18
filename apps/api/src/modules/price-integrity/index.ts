@@ -10,10 +10,12 @@ export type {
   SkuEvidenceView,
   StoreTrustView,
 } from "./application/service";
+export { KyselyEnforcementStore, KyselySkuDirectory, ShadowExternalEvidence } from "./adapters/kysely";
 export { createPriceIntegrityDevFixtures, type PriceIntegrityDevFixtures } from "./adapters/in-memory";
 export { SYSTEM_SESSION as PRICE_INTEGRITY_SYSTEM_SESSION, type PriceIntegrityDb, type SessionProvider as PriceIntegritySessionProvider } from "./adapters/kysely";
 export type {
   ClaimStore,
+  EnforcementRecord,
   EnforcementStore,
   ExternalEvidencePort,
   PriceEventStore,

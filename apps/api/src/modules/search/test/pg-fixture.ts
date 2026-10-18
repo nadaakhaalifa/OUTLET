@@ -25,5 +25,11 @@ export async function createSearchDatabase(opts: { trigram: boolean } = { trigra
   const base = names.map((f) => parseMigration(f, readFileSync(fileURLToPath(new URL(f, DIR)), "utf8")));
   await migrate(withoutConcurrently(db), base);
   await db.exec(SEARCH_MIGRATION);
+  // 0086 adds search_documents.department; only its guarded search block applies here (no products table).
+  const dept = readFileSync(fileURLToPath(new URL("0086_product_department.sql", DIR)), "utf8");
+  await db.exec(dept.slice(dept.indexOf("DO $$")));
+  // 0096 adds search_documents.brand_id (nullable) and its partial index; same guarded block.
+  const brand = readFileSync(fileURLToPath(new URL("0096_search_documents_brand.sql", DIR)), "utf8");
+  await db.exec(brand.slice(brand.indexOf("DO $$")));
   return db;
 }

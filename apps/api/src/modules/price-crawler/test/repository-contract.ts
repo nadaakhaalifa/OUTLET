@@ -136,6 +136,32 @@ export function runCrawlStoreContract(name: string, make: () => Promise<CrawlCon
       ]);
       expect(await c.eventTypes()).toEqual(["crawl.incident"]);
     });
+    it("lists incidents newest first with a keyset cursor and a store filter", async () => {
+      const SA = U(1777);
+      const SB = U(1778);
+      const mk = (n: number, storeId: string, at: number) => ({
+        id: U(7100 + n),
+        targetId: null,
+        storeId,
+        kind: "robots_disallowed" as const,
+        host: "shop.example",
+        urlHash: "b".repeat(64),
+        detail: null,
+        createdAtMs: at,
+      });
+      await c.store.addIncident(mk(1, SA, START_MS + 1_000), []);
+      await c.store.addIncident(mk(2, SA, START_MS + 3_000), []);
+      await c.store.addIncident(mk(3, SB, START_MS + 2_000), []);
+      await c.store.addIncident(mk(4, SA, START_MS + 3_000), []);
+      const all = await c.store.listIncidents({ storeId: SA, kind: null, limit: 10, after: null });
+      expect(all.map((r) => r.id)).toEqual([U(7104), U(7102), U(7101)]);
+      const first = await c.store.listIncidents({ storeId: SA, kind: null, limit: 2, after: null });
+      expect(first.map((r) => r.id)).toEqual([U(7104), U(7102)]);
+      const last = first[1];
+      const next = await c.store.listIncidents({ storeId: SA, kind: null, limit: 2, after: { atMs: last?.createdAtMs ?? 0, id: last?.id ?? "" } });
+      expect(next.map((r) => r.id)).toEqual([U(7101)]);
+      expect(await c.store.listIncidents({ storeId: SA, kind: "ssrf_refused", limit: 5, after: null })).toEqual([]);
+    });
     void ev;
   });
 }

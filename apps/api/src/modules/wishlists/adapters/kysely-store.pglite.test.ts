@@ -19,6 +19,10 @@ const fresh = async () => {
     ensureUser: async (id: string) => {
       await raw.query(`insert into users (id, status) values ($1, 'active') on conflict do nothing`, [id]);
     },
+    recordedEventTypes: async (): Promise<readonly string[]> => {
+      const r = await raw.query<{ event_type: string }>(`select event_type from outbox_events where aggregate_type = 'wishlist' order by occurred_at, id`);
+      return r.rows.map((x) => x.event_type);
+    },
   };
 };
 

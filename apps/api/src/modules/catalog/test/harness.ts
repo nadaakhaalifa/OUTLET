@@ -82,7 +82,7 @@ class TestAuthenticator implements Authenticator {
 
 @Global()
 @Module({})
-class TestAuthModule {
+export class TestAuthModule {
   static register(): DynamicModule {
     return {
       module: TestAuthModule,
@@ -101,13 +101,27 @@ export interface CatalogHarness {
   close(): Promise<void>;
 }
 
-export async function createCatalogHarness(persistence?: CatalogPersistence): Promise<CatalogHarness> {
+/** Binds the product-media link port the way the product-media module does ("catalog.ImageJobs"). */
+@Global()
+@Module({})
+export class TestImageJobsModule {
+  static register(port: unknown): DynamicModule {
+    return { module: TestImageJobsModule, providers: [{ provide: "catalog.ImageJobs", useValue: port }], exports: ["catalog.ImageJobs"] };
+  }
+}
+
+export async function createCatalogHarness(persistence?: CatalogPersistence, imageJobs?: unknown): Promise<CatalogHarness> {
   const config = loadConfig({ NODE_ENV: "test" });
   const clock = new TestClock();
   const ids = createIdGenerator(clock, nodeCsprng);
   const fixtures = createCatalogDevFixtures();
   const moduleRef = await Test.createTestingModule({
-    imports: [PlatformModule.forRoot(config, { clock, ids }), TestAuthModule.register(), CatalogModule.forRoot(config, fixtures, persistence)],
+    imports: [
+      PlatformModule.forRoot(config, { clock, ids }),
+      TestAuthModule.register(),
+      ...(imageJobs === undefined ? [] : [TestImageJobsModule.register(imageJobs)]),
+      CatalogModule.forRoot(config, fixtures, persistence),
+    ],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, config);

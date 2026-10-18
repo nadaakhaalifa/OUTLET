@@ -14,6 +14,7 @@ import {
   SpyRanker,
 } from "./adapters/in-memory";
 import { RecommendationsController } from "./adapters/recommendations.controller";
+import { PublicFeedController } from "./adapters/public-feed.controller";
 import * as T from "./adapters/tokens";
 import {
   BuildCooccurrence,
@@ -23,7 +24,9 @@ import {
   RestockReminders,
   SimilarProducts,
   type RecoDeps,
+  type ShadowObserverLike,
 } from "./application/recommendations";
+import { RANKING_SHADOW_OBSERVER } from "../ranking";
 import type {
   AffordabilityFilterPort,
   CatalogPort,
@@ -83,8 +86,8 @@ export class RecommendationsModule {
     const affordability = o.affordability ?? null;
 
     const RUNTIME = Symbol("recommendations.Runtime");
-    const runtime = (clock: Clock) => {
-      const d: RecoDeps = { store, catalog, vectors, ranker, personalization, sizes, flags, rng, clock, affordability };
+    const runtime = (clock: Clock, shadow: ShadowObserverLike | null) => {
+      const d: RecoDeps = { store, catalog, vectors, ranker, personalization, sizes, flags, rng, clock, affordability, shadow };
       return {
         feed: new BuildFeed(d),
         similar: new SimilarProducts(d),
@@ -103,7 +106,7 @@ export class RecommendationsModule {
 
     return {
       module: RecommendationsModule,
-      controllers: [RecommendationsController],
+      controllers: [RecommendationsController, PublicFeedController],
       providers: [
         { provide: T.RECO_STORE, useValue: store },
         { provide: T.RECO_CATALOG, useValue: catalog },
@@ -113,7 +116,11 @@ export class RecommendationsModule {
         { provide: T.RECO_SIZES, useValue: sizes },
         { provide: T.RECO_FLAGS, useValue: flags },
         { provide: T.RECO_RNG, useValue: rng },
-        { provide: RUNTIME, inject: [CLOCK, ID_GENERATOR], useFactory: (c: Clock, _ids: IdGenerator) => runtime(c) },
+        {
+          provide: RUNTIME,
+          inject: [CLOCK, ID_GENERATOR, { token: RANKING_SHADOW_OBSERVER, optional: true }],
+          useFactory: (c: Clock, _ids: IdGenerator, shadow: ShadowObserverLike | undefined) => runtime(c, shadow ?? null),
+        },
         from(T.BUILD_FEED, (r) => r.feed),
         from(T.SIMILAR_PRODUCTS, (r) => r.similar),
         from(T.RESTOCK_REMINDERS, (r) => r.restock),

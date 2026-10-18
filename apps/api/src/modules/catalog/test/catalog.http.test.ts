@@ -44,7 +44,7 @@ async function create(p: TestPrincipal = PRINCIPALS.ownerA, over: Record<string,
 async function createOk(over: Record<string, unknown> = {}) {
   const r = await create(PRINCIPALS.ownerA, over);
   expect(r.status).toBe(201);
-  return r.body as { id: string; skus: { id: string }[]; status: string };
+  return r.body as { id: string; skus: { id: string }[]; status: string; department?: string; publish_warnings?: unknown[] };
 }
 
 describe("POST /v1/seller/products", () => {
@@ -190,6 +190,26 @@ describe("PATCH /v1/seller/products/{id} and the listing lifecycle", () => {
     return r.send(data);
   };
 
+  it("defaults department to unisex, accepts the enum, refuses anything else and warns without blocking", async () => {
+    const dflt = await createOk();
+    expect(dflt.department).toBe("unisex");
+    expect(dflt.publish_warnings).toEqual([
+      { pointer: "/department", code: "department_not_chosen", blocking: false },
+      { pointer: "/description/en", code: "description_en_missing", blocking: false },
+    ]);
+    const women = await create(PRINCIPALS.ownerA, { department: "women" });
+    expect(women.status).toBe(201);
+    expect(women.body.department).toBe("women");
+    expect(women.body.publish_warnings).toEqual([{ pointer: "/description/en", code: "description_en_missing", blocking: false }]);
+    expect((await create(PRINCIPALS.ownerA, { department: "accessories" })).status).toBe(400);
+    expect((await create(PRINCIPALS.ownerA, { department: "WOMEN" })).status).toBe(400);
+    const etag = await etagOf(dflt.id);
+    expect((await patch(dflt.id, etag, { department: "bogus" })).status).toBe(400);
+    const ok = await patch(dflt.id, etag, { department: "kids" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.department).toBe("kids");
+  });
+
   it("requires If-Match (428) and checks it (412)", async () => {
     const p = await createOk();
     expect((await patch(p.id, null, { material: "كتان" })).status).toBe(428);
@@ -211,6 +231,22 @@ describe("PATCH /v1/seller/products/{id} and the listing lifecycle", () => {
     const fixed = await patch(p.id, etag, { status: "active", description: { ar: "وصف المنتج" }, image_upload_ids: [UP_IMG] });
     expect(fixed.status).toBe(200);
     expect(fixed.body.status).toBe("active");
+  });
+
+  it("requires an English and an Arabic title to publish; drafts may stay incomplete", async () => {
+    const p = await createOk({ title: { ar: "فستان كتان أبيض" } });
+    expect(p.publish_warnings).toContainEqual({ pointer: "/title/en", code: "title_en_missing", blocking: true });
+    const etag = await etagOf(p.id);
+    const r = await patch(p.id, etag, { status: "active" });
+    expect(r.status).toBe(422);
+    expect(r.body.errors).toContainEqual({ pointer: "/title/en", code: "title_en_missing" });
+    const junk = await patch(p.id, etag, { status: "active", title: { ar: "فستان كتان أبيض", en: "12345" } });
+    expect(junk.status).toBe(422);
+    expect(junk.body.errors).toContainEqual({ pointer: "/title/en", code: "title_en_missing" });
+    const ok = await patch(p.id, etag, { status: "active", title: { ar: "فستان كتان أبيض", en: "White linen dress" } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.status).toBe("active");
+    expect(ok.body.publish_warnings.some((w: { blocking: boolean }) => w.blocking)).toBe(false);
   });
 
   it("walks active, paused, active and emits status events", async () => {
@@ -420,7 +456,7 @@ describe("GET /v1/products/{id} public read model", () => {
 
 describe("bulk CSV import over HTTP", () => {
   const HEADER = "product_ref,title_ar,title_en,description_ar,category_slug,brand_slug,condition,size_label,color,seller_sku,barcode_gtin,price_egp,initial_stock,image_upload_ids,defect_photo_upload_ids";
-  const good = (ref: string, size: string) => `${ref},فستان ${ref},,وصف,dresses,acme,new_with_tags,${size},White,${ref}-${size},,1299.50,5,${UP_IMG},`;
+  const good = (ref: string, size: string) => `${ref},فستان ${ref},Dress ${ref},وصف,dresses,acme,new_with_tags,${size},White,${ref}-${size},,1299.50,5,${UP_IMG},`;
   const csv = (lines: string[]) => [HEADER, ...lines].join("\n");
   const start = (p: TestPrincipal, data: Record<string, unknown>) =>
     h.http().post("/v1/seller/catalog/imports").set(bearer(p)).set("Idempotency-Key", idemKey()).send(data);
@@ -439,7 +475,7 @@ describe("bulk CSV import over HTTP", () => {
     expect(h.fixtures.products.snapshotForTest()).toBe(snapshot);
 
     const report = Buffer.from(String(r1.body.error_report_url).split(",")[1] ?? "", "base64").toString("utf8");
-    expect(report).toBe("row,column,code\n4,title_ar,arabic_text_required");
+    expect(report).toBe("row,column,code\n4,title_ar,title_ar_missing\n4,title_en,title_en_missing");
     const got = await h.http().get(`/v1/seller/catalog/imports/${r1.body.id}`).set(bearer(PRINCIPALS.ownerA));
     expect(got.status).toBe(200);
     expect(got.body.id).toBe(r1.body.id);

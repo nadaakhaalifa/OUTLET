@@ -1,7 +1,9 @@
 import { MoneyWireSchema, UuidSchema, moneyToWire, type MoneyWire } from "@outlet/validation";
 import { z } from "zod";
+import { MAX_FACET_BUCKETS, SEARCH_SORTS } from "./ports";
 import {
   CONDITIONS,
+  DEPARTMENTS,
   MAX_FACETS,
   WORLDS,
   canonicalizeFilter,
@@ -31,12 +33,14 @@ export const SearchFilterSchema = z
     world: z.enum(WORLDS).optional(),
     store_ids: UuidArray.optional(),
     category_ids: UuidArray.optional(),
+    brand_ids: UuidArray.optional(),
     min_verified_discount_pct: z.number().int().min(5).max(100).optional(),
     price_min: piastres.optional(),
     price_max: piastres.optional(),
     colors: StringArray.optional(),
     materials: StringArray.optional(),
     conditions: z.array(z.enum(CONDITIONS)).max(4).optional(),
+    departments: z.array(z.enum(DEPARTMENTS)).max(4).optional(),
     free_delivery_eligible: z.boolean().optional(),
     verified_discount_only: z.boolean().optional(),
     lowest_30d_only: z.boolean().optional(),
@@ -59,12 +63,14 @@ export const SearchFilterSchema = z
     put("world", w.world);
     put("storeIds", w.store_ids);
     put("categoryIds", w.category_ids);
+    put("brandIds", w.brand_ids);
     put("minVerifiedDiscountPct", w.min_verified_discount_pct);
     put("priceMin", w.price_min);
     put("priceMax", w.price_max);
     put("colors", w.colors);
     put("materials", w.materials);
     put("conditions", w.conditions);
+    put("departments", w.departments);
     put("freeDeliveryEligible", w.free_delivery_eligible);
     put("verifiedDiscountOnly", w.verified_discount_only);
     put("lowest30dOnly", w.lowest_30d_only);
@@ -93,12 +99,14 @@ export function filterToWire(f: SearchFilter): Record<string, unknown> {
   put("world", f.world);
   put("store_ids", f.storeIds);
   put("category_ids", f.categoryIds);
+  put("brand_ids", f.brandIds);
   put("min_verified_discount_pct", f.minVerifiedDiscountPct);
   put("price_min", f.priceMin === undefined ? undefined : wireMoney(f.priceMin));
   put("price_max", f.priceMax === undefined ? undefined : wireMoney(f.priceMax));
   put("colors", f.colors);
   put("materials", f.materials);
   put("conditions", f.conditions);
+  put("departments", f.departments);
   put("free_delivery_eligible", f.freeDeliveryEligible);
   put("verified_discount_only", f.verifiedDiscountOnly);
   put("lowest_30d_only", f.lowest30dOnly);
@@ -112,3 +120,17 @@ export function filterFromStored(json: unknown): SearchFilter {
   const r = SearchFilterSchema.safeParse(json);
   return r.success ? r.data : {};
 }
+
+/** `sort` query parameter: allow-list of enums; absent means relevance. */
+export const SearchSortSchema = z.enum(SEARCH_SORTS);
+
+const BucketSchema = z.object({ id: UuidSchema, count: z.number().int().min(0) }).strict();
+
+/** Wire `facet_counts` (OpenAPI FacetCounts). Present only when an exact count is available; never zeros for "unknown". */
+export const FacetCountsWireSchema = z
+  .object({
+    category_ids: z.array(BucketSchema).max(MAX_FACET_BUCKETS),
+    store_ids: z.array(BucketSchema).max(MAX_FACET_BUCKETS),
+  })
+  .strict();
+export type FacetCountsWire = z.infer<typeof FacetCountsWireSchema>;

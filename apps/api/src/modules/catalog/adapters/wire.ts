@@ -1,6 +1,6 @@
 import { moneyToWire } from "@outlet/validation";
 import { sha256Hex } from "@outlet/idempotency";
-import type { Issue, PriceBlockInput, Product, PublicSellerIdentity, PublicSku } from "../domain/catalog-domain";
+import { publishWarnings, type Issue, type PriceBlockInput, type Product, type PublicSellerIdentity, type PublicSku } from "../domain/catalog-domain";
 import type { PublicProduct } from "../application/products";
 import type { ImportRecord, StockLevel } from "../domain/ports";
 import { errorReportDataUri } from "../application/imports";
@@ -46,15 +46,18 @@ export function publicProductWire(p: PublicProduct) {
       live_drop: p.store.liveDrop,
       is_favorite: p.store.isFavorite,
     },
-    ...(first !== undefined ? { image_url: first.url, ...(first.blurhash !== undefined ? { blurhash: first.blurhash } : {}) } : {}),
+    ...(first !== undefined
+      ? { image_url: first.url, ...(first.cutoutUrl !== undefined ? { cutout_url: first.cutoutUrl } : {}), ...(first.blurhash !== undefined ? { blurhash: first.blurhash } : {}) }
+      : {}),
     price:
       headline === undefined
         ? { price: moneyToWire({ amount: 0n, currency: "EGP" }), badge: "none", reference_price: null, discount_pct: null, claim_id: null, installment_quote: null }
         : priceBlockWire(headline),
     condition: v.condition,
+    department: v.department,
     sponsored: false,
     ...(v.description !== undefined ? { description: v.description } : {}),
-    images: p.images.map((i) => ({ url: i.url, ...(i.blurhash !== undefined ? { blurhash: i.blurhash } : {}) })),
+    images: p.images.map((i) => ({ url: i.url, ...(i.blurhash !== undefined ? { blurhash: i.blurhash } : {}), ...(i.cutoutUrl !== undefined ? { cutout_url: i.cutoutUrl } : {}) })),
     skus: v.skus.map((s) => ({
       id: s.id,
       size_label: s.sizeLabel,
@@ -86,6 +89,7 @@ export function sellerProductWire(
   p: Product,
   levels: ReadonlyMap<string, StockLevel>,
   blocks?: ReadonlyMap<string, PriceBlockInput>,
+  mediaJobIds: readonly string[] = [],
 ) {
   const firstSku = p.skus[0];
   return {
@@ -96,8 +100,13 @@ export function sellerProductWire(
     category_id: p.categoryId,
     ...(p.brandId !== undefined ? { brand_id: p.brandId } : {}),
     condition: p.condition,
+    department: p.department,
+    /** Non-blocking publish hints (never errors). */
+    publish_warnings: publishWarnings({ department: p.department, title: p.title, ...(p.description !== undefined ? { description: p.description } : {}) }),
     ...(p.material !== undefined ? { material: p.material } : {}),
     image_upload_ids: p.imageUploadIds,
+    /** Entries of image_upload_ids that are background-removal job ids (send them back as media_job_id). */
+    image_media_job_ids: mediaJobIds,
     defect_photo_upload_ids: p.defectPhotoUploadIds,
     ...(p.sizeChartId !== undefined ? { size_chart_id: p.sizeChartId } : {}),
     skus: p.skus.map((s) => {

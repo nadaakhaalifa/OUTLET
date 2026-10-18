@@ -24,6 +24,20 @@ export class InMemoryStylistStore implements StylistStore {
   private readonly feedback = new Map<string, FeedbackRecord>();
   private readonly vectors = new Map<string, readonly number[]>();
 
+  async inclusionByStore(storeIds: readonly string[], fromMs: number, toMs: number) {
+    return storeIds.map((storeId) => {
+      const hit = [...this.outfits.values()].filter(
+        (o) => o.createdAtMs >= fromMs && o.createdAtMs < toMs && o.items.some((i) => i.storeId === storeId),
+      );
+      return {
+        storeId,
+        outfits: hit.length,
+        distinctShoppers: new Set(hit.map((o) => o.userId)).size,
+        addedToBagOutfits: hit.filter((o) => o.addedToBagAtMs !== null).length,
+      };
+    });
+  }
+
   async insertOutfits(records: readonly OutfitRecord[], events: readonly StylistEvent[]): Promise<void> {
     for (const r of records) {
       if (this.outfits.has(r.id)) throw new Error("duplicate outfit");

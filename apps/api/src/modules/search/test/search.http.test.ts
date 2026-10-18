@@ -82,6 +82,43 @@ describe("GET /v1/search", () => {
     }
   });
 
+  it("applies the departments filter on the authenticated route and echoes it in applied_filters", async () => {
+    await seed(20, { searchText: "dept shirt", department: "men" }, { department: "men" });
+    await seed(21, { searchText: "dept shirt", department: "women" }, { department: "women" });
+    const r = await h
+      .http()
+      .get("/v1/search")
+      .query({ q: "dept", filters: JSON.stringify({ departments: ["men"] }) })
+      .set(bearer(a.accessToken));
+    expect(r.status).toBe(200);
+    expect(r.body.items.map((i: { id: string }) => i.id)).toEqual([P(20)]);
+    expect(r.body.applied_filters).toMatchObject({ departments: ["men"] });
+    const bad = await h.http().get("/v1/search").query({ filters: JSON.stringify({ departments: ["pets"] }) }).set(bearer(a.accessToken));
+    expect(bad.status).toBe(400);
+    await h.index.remove(P(20));
+    await h.index.remove(P(21));
+  });
+
+  it("filters by brand_ids; brand is on the wire only when the facts carry it", async () => {
+    const B = "00000000-0000-4000-8000-000000000001";
+    await seed(30, { searchText: "brandy tee", brandId: B }, { brand: { id: B, name: { ar: "ماركة", en: "Brand" } } });
+    await seed(31, { searchText: "brandy tee" });
+    const r = await h
+      .http()
+      .get("/v1/search")
+      .query({ q: "brandy", filters: JSON.stringify({ brand_ids: [B] }) })
+      .set(bearer(a.accessToken));
+    expect(r.status).toBe(200);
+    expect(r.body.items.map((i: { id: string }) => i.id)).toEqual([P(30)]);
+    expect(r.body.items[0].brand).toEqual({ id: B, name: { ar: "ماركة", en: "Brand" } });
+    const all = await h.http().get("/v1/search").query({ q: "brandy" }).set(bearer(a.accessToken));
+    const plain = all.body.items.find((i: { id: string }) => i.id === P(31));
+    expect(plain).toBeDefined();
+    expect("brand" in plain).toBe(false);
+    await h.index.remove(P(30));
+    await h.index.remove(P(31));
+  });
+
   it("rejects page sizes above 50 and over-long queries", async () => {
     expect((await h.http().get("/v1/search?limit=51").set(bearer(a.accessToken))).status).toBe(400);
     expect((await h.http().get("/v1/search").query({ q: "x".repeat(301) }).set(bearer(a.accessToken))).status).toBe(400);

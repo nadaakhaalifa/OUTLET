@@ -24,3 +24,8 @@ export const FIND_MATCH_CANDIDATES = Symbol("crawler.FindMatchCandidates");
 export const CHANGE_MATCHING_CONFIG = Symbol("crawler.ChangeMatchingConfig");
 export const CRAWLER_EXTERNAL_EVIDENCE = Symbol("crawler.ExternalEvidence");
 export const CRAWL_READS = Symbol("crawler.Reads");
+
+export const CRAWL_LIST_INCIDENTS = Symbol("crawler.ListCrawlIncidents");
+export const CRAWL_LIST_PARITY = Symbol("crawler.ListParityWarnings");
+export const CRAWL_PARITY = Symbol("crawler.ParityWarningsPort");
+export const CRAWL_ADMIN_RESOLVER = Symbol("crawler.AdminConsoleResolver");

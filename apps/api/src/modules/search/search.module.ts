@@ -13,6 +13,8 @@ import {
   StaticKillSwitch,
   StaticShopperScope,
 } from "./adapters/in-memory";
+import { NoopSearchSyncMetrics } from "./adapters/otel-sync-metrics";
+import { PublicSearchController } from "./adapters/public.controller";
 import { SavedSearchesController, SearchController } from "./adapters/search.controller";
 import { TypesenseSearchPort } from "./adapters/typesense";
 import {
@@ -32,6 +34,7 @@ import {
   SEARCH_PRIMARY,
   SEARCH_PRODUCTS,
   SEARCH_SCOPE,
+  SEARCH_SYNC_EVENT_CONSUMER,
   SUGGEST_QUERIES,
   UPDATE_SAVED_SEARCH,
 } from "./adapters/tokens";
@@ -44,12 +47,15 @@ import {
   type SavedSearchDeps,
 } from "./application/saved-searches";
 import { ParseSearchQuery, SearchProducts, SuggestQueries } from "./application/search";
+import { SearchSyncConsumer } from "./application/sync";
 import type {
   LlmGatewayPort,
   ProductFactsPort,
   SavedSearchRepository,
+  IndexSourcePort,
   SearchEventPublisher,
   SearchIndexWriter,
+  SearchSyncMetrics,
   SearchKillSwitchPort,
   SearchPort,
   ShopperScopePort,
@@ -69,6 +75,11 @@ export interface SearchModuleOverrides {
   readonly directory?: SuggestionDirectoryPort;
   readonly llm?: LlmGatewayPort | null;
   readonly events?: SearchEventPublisher;
+  /**
+   * Catalog-to-index feeder. Absent: no consumer is provided and the relay acknowledges catalog events unrouted.
+   * It needs an index writer too (the module's own in-memory index in dev, `indexWriter` otherwise).
+   */
+  readonly sync?: { readonly source: IndexSourcePort; readonly metrics?: SearchSyncMetrics };
 }
 
 /**
@@ -115,11 +126,19 @@ export class SearchModule {
     });
     return {
       module: SearchModule,
-      controllers: [SearchController, SavedSearchesController],
+      controllers: [SearchController, SavedSearchesController, PublicSearchController],
       providers: [
         { provide: SEARCH_PRIMARY, useValue: o.primary ?? new TypesenseSearchPort(null) },
         { provide: SEARCH_FALLBACK, useValue: fallback },
         { provide: SEARCH_INDEX_WRITER, useValue: writer ?? null },
+        {
+          provide: SEARCH_SYNC_EVENT_CONSUMER,
+          inject: [CLOCK],
+          useFactory: (clock: Clock): SearchSyncConsumer | null =>
+            o.sync === undefined || writer === undefined
+              ? null
+              : new SearchSyncConsumer({ source: o.sync.source, writer, metrics: o.sync.metrics ?? new NoopSearchSyncMetrics(), clock }),
+        },
         { provide: SEARCH_KILL_SWITCH, useValue: o.killSwitch ?? new StaticKillSwitch(false) },
         { provide: SEARCH_FACTS, useValue: o.facts ?? new FakeProductFacts() },
         { provide: SEARCH_SCOPE, useValue: o.scope ?? new StaticShopperScope() },
@@ -156,7 +175,7 @@ export class SearchModule {
         saved(UPDATE_SAVED_SEARCH, (d) => new UpdateSavedSearch(d)),
         saved(DELETE_SAVED_SEARCH, (d) => new DeleteSavedSearch(d)),
       ],
-      exports: [SEARCH_INDEX_WRITER, SAVED_SEARCH_REPOSITORY, SEARCH_FACTS, SEARCH_EVENTS],
+      exports: [SEARCH_SYNC_EVENT_CONSUMER, SEARCH_INDEX_WRITER, SAVED_SEARCH_REPOSITORY, SEARCH_FACTS, SEARCH_EVENTS],
     };
   }
 }

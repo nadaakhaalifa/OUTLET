@@ -47,3 +47,5 @@ export type {
   TargetRecord,
   TokenVaultPort,
 } from "./domain/ports";
+export { ListCrawlIncidents, ListParityWarnings, PriceIntegrityParityAdapter, PARITY_FIX_WINDOW_MS, type TrustReader } from "./application/incidents";
+export type { IncidentRow, ParityWarning, ParityWarningsPort } from "./domain/ports";

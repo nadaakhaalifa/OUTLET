@@ -6,6 +6,8 @@ import { normalizeSearchText } from "../domain/bridge";
 import {
   LlmUnavailableError,
   ProductFactsUnavailableError,
+  type FacetBucket,
+  type FacetCountFacet,
   type IndexedProduct,
   type LlmGatewayPort,
   type ProductFacts,
@@ -26,7 +28,7 @@ import {
   type SuggestionDirectoryPort,
   type LocalizedText,
 } from "../domain/ports";
-import { docMatches } from "./matching";
+import { bucketize, compareDocs, docMatches } from "./matching";
 
 export class InMemorySearchIndex implements SearchPort, SearchIndexWriter {
   readonly engine = "in_memory" as const;
@@ -43,12 +45,16 @@ export class InMemorySearchIndex implements SearchPort, SearchIndexWriter {
   async search(req: SearchRequest): Promise<SearchPage> {
     const all = [...this.docs.values()]
       .filter((d) => docMatches(d, req))
-      .sort((a, b) => b.listedAtMs - a.listedAtMs || (a.productId < b.productId ? -1 : 1));
+      .sort((a, b) => compareDocs(req.sort ?? "relevance", a, b));
     return {
       hits: all.slice(req.offset, req.offset + req.limit).map((d) => ({ productId: d.productId, sponsored: d.sponsored })),
       total: all.length,
       degraded: false,
     };
+  }
+
+  async facetCounts(req: SearchRequest, facet: FacetCountFacet, cap: number): Promise<readonly FacetBucket[]> {
+    return bucketize([...this.docs.values()].filter((d) => docMatches(d, req)), facet, cap);
   }
 
   async suggest(prefixNormalized: string, limit: number): Promise<readonly string[]> {

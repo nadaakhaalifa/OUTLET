@@ -16,6 +16,9 @@ export { detectInjection } from "./domain/injection";
 export { scrubPii } from "./domain/scrub";
 export {
   STYLIST_INTENT,
+  STYLIST_CHAT_INTENT,
+  StylistChatIntentOutput,
+  type StylistChatIntent,
   STYLIST_RERANK,
   SEARCH_PARSE,
   PromptRegistry,

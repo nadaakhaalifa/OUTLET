@@ -11,6 +11,7 @@ import {
   baselineScore,
   sortByScore,
   type Candidate,
+  type UserFeatures,
   type PersonalizationReason,
   type PriceDrop,
   type ScoredCandidate,
@@ -29,6 +30,20 @@ import type {
   VectorIndexPort,
 } from "../domain/ports";
 
+/** Structural slice of ranking's ShadowObserverPort (shadow deployment of the v2 ranker). */
+export interface ShadowObserverLike {
+  observe(o: {
+    readonly module: "feed";
+    readonly servedModelVersion: string;
+    readonly servedOrder: readonly string[];
+    readonly candidates: readonly Candidate[];
+    readonly user: UserFeatures | null;
+    readonly personalized: boolean;
+    readonly sizeLabels: readonly string[] | null;
+    readonly nowMs: number;
+  }): Promise<void>;
+}
+
 export interface RecoDeps {
   readonly store: RecoStore;
   readonly catalog: CatalogPort;
@@ -40,6 +55,8 @@ export interface RecoDeps {
   readonly rng: RngPort;
   readonly clock: Clock;
   readonly affordability: AffordabilityFilterPort | null;
+  /** Optional v2 shadow observer: scores and logs only, never changes what is served. */
+  readonly shadow?: ShadowObserverLike | null;
 }
 
 export const FEED_POOL = 200;
@@ -81,7 +98,14 @@ export class BuildFeed {
    * Personalization is decided before any user data is touched. Short circuits (requested off,
    * setting off, no consent, kill switch) never read the feature store, the history or the sizes.
    */
-  async execute(i: { userId: string; personalizedParam: boolean | undefined; affordable: boolean; limit: number }): Promise<FeedResult> {
+  async execute(i: {
+    userId: string;
+    personalizedParam: boolean | undefined;
+    affordable: boolean;
+    limit: number;
+    /** Public guest feed (ADR-0055): serve the popular pool only and write nothing (no impression counters, no shadow log). */
+    anonymous?: boolean;
+  }): Promise<FeedResult> {
     const now = this.d.clock.nowMs();
     const limit = clampLimit(i.limit);
     const mlAllowed = await this.d.flags.mlRankingAllowed();
@@ -192,7 +216,7 @@ export class BuildFeed {
     }));
 
     const shown = items.map((x) => x.candidate.productId);
-    if (shown.length > 0) {
+    if (shown.length > 0 && i.anonymous !== true) {
       await this.d.store.recordImpressions(
         "feed",
         shown,
@@ -208,6 +232,22 @@ export class BuildFeed {
           now,
         );
       }
+    }
+    // Shadow v2: fire and forget, after v1 has been decided. Skipped for affordability-filtered
+    // requests so the budget-conditioned candidate set is never logged (spec 12 Privacy).
+    if (this.d.shadow !== undefined && this.d.shadow !== null && !affordabilityApplied && shown.length > 0 && i.anonymous !== true) {
+      void this.d.shadow
+        .observe({
+          module: "feed",
+          servedModelVersion: modelVersion,
+          servedOrder: shown,
+          candidates: visible,
+          user: personalized ? userFeatures : null,
+          personalized,
+          sizeLabels: personalized ? sizes : null,
+          nowMs: rankNow,
+        })
+        .catch(() => undefined);
     }
     return { items, personalized, reason: decision.reason, modelVersion, degraded, affordabilityApplied };
   }

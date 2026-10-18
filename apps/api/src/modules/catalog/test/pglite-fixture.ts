@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createTestDatabaseUpTo } from "@outlet/db";
 import type { RlsSession } from "../../../platform/db";
 import {
@@ -13,7 +15,7 @@ import { KyselyImportRepository, KyselyProductRepository, KyselyTaxonomy } from 
 import { SEED, SEED_BRANDS, SEED_CATEGORIES } from "../adapters/in-memory";
 import type { CatalogContractHarness } from "./contract/repositories.contract";
 
-/** Migrations 0001..0013: catalog needs only 0012, 0013 gives it the real `stores` table beside it. */
+/** Migrations 0001..0013 (catalog 0012, real `stores` 0013), then 0083 + 0085 + 0086 (department; job link: product_media.media_job_id, needs the jobs table). */
 export const CATALOG_MIGRATION_CEILING = 13;
 
 export interface CatalogPglite extends CatalogContractHarness {
@@ -29,6 +31,9 @@ export interface CatalogPglite extends CatalogContractHarness {
 
 export async function createCatalogPglite(): Promise<CatalogPglite> {
   const raw = await createTestDatabaseUpTo(CATALOG_MIGRATION_CEILING);
+  for (const f of ["0083_product_media.sql", "0085_product_media_attach.sql", "0086_product_department.sql"]) {
+    await raw.exec(readFileSync(fileURLToPath(new URL(`../../../../../../packages/db/migrations/${f}`, import.meta.url)), "utf8"));
+  }
   const db = createPgliteDatabase<CatalogDb>(raw as unknown as PgliteInstance);
   let n = 0;
   const runner = new KyselyTransactionRunner<CatalogDb>({

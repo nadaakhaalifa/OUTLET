@@ -159,6 +159,13 @@ export interface FeedbackRecord {
   readonly atMs: number;
 }
 
+export interface StoreInclusionRow {
+  readonly storeId: string;
+  readonly outfits: number;
+  readonly distinctShoppers: number;
+  readonly addedToBagOutfits: number;
+}
+
 export interface StylistStore {
   insertOutfits(records: readonly OutfitRecord[], events: readonly StylistEvent[]): Promise<void>;
   getOutfit(id: string): Promise<OutfitRecord | null>;
@@ -170,6 +177,8 @@ export interface StylistStore {
   getFeedback(outfitId: string): Promise<readonly FeedbackRecord[]>;
   getStyleVector(userId: string): Promise<readonly number[] | null>;
   putStyleVector(userId: string, vec: readonly number[], atMs: number): Promise<void>;
+  /** Raw per-store aggregates over outfits generated in [fromMs, toMs). Callers MUST apply k-anonymity before exposing. */
+  inclusionByStore(storeIds: readonly string[], fromMs: number, toMs: number): Promise<readonly StoreInclusionRow[]>;
   /** History clear / consent withdrawal: outfits, feedback and style vector. */
   eraseForUser(userId: string): Promise<void>;
 }

@@ -18,6 +18,8 @@ import { budgetBand } from "../domain/ports";
 
 export const FLAG_ML = "kill.stylist_ml";
 export const FLAG_LLM = "kill.stylist_llm";
+/** Stylist chat as a whole (spec P3-07). Allowed when true, like every kill switch (ADR-0028). */
+export const FLAG_CHAT = "kill.stylist_chat";
 
 export interface StylistConfig {
   readonly dailyGenerations: number;

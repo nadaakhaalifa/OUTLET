@@ -207,7 +207,12 @@ export class DevAesGcmFieldCipher implements FieldCipherPort {
     const d = createDecipheriv("aes-256-gcm", this.key, buf.subarray(0, 12));
     d.setAAD(Buffer.from(aad, "utf8"));
     d.setAuthTag(buf.subarray(12, 28));
-    return new Uint8Array(Buffer.concat([d.update(buf.subarray(28)), d.final()]));
+    try {
+      return new Uint8Array(Buffer.concat([d.update(buf.subarray(28)), d.final()]));
+    } catch {
+      // Same contract as EnvelopeFieldCipher: an authentication failure is an integrity fault, not an outage.
+      throw new Error("bad_ciphertext");
+    }
   }
 }
 

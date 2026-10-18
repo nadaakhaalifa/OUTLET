@@ -53,6 +53,31 @@ export function describeSearchIndexContract(name: string, make: () => Promise<In
     const ids = async (r: Partial<SearchRequest>): Promise<string[]> =>
       (await c.port.search(req(r))).hits.map((h) => h.productId).sort();
 
+    const B1 = "00000000-0000-4000-d000-000000000001";
+    const B2 = "00000000-0000-4000-d000-000000000002";
+
+    it("brand_ids filter matches only documents that carry one of the brands; no brand never matches", async () => {
+      await c.writer.upsert(doc(1, { brandId: B1 }));
+      await c.writer.upsert(doc(2, { brandId: B2 }));
+      await c.writer.upsert(doc(3));
+      await c.writer.upsert(doc(4, { brandId: null }));
+      expect(await ids({ filter: { brandIds: [B1] } })).toEqual([P(1)]);
+      expect(await ids({ filter: { brandIds: [B1, B2] } })).toEqual([P(1), P(2)]);
+      expect(await ids({ filter: { brandIds: ["00000000-0000-4000-d000-0000000000ff"] } })).toEqual([]);
+    });
+
+    it("re-indexing is idempotent and updates or clears the brand", async () => {
+      await c.writer.upsert(doc(1, { brandId: B1 }));
+      await c.writer.upsert(doc(1, { brandId: B1 }));
+      expect(await ids({ filter: { brandIds: [B1] } })).toEqual([P(1)]);
+      expect(await ids({})).toEqual([P(1)]);
+      await c.writer.upsert(doc(1, { brandId: B2 }));
+      expect(await ids({ filter: { brandIds: [B1] } })).toEqual([]);
+      expect(await ids({ filter: { brandIds: [B2] } })).toEqual([P(1)]);
+      await c.writer.upsert(doc(1));
+      expect(await ids({ filter: { brandIds: [B2] } })).toEqual([]);
+    });
+
     it("returns in-stock documents newest first when there is no keyword", async () => {
       await c.writer.upsert(doc(1));
       await c.writer.upsert(doc(2));

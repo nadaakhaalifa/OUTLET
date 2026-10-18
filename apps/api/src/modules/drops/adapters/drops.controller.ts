@@ -20,6 +20,7 @@ import {
 } from "../application/drops";
 import {
   ADMIN_CONTROL_DROP,
+  ADMIN_DROPS_OPS,
   CREATE_DROP,
   DROP_ADMIN_RESOLVER,
   DROP_RESOLVER,
@@ -35,6 +36,7 @@ import {
 } from "./tokens";
 import { storeIdsOf } from "./resolvers";
 import { publicDropDetailWire, publicDropWire, sellerDropWire } from "./wire";
+import type { AdminDropsOps } from "../application/ops";
 import { CLOCK } from "../../../platform/tokens";
 
 const Id = z.uuid();
@@ -111,6 +113,7 @@ export class DropsController {
     @Inject(GET_PUBLIC_DROP) private readonly publicGet: GetPublicDropView,
     @Inject(ADMIN_CONTROL_DROP) private readonly control: AdminControlDrop,
     @Inject(JOIN_WAITLIST) private readonly waitlist: JoinWaitlist,
+    @Inject(ADMIN_DROPS_OPS) private readonly opsUc: AdminDropsOps,
   ) {}
 
   // ---- public ----
@@ -294,6 +297,32 @@ export class DropsController {
   }
 
   // ---- admin ----
+
+  @Get("admin/drops/ops")
+  @Authorize({ audience: "admin_api", action: "read", resourceType: "admin_console", resolver: DROP_ADMIN_RESOLVER, idParam: "none" })
+  @RateLimit([{ dimension: "user", limit: 60, windowSeconds: 60 }])
+  async adminOps(@Req() req: ApiRequest, @Query(new ZodPipe(ListQuery, "/query")) q: z.infer<typeof ListQuery>) {
+    const actor = principalOf(req).actor;
+    if (!actor.grants.some((g) => g.kind === "admin" && (ADMIN_ROLES as readonly string[]).includes(g.role))) throw Problems.forbidden();
+    const r = await this.opsUc.execute(q.cursor ?? null, q.limit);
+    if (r.kind === "invalid_cursor") throw invalidCursor();
+    return {
+      items: r.items.map((o) => ({
+        drop_id: o.dropId,
+        store_id: o.storeId,
+        state: o.state,
+        paused: o.paused,
+        configured_admit_per_sec: o.configuredAdmitPerSec,
+        queue_depth: o.queueDepth,
+        admitted_last_minute: o.admittedLastMinute,
+        admitted_per_sec: o.admittedPerSec,
+        bot_block_rate_bps: o.botBlockRateBps,
+        waitlist_size: o.waitlistSize,
+        admission_health: o.admissionHealth,
+      })),
+      page: { next_cursor: r.nextCursor, has_more: r.nextCursor !== null },
+    };
+  }
 
   @Post("admin/drops/:id/pause")
   @HttpCode(200)

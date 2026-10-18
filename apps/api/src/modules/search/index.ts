@@ -11,6 +11,7 @@ export {
   SEARCH_LLM,
   SEARCH_PRIMARY,
   SEARCH_SCOPE,
+  SEARCH_SYNC_EVENT_CONSUMER,
 } from "./adapters/tokens";
 export {
   FakeLlmGateway,
@@ -23,10 +24,19 @@ export {
   StaticShopperScope,
 } from "./adapters/in-memory";
 export { PostgresFtsSearchPort, type SearchDb } from "./adapters/postgres-fts";
+export { CatalogBackedProductFacts } from "./adapters/catalog-facts";
+export { CatalogIndexSource, toIndexedProduct } from "./adapters/catalog-index-source";
+export { NoopSearchSyncMetrics, OtelSearchSyncMetrics } from "./adapters/otel-sync-metrics";
+export { StoresBackedSummaries } from "./adapters/store-summaries";
+export { SearchSyncConsumer, SEARCH_SYNC_CONSUMED_EVENTS, type SearchSyncEvent } from "./application/sync";
 export { KyselySavedSearchRepository } from "./adapters/kysely-saved-searches";
 export { TypesenseSearchPort, type TypesenseTransport } from "./adapters/typesense";
 export type {
   IndexedProduct,
+  IndexSource,
+  IndexSourcePort,
+  SearchSyncMetrics,
+  StoreSummaryPort,
   LlmGatewayPort,
   ProductFacts,
   ProductFactsPort,
@@ -42,4 +52,4 @@ export type {
   ShopperScopePort,
   SuggestionDirectoryPort,
 } from "./domain/ports";
-export { ProductFactsUnavailableError, SearchUnavailableError, LlmUnavailableError } from "./domain/ports";
+export { StaleIndexSourceError, ProductFactsUnavailableError, SearchUnavailableError, LlmUnavailableError } from "./domain/ports";

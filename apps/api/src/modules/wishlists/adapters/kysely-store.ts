@@ -1,6 +1,7 @@
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
-import type { WishlistRepository } from "../domain/ports";
+import { randomUUID } from "node:crypto";
+import type { WishlistEvent, WishlistRepository } from "../domain/ports";
 import { WISHLIST_INTENTS, type Money, type Wishlist, type WishlistItem } from "../domain/types";
 
 /** Raw SQL only, rows validated with Zod (same approach as the inventory adapter, ADR-0020). */
@@ -113,7 +114,26 @@ const toItem = (raw: unknown): WishlistItem => {
  * `updated_at` is maintained by the touch trigger (0002), so after `save` it is the database clock.
  */
 export class KyselyWishlistRepository implements WishlistRepository {
-  constructor(private readonly db: WishlistDb) {}
+  /** `ids` supplies time-ordered outbox ids; without it a random UUID is used. */
+  constructor(
+    private readonly db: WishlistDb,
+    private readonly ids: { uuidV7(): string } = { uuidV7: () => randomUUID() },
+  ) {}
+
+  /** Appends outbox rows INSIDE the caller's transaction (same commit as the state change). */
+  private async emit(trx: WishlistDb, events: readonly WishlistEvent[]): Promise<void> {
+    for (const e of events) {
+      const body = e.type === "wishlist.alert_due" ? { alert: e.alert } : e.type === "wishlist.shared"
+        ? { user_id: e.userId, expires_at_ms: e.expiresAtMs, hide_prices: e.hidePrices }
+        : { user_id: e.userId };
+      const aggregateId = e.type === "wishlist.alert_due" ? e.alert.wishlistId : e.wishlistId;
+      const payload = JSON.stringify({ wishlist_id: aggregateId, ...body });
+      await sql`
+        insert into outbox_events (id, aggregate_type, aggregate_id, event_type, ordering_key, payload)
+        values (${this.ids.uuidV7()}::uuid, 'wishlist', ${aggregateId}::uuid, ${e.type},
+                ${`wishlist:${aggregateId}`}, ${payload}::jsonb)`.execute(trx);
+    }
+  }
 
   private async tx<T>(run: (trx: WishlistDb) => Promise<T>): Promise<T> {
     return this.db.transaction().execute(async (trx) => {
@@ -155,7 +175,7 @@ export class KyselyWishlistRepository implements WishlistRepository {
   }
 
   /** Owner-scoped (never touches another user's row); revocation of the same token is monotonic. */
-  async save(l: Wishlist): Promise<void> {
+  async save(l: Wishlist, events: readonly WishlistEvent[] = []): Promise<void> {
     const s = l.share;
     await this.tx(async (trx) => {
       await sql`
@@ -175,6 +195,7 @@ export class KyselyWishlistRepository implements WishlistRepository {
             else ${isoOrNull(s?.revokedAtMs ?? null)}::timestamptz end,
           share_hide_prices = ${s?.hidePrices ?? false}
          where id = ${l.id}::uuid and user_id = ${l.userId}::uuid`.execute(trx);
+      await this.emit(trx, events);
     });
   }
 
@@ -283,12 +304,14 @@ export class KyselyWishlistRepository implements WishlistRepository {
     });
   }
 
-  async claimAlert(dedupeKey: string, wishlistId: string): Promise<boolean> {
+  async claimAlert(dedupeKey: string, wishlistId: string, events: readonly WishlistEvent[] = []): Promise<boolean> {
     return this.tx(async (trx) => {
       const r = await sql<{ k: string }>`
         insert into wishlist_alert_dedupe (dedupe_key, wishlist_id) values (${dedupeKey}, ${wishlistId}::uuid)
         on conflict (dedupe_key) do nothing returning dedupe_key as k`.execute(trx);
-      return r.rows.length > 0;
+      if (r.rows.length === 0) return false;
+      await this.emit(trx, events);
+      return true;
     });
   }
 }

@@ -128,6 +128,8 @@ export interface AdmissionStore {
   recordEnded(t: EndedTicket, events: readonly WaitingRoomEvent[]): Promise<void>;
   recordJoined(dropId: string, ticketId: string, events: readonly WaitingRoomEvent[]): Promise<void>;
   latestAdmission(dropId: string, userId: string): Promise<AdmissionRecord | null>;
+  /** Stored counters for ops: tickets that ended in each state since a time (admitted, rejected, abandoned). */
+  countsSince(dropId: string, sinceMs: number): Promise<{ readonly admitted: number; readonly rejected: number; readonly abandoned: number }>;
   /** Single use: the first call wins. */
   consume(jti: string, nowMs: number): Promise<"used" | "already_used" | "unknown" | "expired">;
 }

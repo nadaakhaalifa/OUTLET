@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { planDateAlerts, planSignalAlert, type CatalogSignal, type PlannedAlert } from "../domain/alerts";
-import type { Clock, WishlistEventPublisher, WishlistRepository } from "../domain/ports";
+import type { Clock, WishlistRepository } from "../domain/ports";
 
 const Id = z.string().min(1).max(64);
 const Piastres = z.string().regex(/^[0-9]{1,18}$/);
@@ -51,15 +51,11 @@ export function toSignal(wire: z.infer<typeof CatalogSignalSchema>): CatalogSign
   }
 }
 
-async function emit(
-  repo: WishlistRepository,
-  events: WishlistEventPublisher,
-  alerts: readonly PlannedAlert[],
-): Promise<number> {
+/** The dedupe claim and the outbox event commit together: a crash can neither lose nor duplicate an alert. */
+async function emit(repo: WishlistRepository, alerts: readonly PlannedAlert[]): Promise<number> {
   let n = 0;
   for (const a of alerts) {
-    if (!(await repo.claimAlert(a.dedupeKey, a.wishlistId))) continue;
-    await events.publish({ type: "wishlist.alert_due", alert: a });
+    if (!(await repo.claimAlert(a.dedupeKey, a.wishlistId, [{ type: "wishlist.alert_due", alert: a }]))) continue;
     n += 1;
   }
   return n;
@@ -69,7 +65,6 @@ async function emit(
 export class HandleCatalogSignal {
   constructor(
     private readonly repo: WishlistRepository,
-    private readonly events: WishlistEventPublisher,
   ) {}
 
   async execute(raw: unknown): Promise<{ readonly kind: "invalid" } | { readonly kind: "handled"; readonly emitted: number }> {
@@ -82,7 +77,7 @@ export class HandleCatalogSignal {
       const p = planSignalAlert(signal, item);
       if (p !== null) planned.push(p);
     }
-    return { kind: "handled", emitted: await emit(this.repo, this.events, planned) };
+    return { kind: "handled", emitted: await emit(this.repo, planned) };
   }
 }
 
@@ -90,7 +85,6 @@ export class HandleCatalogSignal {
 export class ScheduleDateAlerts {
   constructor(
     private readonly repo: WishlistRepository,
-    private readonly events: WishlistEventPublisher,
     private readonly clock: Clock,
   ) {}
 
@@ -98,6 +92,6 @@ export class ScheduleDateAlerts {
     const nowMs = this.clock.nowMs();
     const planned: PlannedAlert[] = [];
     for (const list of await this.repo.listWithDates()) planned.push(...planDateAlerts(list, nowMs));
-    return { emitted: await emit(this.repo, this.events, planned) };
+    return { emitted: await emit(this.repo, planned) };
   }
 }

@@ -6,7 +6,10 @@ import type {
   ConfigChange,
   CrawlEvent,
   CrawlStore,
+  IncidentKind,
+  IncidentQuery,
   IncidentRecord,
+  IncidentRow,
   MatchRecord,
   MatchingConfigRecord,
   SnapshotRecord,
@@ -371,9 +374,44 @@ export class KyselyCrawlStore implements CrawlStore {
 
   async addIncident(i: IncidentRecord, events: readonly CrawlEvent[]) {
     await this.tx(async (trx) => {
-      await sql`insert into crawl_incidents (id, target_id, store_id, kind, host, url_hash, detail)
-        values (${i.id}::uuid, ${i.targetId}::uuid, ${i.storeId}::uuid, ${i.kind}, ${i.host}, ${i.urlHash}, ${i.detail})`.execute(trx);
+      const at = i.createdAtMs === undefined ? sql`now()` : sql`to_timestamp(${i.createdAtMs}::numeric / 1000)`;
+      await sql`insert into crawl_incidents (id, target_id, store_id, kind, host, url_hash, detail, created_at)
+        values (${i.id}::uuid, ${i.targetId}::uuid, ${i.storeId}::uuid, ${i.kind}, ${i.host}, ${i.urlHash}, ${i.detail}, ${at})`.execute(trx);
       await this.emit(trx, events);
+    });
+  }
+
+  async listIncidents(q: IncidentQuery): Promise<readonly IncidentRow[]> {
+    return this.tx(async (trx) => {
+      const store = q.storeId === null ? sql`true` : sql`store_id = ${q.storeId}::uuid`;
+      const kind = q.kind === null ? sql`true` : sql`kind = ${q.kind}`;
+      const after =
+        q.after === null
+          ? sql`true`
+          : sql`(floor(extract(epoch from created_at) * 1000)::bigint, id) < (${q.after.atMs}::bigint, ${q.after.id}::uuid)`;
+      const r = await sql<{
+        id: string;
+        target_id: string | null;
+        store_id: string | null;
+        kind: IncidentKind;
+        host: string;
+        url_hash: string;
+        detail: string | null;
+        at_ms: string;
+      }>`select id::text as id, target_id::text as target_id, store_id::text as store_id, kind, host, url_hash, detail,
+          floor(extract(epoch from created_at) * 1000)::bigint::text as at_ms
+        from crawl_incidents where ${store} and ${kind} and ${after}
+        order by floor(extract(epoch from created_at) * 1000)::bigint desc, id desc limit ${q.limit}`.execute(trx);
+      return r.rows.map((x) => ({
+        id: x.id,
+        targetId: x.target_id,
+        storeId: x.store_id,
+        kind: x.kind,
+        host: x.host,
+        urlHash: x.url_hash,
+        detail: x.detail,
+        createdAtMs: Number(x.at_ms),
+      }));
     });
   }
 }

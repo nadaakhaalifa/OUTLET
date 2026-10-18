@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IDEM, TOKENS, USERS, bearer, createStylistHarness, type StylistHarness } from "./test/harness";
-import { item, sku, U } from "./test/fixtures";
+import { item, record, sku, U } from "./test/fixtures";
 
 let h: StylistHarness;
 let seq = 0;
@@ -193,5 +193,36 @@ describe("fair use", () => {
     } finally {
       await q.close();
     }
+  });
+});
+
+describe("seller stylist inclusion (k-anonymity)", () => {
+  const FRESH = U(9555);
+  const get = (token: string | null, qs = "") => {
+    tick();
+    const r = h.http().get(`/v1/seller/stylist/inclusion${qs}`);
+    return token === null ? r : r.set(bearer(token));
+  };
+  it("suppresses below 50 distinct shoppers and shows aggregates at 50; scoped to the caller's stores", async () => {
+    const now = h.clock.nowMs();
+    const few = Array.from({ length: 49 }, (_, i) => record(900 + i, U(5000 + i), { id: U(60_000 + i), generationId: U(61_000 + i), createdAtMs: now - 1000, items: [{ itemId: sku(1), storeId: FRESH, slot: "top", pricePiastres: 1000n, verifiedDiscountPct: 0 }] }));
+    await h.store.insertOutfits(few, []);
+    const low = await get(TOKENS.sellerFresh);
+    expect(low.status).toBe(200);
+    expect(low.body.items[0]).toEqual({ store_id: FRESH, suppressed: true, outfits: null, distinct_shoppers: null, added_to_bag_outfits: null });
+    await h.store.insertOutfits([record(999, U(5999), { id: U(60_999), generationId: U(61_999), createdAtMs: now - 500, items: [{ itemId: sku(1), storeId: FRESH, slot: "top", pricePiastres: 1000n, verifiedDiscountPct: 0 }] })], []);
+    const ok = await get(TOKENS.sellerFresh);
+    expect(ok.body.items[0]).toMatchObject({ suppressed: false, distinct_shoppers: 50, outfits: 50 });
+    const other = await get(TOKENS.sellerOther);
+    expect(other.body.items).toHaveLength(1);
+    expect(other.body.items[0].suppressed).toBe(true);
+    expect(other.body.items[0].store_id).toBe(U(9777));
+  });
+  it("auth: no token 401, shopper audience 401, shopper token on seller audience 403, bad range 400", async () => {
+    expect((await get(null)).status).toBe(401);
+    expect((await get(TOKENS.a)).status).toBe(401);
+    expect((await get(TOKENS.shopperOnSellerAud)).status).toBe(403);
+    expect((await get(TOKENS.sellerA, "?from=2030-01-02T00:00:00Z&to=2030-01-01T00:00:00Z")).status).toBe(400);
+    expect((await get(TOKENS.sellerA, "?x=1")).status).toBe(400);
   });
 });

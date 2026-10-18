@@ -21,12 +21,16 @@ import {
   LlmUnavailableError,
   ProductFactsUnavailableError,
   SearchUnavailableError,
+  DEFAULT_SEARCH_SORT,
+  MAX_FACET_BUCKETS,
+  type FacetBucket,
   type LlmGatewayPort,
   type ProductFacts,
   type ProductFactsPort,
   type SearchEventPublisher,
   type SearchKillSwitchPort,
   type SearchPort,
+  type SearchSort,
   type ShopperScopePort,
   type SuggestionDirectoryPort,
 } from "../domain/ports";
@@ -73,6 +77,7 @@ export interface SearchInput {
   readonly filter: SearchFilter;
   readonly limit?: number;
   readonly cursor?: string;
+  readonly sort?: SearchSort;
   readonly locale?: "ar" | "en";
 }
 
@@ -89,7 +94,12 @@ export interface SearchOutcome {
   readonly relaxedFilters: readonly string[];
   readonly didYouMean: string | null;
   readonly degraded: boolean;
+  /** Exact index-level counts; undefined when unavailable (degraded engine, later page, live-only filter, engine failure). */
+  readonly facetCounts?: { readonly categories: readonly FacetBucket[]; readonly stores: readonly FacetBucket[] };
 }
+
+/** Filters judged on live facts owned by other modules; index counts cannot honour them, so counts are omitted. */
+const LIVE_ONLY_FILTERS = ["installmentsAvailable", "monthlyMax", "codAvailable", "payableWithStoreCredit", "mySizeOnly", "fitsRemainingBudget"] as const;
 
 const KEY_TO_WIRE: Readonly<Record<string, string>> = {
   newArrivals: "new_arrivals",
@@ -112,8 +122,10 @@ const KEY_TO_WIRE: Readonly<Record<string, string>> = {
 const jsonSafe = (v: unknown): unknown =>
   JSON.parse(JSON.stringify(v, (_k, x: unknown) => (typeof x === "bigint" ? x.toString() : x))) as unknown;
 
-function fingerprint(keywords: string, filter: SearchFilter): string {
-  return sha256Hex(JSON.stringify(jsonSafe({ k: keywords, f: canonicalizeFilter(filter) }))).slice(0, 16);
+function fingerprint(keywords: string, filter: SearchFilter, sort: SearchSort = DEFAULT_SEARCH_SORT): string {
+  // The default sort keeps the historical fingerprint, so cursors issued before `sort` existed stay valid.
+  const base = { k: keywords, f: canonicalizeFilter(filter) };
+  return sha256Hex(JSON.stringify(jsonSafe(sort === DEFAULT_SEARCH_SORT ? base : { ...base, s: sort }))).slice(0, 16);
 }
 
 /** Resumable paging state: engine offset, global rank state and demoted sponsored product ids. */
@@ -205,13 +217,14 @@ export class SearchProducts {
     const facetCount = countFacets(merged);
     if (facetCount > MAX_FACETS) throw new TooManyFacetsError(facetCount);
 
-    const fp = fingerprint(parsed.keywords, merged);
+    const sort = input.sort ?? DEFAULT_SEARCH_SORT;
+    const fp = fingerprint(parsed.keywords, merged, sort);
     const start: CursorState =
       input.cursor === undefined
         ? { offset: 0, emitted: 0, sponsoredTop: 0, deferredIds: [] }
         : decodeCursor(input.cursor, fp);
     const offset = start.offset;
-    const first = await this.page(input.userId, parsed.keywords, merged, limit, start);
+    const first = await this.page(input.userId, parsed.keywords, merged, limit, start, sort);
     let result = first;
     let applied = merged;
     const relaxed: string[] = [];
@@ -223,7 +236,7 @@ export class SearchProducts {
         if (r === null) break;
         current = r.filter;
         relaxed.push(KEY_TO_WIRE[r.dropped] ?? r.dropped);
-        const next = await this.page(input.userId, parsed.keywords, current, limit, { offset: 0, emitted: 0, sponsoredTop: 0, deferredIds: [] });
+        const next = await this.page(input.userId, parsed.keywords, current, limit, { offset: 0, emitted: 0, sponsoredTop: 0, deferredIds: [] }, sort);
         if (next.items.length > 0) {
           result = next;
           applied = current;
@@ -249,7 +262,8 @@ export class SearchProducts {
         relaxed: relaxed.length > 0,
       });
     }
-    const nextFp = fingerprint(parsed.keywords, applied);
+    const nextFp = fingerprint(parsed.keywords, applied, sort);
+    const counts = input.cursor === undefined && !result.degraded ? await this.facetCounts(input.userId, parsed.keywords, applied, result.engine) : undefined;
     return {
       items: result.items,
       nextCursor: result.next === null ? null : encodeCursor(result.next, nextFp),
@@ -258,7 +272,32 @@ export class SearchProducts {
       relaxedFilters: relaxed,
       didYouMean: suggestion,
       degraded: result.degraded,
+      ...(counts !== undefined ? { facetCounts: counts } : {}),
     };
+  }
+
+  /**
+   * Counts per facet with that facet's own selection removed, so the shopper sees what each option would
+   * return. Index-level and exact for index-level filters; any failure just omits the field.
+   */
+  private async facetCounts(userId: string, keywords: string, filter: SearchFilter, port: SearchPort | null) {
+    if (port === null || port.facetCounts === undefined) return undefined;
+    if (LIVE_ONLY_FILTERS.some((k) => filter[k] !== undefined)) return undefined;
+    try {
+      const storeScope = filter.world === "my_stores" ? await this.d.scope.favoriteStoreIds(userId) : null;
+      const now = this.d.clock.nowMs();
+      const base = { keywords, storeScope, limit: 0, offset: 0, nowMs: now };
+      const { categoryIds: _c, ...withoutCategories } = filter;
+      const { storeIds: _s, ...withoutStores } = filter;
+      const [categories, stores] = await Promise.all([
+        port.facetCounts({ ...base, filter: withoutCategories }, "categories", MAX_FACET_BUCKETS),
+        port.facetCounts({ ...base, filter: withoutStores }, "stores", MAX_FACET_BUCKETS),
+      ]);
+      return { categories, stores };
+    } catch (e) {
+      if (e instanceof SearchUnavailableError) return undefined;
+      throw e;
+    }
   }
 
   private async engine(req: Parameters<SearchPort["search"]>[0]) {
@@ -271,21 +310,21 @@ export class SearchProducts {
     if (!useFallback) {
       try {
         const p = await this.d.primary.search(req);
-        return { ...p, degraded: false };
+        return { ...p, degraded: false, port: this.d.primary as SearchPort | null };
       } catch (e) {
         if (!(e instanceof SearchUnavailableError)) throw e;
       }
     }
     try {
       const p = await this.d.fallback.search(req);
-      return { ...p, degraded: true };
+      return { ...p, degraded: true, port: null as SearchPort | null };
     } catch (e) {
       if (e instanceof SearchUnavailableError) throw new SearchEnginesUnavailableError();
       throw e;
     }
   }
 
-  private async page(userId: string, keywords: string, filter: SearchFilter, limit: number, start: CursorState) {
+  private async page(userId: string, keywords: string, filter: SearchFilter, limit: number, start: CursorState, sort: SearchSort) {
     const now = this.d.clock.nowMs();
     let storeScope: readonly string[] | null = null;
     if (filter.world === "my_stores") storeScope = await this.d.scope.favoriteStoreIds(userId);
@@ -321,6 +360,7 @@ export class SearchProducts {
     let position = start.offset;
     let total = 0;
     let degraded = false;
+    let port: SearchPort | null = null;
     let exhausted = false;
     const chunk = Math.min(limit * 2, MAX_PAGE_SIZE * 2);
     const drain = (): void => {
@@ -332,9 +372,10 @@ export class SearchProducts {
     };
     drain();
     for (let round = 0; round < 4 && collected.length < limit && !exhausted; round += 1) {
-      const p = await this.engine({ keywords, filter, storeScope, limit: chunk, offset: position, nowMs: now });
+      const p = await this.engine({ keywords, filter, storeScope, limit: chunk, offset: position, nowMs: now, sort });
       total = p.total;
       degraded = p.degraded;
+      port = p.port;
       if (p.hits.length === 0) {
         exhausted = true;
         break;
@@ -362,7 +403,7 @@ export class SearchProducts {
           deferredIds: ranker.deferred.map((i) => i.facts.productId),
         }
       : null;
-    return { items: collected, next, total, degraded };
+    return { items: collected, next, total, degraded, engine: port };
   }
 }
 

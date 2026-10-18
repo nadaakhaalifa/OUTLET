@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StylistStore } from "../domain/ports";
-import { START_MS, U, record, sku } from "./fixtures";
+import { START_MS, STORES, U, record, sku } from "./fixtures";
 
 export interface StoreFixture {
   readonly store: StylistStore;
@@ -24,6 +24,23 @@ export function describeStylistStoreContract(name: string, make: () => Promise<S
       const got = await f.store.getOutfit(r.id);
       expect(got).toEqual(r);
       expect(await f.store.getOutfit(U(999))).toBeNull();
+    });
+
+    it("aggregates inclusion per store with distinct shoppers inside the window only", async () => {
+      const f = await make();
+      await f.ensureUser(U(1));
+      await f.ensureUser(U(2));
+      const a = record(1, U(1));
+      const b = record(2, U(1));
+      const c = record(3, U(2));
+      await f.store.insertOutfits([a, b, c], []);
+      await f.store.markAddedToBag(a.id, U(1), START_MS + 10, []);
+      const rows = await f.store.inclusionByStore([STORES[0], STORES[2]], a.createdAtMs, c.createdAtMs + 1);
+      expect(rows).toEqual([
+        { storeId: STORES[0], outfits: 3, distinctShoppers: 2, addedToBagOutfits: 1 },
+        { storeId: STORES[2], outfits: 0, distinctShoppers: 0, addedToBagOutfits: 0 },
+      ]);
+      expect((await f.store.inclusionByStore([STORES[0]], a.createdAtMs, a.createdAtMs + 1))[0]?.outfits).toBe(1);
     });
 
     it("counts generations (not outfits) per user since a time", async () => {

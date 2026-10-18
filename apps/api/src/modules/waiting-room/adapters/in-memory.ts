@@ -84,6 +84,15 @@ export class InMemoryAdmissionStore implements AdmissionStore {
     const jti = this.latest.get(`${dropId}:${userId}`);
     return jti === undefined ? null : (this.admissions.get(jti) ?? null);
   }
+  async countsSince(dropId: string, sinceMs: number): Promise<{ admitted: number; rejected: number; abandoned: number }> {
+    const admitted = [...this.admissions.values()].filter((r) => r.dropId === dropId && r.issuedAtMs >= sinceMs).length;
+    const ended = this.ended.filter((e) => e.dropId === dropId && e.atMs >= sinceMs);
+    return {
+      admitted,
+      rejected: ended.filter((e) => e.state === "rejected").length,
+      abandoned: ended.filter((e) => e.state === "abandoned").length,
+    };
+  }
   async consume(jti: string, nowMs: number): Promise<"used" | "already_used" | "unknown" | "expired"> {
     const r = this.admissions.get(jti);
     if (r === undefined) return "unknown";

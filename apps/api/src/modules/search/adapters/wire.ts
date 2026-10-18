@@ -1,7 +1,7 @@
 import type { Money } from "../domain/bridge";
 import type { SearchOutcome } from "../application/search";
 import type { LocalizedText, ProductFacts, SavedSearchRecord, StoreSummaryFacts } from "../domain/ports";
-import { filterToWire } from "../domain/schema";
+import { FacetCountsWireSchema, filterToWire } from "../domain/schema";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const text = (t: LocalizedText) => ({ ar: t.ar, ...(t.en !== undefined ? { en: t.en } : {}) });
@@ -41,6 +41,8 @@ export function productWire(f: ProductFacts, sponsored: boolean) {
       discount_pct: verified ? f.discountPct : null,
     },
     condition: f.condition,
+    ...(f.department !== undefined ? { department: f.department } : {}),
+    ...(f.brand !== undefined ? { brand: { id: f.brand.id, name: text(f.brand.name) } } : {}),
     sponsored,
   };
 }
@@ -54,6 +56,14 @@ export function searchResultsWire(o: SearchOutcome) {
     relaxed_filter: o.relaxedFilters.length > 0 ? o.relaxedFilters.join(",") : null,
     did_you_mean: o.didYouMean,
     degraded: o.degraded,
+    ...(o.facetCounts !== undefined && !o.degraded
+      ? {
+          facet_counts: FacetCountsWireSchema.parse({
+            category_ids: o.facetCounts.categories,
+            store_ids: o.facetCounts.stores,
+          }),
+        }
+      : {}),
   };
 }
 

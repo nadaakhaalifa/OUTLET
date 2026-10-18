@@ -155,9 +155,14 @@ export class PriceIntegrityService implements PriceBlockReader {
       actorId: input.actorId,
       idempotencyKey: input.idempotencyKey,
     };
-    const { event, created } = await this.d.events.append(neu);
-    const history = await this.d.events.history(input.skuId);
+    // External evidence is read first so the `price.changed` signal can be computed inside the
+    // append transaction, from the same history that includes the new event (fail closed on error).
     const external = (await this.d.external.lookup([input.skuId])).get(input.skuId) ?? null;
+    const { event, created } = await this.d.events.append(neu, (h) => {
+      const r = computeVrp({ events: h, nowMs, external });
+      return { verified: r.claimAllowed, anomaly: detectPreDropInflation(h, nowMs) || r.inflationReset };
+    });
+    const history = await this.d.events.history(input.skuId);
     const result = computeVrp({ events: history, nowMs, external });
     const claimId = claimIdFor(input.skuId, result);
     if (!created) return { created, event, result, claimId, actions: [] };

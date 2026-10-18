@@ -1,4 +1,12 @@
 import { Module, type DynamicModule } from "@nestjs/common";
+import { LLM_GATEWAY, type LlmGateway } from "../llm-gateway";
+import { GatewayChatIntent, InjectionSignalingLlm } from "./adapters/gateway-chat";
+import { InMemoryChatStore, NullChatIntent } from "./adapters/in-memory-chat";
+import { StylistChatController } from "./adapters/chat.controller";
+import { StylistInclusionController } from "./adapters/inclusion.controller";
+import { DEFAULT_CHAT_CONFIG, StylistChat, type ChatConfig } from "./application/chat";
+import type { StylistChatIntentPort, StylistChatStore } from "./domain/chat-ports";
+import { GetStoreInclusion } from "./application/inclusion";
 import type { AppConfig } from "../../config/env";
 import { NoProductionAdaptersError } from "../../platform/platform.module";
 import type { Clock, IdGenerator } from "../../platform/ports";
@@ -18,7 +26,7 @@ import {
   InMemoryStylistStore,
   StaticStylistFlags,
 } from "./adapters/in-memory";
-import { OutfitResolver } from "./adapters/resolvers";
+import { ChatSessionResolver, OutfitResolver, SellerStoreResolver } from "./adapters/resolvers";
 import { StylistController } from "./adapters/stylist.controller";
 import * as T from "./adapters/tokens";
 import type {
@@ -44,6 +52,11 @@ export interface StylistModuleOptions {
   readonly bag?: BagPort;
   readonly flags?: StylistFlagPort;
   readonly llm?: StylistLlmPort;
+  /** Stylist chat (spec P3-07). Required outside dev: chat transcripts must not live in process memory. */
+  readonly chatStore?: StylistChatStore;
+  /** Override the intent port. Default: llm-gateway when composed, else rules only. */
+  readonly chatIntent?: StylistChatIntentPort;
+  readonly chatConfig?: ChatConfig;
 }
 
 /**
@@ -61,7 +74,7 @@ export class MissingStylistPortsError extends Error {
 export class StylistModule {
   static forRoot(config: AppConfig, o: StylistModuleOptions = {}): DynamicModule {
     const production = config.adapters !== "in-memory-dev";
-    if (production && o.store === undefined) throw new NoProductionAdaptersError();
+    if (production && (o.store === undefined || o.chatStore === undefined)) throw new NoProductionAdaptersError();
     if (production || config.env !== "test") {
       const missing: string[] = [];
       if (o.candidates === undefined) missing.push("candidates (catalog, sizing, inventory)");
@@ -80,19 +93,24 @@ export class StylistModule {
     const live = o.live ?? new FakeLivePrices();
     const bag = o.bag ?? new FakeBag();
     const flags = o.flags ?? new StaticStylistFlags();
-    const llm = o.llm ?? new FakeStylistLlm();
+    const chatStore = o.chatStore ?? new InMemoryChatStore();
+    // Seller text that is about to reach a model is scanned for instruction-like content (LLM01 signal).
+    const llm = new InjectionSignalingLlm(o.llm ?? new FakeStylistLlm(), chatStore);
     const cfg = o.config ?? DEFAULT_STYLIST_CONFIG;
+    const chatCfg = o.chatConfig ?? DEFAULT_CHAT_CONFIG;
 
     const RUNTIME = Symbol("stylist.Runtime");
-    const runtime = (clock: Clock, ids: IdGenerator) => {
+    const runtime = (clock: Clock, ids: IdGenerator, gateway: LlmGateway | null) => {
       const d: StylistDeps = { store, candidates, embeddings, budget, personalization, live, flags, llm, clock, ids, cfg };
+      const intent: StylistChatIntentPort = o.chatIntent ?? (gateway === null ? new NullChatIntent() : new GatewayChatIntent(gateway));
       return {
+        chat: new StylistChat({ d, chat: chatStore, intent, cfg: chatCfg }),
         generate: new GenerateOutfits(d),
         look: new CompleteLook(d),
         capsule: new PlanCapsule(d),
         add: new AddOutfitToBag(d, bag),
         feedback: new SubmitFeedback(d),
-        clear: new ClearStylistHistory(d),
+        clear: new ClearStylistHistory(d, chatStore),
       };
     };
     type Runtime = ReturnType<typeof runtime>;
@@ -104,7 +122,7 @@ export class StylistModule {
 
     return {
       module: StylistModule,
-      controllers: [StylistController],
+      controllers: [StylistController, StylistChatController, StylistInclusionController],
       providers: [
         { provide: T.STYLIST_STORE, useValue: store },
         { provide: T.STYLIST_CANDIDATES, useValue: candidates },
@@ -115,12 +133,17 @@ export class StylistModule {
         { provide: T.STYLIST_BAG, useValue: bag },
         { provide: T.STYLIST_FLAGS, useValue: flags },
         { provide: T.STYLIST_LLM, useValue: llm },
+        { provide: T.STYLIST_CHAT_STORE, useValue: chatStore },
+        { provide: T.STYLIST_CHAT_SESSION_RESOLVER, useValue: new ChatSessionResolver(chatStore) },
+        { provide: T.STYLIST_SELLER_RESOLVER, useValue: new SellerStoreResolver() },
+        { provide: T.GET_STORE_INCLUSION, useValue: new GetStoreInclusion(store) },
         { provide: T.STYLIST_OUTFIT_RESOLVER, useValue: new OutfitResolver(store) },
         {
           provide: RUNTIME,
-          inject: [CLOCK, ID_GENERATOR],
-          useFactory: (c: Clock, ids: IdGenerator) => runtime(c, ids),
+          inject: [CLOCK, ID_GENERATOR, { token: LLM_GATEWAY, optional: true }],
+          useFactory: (c: Clock, ids: IdGenerator, gateway: LlmGateway | undefined) => runtime(c, ids, gateway ?? null),
         },
+        from(T.STYLIST_CHAT, (r) => r.chat),
         from(T.GENERATE_OUTFITS, (r) => r.generate),
         from(T.COMPLETE_LOOK, (r) => r.look),
         from(T.PLAN_CAPSULE, (r) => r.capsule),

@@ -127,7 +127,7 @@ export const storeStatusMachine = defineMachine<StoreStatus, StoreEvent>({
 
 export class StoreRuleError extends Error {
   constructor(
-    readonly code: "seller_not_approved",
+    readonly code: "seller_not_approved" | "english_name_required",
     message: string,
   ) {
     super(message);
@@ -136,10 +136,16 @@ export class StoreRuleError extends Error {
 }
 
 /** Pure: next status for an event, enforcing that (re)activation needs an approved seller. */
-export function nextStoreStatus(store: Pick<Store, "status" | "sellerKycState">, event: StoreEvent): StoreStatus {
+export function nextStoreStatus(store: Pick<Store, "status" | "sellerKycState"> & Partial<Pick<Store, "nameAr" | "nameEn">>, event: StoreEvent): StoreStatus {
   const next = storeStatusMachine.transition(store.status, event);
   if ((event === "ACTIVATE" || event === "REINSTATE" || event === "RESUME") && store.sellerKycState !== "APPROVED") {
     throw new StoreRuleError("seller_not_approved", `cannot ${event} a store of a seller in ${store.sellerKycState}`);
+  }
+  // First activation needs both display names. Resume/reinstate are exempt so legacy stores can still trade.
+  if (event === "ACTIVATE" && store.nameAr !== undefined) {
+    if (store.nameAr.trim().length < 2 || (store.nameEn ?? "").trim().length < 2) {
+      throw new StoreRuleError("english_name_required", "a store needs an Arabic and an English name before activation");
+    }
   }
   return next;
 }

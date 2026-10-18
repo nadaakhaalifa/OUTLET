@@ -6,6 +6,8 @@ export interface WishlistRepoContext {
   readonly repo: WishlistRepository;
   /** Makes the user exist where the store enforces the FK (Postgres); no-op in memory. */
   ensureUser(userId: string): Promise<void>;
+  /** Event types the store recorded (outbox rows in Postgres, the sink in memory), oldest first. */
+  recordedEventTypes(): Promise<readonly string[]>;
 }
 
 export const U = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -192,6 +194,20 @@ export function describeWishlistRepositoryContract(name: string, make: () => Pro
       expect(await c.repo.claimAlert("price:p1:t", l.id)).toBe(true);
       expect(await c.repo.claimAlert("price:p1:t", l.id)).toBe(false);
       expect(await c.repo.claimAlert("price:p2:t", l.id)).toBe(true);
+    });
+
+    it("records events atomically with save and with the first alert claim only", async () => {
+      const l = list(1, U(1));
+      await c.repo.insert(l);
+      const share = { tokenHash: HASH, createdAtMs: T0, expiresAtMs: null, revokedAtMs: null, hidePrices: false };
+      await c.repo.save({ ...l, share }, [{ type: "wishlist.shared", wishlistId: l.id, userId: U(1), expiresAtMs: null, hidePrices: false }]);
+      await c.repo.save({ ...l, share: { ...share, revokedAtMs: T0 + 1 } }, [{ type: "wishlist.share_revoked", wishlistId: l.id, userId: U(1) }]);
+      const alert = {
+        alertType: "price_drop_verified" as const, wishlistId: l.id, itemId: null, userId: U(1), productId: null, skuId: null, daysBefore: null, dedupeKey: "k1",
+      };
+      expect(await c.repo.claimAlert("k1", l.id, [{ type: "wishlist.alert_due", alert }])).toBe(true);
+      expect(await c.repo.claimAlert("k1", l.id, [{ type: "wishlist.alert_due", alert }])).toBe(false);
+      expect(await c.recordedEventTypes()).toEqual(["wishlist.shared", "wishlist.share_revoked", "wishlist.alert_due"]);
     });
 
     it("delete removes the list, its items and its alert keys", async () => {

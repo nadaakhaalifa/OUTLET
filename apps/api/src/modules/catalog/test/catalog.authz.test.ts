@@ -50,6 +50,7 @@ function routes(): { name: string; id: boolean; write: boolean; send: (token: st
       write: false,
       send: (t, id) => h.http().get(`/v1/products/${id ?? productId}`).set(auth(t)),
     },
+    { name: "GET /v1/seller/categories", id: false, write: false, send: (t) => h.http().get("/v1/seller/categories").set(auth(t)) },
     { name: "GET /v1/seller/products", id: false, write: false, send: (t) => h.http().get("/v1/seller/products").set(auth(t)) },
     {
       name: "POST /v1/seller/products",
@@ -94,6 +95,7 @@ describe("catalog authorization matrix", () => {
   it("covers every route registered by the module", () => {
     expect(routes().map((r) => r.name)).toEqual([
       "GET /v1/products/{id}",
+      "GET /v1/seller/categories",
       "GET /v1/seller/products",
       "POST /v1/seller/products",
       "GET /v1/seller/products/{id}",

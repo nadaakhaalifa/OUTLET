@@ -225,6 +225,24 @@ describe("size profiles", () => {
       h.cipher.setFailing(false);
     }
   });
+
+  it("answers a tampered stored ciphertext with a distinct integrity Problem, never a bare 500 or the ciphertext", async () => {
+    const id = await makeProfile(TOKENS.buyerA, { label: "Tamper" });
+    const stored = h.profiles.rawRecords().find((x) => x.id === id);
+    expect(stored?.measurementsEnc).toBeDefined();
+    const enc = stored?.measurementsEnc;
+    if (enc === undefined || enc === null) throw new Error("measurements were not stored");
+    enc[enc.length - 1] = (enc[enc.length - 1] ?? 0) ^ 0xff;
+
+    const r = await h.http().get(`/v1/me/size-profiles/${id}`).set(auth(TOKENS.buyerA));
+    expect(r.status).toBe(500);
+    expect(r.headers["content-type"]).toContain("application/problem+json");
+    expect(r.body).toMatchObject({ type: "/problems/ciphertext-integrity", code: "ciphertext_integrity", status: 500 });
+    const body = JSON.stringify(r.body);
+    expect(body).not.toContain(Buffer.from(enc).toString("base64"));
+    expect(body).not.toContain("size_profile:");
+    expect(body).not.toContain("measurements");
+  });
 });
 
 describe("seller size charts", () => {
