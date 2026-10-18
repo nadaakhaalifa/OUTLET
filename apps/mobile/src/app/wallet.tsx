@@ -1,5 +1,6 @@
 import { WalletScreen } from "../features/wallet/WalletScreen";
+import { GuestGate } from "../features/me/GuestGate";
 
 export default function Route() {
-  return <WalletScreen />;
+  return <GuestGate feature="wallet">{() => <WalletScreen />}</GuestGate>;
 }

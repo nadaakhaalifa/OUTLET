@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { PrivacyCenterScreen } from "../features/privacy-center/PrivacyCenterScreen";
 import { PortError, type DeletionState, type PrivacyPort, type PrivacySnapshot } from "../features/privacy-center/model";
 import { CONSENT_PURPOSES, DEFAULT_COOLING_DAYS, evaluateDeletionEligibility, type ConsentPurpose } from "../workspace";
+import { GuestGate } from "../features/me/GuestGate";
+import { GuestPrivacyPanel } from "../features/privacy-center/GuestPrivacyPanel";
 import { useServices, type AppServices } from "../state/services";
 
 /** Adapts the real consent controller and API port to the feature's PrivacyPort. */
@@ -58,5 +60,5 @@ function createPort(services: AppServices): PrivacyPort {
 export default function PrivacyCenter() {
   const services = useServices();
   const port = useMemo(() => createPort(services), [services]);
-  return <PrivacyCenterScreen port={port} />;
+  return <GuestGate feature="guestPrivacy">{(guest) => (guest ? <GuestPrivacyPanel /> : <PrivacyCenterScreen port={port} />)}</GuestGate>;
 }

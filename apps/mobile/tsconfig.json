@@ -7,5 +7,9 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "expo-env.d.ts", ".expo/types/**/*.ts"]
+  "include": [
+    "src",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

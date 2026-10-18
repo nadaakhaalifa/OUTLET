@@ -1,5 +1,6 @@
 import { BudgetScreen } from "../features/budget/BudgetScreen";
+import { GuestGate } from "../features/me/GuestGate";
 
 export default function Route() {
-  return <BudgetScreen />;
+  return <GuestGate feature="budget">{() => <BudgetScreen />}</GuestGate>;
 }

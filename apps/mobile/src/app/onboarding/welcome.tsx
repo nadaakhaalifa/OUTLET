@@ -17,8 +17,10 @@ export default function WelcomeStep() {
     router.replace("/(tabs)");
   };
   return (
-    <StepScaffold step="done" title={t("onboarding.welcome.title")} body={t("onboarding.welcome.body")}>
-      <Button title={t("onboarding.welcome.start")} onPress={() => void start()} />
+    <StepScaffold step="done" noBack art="drop" artAspect={1.15} title={t("onboarding.welcome.title")} body={t("onboarding.welcome.body")}>
+      <Button variant="brand" title={t("onboarding.welcome.start")} onPress={() => void start()} />
+      {/* Optional preference steps: reachable here after the first value screen, never blocking signup. */}
+      <Button variant="ghost" title={t("onboarding.welcome.personalize")} onPress={() => router.replace("/onboarding/vibes")} />
     </StepScaffold>
   );
 }

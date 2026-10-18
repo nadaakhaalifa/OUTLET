@@ -3,5 +3,5 @@ import { BagScreen } from "../../features/bag/BagScreen";
 
 export default function Screen() {
   const router = useRouter();
-  return <BagScreen onCheckout={() => router.push("/checkout")} />;
+  return <BagScreen onShop={() => router.navigate("/")} />;
 }
