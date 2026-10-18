@@ -56,6 +56,10 @@ export class DevFakeApi implements OutletApi {
     if (off) return off;
     if (input.code !== DEV_FIXTURE_OTP) return { ok: false, error: { code: "invalid_code" } };
     // Fixture: in sign-in-only mode a number ending 9999 has no account; any other number is an existing account.
+    // Fixture: a number ending 8888 is a recycled number that needs the step-up.
+    if (input.mode === "existing_only" && input.phoneE164.endsWith("8888")) {
+      return { ok: false, error: { code: "step_up_required", stepUp: { challengeId: "00000000-0000-4000-8000-000000000000", challenge: "DEV-FIXTURE-CHALLENGE", rpId: "dev.invalid", expiresAtMs: this.options.clock.now().getTime() + 5 * 60_000 } } };
+    }
     if (input.mode === "existing_only" && input.phoneE164.endsWith("9999")) return { ok: false, error: { code: "no_account" } };
     return ok({
       isNewAccount: input.mode !== "existing_only",
@@ -64,6 +68,13 @@ export class DevFakeApi implements OutletApi {
         refreshToken: "DEV-FIXTURE-REFRESH-TOKEN-NOT-REAL",
         accessExpiresAtMs: this.options.clock.now().getTime() + 15 * 60_000,
       },
+    });
+  }
+
+  async assertPasskey(): Promise<ApiResult<VerifiedLogin>> {
+    return this.offline<VerifiedLogin>() ?? ok({
+      isNewAccount: false,
+      tokens: { accessToken: "DEV-FIXTURE-ACCESS-TOKEN-NOT-REAL", refreshToken: "DEV-FIXTURE-REFRESH-TOKEN-NOT-REAL", accessExpiresAtMs: this.options.clock.now().getTime() + 15 * 60_000 },
     });
   }
 

@@ -2,7 +2,7 @@ import { ApiError, dataOf, type OutletClient } from "./api-client";
 import { toPortError } from "./wire";
 import type { AgeGatePort, AgeGateRequest, AgeGateResponse } from "../api/age-gate";
 import type {
-  ApiResult, ApiSession, ConsentChange, DeletionRequested, ExportRequested, OtpRequested, OutletApi, VerifiedLogin,
+  ApiResult, ApiSession, ConsentChange, DeletionRequested, ExportRequested, OtpRequested, OutletApi, StepUpChallenge, VerifiedLogin,
 } from "../api/port";
 import type { CivilDate, DeletionSnapshot, PrivacyClock } from "../workspace";
 import { NetworkError, TimeoutError } from "./api-client";
@@ -27,6 +27,13 @@ function mapError<T>(e: unknown): ApiResult<T> {
     return fail("unavailable");
   }
   throw toPortError(e);
+}
+
+function parseStepUp(p: Readonly<Record<string, unknown>>): StepUpChallenge | null {
+  const { passkey_challenge_id: id, passkey_challenge: ch, passkey_rp_id: rp, passkey_expires_at: exp } = p;
+  if (typeof id !== "string" || typeof ch !== "string" || typeof rp !== "string" || typeof exp !== "string") return null;
+  const expiresAtMs = Date.parse(exp);
+  return Number.isNaN(expiresAtMs) ? null : { challengeId: id, challenge: ch, rpId: rp, expiresAtMs };
 }
 
 const pad = (n: number, w: number): string => String(n).padStart(w, "0");
@@ -74,6 +81,28 @@ export class HttpOutletApi implements OutletApi {
         // 404 no_account: nothing was created. Any other 404 (feature blocked) is "not available", never create mode.
         return fail(e.code === "no_account" ? "no_account" : "sign_in_unavailable");
       }
+      if (input.mode === "existing_only" && e instanceof ApiError && e.status === 403 && e.code === "step_up_required") {
+        const stepUp = parseStepUp(e.problem as Readonly<Record<string, unknown>>);
+        // A malformed challenge fails closed: no step-up, no tokens.
+        return stepUp === null ? fail("unavailable") : { ok: false, error: { code: "step_up_required", stepUp } };
+      }
+      return mapError(e);
+    }
+  }
+
+  async assertPasskey(input: { challengeId: string; credential: Readonly<Record<string, unknown>> }): Promise<ApiResult<VerifiedLogin>> {
+    try {
+      const t = dataOf(
+        await this.client.assertPasskey({ body: { challenge_id: input.challengeId, credential: { ...input.credential }, device: { platform: this.platform, install_id: await this.installId() }, mode: "existing_only" } }),
+      );
+      return {
+        ok: true,
+        value: {
+          isNewAccount: false,
+          tokens: { accessToken: t.access_token, refreshToken: t.refresh_token, accessExpiresAtMs: Date.parse(t.access_expires_at) },
+        },
+      };
+    } catch (e) {
       return mapError(e);
     }
   }

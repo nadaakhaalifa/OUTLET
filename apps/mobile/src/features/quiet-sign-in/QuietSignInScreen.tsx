@@ -17,6 +17,8 @@ import { getApiRuntime, getSharedClient } from "../../services/runtime";
 import { getGuestStore } from "../../state/ports";
 import { useServices } from "../../state/services";
 import { sha256Hex } from "../../workspace";
+import type { StepUpChallenge } from "../../api/port";
+import { StepUpPanel } from "../step-up/StepUpPanel";
 import { runQuietVerify } from "./model";
 
 type Phase =
@@ -25,6 +27,7 @@ type Phase =
   | { readonly kind: "merging" }
   | { readonly kind: "merge_failed" }
   | { readonly kind: "summary"; readonly summary: MergeSummary }
+  | { readonly kind: "step_up"; readonly challenge: StepUpChallenge }
   | { readonly kind: "no_account" }
   | { readonly kind: "unavailable" }
   | { readonly kind: "already" };
@@ -147,6 +150,7 @@ export function QuietSignInScreen() {
       );
       if (outcome.kind === "error") { setErrorKey(outcome.errorKey); return; }
       if (outcome.kind === "no_account") { setPhase({ kind: "no_account" }); return; }
+      if (outcome.kind === "step_up") { setCode(""); setPhase({ kind: "step_up", challenge: outcome.challenge }); return; }
       if (outcome.kind === "unavailable") { setPhase({ kind: "unavailable" }); return; }
       void services.role.flushFunnel?.();
       void services.consent.flushPending().catch(() => undefined);
@@ -217,6 +221,18 @@ export function QuietSignInScreen() {
           }} />
           <Button variant="ghost" title={t("quietSignIn.changeNumber")} onPress={() => { setCode(""); setErrorKey(null); setPhase({ kind: "form" }); }} disabled={busy} />
         </View>
+      ) : null}
+
+      {phase.kind === "step_up" ? (
+        <StepUpPanel
+          challenge={phase.challenge}
+          onSignedIn={async () => {
+            void services.role.flushFunnel?.();
+            void services.consent.flushPending().catch(() => undefined);
+            await merge();
+          }}
+          onLeave={() => router.replace("/(tabs)" as Href)}
+        />
       ) : null}
 
       {phase.kind === "merging" ? <LoadingState label={t("guestMerge.moving")} /> : null}

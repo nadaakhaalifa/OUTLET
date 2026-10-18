@@ -14,11 +14,21 @@ export type ApiErrorCode =
   /** Sign-in-only verify: the number has no account (nothing was created). */
   | "no_account"
   /** Sign-in-only verify answered 404 for another reason (feature blocked). */
-  | "sign_in_unavailable";
+  | "sign_in_unavailable"
+  /** Sign-in-only verify: a recycled number on a new install needs a passkey before any token exists (VR-GUEST-06). */
+  | "step_up_required";
+
+/** Account-bound passkey challenge from a 403 step_up_required. No user id or factor hint. */
+export interface StepUpChallenge {
+  readonly challengeId: string;
+  readonly challenge: string;
+  readonly rpId: string;
+  readonly expiresAtMs: number;
+}
 
 export type ApiResult<T> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly error: { readonly code: ApiErrorCode; readonly retryAfterSeconds?: number } };
+  | { readonly ok: false; readonly error: { readonly code: ApiErrorCode; readonly retryAfterSeconds?: number; readonly stepUp?: StepUpChallenge } };
 
 export interface OtpRequested {
   readonly sendsSoFar: number;
@@ -63,6 +73,8 @@ export interface OutletApi {
   requestOtp(input: { phoneE164: string; locale: "ar" | "en"; idempotencyKey: string }): Promise<ApiResult<OtpRequested>>;
   /** `mode: "existing_only"` (G-9) signs in an existing account and never creates one. */
   verifyOtp(input: { phoneE164: string; code: string; mode?: "existing_only" }): Promise<ApiResult<VerifiedLogin>>;
+  /** Completes a step-up (or a passkey sign-in) with the platform assertion. Never creates an account. */
+  assertPasskey(input: { challengeId: string; credential: Readonly<Record<string, unknown>> }): Promise<ApiResult<VerifiedLogin>>;
   /** Sent once, only after the local age gate accepted. The server stores the DOB; the device does not. */
   submitAge(input: { dob: CivilDate; attestedAtLeast18: true }): Promise<ApiResult<void>>;
   recordConsent(change: ConsentChange): Promise<ApiResult<void>>;

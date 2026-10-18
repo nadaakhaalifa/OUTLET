@@ -3100,6 +3100,15 @@ export const en = {
     switchToArabic: "Switch to Arabic",
     switchToEnglish: "Switch to English",
   },
+  stepUp: {
+    title: "Confirm it's you",
+    body: "This number hasn't been used on this phone for a long time. To protect the account, confirm with your passkey. You're not signed in yet.",
+    usePasskey: "Confirm with passkey",
+    noPasskey: "I don't have a passkey on this phone",
+    supportTitle: "We can't sign you in on this phone yet",
+    supportBody: "Without a passkey we can't confirm this account here. Nothing was created, you're not signed in, and no account details are shown. Please contact support. Your bag stays on this phone.",
+    backToShopping: "Back to shopping",
+  },
   quietSignIn: {
     title: "Sign in",
     body: "For existing accounts. The bag and saved items on this phone join your account.",

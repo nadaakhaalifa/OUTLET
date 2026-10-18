@@ -12,6 +12,8 @@ import { randomUrlSafeId } from "../../platform/random";
 import { getGuestStore } from "../../state/ports";
 import { wipeGuestData } from "../../features/guest";
 import { isSignInOnly, setSignInOnly, setNewAccountSignUp, peekReturnTarget } from "../../features/flow";
+import type { StepUpChallenge } from "../../api/port";
+import { StepUpPanel } from "../../features/step-up/StepUpPanel";
 import { useServices } from "../../state/services";
 
 export default function OtpStep() {
@@ -23,6 +25,7 @@ export default function OtpStep() {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [noAccount, setNoAccount] = useState(false);
+  const [stepUp, setStepUp] = useState<StepUpChallenge | null>(null);
   const nowFn = useCallback(() => services.clock.now().getTime(), [services]);
 
   useEffect(() => {
@@ -43,6 +46,11 @@ export default function OtpStep() {
         if (result.error.code === "no_account") {
           // Sign-in never creates an account: say so and offer the way back to sign-up.
           setNoAccount(true);
+          return;
+        }
+        if (result.error.code === "step_up_required") {
+          // Recycled number on a new install: no tokens yet. Never fall back to create mode.
+          if (result.error.stepUp !== undefined) { setCode(""); setStepUp(result.error.stepUp); } else setErrorKey("errors.generic");
           return;
         }
         setErrorKey(errorKeyFor(result.error.code, "otp"));
@@ -109,6 +117,24 @@ export default function OtpStep() {
       setBusy(false);
     }
   };
+
+  if (stepUp !== null) {
+    return (
+      <StepScaffold step="otp" title={t("stepUp.title")} body="">
+        <StepUpPanel
+          challenge={stepUp}
+          onSignedIn={async () => {
+            setNewAccountSignUp(false);
+            services.session.phoneE164 = null;
+            services.session.pendingDob = null;
+            setSignInOnly(false);
+            router.replace(peekReturnTarget() !== null ? "/sign-up?phase=merge" : "/onboarding/welcome");
+          }}
+          onLeave={() => { setSignInOnly(false); router.replace("/(tabs)/bag"); }}
+        />
+      </StepScaffold>
+    );
+  }
 
   return (
     <StepScaffold step="otp" title={t("onboarding.otp.title")} body={t("onboarding.otp.body", { phone: maskPhone(phone) })}>

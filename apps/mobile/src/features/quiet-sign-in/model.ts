@@ -1,4 +1,4 @@
-import type { ApiResult, VerifiedLogin } from "../../api/port";
+import type { ApiResult, StepUpChallenge, VerifiedLogin } from "../../api/port";
 import type { AuthTokens } from "../../platform/secure-storage";
 import { errorKeyFor } from "../api-errors";
 
@@ -9,6 +9,8 @@ export type QuietVerifyOutcome =
   | { readonly kind: "signed_in" }
   | { readonly kind: "no_account" }
   | { readonly kind: "unavailable" }
+  /** Recycled number on a new install: no tokens; the caller runs the passkey step-up. */
+  | { readonly kind: "step_up"; readonly challenge: StepUpChallenge }
   | { readonly kind: "error"; readonly errorKey: string };
 
 export interface QuietVerifyDeps {
@@ -27,6 +29,10 @@ export async function runQuietVerify(deps: QuietVerifyDeps, phoneE164: string, c
   const result = await deps.verifyOtp({ phoneE164, code, mode: "existing_only" });
   if (!result.ok) {
     if (result.error.code === "no_account") return { kind: "no_account" };
+    if (result.error.code === "step_up_required") {
+      // Fail closed: a step-up answer without a challenge is "not available", never a session or create mode.
+      return result.error.stepUp !== undefined ? { kind: "step_up", challenge: result.error.stepUp } : { kind: "unavailable" };
+    }
     if (result.error.code === "sign_in_unavailable") return { kind: "unavailable" };
     return { kind: "error", errorKey: errorKeyFor(result.error.code, "otp") };
   }
