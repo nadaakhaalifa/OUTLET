@@ -1,11 +1,11 @@
-# Spec: Part C section 3 acceptance. World selection persists across app restarts.
+# Spec: Part C section 3 acceptance. World selection persists across app restarts (guest, device-only).
 appId: ${APP_ID}
 name: World switch persistence
-tags: [smoke, worlds]
+tags: [smoke, worlds, guest]
 ---
-- runFlow: ../subflows/onboard-adult.yaml
+- runFlow: ../subflows/guest-start.yaml
 - tapOn:
-    id: "tab-explore"
+    id: "tab-discover"
 - tapOn:
     id: "world-global"
 - assertVisible:
@@ -14,8 +14,13 @@ tags: [smoke, worlds]
 - stopApp
 - launchApp:
     clearState: false
+# Region screen and entrance page appear on first launch only.
+- assertNotVisible:
+    id: "region-continue"
+- assertNotVisible:
+    id: "role-screen"
 - tapOn:
-    id: "tab-explore"
+    id: "tab-discover"
 - assertVisible:
     id: "world-global"
     selected: true
@@ -25,7 +30,7 @@ tags: [smoke, worlds]
 - launchApp:
     clearState: false
 - tapOn:
-    id: "tab-explore"
+    id: "tab-discover"
 - assertVisible:
     id: "world-local"
     selected: true

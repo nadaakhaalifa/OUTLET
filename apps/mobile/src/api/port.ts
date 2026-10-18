@@ -10,7 +10,11 @@ export type ApiErrorCode =
   | "country_not_supported"
   | "age_not_eligible"
   | "deletion_blocked"
-  | "unauthenticated";
+  | "unauthenticated"
+  /** Sign-in-only verify: the number has no account (nothing was created). */
+  | "no_account"
+  /** Sign-in-only verify answered 404 for another reason (feature blocked). */
+  | "sign_in_unavailable";
 
 export type ApiResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -57,7 +61,8 @@ export interface ApiSession {
  */
 export interface OutletApi {
   requestOtp(input: { phoneE164: string; locale: "ar" | "en"; idempotencyKey: string }): Promise<ApiResult<OtpRequested>>;
-  verifyOtp(input: { phoneE164: string; code: string }): Promise<ApiResult<VerifiedLogin>>;
+  /** `mode: "existing_only"` (G-9) signs in an existing account and never creates one. */
+  verifyOtp(input: { phoneE164: string; code: string; mode?: "existing_only" }): Promise<ApiResult<VerifiedLogin>>;
   /** Sent once, only after the local age gate accepted. The server stores the DOB; the device does not. */
   submitAge(input: { dob: CivilDate; attestedAtLeast18: true }): Promise<ApiResult<void>>;
   recordConsent(change: ConsentChange): Promise<ApiResult<void>>;

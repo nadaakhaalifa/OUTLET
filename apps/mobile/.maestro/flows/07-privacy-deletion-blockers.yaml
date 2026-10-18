@@ -4,9 +4,10 @@ appId: ${APP_ID}
 name: Privacy deletion blockers
 tags: [critical, privacy]
 ---
-- runFlow: ../subflows/onboard-adult.yaml
+- runFlow: ../subflows/guest-start.yaml
+- runFlow: ../subflows/sign-in-existing.yaml
 - tapOn:
-    id: "tab-me"
+    id: "tab-profile"
 - tapOn:
     id: "me-row-privacy"
 - assertVisible: ${PRIVACY_TITLE}

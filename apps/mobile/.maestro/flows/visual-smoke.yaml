@@ -1,0 +1,29 @@
+# Visual smoke: walks the main tabs and takes named screenshots for human or diff review.
+# Not a gate. Output goes to ~/.maestro/tests/<run>/ (or --test-output-dir). See docs/engineering/visual-regression.md.
+appId: ${APP_ID}
+name: Visual smoke
+tags: [visual]
+---
+- runFlow: ../subflows/guest-start.yaml
+- assertVisible:
+    id: "tab-home"
+- takeScreenshot: visual-01-home
+- tapOn:
+    id: "tab-discover"
+- assertVisible:
+    id: "tab-discover"
+- takeScreenshot: visual-02-explore
+- tapOn:
+    id: "tab-saved"
+- assertVisible:
+    id: "tab-saved"
+- takeScreenshot: visual-03-saved
+- tapOn:
+    id: "tab-bag"
+- assertVisible: ${BAG_TITLE}
+- takeScreenshot: visual-04-bag
+- tapOn:
+    id: "tab-profile"
+- assertVisible:
+    id: "tab-profile"
+- takeScreenshot: visual-05-me

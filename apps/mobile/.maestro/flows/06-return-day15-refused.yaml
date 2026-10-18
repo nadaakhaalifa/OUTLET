@@ -6,7 +6,8 @@ tags: [critical, returns]
 env:
   RETURN_LINE_DAY15: e2e-line-delivered-15d
 ---
-- runFlow: ../subflows/onboard-adult.yaml
+- runFlow: ../subflows/guest-start.yaml
+- runFlow: ../subflows/sign-in-existing.yaml
 - openLink: ${SCHEME}://returns?line=${RETURN_LINE_DAY15}
 - tapOn:
     id: "returns-reason-changed_mind"

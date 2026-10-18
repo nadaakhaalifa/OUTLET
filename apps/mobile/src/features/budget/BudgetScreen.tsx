@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@outlet/ui-tokens";
-import { Banner, Button, Card, Divider, ErrorState, LoadingState, Screen, SwitchRow, Text, TextField } from "../../ui";
+import { Banner, Button, Chip, Divider, ErrorState, Eyebrow, Reveal, Screen, Skeleton, SwitchRow, Text, TextField } from "../../ui";
+import { Section } from "../account-ui";
+import { Ticker } from "../../components/Ticker";
 import { formatMoney, localizeDigits, type DisplayLocale } from "../money-display";
 import { clockFromServer } from "../drops/serverClock";
 import {
@@ -14,6 +16,7 @@ import { getFeaturePorts } from "../../state/ports";
 
 export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; newKey?: () => string }) {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port = useMemo<BudgetPort>(() => props.port ?? getFeaturePorts().budget, [props.port]);
   const nowFn = props.now ?? Date.now;
@@ -31,7 +34,6 @@ export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; new
   const [capMode, setCapMode] = useState<CapMode>("off");
   const [msg, setMsg] = useState<"saved" | "saveFailed" | "unlockFailed" | null>(null);
   const [holdStart, setHoldStart] = useState<number | null>(null);
-  const [tick, setTick] = useState(() => nowFn());
   const [clockOffset, setClockOffset] = useState(0);
 
   const load = useCallback(async () => {
@@ -56,11 +58,6 @@ export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; new
   useEffect(() => { void load(); }, [load]);
 
   const timing = holdStart !== null || (state.status === "ready" && state.summary.unlockAtMs !== null);
-  useEffect(() => {
-    if (!timing) return;
-    const id = setInterval(() => setTick(nowFn()), 1000);
-    return () => clearInterval(id);
-  }, [timing]);
 
   const setConsent = async (granted: boolean) => {
     try {
@@ -103,13 +100,17 @@ export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; new
   const rem = ready !== null ? remainingNow(ready, includeBag) : null;
   const after = ready !== null ? availableAfterPayday(ready) : null;
   const cap = ready !== null && ready.settings !== null ? capState(ready.settings.capMode, rem) : { kind: "off" as const };
-  const hold = holdState(holdStart, tick);
-  const unlock = ready !== null ? unlockState(ready.unlockAtMs, { offsetMs: clockOffset }, tick) : { kind: "none" as const };
 
   return (
-    <Screen>
-      <Text variant="title">{t("budget.title")}</Text>
-      {state.status === "loading" ? <LoadingState label={t("budget.loading")} /> : null}
+    <Screen title={t("budget.title")} onBack={() => router.back()} backLabel={t("common.back")}>
+      {state.status === "loading" ? (
+        <View accessibilityRole="progressbar" accessibilityLabel={t("budget.loading")} style={{ gap: 16 }}>
+          <Skeleton width={110} height={12} />
+          <Skeleton width="65%" height={56} />
+          <Skeleton height={44} radius={14} />
+          <Skeleton height={44} radius={14} />
+        </View>
+      ) : null}
       {state.status === "error" ? (
         <ErrorState
           offline={state.offline}
@@ -120,17 +121,33 @@ export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; new
         />
       ) : null}
       {state.status === "consent" ? (
-        <Card>
-          <Text variant="heading">{t("budget.consentTitle")}</Text>
+        <Section title={t("budget.consentTitle")}>
           <Text>{t("budget.consentBody", { hours: num(BUDGET_DELETE_HOURS) })}</Text>
           {state.failed ? <Banner tone="error" message={t("budget.consentFailed")} /> : null}
           <Button title={t("budget.consentGrant")} onPress={() => void setConsent(true)} />
-        </Card>
+        </Section>
       ) : null}
 
       {ready !== null ? (
         <>
-          <Card>
+          {rem === null || after === null ? (
+            <Section title={t("budget.emptyTitle")}>
+              <Text secondary>{t("budget.emptyBody")}</Text>
+            </Section>
+          ) : (
+            <Reveal index={0}><View style={{ gap: 8, paddingVertical: 8 }}>
+              <Eyebrow>{t("budget.remainingLabel")}</Eyebrow>
+              <Text variant="hero" numeric accessibilityRole="header">{money(rem.display)}</Text>
+              {rem.over ? <Banner tone="warning" message={t("budget.overBy", { amount: money(rem.overBy) })} /> : null}
+              <Text secondary>{t("budget.afterPayday", { amount: money(after) })}</Text>
+              <Text variant="caption" secondary>{t("budget.spent", { amount: money(ready.spentThisCycle) })}</Text>
+              <Text variant="caption" secondary>{t("budget.installmentsDue", { amount: money(ready.installmentsDueThisCycle) })}</Text>
+              <SwitchRow label={t("budget.includeBag")} value={includeBag} onValueChange={setIncludeBag} />
+              {includeBag ? <Text variant="caption" secondary>{t("budget.bagIncluded", { amount: money(ready.bagTotal) })}</Text> : null}
+            </View></Reveal>
+          )}
+
+          <Section title={t("budget.settingsHeading")}>
             <TextField
               label={`${t("budget.amountLabel")} (${currency})`}
               value={amountText}
@@ -147,101 +164,82 @@ export function BudgetScreen(props: { port?: BudgetPort; now?: () => number; new
               {...(fieldErr.payday ? { error: t("budget.paydayInvalid") } : {})}
             />
             <Text variant="caption" secondary>{t("budget.capHeading")}</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {CAP_MODES.map((m) => (
-                <Button
-                  key={m}
-                  variant={m === capMode ? "primary" : "secondary"}
-                  title={t(`budget.capMode.${m}`)}
-                  accessibilityLabel={t("budget.capModeName", { mode: t(`budget.capMode.${m}`) })}
-                  onPress={() => setCapMode(m)}
-                />
+                <Chip key={m} label={t(`budget.capMode.${m}`)} selected={m === capMode} onPress={() => setCapMode(m)} />
               ))}
             </View>
-            <Button title={t("budget.saveSettings")} onPress={() => void save()} />
+            <Button variant="brand" title={t("budget.saveSettings")} onPress={() => void save()} />
             {msg === "saved" ? <Banner tone="info" message={t("budget.saved")} /> : null}
             {msg === "saveFailed" ? <Banner tone="error" message={t("budget.saveFailed")} /> : null}
-          </Card>
-
-          {rem === null || after === null ? (
-            <Card>
-              <Text variant="heading">{t("budget.emptyTitle")}</Text>
-              <Text secondary>{t("budget.emptyBody")}</Text>
-            </Card>
-          ) : (
-            <Card>
-              <Text variant="heading">{t("budget.remainingNow", { amount: money(rem.display) })}</Text>
-              {rem.over ? <Banner tone="warning" message={t("budget.overBy", { amount: money(rem.overBy) })} /> : null}
-              <Text>{t("budget.afterPayday", { amount: money(after) })}</Text>
-              <Text variant="caption" secondary>{t("budget.spent", { amount: money(ready.spentThisCycle) })}</Text>
-              <Text variant="caption" secondary>{t("budget.installmentsDue", { amount: money(ready.installmentsDueThisCycle) })}</Text>
-              <SwitchRow label={t("budget.includeBag")} value={includeBag} onValueChange={setIncludeBag} />
-              {includeBag ? <Text variant="caption" secondary>{t("budget.bagIncluded", { amount: money(ready.bagTotal) })}</Text> : null}
-            </Card>
-          )}
+          </Section>
 
           {ready.installments.length > 0 ? (
-            <Card>
-              <Text variant="heading">{t("budget.installmentsHeading")}</Text>
+            <Section title={t("budget.installmentsHeading")}>
               {ready.installments.map((i) => (
                 <Text key={i.id}>
                   {t(i.source === "provider" ? "budget.installmentLineProvider" : "budget.installmentLineUser", { provider: i.provider, amount: money(i.monthly) })}
                 </Text>
               ))}
-            </Card>
+            </Section>
           ) : null}
 
           {ready.settings !== null ? (
-            <Card>
-              <Text variant="heading">{t("budget.affordableHeading")}</Text>
+            <Section title={t("budget.affordableHeading")}>
               {wishlistAffordability(ready, includeBag).length === 0 ? <Text secondary>{t("budget.affordableEmpty")}</Text> : null}
               {wishlistAffordability(ready, includeBag).map(({ item, status }) => (
-                <View key={item.id} style={{ gap: spacing.xs }}>
+                <View key={item.id} style={{ gap: 4 }}>
                   <Text>{`${item.title}, ${money(item.price)}`}</Text>
                   <Text variant="caption" secondary>
                     {t(status === "now" ? "budget.affordableNow" : status === "afterPayday" ? "budget.affordableLater" : "budget.affordableNo")}
                   </Text>
                 </View>
               ))}
-            </Card>
+            </Section>
           ) : null}
 
-          <Card>
-            <Text variant="heading">{t("budget.capHeading")}</Text>
-            {cap.kind === "off" ? <Text secondary>{t("budget.capOff")}</Text> : null}
-            {cap.kind === "notReached" ? <Text secondary>{t("budget.capNotReached")}</Text> : null}
-            {cap.kind === "softReached" ? (
+          <Section title={t("budget.capHeading")}>
+            <Ticker nowFn={nowFn} active={timing} render={(tick) => {
+              const hold = holdState(holdStart, tick);
+              const unlock = ready !== null ? unlockState(ready.unlockAtMs, { offsetMs: clockOffset }, tick) : { kind: "none" as const };
+              return (
               <>
-                <Banner tone="warning" message={t("budget.capSoftReached", { seconds: num(SOFT_HOLD_MS / 1000) })} />
-                {hold === null ? (
-                  <Button variant="secondary" title={t("budget.capSoftHold", { seconds: num(SOFT_HOLD_MS / 1000) })} onPress={() => setHoldStart(nowFn())} />
-                ) : hold.done ? (
-                  <Banner tone="info" message={t("budget.capSoftReady")} />
-                ) : (
+                {cap.kind === "off" ? <Text secondary>{t("budget.capOff")}</Text> : null}
+                {cap.kind === "notReached" ? <Text secondary>{t("budget.capNotReached")}</Text> : null}
+                {cap.kind === "softReached" ? (
                   <>
-                    <Text accessibilityRole="text">{t("budget.capSoftCounting", { seconds: num(holdSeconds(hold)) })}</Text>
-                    <Button variant="secondary" title={t("budget.capSoftCancel")} onPress={() => setHoldStart(null)} />
+                    <Banner tone="warning" message={t("budget.capSoftReached", { seconds: num(SOFT_HOLD_MS / 1000) })} />
+                    {hold === null ? (
+                      <Button variant="secondary" title={t("budget.capSoftHold", { seconds: num(SOFT_HOLD_MS / 1000) })} onPress={() => setHoldStart(nowFn())} />
+                    ) : hold.done ? (
+                      <Banner tone="info" message={t("budget.capSoftReady")} />
+                    ) : (
+                      <>
+                        <Text accessibilityRole="text">{t("budget.capSoftCounting", { seconds: num(holdSeconds(hold)) })}</Text>
+                        <Button variant="secondary" title={t("budget.capSoftCancel")} onPress={() => setHoldStart(null)} />
+                      </>
+                    )}
                   </>
-                )}
+                ) : null}
+                {cap.kind === "hardReached" ? (
+                  <>
+                    <Banner tone="warning" message={t("budget.capHardReached", { hours: num(HARD_UNLOCK_HOURS) })} />
+                    {unlock.kind === "none" ? <Button variant="secondary" title={t("budget.capHardRequest")} onPress={() => void requestUnlock()} /> : null}
+                    {unlock.kind === "pending" ? <Banner tone="info" message={t("budget.capHardPending", { date: dateOf(unlock.unlockAtMs) })} /> : null}
+                    {unlock.kind === "ready" ? <Banner tone="info" message={t("budget.capHardReady")} /> : null}
+                    {msg === "unlockFailed" ? <Banner tone="error" message={t("budget.capUnlockFailed")} /> : null}
+                  </>
+                ) : null}
               </>
-            ) : null}
-            {cap.kind === "hardReached" ? (
-              <>
-                <Banner tone="warning" message={t("budget.capHardReached", { hours: num(HARD_UNLOCK_HOURS) })} />
-                {unlock.kind === "none" ? <Button variant="secondary" title={t("budget.capHardRequest")} onPress={() => void requestUnlock()} /> : null}
-                {unlock.kind === "pending" ? <Banner tone="info" message={t("budget.capHardPending", { date: dateOf(unlock.unlockAtMs) })} /> : null}
-                {unlock.kind === "ready" ? <Banner tone="info" message={t("budget.capHardReady")} /> : null}
-                {msg === "unlockFailed" ? <Banner tone="error" message={t("budget.capUnlockFailed")} /> : null}
-              </>
-            ) : null}
-          </Card>
+              );
+            }} />
+          </Section>
 
           <Divider />
           <Text variant="caption" secondary>{t("budget.notAdvice")}</Text>
           <Button variant="secondary" title={t("budget.consentWithdraw")} onPress={() => void setConsent(false)} />
         </>
       ) : null}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
     </Screen>
   );
 }

@@ -5,11 +5,13 @@ appId: ${APP_ID}
 name: Checkout duplicate tap and resume
 tags: [critical, checkout]
 ---
-- runFlow: ../subflows/onboard-adult.yaml
+- runFlow: ../subflows/guest-start.yaml
+# Account is created only at the Checkout gate; the gate lands on checkout step 1.
 - runFlow:
-    file: ../subflows/add-product-to-bag.yaml
+    file: ../subflows/open-checkout-gate.yaml
     env:
       PRODUCT: ${PRODUCT_ID}
+- runFlow: ../subflows/gate-sign-up.yaml
 - runFlow: ../subflows/place-order.yaml
 # Duplicate tap protection.
 - tapOn:

@@ -1,0 +1,5 @@
+{
+  "NSCameraUsageDescription": "Z-OUTLET uses the camera to take review, return and defect photos, to search with a picture, and, if you are a brand, product photos and ownership proof photos, only when you ask it to.",
+  "NSPhotoLibraryUsageDescription": "Z-OUTLET reads photos you choose to attach to reviews and returns or to search with, or, if you are a brand, brand product photos and ownership proof photos. Nothing else is read.",
+  "NSPhotoLibraryAddUsageDescription": "Z-OUTLET saves photos to your library only when you ask it to."
+}

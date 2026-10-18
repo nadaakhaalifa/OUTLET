@@ -1,0 +1,47 @@
+# Spec: docs/specs/guest-browsing.md F5/E14, ADR-0055 item 4b. Quiet sign-in (sign-in-only) for existing accounts from the Me tab.
+# The sign-in form takes the age attestation first (ADR-0055 item 4), then the code. A number with no account gets an honest
+# message and nothing is created: no consents step, no create option. UNKNOWN_PHONE must end 9999 (dev fake) or be unseeded.
+# Needs the e2e seed to hold ADULT_PHONE as an existing account (see docs/engineering/e2e-maestro.md).
+appId: ${APP_ID}
+name: Quiet sign-in
+tags: [guest, auth]
+---
+- runFlow: ../subflows/guest-start.yaml
+- tapOn:
+    id: "tab-profile"
+# Unknown number first: honest message, nothing created.
+- tapOn: ${ME_SIGN_IN}
+- assertVisible:
+    id: "quiet-sign-in"
+- tapOn:
+    id: "signin-dob-input"
+- inputText: ${ADULT_DOB_DAY}${ADULT_DOB_MONTH}${ADULT_DOB_YEAR}
+- hideKeyboard
+- tapOn:
+    id: "signin-dob-attest"
+- tapOn:
+    id: "signin-phone-input"
+- inputText: ${UNKNOWN_PHONE}
+- hideKeyboard
+- tapOn:
+    id: "signin-send"
+- tapOn:
+    id: "signin-otp-input"
+- inputText: ${OTP_CODE}
+- tapOn:
+    id: "signin-verify"
+- assertVisible:
+    id: "signin-no-account"
+- assertNotVisible: ${CONSENTS_SKIP}
+- assertNotVisible:
+    id: "terms-accept"
+- tapOn:
+    id: "signin-back-to-shopping"
+- assertVisible:
+    id: "tab-home"
+# Existing account: signs in and returns to the app with no sign-up step.
+- runFlow: ../subflows/sign-in-existing.yaml
+- assertNotVisible:
+    id: "terms-accept"
+- assertNotVisible:
+    id: "me-quiet-sign-in"

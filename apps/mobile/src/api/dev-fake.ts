@@ -51,12 +51,14 @@ export class DevFakeApi implements OutletApi {
     return ok({ sendsSoFar: this.sends });
   }
 
-  async verifyOtp(input: { phoneE164: string; code: string }): Promise<ApiResult<VerifiedLogin>> {
+  async verifyOtp(input: { phoneE164: string; code: string; mode?: "existing_only" }): Promise<ApiResult<VerifiedLogin>> {
     const off = this.offline<VerifiedLogin>();
     if (off) return off;
     if (input.code !== DEV_FIXTURE_OTP) return { ok: false, error: { code: "invalid_code" } };
+    // Fixture: in sign-in-only mode a number ending 9999 has no account; any other number is an existing account.
+    if (input.mode === "existing_only" && input.phoneE164.endsWith("9999")) return { ok: false, error: { code: "no_account" } };
     return ok({
-      isNewAccount: true,
+      isNewAccount: input.mode !== "existing_only",
       tokens: {
         accessToken: "DEV-FIXTURE-ACCESS-TOKEN-NOT-REAL",
         refreshToken: "DEV-FIXTURE-REFRESH-TOKEN-NOT-REAL",

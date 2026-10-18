@@ -1,0 +1,37 @@
+# Quiet sign-in for an EXISTING seeded account from the Me tab (ADR-0055 F5). Never creates an account.
+# The merge summary (shown when the guest bag/saved had content) is dismissed with signin-merge-continue.
+# The sign-in form still takes the age attestation before the code (ADR-0055 item 4). Needs ADULT_PHONE seeded as an account.
+appId: ${APP_ID}
+---
+- tapOn:
+    id: "tab-profile"
+- tapOn:
+    id: "me-quiet-sign-in-link"
+- assertVisible:
+    id: "quiet-sign-in"
+- tapOn:
+    id: "signin-dob-input"
+- inputText: ${ADULT_DOB_DAY}${ADULT_DOB_MONTH}${ADULT_DOB_YEAR}
+- hideKeyboard
+- tapOn:
+    id: "signin-dob-attest"
+- tapOn:
+    id: "signin-phone-input"
+- inputText: ${ADULT_PHONE}
+- hideKeyboard
+- tapOn:
+    id: "signin-send"
+- tapOn:
+    id: "signin-otp-input"
+- inputText: ${OTP_CODE}
+- tapOn:
+    id: "signin-verify"
+- runFlow:
+    when:
+      visible:
+        id: "signin-merge-continue"
+    commands:
+      - tapOn:
+          id: "signin-merge-continue"
+- assertNotVisible:
+    id: "signin-no-account"

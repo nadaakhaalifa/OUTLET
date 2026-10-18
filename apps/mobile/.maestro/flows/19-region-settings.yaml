@@ -1,0 +1,43 @@
+# Spec: docs/specs/guest-browsing.md F1c, ADR-0055. Settings > Region changes the region without sign-in,
+# restart or the entrance page, and returns to Settings.
+appId: ${APP_ID}
+name: Region in Settings
+tags: [guest, region, settings]
+---
+- runFlow: ../subflows/guest-start.yaml
+- tapOn:
+    id: "tab-profile"
+- tapOn:
+    id: "me-gear"
+- tapOn: ${SETTINGS_REGION_ROW}
+- assertVisible:
+    id: "region-row-EG"
+    selected: true
+# Unserved country still shows the not-available sheet and cannot be saved.
+- tapOn:
+    id: "region-row-FR"
+- assertVisible:
+    id: "region-not-available"
+- tapOn:
+    id: "region-not-available-back"
+- tapOn:
+    id: "region-continue"
+- tapOn:
+    id: "region-skip"
+# Back in Settings: no entrance page, no sign-in, no restart loop.
+- assertVisible: ${SETTINGS_REGION_ROW}
+- assertNotVisible:
+    id: "role-screen"
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible:
+    id: "dob-input"
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible:
+    id: "tab-home"
+- assertNotVisible:
+    id: "region-continue"
+- assertNotVisible:
+    id: "role-screen"

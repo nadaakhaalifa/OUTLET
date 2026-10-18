@@ -101,6 +101,10 @@ export const STORAGE_KEYS = {
   onboardingDone: "outlet.onboarding.done",
   onboardingResume: "outlet.onboarding.resume",
   localePreference: "outlet.pref.locale",
+  rolePreference: "outlet.pref.role",
+  onboardingPrefs: "outlet.onboarding.prefs",
+  /** First-run region and shop-for preference. Device-local only, never sent anywhere. */
+  regionPreference: "outlet.pref.region",
 } as const;
 
 export const AuthTokensSchema = z

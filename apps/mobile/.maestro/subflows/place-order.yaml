@@ -1,6 +1,15 @@
-# Opens checkout. Address and payment are pre-seeded on the test account (see needs).
+# Opens checkout and walks Delivery -> Payment -> Review (ADR-0053). Address and payment are pre-seeded on the test account (see needs).
+# Ends on Review with the Place order button visible.
 appId: ${APP_ID}
 ---
 - openLink: ${SCHEME}://checkout
+- assertVisible:
+    id: "checkout-continue-delivery"
+- tapOn:
+    id: "checkout-continue-delivery"
+- assertVisible:
+    id: "checkout-continue-payment"
+- tapOn:
+    id: "checkout-continue-payment"
 - assertVisible:
     id: "checkout-place-order"

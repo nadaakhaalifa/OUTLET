@@ -1,6 +1,10 @@
-import { useColorScheme } from "react-native";
-import { colors, type ColorTokens } from "@outlet/ui-tokens";
+import { useTheme } from "@outlet/ui-native";
+import type { ColorTokens } from "@outlet/ui-tokens";
 
+/** Semantic colours for the active scheme (light/dark, honouring the manual override). */
 export function useColors(): ColorTokens {
-  return colors[useColorScheme() === "dark" ? "dark" : "light"];
+  return useTheme().colors;
 }
+
+export { AppThemeProvider, THEME_PREFERENCE_KEY } from "./provider";
+export { useAppFonts, type AppFonts } from "./fonts";

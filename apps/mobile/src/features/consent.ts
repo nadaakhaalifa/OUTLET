@@ -57,6 +57,8 @@ export interface ConsentControllerDeps {
   readonly clock: PrivacyClock;
   readonly persistence: ConsentPersistence;
   readonly api: Pick<OutletApi, "recordConsent">;
+  /** False for a guest: decisions stay on the device (pending) and sync once, after sign-in. Default: always. */
+  readonly canSync?: () => Promise<boolean>;
 }
 
 /**
@@ -167,6 +169,7 @@ export class ConsentController {
 
   private async persistAndSync(): Promise<void> {
     await this.persist();
+    if (this.deps.canSync !== undefined && !(await this.deps.canSync())) return;
     for (const purpose of [...this.pending]) {
       const latest = this.latest(purpose);
       if (latest === undefined) {

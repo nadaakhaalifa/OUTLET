@@ -85,7 +85,7 @@ describe("ClientAnalytics", () => {
     const { analytics, counts, transport } = setup();
     expect(analytics.sync()).toBe("unchanged");
     expect(counts().starts).toBe(0);
-    expect(await analytics.trackOnboardingStep("dob", false)).toBe(false);
+    expect(await analytics.trackOnboardingStep("account", false)).toBe(false);
     expect(transport.sent).toHaveLength(0);
   });
   it("an unrelated consent does not start analytics", async () => {
@@ -113,7 +113,7 @@ describe("ClientAnalytics", () => {
     await controller.set("analytics", true, "onboarding_toggle");
     analytics.sync();
     await controller.set("analytics", false, "settings_toggle");
-    expect(await analytics.trackOnboardingStep("dob", false)).toBe(false);
+    expect(await analytics.trackOnboardingStep("account", false)).toBe(false);
     expect(transport.sent).toHaveLength(0);
   });
   it("does not track the done step", async () => {

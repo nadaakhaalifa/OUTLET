@@ -4,30 +4,28 @@ import { canConfirmDeletion, deletionView } from "./deletion";
 import { formatPiastres } from "./format";
 
 describe("onboarding flow", () => {
-  it("only the steps after identity (language, consents) are skippable", () => {
-    for (const s of ["dob", "phone", "otp"] as const) expect(isSkippable(s)).toBe(false);
-    for (const s of ["language", "consents"] as const) expect(isSkippable(s)).toBe(true);
+  it("only consents is skippable; the account and code steps are identity", () => {
+    for (const s of ["account", "otp"] as const) expect(isSkippable(s)).toBe(false);
+    expect(isSkippable("consents")).toBe(true);
   });
   it("advances in order and stops at done", () => {
-    expect(nextStep("dob")).toBe("phone");
-    expect(nextStep("phone")).toBe("otp");
-    expect(nextStep("otp")).toBe("language");
+    expect(nextStep("account")).toBe("otp");
+    expect(nextStep("otp")).toBe("consents");
     expect(nextStep("consents")).toBe("done");
     expect(nextStep("done")).toBe("done");
-    expect(stepProgress("dob")).toEqual({ current: 1, total: 5 });
-    expect(stepProgress("otp")).toEqual({ current: 3, total: 5 });
+    expect(stepProgress("account")).toEqual({ current: 1, total: 3 });
+    expect(stepProgress("otp")).toEqual({ current: 2, total: 3 });
   });
-  it("asks for the date of birth before the phone number (spec 1)", () => {
-    expect(ONBOARDING_STEPS.indexOf("dob")).toBeLessThan(ONBOARDING_STEPS.indexOf("phone"));
-    expect(ONBOARDING_STEPS.indexOf("dob")).toBe(0);
+  it("starts at the single account screen, which holds the age gate before the phone number (spec 1)", () => {
+    expect(ONBOARDING_STEPS[0]).toBe("account");
+    expect(ONBOARDING_STEPS).not.toContain("phone");
   });
   it("maps steps to catalog step names", () => {
     expect(analyticsStepFor("otp")).toBe("auth");
-    expect(analyticsStepFor("dob")).toBe("age_attestation");
+    expect(analyticsStepFor("account")).toBe("age_attestation");
     expect(analyticsStepFor("done")).toBeNull();
   });
 });
-
 describe("deletion view", () => {
   const zero = { openOrders: 0, openReturns: 0, openDisputes: 0, storeCreditMinor: 0n };
   it("blocks with open orders and never allows confirmation", () => {

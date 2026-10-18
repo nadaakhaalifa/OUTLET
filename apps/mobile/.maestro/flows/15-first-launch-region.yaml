@@ -1,0 +1,55 @@
+# Spec: docs/specs/guest-browsing.md F1/F1b, ADR-0055. First launch: region, entrance page, shopper, Home as a guest.
+# Relaunch goes straight to Home. Test ids only (AR and EN envs).
+appId: ${APP_ID}
+name: First launch region then guest Home
+tags: [smoke, critical, guest, region]
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "region-row-EG"
+    selected: true
+# Somewhere else: honest not-available sheet, no contact or notify input.
+- tapOn:
+    id: "region-row-FR"
+- assertVisible:
+    id: "region-not-available"
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible: ".*(notify|أبلغني|نبّهني).*"
+- tapOn:
+    id: "region-not-available-back"
+- assertVisible:
+    id: "region-row-EG"
+    selected: true
+- tapOn:
+    id: "region-continue"
+- tapOn:
+    id: "region-skip"
+# Entrance page (shown once), then the shopper path lands on Home with no sign-up step.
+- assertVisible:
+    id: "role-screen"
+- tapOn:
+    id: "role-shopper"
+- assertVisible:
+    id: "tab-home"
+- assertNotVisible:
+    id: "dob-input"
+- assertNotVisible:
+    id: "dob-attest"
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible:
+    id: "role-screen"
+# Relaunch (state kept): straight to Home, no region screen, no entrance page.
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible:
+    id: "tab-home"
+- assertNotVisible:
+    id: "region-continue"
+- assertNotVisible:
+    id: "role-screen"
+- assertNotVisible:
+    id: "phone-input"

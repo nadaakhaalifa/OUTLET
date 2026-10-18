@@ -1,10 +1,14 @@
-import { useCallback, useRef, useState } from "react";
-import { View } from "react-native";
+import { useCallback, useContext, useRef, useState } from "react";
+import { ScrollView, View, useWindowDimensions } from "react-native";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@outlet/ui-tokens";
-import { Banner, Button, Card, Checkbox, Divider, EmptyState, ErrorState, LoadingState, Screen, Text, TextField } from "../../ui";
+import { radius, spacing } from "@outlet/ui-tokens";
+import { Banner, Button, Chip, Divider, Eyebrow, GutterContext, Icon, ListRow, PressScale, Reveal, Scrim, Screen, Skeleton, SwitchRow, Text, TextField, useTheme } from "../../ui";
+import { ProductArt, type ProductKind } from "../../art";
+import { OfflineBanner, StateScreen } from "../../components/states";
 import { getFeaturePorts } from "../../state/ports";
 import { formatMoney, type DisplayLocale } from "../money-display";
+import { reasonOf, type AiFailureReason } from "../ai-failure";
+import { wardrobeKindFor, type WardrobePort } from "../wardrobe/model";
 import {
   OCCASIONS, VIBES, addOutcome, buildOutfitViews, parseBudgetEgp, replaceOutfit, stylistFailureState,
   type AddOutcome, type Occasion, type OutfitBagPort, type OutfitView, type StylistPort, type StylistScreenState, type Vibe,
@@ -12,17 +16,16 @@ import {
 
 type Money = (minor: bigint) => string;
 
+const SLOT_KIND: Readonly<Record<string, ProductKind>> = { top: "tee", bottom: "jeans", dress: "dress", shoes: "sneaker", bag: "bag", accessory: "scarf" };
+
 function Choice(props: { label: string; selected: boolean; onPress: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Button
-      variant={props.selected ? "primary" : "secondary"}
-      title={props.label}
-      accessibilityLabel={props.label}
-      {...(props.selected ? { accessibilityHint: t("common.on") } : {})}
-      onPress={props.onPress}
-    />
-  );
+  return <Chip label={props.label} selected={props.selected} onPress={props.onPress} />;
+}
+
+function useBleed(): number {
+  const g = useContext(GutterContext);
+  const { gutter } = useTheme();
+  return g > 0 ? g : gutter;
 }
 
 function OutfitCard(props: {
@@ -39,64 +42,141 @@ function OutfitCard(props: {
   const { t } = useTranslation();
   const { v, money } = props;
   const fit = v.fit;
+  const { colors } = useTheme();
+  const bleed = useBleed();
+  const { width } = useWindowDimensions();
+  const tileW = Math.round(width * 0.64);
+  // Budget fill: total against budget (derived from the fit), never animated into a "success" colour when over.
+  const budget = fit.kind === "fits" ? v.total + fit.spare : fit.kind === "over" ? v.total - fit.by : fit.kind === "exact" ? v.total : 0n;
+  const ratio = fit.kind === "none" || budget <= 0n ? 0 : Math.min(1, Number(v.total) / Number(budget));
+  const storeTotals = Array.from(
+    v.outfit.items.reduce((m, i) => m.set(i.storeId, { id: i.storeId, name: i.storeName, total: (m.get(i.storeId)?.total ?? 0n) + i.unitPrice }), new Map<string, { id: string; name: string; total: bigint }>()).values(),
+  );
   return (
-    <Card>
-      <Text variant="heading">{t("stylist.outfitHeading", { n: props.n })}</Text>
-      {v.outfit.items.map((i) => (
-        <View key={i.skuId} style={{ gap: spacing.xs }}>
-          <Text variant="caption" secondary>{t(`stylist.slotName.${i.slot}`)}</Text>
-          <Text>{t("stylist.itemLine", { title: i.title, store: i.storeName, size: i.sizeLabel, amount: money(i.unitPrice) })}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-            <Button variant="secondary" title={t("stylist.like")} accessibilityLabel={t("stylist.likeName", { title: i.title })} onPress={() => props.onFeedback(i.skuId, "like")} />
-            <Button variant="secondary" title={t("stylist.dislike")} accessibilityLabel={t("stylist.dislikeName", { title: i.title })} onPress={() => props.onFeedback(i.skuId, "dislike")} />
-            <Button variant="secondary" title={t("stylist.swap")} accessibilityLabel={t("stylist.swapName", { title: i.title })} onPress={() => props.onSwap(i.skuId)} />
-          </View>
-        </View>
-      ))}
-      <Divider />
-      <Text>{t("stylist.outfitTotal", { amount: money(v.total) })}</Text>
-      {v.deliveries.map((d) => (
-        <Text key={d.storeId} variant="caption" secondary>
-          {d.fee === 0n ? t("stylist.deliveryFree", { store: d.storeName }) : t("stylist.deliveryFee", { store: d.storeName, amount: money(d.fee) })}
-        </Text>
-      ))}
-      <Text secondary>
-        {fit.kind === "none" ? t("stylist.budgetNone") : fit.kind === "exact" ? t("stylist.budgetExact") : fit.kind === "fits" ? t("stylist.budgetFits", { amount: money(fit.spare) }) : t("stylist.budgetOver", { amount: money(fit.by) })}
-      </Text>
-      {v.isPartial ? (
+    <Reveal index={props.n - 1}>
+      <View style={{ gap: spacing.lg, paddingTop: spacing.xxl }}>
         <View style={{ gap: spacing.xs }}>
-          <Banner tone="info" message={t("stylist.partialHeading")} />
-          {v.missing.map((m) => (
-            <Text key={m.slot}>{t("stylist.partialMissing", { amount: money(m.shortfall), slot: t(`stylist.slot.${m.slot}`) })}</Text>
+          <Eyebrow>{t("stylist.outfitHeading", { n: props.n })}</Eyebrow>
+          <Text variant="display" numeric>{t("stylist.outfitTotal", { amount: money(v.total) })}</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={tileW + spacing.sm}
+          snapToAlignment="start"
+          style={{ marginHorizontal: -bleed }}
+          contentContainerStyle={{ paddingHorizontal: bleed, gap: spacing.sm }}
+        >
+          {v.outfit.items.map((i) => (
+            <View key={i.skuId} style={{ width: tileW, borderRadius: radius.lg, overflow: "hidden" }}>
+              <ProductArt kind={SLOT_KIND[i.slot] ?? "tee"} seed={i.skuId} ratio="3:4" />
+              <Scrim position="bottom" />
+              <View style={{ position: "absolute", start: spacing.md, end: spacing.md, bottom: spacing.md, gap: 2 }}>
+                <Text variant="eyebrow" color="onImage" accessibilityRole="none">{t(`stylist.slotName.${i.slot}`)}</Text>
+                <Text variant="quote" color="onImage" numberOfLines={2} accessibilityRole="none">{i.title}</Text>
+              </View>
+            </View>
           ))}
+        </ScrollView>
+        <View style={{ gap: spacing.sm }}>
+          <View accessibilityRole="progressbar" accessibilityLabel={fit.kind === "none" ? t("stylist.budgetNone") : undefined} style={{ height: 3, backgroundColor: colors.hairline }}>
+            <View style={{ height: 3, width: `${Math.round(ratio * 100)}%`, backgroundColor: fit.kind === "over" ? colors.danger : colors.textPrimary }} />
+          </View>
+          <Text variant="callout" color={fit.kind === "over" ? "danger" : fit.kind === "none" ? "textSecondary" : "savings"}>
+            {fit.kind === "none" ? t("stylist.budgetNone") : fit.kind === "exact" ? t("stylist.budgetExact") : fit.kind === "fits" ? t("stylist.budgetFits", { amount: money(fit.spare) }) : t("stylist.budgetOver", { amount: money(fit.by) })}
+          </Text>
         </View>
-      ) : null}
-      {props.outcome?.kind === "added" ? <Banner tone="info" message={t("stylist.added")} /> : null}
-      {props.outcome !== null && props.outcome.kind !== "added" ? (
-        <View style={{ gap: spacing.xs }}>
-          <Banner tone="warning" message={t(props.outcome.kind === "partial" ? "stylist.addedPartial" : "stylist.addFailed")} />
-          <Text variant="caption" secondary>{t("stylist.rejectedHeading")}</Text>
-          {props.outcome.rejected.map((r) => {
-            const title = props.titles[r.skuId] ?? r.skuId;
-            return (
-              <Text key={r.skuId}>
-                {r.reason === "soldOut"
-                  ? t("stylist.rejectSoldOut", { title })
-                  : r.reason === "paused"
-                    ? t("stylist.rejectPaused", { title })
-                    : t("stylist.rejectPrice", { title, amount: money(r.currentPrice ?? 0n) })}
-              </Text>
-            );
-          })}
+        <View>
+          {v.outfit.items.map((i) => (
+            <View key={i.skuId}>
+              <Divider />
+              <View style={{ paddingVertical: spacing.md, gap: spacing.xs }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
+                  <Text style={{ flex: 1 }}>{i.title}</Text>
+                  <Text numeric>{money(i.unitPrice)}</Text>
+                </View>
+                <Text variant="caption" secondary>{`${t(`stylist.slotName.${i.slot}`)} · ${i.storeName} · ${i.sizeLabel}`}</Text>
+                <View style={{ flexDirection: "row", gap: spacing.md }}>
+                  <PressScale onPress={() => props.onFeedback(i.skuId, "like")} accessibilityRole="button" accessibilityLabel={t("stylist.likeName", { title: i.title })} innerStyle={{ minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" }}><Icon name="thumbs-up-outline" size={20} /></PressScale>
+                  <PressScale onPress={() => props.onFeedback(i.skuId, "dislike")} accessibilityRole="button" accessibilityLabel={t("stylist.dislikeName", { title: i.title })} innerStyle={{ minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" }}><Icon name="thumbs-down-outline" size={20} /></PressScale>
+                  <PressScale onPress={() => props.onSwap(i.skuId)} accessibilityRole="button" accessibilityLabel={t("stylist.swapName", { title: i.title })} innerStyle={{ minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" }}><Icon name="swap-horizontal-outline" size={20} /></PressScale>
+                </View>
+              </View>
+            </View>
+          ))}
+          <Divider />
         </View>
-      ) : null}
-      <Button title={t(props.busy ? "stylist.adding" : "stylist.addAll")} loading={props.busy} disabled={props.busy} onPress={props.onAdd} />
-    </Card>
+        {storeTotals.map((st) => (
+          <View key={st.id} style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
+            <Text variant="callout" secondary>{st.name}</Text>
+            <Text variant="callout" numeric>{money(st.total)}</Text>
+          </View>
+        ))}
+        {v.deliveries.map((d) => (
+          <Text key={d.storeId} variant="caption" secondary>
+            {d.fee === 0n ? t("stylist.deliveryFree", { store: d.storeName }) : t("stylist.deliveryFee", { store: d.storeName, amount: money(d.fee) })}
+          </Text>
+        ))}
+        {v.isPartial ? (
+          <View style={{ gap: spacing.xs }}>
+            <Banner tone="info" message={t("stylist.partialHeading")} />
+            {v.missing.map((m) => (
+              <Text key={m.slot}>{t("stylist.partialMissing", { amount: money(m.shortfall), slot: t(`stylist.slot.${m.slot}`) })}</Text>
+            ))}
+          </View>
+        ) : null}
+        {props.outcome?.kind === "added" ? <Banner tone="success" message={t("stylist.added")} /> : null}
+        {props.outcome !== null && props.outcome.kind !== "added" ? (
+          <View style={{ gap: spacing.xs }}>
+            <Banner tone="warning" message={t(props.outcome.kind === "partial" ? "stylist.addedPartial" : "stylist.addFailed")} />
+            <Text variant="caption" secondary>{t("stylist.rejectedHeading")}</Text>
+            {props.outcome.rejected.map((r) => {
+              const title = props.titles[r.skuId] ?? r.skuId;
+              return (
+                <Text key={r.skuId}>
+                  {r.reason === "soldOut"
+                    ? t("stylist.rejectSoldOut", { title })
+                    : r.reason === "paused"
+                      ? t("stylist.rejectPaused", { title })
+                      : t("stylist.rejectPrice", { title, amount: money(r.currentPrice ?? 0n) })}
+                </Text>
+              );
+            })}
+          </View>
+        ) : null}
+        <Button title={t(props.busy ? "stylist.adding" : "stylist.addAll")} loading={props.busy} disabled={props.busy} onPress={props.onAdd} />
+      </View>
+    </Reveal>
+  );
+}
+
+function LookSkeleton(props: { label: string }) {
+  const bleed = useBleed();
+  const { width } = useWindowDimensions();
+  const tileW = Math.round(width * 0.64);
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel={props.label} style={{ gap: spacing.md, paddingTop: spacing.xl }}>
+      <Skeleton width={120} height={12} />
+      <Skeleton width="60%" height={28} />
+      <View style={{ flexDirection: "row", gap: spacing.sm, marginHorizontal: -bleed, paddingHorizontal: bleed, overflow: "hidden" }}>
+        <Skeleton width={tileW} height={Math.round(tileW * (4 / 3))} radius={radius.lg} />
+        <Skeleton width={tileW} height={Math.round(tileW * (4 / 3))} radius={radius.lg} />
+      </View>
+    </View>
   );
 }
 
 /** Dev fixtures only; production wiring replaces the ports when the API client lands. */
-export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPort; newKey?: () => string }) {
+export function StylistScreen(props: {
+  port?: StylistPort;
+  bagPort?: OutfitBagPort;
+  newKey?: () => string;
+  /** Opens the chat inside the Stylist tab (Phase 3). Hidden when not provided. */
+  onOpenChat?: () => void;
+  /** Wardrobe port for the "use my wardrobe" toggle (defaults to the feature container). */
+  wardrobePort?: WardrobePort;
+}) {
   const { t, i18n } = useTranslation();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
   const port: StylistPort = props.port ?? getFeaturePorts().stylist;
@@ -115,6 +195,10 @@ export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPo
   const [busyId, setBusyId] = useState<string | null>(null);
   const [outcomes, setOutcomes] = useState<Readonly<Record<string, AddOutcome>>>({});
   const [notice, setNotice] = useState<"feedback" | "swap" | "fairUse" | null>(null);
+  const [useWardrobe, setUseWardrobe] = useState(false);
+  const [ownedSlots, setOwnedSlots] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const [wardrobeOnly, setWardrobeOnly] = useState(false);
+  const [wardrobeFailure, setWardrobeFailure] = useState<AiFailureReason | null>(null);
 
   const generate = async () => {
     const parsed = parseBudgetEgp(budgetText);
@@ -123,10 +207,26 @@ export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPo
     setState({ status: "loading" });
     setOutcomes({});
     setNotice(null);
+    setWardrobeFailure(null);
+    setOwnedSlots({});
+    setWardrobeOnly(false);
     try {
+      if (useWardrobe) {
+        // Owned pieces fill their slots at no cost; only the missing ones are suggested from stores.
+        const look = await (props.wardrobePort ?? getFeaturePorts().wardrobe).completeLook({ kind: wardrobeKindFor(occasion), modest, budget: parsed.value });
+        setOwnedSlots(look.ownedSlots);
+        setWardrobeOnly(look.ownedOnly);
+        setState({ status: "ready", result: { outfits: look.outfits, source: look.source }, budget: parsed.value });
+        return;
+      }
       const result = await port.generate({ occasion, vibe, modest, budget: parsed.value });
       setState({ status: "ready", result, budget: parsed.value });
     } catch (e) {
+      if (useWardrobe) {
+        setWardrobeFailure(reasonOf(e));
+        setState({ status: "idle" });
+        return;
+      }
       setState(stylistFailureState(e));
     }
   };
@@ -160,18 +260,21 @@ export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPo
   };
 
   return (
-    <Screen>
-      <Text variant="title">{t("stylist.title")}</Text>
-      <Banner tone="info" message={t("stylist.aiLabel")} />
-      <Text variant="heading">{t("stylist.occasionHeading")}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+    <Screen title={t("stylist.title")}>
+      <Text variant="lede" secondary>{t("stylist.aiLabel")}</Text>
+      {props.onOpenChat !== undefined ? (
+        <ListRow title={t("stylistChat.entry")} subtitle={t("stylistChat.entryHint")} leadingIcon="chatbubble-ellipses-outline" divider onPress={props.onOpenChat} />
+      ) : null}
+      <OfflineBanner visible={state.status === "error" && state.offline} message={t("common.offlineBanner")} />
+      <Eyebrow>{t("stylist.occasionHeading")}</Eyebrow>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {OCCASIONS.map((o) => <Choice key={o} label={t(`stylist.occasion.${o}`)} selected={o === occasion} onPress={() => setOccasion(o)} />)}
       </View>
-      <Text variant="heading">{t("stylist.vibeHeading")}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+      <Eyebrow>{t("stylist.vibeHeading")}</Eyebrow>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {VIBES.map((o) => <Choice key={o} label={t(`stylist.vibe.${o}`)} selected={o === vibe} onPress={() => setVibe(o)} />)}
+        <Choice label={t("stylist.modest")} selected={modest} onPress={() => setModest((m) => !m)} />
       </View>
-      <Checkbox label={t("stylist.modest")} value={modest} onValueChange={setModest} />
       <TextField
         label={`${t("stylist.budgetLabel")} (${currency})`}
         value={budgetText}
@@ -180,23 +283,31 @@ export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPo
         helper={t("stylist.budgetHelper")}
         {...(budgetError ? { error: t("stylist.budgetInvalid") } : {})}
       />
-      <Button title={t("stylist.generate")} loading={state.status === "loading"} disabled={state.status === "loading"} onPress={() => void generate()} />
+      <SwitchRow label={t("wardrobe.useWardrobe")} value={useWardrobe} onValueChange={setUseWardrobe} />
+      <Text variant="caption" secondary>{t("wardrobe.useWardrobeHelp")}</Text>
+      <Button variant="brand" title={t("stylist.generate")} loading={state.status === "loading"} disabled={state.status === "loading"} onPress={() => void generate()} />
 
-      {state.status === "loading" ? <LoadingState label={t("stylist.loading")} /> : null}
+      {state.status === "loading" ? <LookSkeleton label={t("stylist.loading")} /> : null}
       {state.status === "error" ? (
-        <ErrorState
-          offline={state.offline}
+        <StateScreen
+          illustration={state.offline ? "offline" : "error"}
           title={t(state.offline ? "stylist.offlineTitle" : "stylist.errorTitle")}
           description={t(state.offline ? "stylist.offlineBody" : "stylist.errorBody")}
-          retryTitle={t("common.retry")}
-          onRetry={() => void generate()}
+          actionTitle={t("common.retry")}
+          onAction={() => void generate()}
         />
       ) : null}
+      {wardrobeFailure !== null ? <Banner tone={wardrobeFailure === "nothingOwned" || wardrobeFailure === "consent" ? "info" : "error"} message={t(`aiFailure.${wardrobeFailure}`)} /> : null}
+      {state.status === "ready" && wardrobeOnly ? <Banner tone="success" message={t("wardrobe.ownedOnly")} /> : null}
       {state.status === "ready" && state.result.source === "rules" ? <Banner tone="warning" message={t("stylist.rulesFallback")} /> : null}
       {notice === "feedback" ? <Banner tone="error" message={t("stylist.feedbackFailed")} /> : null}
       {notice === "swap" ? <Banner tone="error" message={t("stylist.swapFailed")} /> : null}
-      {state.status === "ready" && views.length === 0 ? <EmptyState title={t("stylist.emptyTitle")} description={t("stylist.emptyBody")} /> : null}
+      {state.status === "ready" && views.length === 0 ? <StateScreen illustration="noResults" title={t("stylist.emptyTitle")} description={t("stylist.emptyBody")} /> : null}
       {views.map((v, idx) => (
+        <View key={v.outfit.id}>
+          {(ownedSlots[v.outfit.id] ?? []).length > 0 ? (
+            <Text variant="caption" secondary>{t("wardrobe.ownedFromWardrobe", { slots: (ownedSlots[v.outfit.id] ?? []).map((s) => t(`stylist.slotName.${s}`)).join(", ") })}</Text>
+          ) : null}
         <OutfitCard
           key={v.outfit.id}
           n={idx + 1}
@@ -209,8 +320,8 @@ export function StylistScreen(props: { port?: StylistPort; bagPort?: OutfitBagPo
           onFeedback={(sku, s) => void feedback(v.outfit.id, sku, s)}
           onSwap={(sku) => void swap(v.outfit.id, sku)}
         />
+        </View>
       ))}
-      {typeof __DEV__ !== "undefined" && __DEV__ ? <Banner tone="info" message={t("common.devFixtureBackend")} /> : null}
     </Screen>
   );
 }

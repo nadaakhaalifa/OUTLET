@@ -1,0 +1,40 @@
+# Creates the account at the Checkout gate (ADR-0055 R0) with the synthetic fixtures. Start: the gate page is showing
+# (reached from Bag > Checkout). The gate is one page: DOB, 18+ attestation, phone, Terms; then OTP; then consents
+# (all off, skipped). Ends when checkout step 1 (Delivery) is visible; the merge summary is dismissed when shown.
+appId: ${APP_ID}
+---
+- assertVisible:
+    id: "checkout-gate"
+- tapOn:
+    id: "dob-input"
+- inputText: ${ADULT_DOB_DAY}${ADULT_DOB_MONTH}${ADULT_DOB_YEAR}
+- hideKeyboard
+- tapOn:
+    id: "dob-attest"
+- tapOn:
+    id: "phone-input"
+- inputText: ${ADULT_PHONE}
+- hideKeyboard
+- tapOn:
+    id: "terms-accept"
+- tapOn:
+    id: "dob-submit"
+- tapOn:
+    id: "otp-input"
+- inputText: ${OTP_CODE}
+- tapOn:
+    id: "otp-verify"
+- runFlow:
+    when:
+      visible: ${CONSENTS_SKIP}
+    commands:
+      - tapOn: ${CONSENTS_SKIP}
+- runFlow:
+    when:
+      visible:
+        id: "merge-summary"
+    commands:
+      - tapOn:
+          id: "merge-continue"
+- assertVisible:
+    id: "checkout-continue-delivery"

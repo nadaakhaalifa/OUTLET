@@ -2,20 +2,25 @@ import type { PrivacyClock as Clock } from "../workspace";
 import { DevFakeApi } from "./dev-fake";
 import { FakeAgeGate, type AgeGatePort } from "./age-gate";
 import type { OutletApi } from "./port";
+import { HttpAgeGate, HttpOutletApi } from "../services/http-api";
+import { getSharedClient, type ApiRuntime } from "../services/runtime";
 
 export type { OutletApi } from "./port";
 
 /**
- * Chooses the API implementation. Only the development fixture exists; a release build refuses to
+ * Chooses the API implementation. With an API runtime (EXPO_PUBLIC_API_BASE_URL set) the generated HTTP client
+ * is used in every build. Without one only the development fixture exists, and a release build refuses to
  * start with it rather than silently shipping fake data.
  */
-export function createApi(clock: Clock, isDevelopment: boolean): OutletApi {
-  if (!isDevelopment) throw new Error("No production API adapter exists yet; refusing to use the development fixture.");
+export function createApi(clock: Clock, isDevelopment: boolean, runtime?: ApiRuntime | null): OutletApi {
+  if (runtime !== undefined && runtime !== null) return new HttpOutletApi(getSharedClient(runtime), runtime.installId, runtime.platform, clock);
+  if (!isDevelopment) throw new Error("EXPO_PUBLIC_API_BASE_URL is not set; refusing to use the development fixture in a release build.");
   return new DevFakeApi({ clock });
 }
 
-/** Age-gate client. Development fake only until the HTTP adapter for POST /v1/auth/age-gate exists. */
-export function createAgeGate(clock: Clock, isDevelopment: boolean): AgeGatePort {
-  if (!isDevelopment) throw new Error("No production age-gate adapter exists yet; refusing to use the development fake.");
+/** Age-gate client: POST /v1/auth/age-gate with an API runtime, the development fake otherwise (never in release). */
+export function createAgeGate(clock: Clock, isDevelopment: boolean, runtime?: ApiRuntime | null): AgeGatePort {
+  if (runtime !== undefined && runtime !== null) return new HttpAgeGate(getSharedClient(runtime));
+  if (!isDevelopment) throw new Error("EXPO_PUBLIC_API_BASE_URL is not set; refusing to use the development fake in a release build.");
   return new FakeAgeGate({ clock });
 }

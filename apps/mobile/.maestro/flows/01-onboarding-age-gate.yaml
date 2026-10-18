@@ -1,36 +1,44 @@
-# Spec: Part C section 1 acceptance. Under-18 DOB refused; 18+ succeeds.
+# Spec: Part C section 1 acceptance, ADR-0055 R0. A guest browses with no account prompt; the age gate sits at the Checkout gate.
+# Under-18 DOB refused (no account); a fresh install with an 18+ DOB reaches checkout step 1.
 appId: ${APP_ID}
-name: Onboarding age gate
-tags: [smoke, critical, onboarding]
+name: Checkout gate age gate
+tags: [smoke, critical, onboarding, guest]
 ---
-- launchApp:
-    clearState: true
-- tapOn:
+- runFlow: ../subflows/guest-start.yaml
+# Browsing shows no sign-up UI.
+- assertNotVisible:
+    id: "dob-input"
+- assertNotVisible:
     id: "phone-input"
-- inputText: ${ADULT_PHONE}
-- tapOn: ${PHONE_SEND}
-- tapOn:
-    id: "otp-input"
-- inputText: ${OTP_CODE}
-- tapOn: ${OTP_VERIFY}
+- runFlow:
+    file: ../subflows/open-checkout-gate.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
 # Under 18: refused, and no account is created.
 - tapOn:
-    id: "dob-day"
-- inputText: ${MINOR_DOB_DAY}
-- tapOn:
-    id: "dob-month"
-- inputText: ${MINOR_DOB_MONTH}
-- tapOn:
-    id: "dob-year"
-- inputText: ${MINOR_DOB_YEAR}
+    id: "dob-input"
+- inputText: ${MINOR_DOB_DAY}${MINOR_DOB_MONTH}${MINOR_DOB_YEAR}
 - hideKeyboard
 - tapOn:
     id: "dob-attest"
-- tapOn: ${DOB_SUBMIT}
+- tapOn:
+    id: "phone-input"
+- inputText: ${ADULT_PHONE}
+- hideKeyboard
+- tapOn:
+    id: "terms-accept"
+- tapOn: ${PHONE_SEND}
 - assertVisible: ${BLOCKED_TITLE}
 - assertNotVisible:
-    id: "tab-home"
-# Fresh device state, then the adult path.
-- runFlow: ../subflows/onboard-adult.yaml
+    id: "otp-input"
+- assertNotVisible:
+    id: "checkout-continue-delivery"
+# Fresh device state (a blocked device is soft-blocked), then the adult path through the gate.
+- runFlow: ../subflows/guest-start.yaml
+- runFlow:
+    file: ../subflows/open-checkout-gate.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
+- runFlow: ../subflows/gate-sign-up.yaml
 - assertVisible:
-    id: "tab-bag"
+    id: "checkout-steps"
