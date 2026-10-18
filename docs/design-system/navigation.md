@@ -3,7 +3,7 @@
 Source: `apps/mobile/src/features/navigation/model.ts` (pure, tested), `src/app/(tabs)/_layout.tsx`, `src/app/(tabs)/me.tsx`.
 
 ## Tabs
-Home, Explore (worlds), Stylist, Bag, Me, in that logical order. The platform mirrors the bar in RTL, so Home sits on the right in Arabic; there is no manual reversal (reversing would double-flip). Each tab sets `tabBarAccessibilityLabel` and `tabBarButtonTestID` (`tab-<id>`); selected state comes from the navigator's tab button.
+Home, Discover (worlds; route `explore`), Saved (wishlists), Bag, Profile (route `me`), in that logical order (ADR-0044). The stylist is not a tab: it is reached from the Discover "Style me" row and the Profile row, route `/stylist`. The platform mirrors the bar in RTL, so Home sits on the right in Arabic; there is no manual reversal (reversing would double-flip). Each tab sets `tabBarAccessibilityLabel` and `tabBarButtonTestID` (`tab-home`, `tab-discover`, `tab-saved`, `tab-bag`, `tab-profile`); selected state comes from the navigator's tab button.
 
 ## Me menu
 Orders, Z-OUTLET credit (wallet, closed loop), Budget, Wishlists, Size profile, Plus, Rewards, Gift cards, Privacy Center, Help, Settings. The list has `accessibilityRole="list"`; each row is a button with its title as the name (Plus adds a hint).

@@ -46,3 +46,10 @@ Given evidence older than 72 h, Then the product shows a plain price.
 Given a price raised then cut within 30 days, Then no claim exceeds the true 30-day minimum (property test).
 Given rate-limit config 1 req/5 s, Then no domain sees > 12 req/min.
 ```
+
+## Addendum: incident and parity read APIs, ad click review
+
+- `GET /v1/admin/price-crawler/incidents` (admin: ops, trust_safety, security, super_admin), `GET /v1/seller/crawl-incidents?store_id=` (owner, manager of that store; a foreign store is 404). Rows carry kind, host, detail, time only (never URLs). Keyset cursor `(created_at desc, id desc)`, limit max 50, an invalid cursor is 400.
+- `GET /v1/seller/parity-warnings?store_id=` reads open `cross_channel_cheaper` findings through `ParityWarningsPort` (adapter over price-integrity's public `trustForStore`; this module imports nothing from it). `fix_deadline_at = opened_at + 48h`; after it price-integrity auto-pauses the SKU. Wire up with `new PriceIntegrityParityAdapter(priceIntegrityService)` in the `parity` option.
+- Ads: `GET /v1/admin/ads/invalid-clicks` lists unreviewed invalid clicks with a fraud reason (too_fast, duplicate_window, burst, self_click, bot, campaign_drain); `POST .../{id}/decision` (`confirm_invalid` | `flag_store`, reason code) is idempotent, one decision per click, 409 on a different later decision, and never moves money. Stored in `ad_click_reviews` (migration 0048, append-only).
+- Threats: IDOR on store query (central policy, 404), cursor tampering (Zod + decode, 400), information leak (no URL, no session hash in responses).

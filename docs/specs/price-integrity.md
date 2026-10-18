@@ -80,10 +80,16 @@ clamped 0..100; bands excellent >= 90, good >= 70, at_risk >= 40, restricted.
 claim_id, reason code when absent, lowest_30d, evidence ids, 30 day price history. It never returns actor
 or store identifiers. Unknown and inactive products are indistinguishable 404s.
 
-## 7. Events (not wired yet)
+## 7. Events
 
-`price.changed`, `price_claim.scored`, `price_enforcement.applied`. v1 writes state only; the outbox
-publisher lands with the catalog event relay (see needs).
+`price.changed` is written to the outbox in the same transaction as the `price_events` insert (aggregate
+`price`, id = SKU) for every newly created event; an idempotent replay writes nothing. Payload (the
+auto-buy consumer's `PriceChangedSchema`): `event_id` (the price event id), `sku_id`, `price {amount, currency}`,
+`verified`, `anomaly`, `occurred_at`. `verified` is the VRP engine's `claimAllowed` for the history including
+the new event; `anomaly` is pre-drop inflation or an inflation reset. If the signal cannot be computed it fails
+closed: `verified=false`, `anomaly=true`, and the price is still recorded. Increases are emitted too (the
+consumer ignores prices above every target). `price_claim.scored` and `price_enforcement.applied` are not wired
+yet (state only). See `docs/specs/commerce-events.md`.
 
 ## 8. Failure handling
 

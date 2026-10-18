@@ -144,3 +144,6 @@ Save to purchase conversion by intent, cool-off regret reduction (return rate of
 - `save` is owner-scoped (`where id and user_id = actor`); a save for a list owned by someone else changes nothing.
 - Revocation is monotonic: a save carrying the same share token hash never clears an existing `revoked_at`, so a stale snapshot cannot resurrect a revoked link. Only a new token (share/rotate) replaces it.
 - Covered by the shared repository contract (in-memory and Kysely/PGlite).
+
+## Guest browsing note (ADR-0055, behind `flag.guest_browsing`)
+Saved items of a signed-out shopper live on the device only (intents need, want, treat, later; no server write). After sign-in `POST /v1/me/guest-merge` adds them to the account's default list of that intent (the oldest list with that intent; created with an Arabic title if none, within the 50-list cap), deduplicated by product (a product already in the list is a duplicate, nothing changes), each list capped at 200 items, with the SERVER price as `added_price`. Bag lines that cannot stay in the bag (over the 50-line cap, sold out) land in the `want` list. Products that are unknown, delisted or without a price are counted as `unavailable` and not saved. Gift, birthday and custom lists and sharing stay account-only.

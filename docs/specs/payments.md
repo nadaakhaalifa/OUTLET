@@ -78,7 +78,7 @@ Out-of-order and conflicting events (`decideWebhookEffect`): a stale event for a
 Intent creation, capture, void and refund are application use cases for checkout and the refund router, not public HTTP routes.
 
 ## Events (outbox, aggregate `payment_intent` unless noted)
-`payment.webhook_received` (aggregate `payment_event`), `payment.authorized`, `payment.succeeded`, `payment.failed`, `payment.voided`, `payment.refunded`, `payment.refund_failed`, `payment.anomaly`, `payment_method.saved`. Payloads: ids, amounts as strings, codes. No card data, no raw bodies.
+`payment.webhook_received` (aggregate `payment_event`), `payment.authorized`, `payment.succeeded`, `payment.failed`, `payment.voided`, `payment.refunded`, `payment.refund_failed`, `payment.anomaly`, `payment_method.saved`, `payment_method.removed {card_id, user_id, provider}` (aggregate `payment_method`, written in the same transaction as the soft delete after the PSP token was deleted; consumer: auto-buy `CancelAllForUser(card_removed)`). Payloads: ids, amounts as strings, codes. No card data, no raw bodies, never the PSP token.
 
 ## Failure handling
 PSP calls: timeout 10 s (adapter), 3 idempotent attempts with exponential backoff and jitter on the same provider; the breaker and failover as in P6. Webhook consumer: at-least-once, idempotent by inbox and `processed_at`. Dead letters go through the outbox DLQ and a replay tool. User-visible fallback: method hidden when no provider is available.

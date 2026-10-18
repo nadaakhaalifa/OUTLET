@@ -15,7 +15,7 @@ Before this change every sweeper and background use case existed but nothing cal
 - Kill switches: a job with `capability` whose capability is blocked records `skipped_blocked` and does not run. Source today: env `WORKER_BLOCKED_CAPABILITIES` (comma list); swap `CapabilityGate` for the flag service adapter when it is worker-readable. Only `drops` (drops.advance, waiting-room.admit) is gated. Money sweepers (refunds, redemption resume, payouts, pot close, holds) deliberately ignore sale-side kill switches: killing gift-card sales or a payment method must never strand in-flight money.
 - `WORKER_EVENT_MODE=true` enables the intraday ledger integrity job.
 
-## Jobs (37 registered from the container, plus 2 relay jobs when supplied)
+## Jobs (48 registered from the container, plus 16 retention jobs and 2 relay jobs when supplied)
 
 | Job | Owner module | Provider token . method | Cadence | Criticality | Kill switch | Idempotency basis |
 |---|---|---|---|---|---|---|
@@ -36,6 +36,8 @@ Before this change every sweeper and background use case existed but nothing cal
 | `tax-eta.daily-reconciliation` | tax-eta | `RUN_DAILY_RECONCILIATION.execute` | daily 01:30 Cairo | important | - | report for a Cairo day is a pure function of stored documents |
 | `subscriptions.renewal-sweep` | subscriptions | `PLUS_RENEWAL_SWEEP.execute` | 5 min | critical | - | renewal charge idempotency key = subscription + period; dunning attempt counter CAS |
 | `subscriptions.recognize-revenue` | subscriptions | `PLUS_RECOGNIZE_REVENUE.execute` | daily 02:00 Cairo | important | - | ledger entry key per invoice and day |
+| `subscriptions.family-sweep` | subscriptions | `PLUS_FAMILY_SWEEP.execute` | 15 min | important | - | group row lock; member and group state machines; ending notice recorded once per group |
+| `subscriptions.student-sweep` | subscriptions | `PLUS_STUDENT_SWEEP.execute` | 1 h | routine | - | verification version CAS; 30 day notice recorded once per verification |
 | `gift-cards.resume-redemptions` | gift-cards | `RESUME_PENDING_REDEMPTIONS.execute` | 1 min | critical | - | redemption saga keyed by redemption id; completes or reverses once |
 | `gift-cards.close-due-pots` | gift-cards | `CLOSE_DUE_POTS.execute` | 5 min | important | - | pot state CAS; unfunded refunds keyed by contribution |
 | `gift-cards.expire` | gift-cards | `EXPIRE_GIFT_CARDS.execute` | 1 h | routine | - | card state CAS to EXPIRED |
@@ -55,7 +57,16 @@ Before this change every sweeper and background use case existed but nothing cal
 | `fulfillment.awb-worker` | fulfillment | `AWB_WORKER.runDue` | 30 s | important | - | AWB creation idempotent by shipment id |
 | `ads.post-click-spend` | ads | `POST_CLICK_SPEND.execute` | 5 min | important | - | ledger posting keyed by click id |
 | `ads.end-expired-campaigns` | ads | `END_EXPIRED_CAMPAIGNS.execute` | 15 min | routine | - | campaign state CAS to ENDED |
+| `calendar.process-reminders` | outfit-calendar | `PROCESS_CALENDAR_REMINDERS.execute` | 5 min | routine | - | unique (event, due_at) row claimed with SKIP LOCKED and a lease; notification ref repeats (event, due_at) |
+| `auto-buy.sweep` | auto-buy | `RUN_AUTO_BUY_SWEEP.execute` | 1 min | critical | - | attempt row lock + state CAS; MIT charge idempotency key auto_buy:{mandate}:{price_event}; unresolved outcomes reconciled by key, never re-charged; kill.auto_buy.charge re-read after the claim |
 | `hub.sweep-groups` | hub-consolidation | `SWEEP_HUB_GROUPS.execute` | 5 min | routine | - | group evaluation is a CAS on open legs |
+| `forecasting.nightly-batch` | forecasting | `FORECAST_BATCH.execute` | daily 03:15 Cairo | routine | forecasting | unique (store, as-of Cairo day) completed run; forecast rows unique by (store, scope, key, horizon, as-of); a failed store is recorded and retried next tick |
+| `channel-odoo.poll-batch` | channel-odoo | `ODOO_POLL_BATCH.execute` | 5 min | routine | - | only channels whose own poll interval is due are synced; price and stock writes carry idempotency keys per (channel, product, price, version); a rerun finds nothing due |
+| `visual-search.sweep` | visual-search | `SWEEP_VISUAL_SEARCH.execute` | 5 min | important | - | object delete is idempotent and the row is marked deleted only after it succeeds; telemetry purge is a delete before a cutoff (48 hours) |
+| `creators.sweep-commission-postings` | creators | `CreatorTokens.POST_COMMISSION_INTENTS.sweep` | 1 min | important | - | claim-then-post repair: ledger entry keyed creator_commission:{commission}:{seq}; posted_at stamped once |
+| `creators.release-held-commissions` | creators | `CreatorTokens.RELEASE_HELD.execute` | 15 min | routine | - | accrual sweep: held row locked, monthly counter taken by the same conditional upsert as accrual; null means still held |
+| `creators.payouts-recover-orphans` | creators | `CreatorTokens.CREATOR_PAYOUT_COMMANDS.recoverOrphans` | 5 min | important | - | re-post under the attempt key (replay is a no-op) and reversal under the reversal key; provider idempotent by the same key; no-op while the provider is unconfigured |
+| `creators.maintain-click-partitions` | creators | `CreatorTokens.MAINTAIN_CLICK_PARTITIONS.execute` | daily 03:50 Cairo | routine | - | create-if-missing monthly partitions; drops partitions older than 13 months and deletes older rows; a rerun finds nothing left |
 | `outbox.relay` | platform/db + packages/outbox | `OutboxRelay.runOnce` | 2 s | critical | - | at-least-once; consumers dedupe through the inbox |
 | `payments.events-relay` | composition | `createPaymentEventsRelay(...).runOnce` | 2 s | critical | - | inbox `message_id` dedupe in the same transaction |
 
@@ -68,7 +79,7 @@ Notes: `reconciliation.tick` runs every 5 min and `ScheduleReconciliation` decid
 3. Crawler scheduler: `CrawlProduct.execute` needs (target, sku, url); the store has `listTargets(storeId)` but no "due targets" selector, and crawling is behind `kill.crawlers`. Needs a `SelectDueCrawls` use case.
 4. Referral settlement: `HandleOrderClosed` is event driven (needs an order-closed message consumer through the inbox), not a sweep. Needs the outbox consumer wiring from gap 1. Capability for it would be `referral-payouts`.
 5. Notifications `HandleDomainEvent` and other inbox consumers: event driven, same dependency as gap 1.
-6. Retention purge jobs from `docs/privacy/retention-schedule.md`. Scheduled: `history.purge-expired-events` (analytics/history events) and `privacy.expire-exports` (`purge_dsar_exports`). No use case exists for: `purge_deleted_accounts`, `purge_expired_tax_records`, `purge_expired_kyc`, `aggregate_analytics_events`, `purge_deleted_measurements`, `purge_support_chats`, `purge_raw_webhooks`, `revoke_seller_delivery_access`, `purge_age_blocks`, `purge_audit_log_partitions`, `purge_consent_records`, `purge_expired_sessions`, `purge_stale_devices`, `purge_idle_carts`, `aggregate_search_queries`, `purge_delivery_records`, `purge_return_evidence`, `purge_user_content`, `purge_live_chat`, `purge_personalization_data`, `purge_budget_data`, `purge_fraud_signals`, `purge_notification_log`, `purge_affiliate_clicks`, `purge_gift_recipient_contacts`, `purge_request_logs`, `purge_dsar_records`, `purge_departed_staff`, `archive_delisted_catalog`, `device_local_cleanup`, `purge_technical_dedup`, `purge_resolved_reservations`, `purge_claimed_units`, `purge_stock_movements`, `purge_catalog_import_records`. (`purge_deleted_accounts` is partly covered by `privacy.process-deletions`.)
+6. Retention purge jobs: `retention.purge.<rule>` (16 jobs, one per rule that has purge targets in `apps/api/src/modules/retention/domain/catalog.ts`, nightly 03:01 to 03:46 Cairo, three minutes apart; names generated from the targets, so a new rule gets a job automatically). Also `history.purge-expired-events` and `privacy.expire-exports`. Rules without a purge target are exempt with a reason in the same catalog (law, append-only archival, erasure flow, or tables not migrated yet); `purge_deleted_accounts` is covered by `privacy.process-deletions`.
 7. Modules scanned but with no sweeper use case: returns, promotions, stores, search index sync, seller-analytics, courier-aramex, resale-lane.
 8. Production leader lock needs `DATABASE_URL`; without it the entrypoint falls back to the in-memory lock (single replica only) and logs `worker.in_memory_lock`.
 

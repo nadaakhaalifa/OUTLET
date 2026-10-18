@@ -16,7 +16,7 @@ interface, fake) and a `*Screen.tsx`, following `features/worlds` and `features/
 - Community fit with its count, shown only from 20 buyers. Stock text only when 5 or fewer in a size.
 - Seller legal identity (legal name, commercial register, tax card, governorate), delivery ETA range,
   return eligibility (14/30 days or non-returnable), defect note for minor-defect items.
-- Add to bag needs an in-stock size; paused or sold out disables it and offers "Notify me". Save with
+- Add to cart needs an in-stock size; paused or sold out disables it and offers "Notify me". Save with
   intent opens the eight intents.
 
 ## Search (`features/search`)

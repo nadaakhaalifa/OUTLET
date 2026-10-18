@@ -19,14 +19,14 @@ Z-OUTLET (spec name HAUL), spec B1 and T6.
 
 | Measure | Count |
 |---|---|
-| Tables | 237 |
-| Fields | 2197 |
-| P0 public | 235 |
-| P1 internal | 1557 |
-| P2 personal | 374 |
-| P3 sensitive | 31 |
-| Fields flagged VERIFY BEFORE LAUNCH | 799 |
-| Tables derived from spec prose, not named columns | 165 |
+| Tables | 334 |
+| Fields | 3200 |
+| P0 public | 282 |
+| P1 internal | 2332 |
+| P2 personal | 528 |
+| P3 sensitive | 58 |
+| Fields flagged VERIFY BEFORE LAUNCH | 1180 |
+| Tables derived from spec prose, not named columns | 245 |
 | Processors in register | 18 |
 | Processors with DPA status other than signed | 18 |
 
@@ -36,15 +36,15 @@ Z-OUTLET (spec name HAUL), spec B1 and T6.
 
 Create and authenticate accounts (phone OTP, Apple, Google, passkey), keep sessions, detect abuse of sign-in.
 
-- **Data subjects:** `shopper`
-- **Lawful basis:** `contract`
-- **PII classes:** `P1`, `P2`, `P3` across 53 fields in 6 tables
-- **Tables:** `devices`, `identities`, `otp_challenges`, `session_families`, `sessions`, `users`
+- **Data subjects:** `seller_representative`, `shopper`, `visitor`
+- **Lawful basis:** `contract`, `legitimate_interest`
+- **PII classes:** `P1`, `P2`, `P3` across 187 fields in 23 tables
+- **Tables:** `auth_nonces`, `auth_sessions`, `devices`, `identities`, `otp_challenges`, `otp_send_log`, `passkey_challenges`, `passkey_credentials`, `seller_memberships`, `seller_otp_challenges`, `seller_otp_proofs`, `seller_otp_send_log`, `seller_passkey_challenges`, `seller_passkey_credentials`, `seller_recovery_codes`, `seller_refresh_tokens`, `seller_sessions`, `seller_staff_invites`, `seller_totp`, `seller_users`, `session_families`, `sessions`, `users`
 - **Recipients and processors:** `app_attestation`, `cloud_primary`, `email_provider`, `identity_providers`, `sms_provider`, `whatsapp_bsp`
 - **Retention:** `account_active` (event-driven (no fixed period)), `auth_credentials` (30 days), `device_records` (13 months)
 - **Residency:** `approved_region`, `in_country`
 - **Technical safeguards:** `blind_index_hmac`, `field_envelope`, `one_way_hash`
-- **Open verification items:** 0 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 4 fields flagged VERIFY BEFORE LAUNCH
 
 ### Age assurance and capability gating (`age_assurance`)
 
@@ -52,13 +52,13 @@ Enforce the 18+ account rule and the 21+ gates (spec B6) using a DOB and attesta
 
 - **Data subjects:** `shopper`, `visitor`
 - **Lawful basis:** `contract`
-- **PII classes:** `P1`, `P2`, `P3` across 11 fields in 3 tables
-- **Tables:** `age_attestations`, `age_block_devices`, `users`
+- **PII classes:** `P1`, `P2`, `P3` across 18 fields in 5 tables
+- **Tables:** `age_attestations`, `age_block_devices`, `age_gate_blocks`, `age_gate_passes`, `users`
 - **Recipients and processors:** `cloud_primary`
-- **Retention:** `account_active` (event-driven (no fixed period)), `consent_evidence` (7 years), `underage_block` (30 days)
+- **Retention:** `account_active` (event-driven (no fixed period)), `auth_credentials` (30 days), `consent_evidence` (7 years), `underage_block` (30 days)
 - **Residency:** `approved_region`, `in_country`
 - **Technical safeguards:** `blind_index_hmac`, `field_envelope`, `one_way_hash`
-- **Open verification items:** 5 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 6 fields flagged VERIFY BEFORE LAUNCH
 
 ### Product analytics and crash reporting (`analytics_product`)
 
@@ -66,13 +66,13 @@ Pseudonymous events and crash reports, initialised only after the analytics cons
 
 - **Data subjects:** `shopper`, `visitor`
 - **Lawful basis:** `consent`, `legitimate_interest` (consent purposes: `analytics`)
-- **PII classes:** `P0`, `P1`, `P2` across 34 fields in 4 tables
-- **Tables:** `analytics_events`, `crash_reports`, `search_queries`, `seller_analytics_facts`
+- **PII classes:** `P0`, `P1`, `P2` across 42 fields in 5 tables
+- **Tables:** `analytics_events`, `crash_reports`, `search_queries`, `seller_analytics_facts`, `seller_analytics_suppression_memo`
 - **Recipients and processors:** `cloud_primary`, `error_monitoring`, `product_analytics`
 - **Retention:** `analytics_events` (25 months), `search_queries` (13 months)
 - **Residency:** `approved_region`
 - **Technical safeguards:** none beyond access control
-- **Open verification items:** 27 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 35 fields flagged VERIFY BEFORE LAUNCH
 
 ### Budget and affordability suite (`budget_insights`)
 
@@ -80,7 +80,7 @@ Opt-in budgets, cycles, instalment commitments and savings goals (spec 12).
 
 - **Data subjects:** `shopper`
 - **Lawful basis:** `consent` (consent purposes: `budget_insights`)
-- **PII classes:** `P1`, `P2`, `P3` across 41 fields in 6 tables
+- **PII classes:** `P1`, `P2`, `P3` across 42 fields in 6 tables
 - **Tables:** `budget_cycles`, `budget_spend_events`, `budget_unlock_requests`, `budgets`, `installment_commitments`, `savings_goals`
 - **Recipients and processors:** `cloud_primary`
 - **Retention:** `budget_data` (event-driven (no fixed period))
@@ -94,8 +94,8 @@ Show products and stores, saved searches, favourite stores, carts and wishlists.
 
 - **Data subjects:** `gift_recipient`, `seller_representative`, `shopper`, `visitor`
 - **Lawful basis:** `consent`, `contract`, `legal_obligation` (consent purposes: `personalization`)
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 249 fields in 25 tables
-- **Tables:** `accessibility_preferences`, `brands`, `cart_lines`, `carts`, `categories`, `drop_items`, `drop_waitlist`, `drops`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_defects`, `product_media`, `products`, `saved_searches`, `search_documents`, `skus`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `user_favorite_stores`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 280 fields in 26 tables
+- **Tables:** `accessibility_preferences`, `brands`, `cart_lines`, `carts`, `categories`, `drop_items`, `drop_waitlist`, `drops`, `home_banners`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_defects`, `product_media`, `products`, `saved_searches`, `search_documents`, `skus`, `store_activity_events`, `store_directory_stats`, `store_legal_identity_public`, `stores`, `user_favorite_stores`, `wishlist_alert_dedupe`, `wishlist_items`, `wishlists`
 - **Recipients and processors:** `cloud_primary`
 - **Retention:** `browsing_state` (90 days), `catalog_content` (event-driven (no fixed period)), `on_device_only` (event-driven (no fixed period)), `orders_tax_records` (7 years)
 - **Residency:** `approved_region`, `device_only`, `global_ok`
@@ -135,14 +135,28 @@ Tickets, chat and WhatsApp inbox conversations.
 Shipments, courier events, proof of delivery and COD remittance.
 
 - **Data subjects:** `courier_agent`, `seller_representative`, `shopper`, `staff`
-- **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 114 fields in 14 tables
+- **Lawful basis:** `consent`, `contract`, `legal_obligation`, `legitimate_interest` (consent purposes: `location_precise`)
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 125 fields in 14 tables
 - **Tables:** `cod_refusal_history`, `cod_remittance_lines`, `cod_remittances`, `consolidated_shipments`, `courier_awb_jobs`, `courier_events_raw`, `delivery_snapshots`, `hub_legs`, `hub_order_groups`, `hub_receipts`, `hubs`, `shipment_events`, `shipments`, `skus`
-- **Recipients and processors:** `cloud_primary`, `courier`, `seller_stores`
+- **Recipients and processors:** `cloud_primary`, `courier`
 - **Retention:** `catalog_content` (event-driven (no fixed period)), `delivery_records` (24 months), `fraud_signals` (24 months), `orders_tax_records` (7 years), `technical_dedup` (30 days)
 - **Residency:** `approved_region`, `global_ok`, `in_country`
 - **Technical safeguards:** `field_envelope`
 - **Open verification items:** 50 fields flagged VERIFY BEFORE LAUNCH
+
+### Ledger integrity checks (`finance_integrity`)
+
+Record the result of the nightly and intraday ledger checks (trial balance, hash chain, store-credit projection drift) so Finance can see and alert on a failure (ADR-0046, spec T4).
+
+- **Data subjects:** `shopper`
+- **Lawful basis:** `legal_obligation`
+- **PII classes:** `P1`, `P2` across 26 fields in 2 tables
+- **Tables:** `ledger_integrity_drift_samples`, `ledger_integrity_runs`
+- **Recipients and processors:** `cloud_primary`
+- **Retention:** `ledger_integrity_samples` (25 months), `orders_tax_records` (7 years)
+- **Residency:** `approved_region`
+- **Technical safeguards:** none beyond access control
+- **Open verification items:** 8 fields flagged VERIFY BEFORE LAUNCH
 
 ### Size and fit advice (`fit_sizing`)
 
@@ -162,15 +176,15 @@ Size profiles, measurements, fit feedback and fit model parameters (spec 10).
 
 Device, IP, instrument and address graph, COD refusal history and risk scores (spec 20.7).
 
-- **Data subjects:** `shopper`, `visitor`
+- **Data subjects:** `creator`, `seller_representative`, `shopper`, `visitor`
 - **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2` across 126 fields in 14 tables
-- **Tables:** `ad_clicks`, `ad_impressions`, `admission_tokens`, `checkout_payment_events`, `checkout_sagas`, `cod_refusal_history`, `device_ip_graph_edges`, `drop_purchases`, `gift_card_attempts`, `payment_methods`, `queue_tickets`, `referrals`, `risk_assessments`, `trial_claims`
-- **Recipients and processors:** `cloud_primary`, `courier`, `psp_failover_fawry`, `psp_primary`
-- **Retention:** `account_active` (event-driven (no fixed period)), `affiliate_attribution` (13 months), `analytics_events` (25 months), `fraud_signals` (24 months), `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years), `stock_reservation_records` (90 days)
+- **PII classes:** `P0`, `P1`, `P2` across 253 fields in 29 tables
+- **Tables:** `ad_clicks`, `ad_impressions`, `admission_tokens`, `affiliate_clicks`, `attributions`, `bv_auto_check_reports`, `bv_claim_conflicts`, `bv_claims`, `bv_domain_verifications`, `bv_screenings`, `bv_trademark_lookups`, `checkout_payment_events`, `checkout_sagas`, `cod_refusal_history`, `commissions`, `creator_accounts`, `creator_monthly_accruals`, `device_ip_graph_edges`, `drop_purchases`, `family_invites`, `family_members`, `gift_card_attempts`, `otp_send_log`, `payment_methods`, `queue_tickets`, `referrals`, `risk_assessments`, `student_verifications`, `trial_claims`
+- **Recipients and processors:** `cloud_primary`, `courier`, `kyc_verifier`, `psp_failover_fawry`, `psp_primary`
+- **Retention:** `account_active` (event-driven (no fixed period)), `affiliate_attribution` (13 months), `analytics_events` (25 months), `auth_credentials` (30 days), `fraud_signals` (24 months), `kyc_records` (5 years), `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years), `stock_reservation_records` (90 days)
 - **Residency:** `approved_region`
 - **Technical safeguards:** `blind_index_hmac`, `one_way_hash`
-- **Open verification items:** 90 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 191 fields flagged VERIFY BEFORE LAUNCH
 
 ### Gift cards and group gifts (`gifting`)
 
@@ -192,13 +206,13 @@ Coins, tiers, referral codes, affiliate attribution and commissions.
 
 - **Data subjects:** `creator`, `shopper`, `staff`, `visitor`
 - **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2` across 99 fields in 14 tables
-- **Tables:** `affiliate_clicks`, `challenges`, `coin_debts`, `coin_events`, `commissions`, `creator_accounts`, `game_entitlements`, `game_odds_versions`, `game_plays`, `referral_codes`, `referrals`, `reward_config_versions`, `spend_events`, `tier_status`
+- **PII classes:** `P0`, `P1`, `P2` across 175 fields in 22 tables
+- **Tables:** `affiliate_clicks`, `affiliate_links`, `attributions`, `challenges`, `coin_debts`, `coin_events`, `commission_postings`, `commissions`, `creator_accounts`, `creator_look_items`, `creator_looks`, `creator_monthly_accruals`, `creator_payouts`, `creator_terms`, `game_entitlements`, `game_odds_versions`, `game_plays`, `referral_codes`, `referrals`, `reward_config_versions`, `spend_events`, `tier_status`
 - **Recipients and processors:** `cloud_primary`
 - **Retention:** `account_active` (event-driven (no fixed period)), `affiliate_attribution` (13 months), `audit_log` (7 years), `catalog_content` (event-driven (no fixed period)), `orders_tax_records` (7 years)
 - **Residency:** `approved_region`, `global_ok`
 - **Technical safeguards:** `one_way_hash`
-- **Open verification items:** 48 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 96 fields flagged VERIFY BEFORE LAUNCH
 
 ### Marketing and notification preferences (`marketing_comms`)
 
@@ -220,12 +234,12 @@ Take, split and fulfil orders, including delivery details shared with sellers an
 
 - **Data subjects:** `seller_representative`, `shopper`, `staff`
 - **Lawful basis:** `consent`, `contract`, `legal_obligation`, `legitimate_interest` (consent purposes: `location_precise`)
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 192 fields in 17 tables
-- **Tables:** `addresses`, `checkout_sagas`, `delivery_snapshots`, `drop_purchases`, `inventory_levels`, `inventory_units`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `promotion_redemptions`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `seller_delivery_access_grants`, `seller_orders`, `stock_pools`
-- **Recipients and processors:** `cloud_primary`, `courier`, `seller_stores`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 266 fields in 24 tables
+- **Tables:** `auto_buy_attempts`, `auto_buy_mandates`, `checkout_sagas`, `courier_coverage`, `couriers`, `coverage_cities`, `coverage_governorates`, `delivery_snapshots`, `drop_purchases`, `gift_address_tokens`, `inventory_levels`, `inventory_units`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `promotion_redemptions`, `reservation_lines`, `reservation_ttl_policies`, `reservations`, `saved_addresses`, `seller_delivery_access_grants`, `seller_orders`, `stock_pools`
+- **Recipients and processors:** `cloud_primary`, `courier`, `psp_primary`
 - **Retention:** `account_active` (event-driven (no fixed period)), `catalog_content` (event-driven (no fixed period)), `orders_tax_records` (7 years), `seller_access_window` (30 days), `stock_reservation_records` (90 days), `stock_unit_rows` (13 months)
 - **Residency:** `approved_region`, `global_ok`, `in_country`
-- **Technical safeguards:** `field_envelope`
+- **Technical safeguards:** `blind_index_hmac`, `field_envelope`, `psp_tokenized`
 - **Open verification items:** 11 fields flagged VERIFY BEFORE LAUNCH
 
 ### Payment processing (`payment_processing`)
@@ -234,11 +248,11 @@ Initiate, confirm and reconcile payments through PSPs and BNPL providers. Card d
 
 - **Data subjects:** `creator`, `seller_representative`, `shopper`, `staff`, `visitor`
 - **Lawful basis:** `contract`, `legal_obligation`
-- **PII classes:** `P1`, `P2`, `P3` across 245 fields in 19 tables
-- **Tables:** `ad_topups`, `checkout_payment_events`, `checkout_sagas`, `gift_pot_contributions`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payment_refunds`, `payout_instruments`, `plus_signups`, `recon_runs`, `recon_tickets`, `refund_attempts`, `refund_legs`, `refunds`, `settlement_file_lines`, `settlement_files`, `subscription_webhook_events`, `subscriptions`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 285 fields in 22 tables
+- **Tables:** `ad_topups`, `auto_buy_attempts`, `auto_buy_mandate_texts`, `auto_buy_mandates`, `checkout_payment_events`, `checkout_sagas`, `gift_pot_contributions`, `payment_events_raw`, `payment_intents`, `payment_methods`, `payment_refunds`, `payout_instruments`, `plus_signups`, `recon_runs`, `recon_tickets`, `refund_attempts`, `refund_legs`, `refunds`, `settlement_file_lines`, `settlement_files`, `subscription_webhook_events`, `subscriptions`
 - **Recipients and processors:** `bnpl_provider`, `cloud_primary`, `courier`, `psp_failover_fawry`, `psp_primary`
 - **Retention:** `account_active` (event-driven (no fixed period)), `kyc_records` (5 years), `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years)
-- **Residency:** `approved_region`, `in_country`
+- **Residency:** `approved_region`, `global_ok`, `in_country`
 - **Technical safeguards:** `blind_index_hmac`, `field_envelope`, `psp_tokenized`
 - **Open verification items:** 136 fields flagged VERIFY BEFORE LAUNCH
 
@@ -248,13 +262,13 @@ Outfit generation, style profile, recommendations, wardrobe and outfit calendar.
 
 - **Data subjects:** `seller_representative`, `shopper`, `staff`
 - **Lawful basis:** `consent`, `contract`, `legal_obligation`, `legitimate_interest` (consent purposes: `cross_border_ml`, `personalization`)
-- **PII classes:** `P0`, `P1`, `P2` across 107 fields in 18 tables
-- **Tables:** `history_clear_requests`, `item_cooccurrence`, `llm_audit_log`, `llm_external_calls`, `outfit_calendar_events`, `outfits`, `personalization_settings`, `product_attributes`, `product_embeddings`, `ranking_models`, `recently_viewed`, `recommendation_item_stats`, `style_profiles`, `stylist_feedback`, `user_events`, `user_features`, `user_style_vectors`, `wardrobe_items`
+- **PII classes:** `P0`, `P1`, `P2` across 218 fields in 30 tables
+- **Tables:** `calendar_events`, `calendar_outfits`, `calendar_reminders`, `history_clear_requests`, `item_cooccurrence`, `llm_audit_log`, `llm_external_calls`, `outfit_calendar_events`, `outfits`, `personalization_settings`, `product_attributes`, `product_embeddings`, `ranking_eval_runs`, `ranking_models`, `ranking_shadow_items`, `ranking_shadow_runs`, `recently_viewed`, `recommendation_item_stats`, `style_profiles`, `stylist_chat_quota`, `stylist_chat_sessions`, `stylist_chat_settings`, `stylist_chat_turns`, `stylist_feedback`, `user_events`, `user_features`, `user_style_vectors`, `wardrobe_blob_graveyard`, `wardrobe_items`, `wardrobe_uploads`
 - **Recipients and processors:** `cloud_primary`, `llm_vendor`
-- **Retention:** `account_active` (event-driven (no fixed period)), `analytics_events` (25 months), `audit_log` (7 years), `catalog_content` (event-driven (no fixed period)), `personalization_data` (24 months), `user_content` (event-driven (no fixed period))
+- **Retention:** `account_active` (event-driven (no fixed period)), `analytics_events` (25 months), `audit_log` (7 years), `catalog_content` (event-driven (no fixed period)), `personalization_data` (24 months), `support_chats` (2 years), `technical_dedup` (30 days), `user_content` (event-driven (no fixed period))
 - **Residency:** `approved_region`, `global_ok`
 - **Technical safeguards:** `one_way_hash`
-- **Open verification items:** 42 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 77 fields flagged VERIFY BEFORE LAUNCH
 
 ### Exactly-once processing and idempotency (`platform_reliability`)
 
@@ -276,10 +290,10 @@ DSAR export and deletion queue, breach register and transfer register (spec B1).
 
 - **Data subjects:** `shopper`, `staff`
 - **Lawful basis:** `legal_obligation`
-- **PII classes:** `P1`, `P2` across 43 fields in 4 tables
-- **Tables:** `breach_affected_subjects`, `breach_register`, `dsar_requests`, `transfer_register`
+- **PII classes:** `P1`, `P2` across 45 fields in 5 tables
+- **Tables:** `analytics_erased_keys`, `breach_affected_subjects`, `breach_register`, `dsar_requests`, `transfer_register`
 - **Recipients and processors:** `cloud_primary`
-- **Retention:** `dsar_export_artifact` (7 days), `dsar_records` (5 years)
+- **Retention:** `dsar_export_artifact` (7 days), `dsar_records` (5 years), `technical_dedup` (30 days)
 - **Residency:** `approved_region`
 - **Technical safeguards:** none beyond access control
 - **Open verification items:** 43 fields flagged VERIFY BEFORE LAUNCH
@@ -318,27 +332,27 @@ Hash-chained audit log, request logs and incident evidence.
 
 - **Data subjects:** `seller_representative`, `shopper`, `staff`, `visitor`
 - **Lawful basis:** `consent`, `contract`, `legal_obligation`, `legitimate_interest` (consent purposes: `cross_border_ml`)
-- **PII classes:** `P1`, `P2` across 116 fields in 12 tables
-- **Tables:** `admin_approval_requests`, `admin_elevations`, `audit_chain_checkpoints`, `audit_log`, `crawl_incidents`, `gift_card_attempts`, `kyc_suspension_reviews`, `llm_audit_log`, `llm_external_calls`, `matching_config_changes`, `request_logs`, `tax_exemption_audit`
+- **PII classes:** `P1`, `P2` across 145 fields in 16 tables
+- **Tables:** `ad_click_reviews`, `admin_approval_requests`, `admin_calendar_audit`, `admin_elevations`, `audit_chain_checkpoints`, `audit_log`, `brand_review_overlay`, `bv_history`, `crawl_incidents`, `gift_card_attempts`, `kyc_suspension_reviews`, `llm_audit_log`, `llm_external_calls`, `matching_config_changes`, `request_logs`, `tax_exemption_audit`
 - **Recipients and processors:** `cdn_waf`, `cloud_primary`, `llm_vendor`
 - **Retention:** `audit_log` (7 years), `fraud_signals` (24 months), `kyc_records` (5 years), `orders_tax_records` (7 years), `request_logs` (30 days)
 - **Residency:** `approved_region`
 - **Technical safeguards:** `blind_index_hmac`, `one_way_hash`
-- **Open verification items:** 106 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 135 fields flagged VERIFY BEFORE LAUNCH
 
 ### Seller and creator KYC and payouts (`seller_onboarding_kyc`)
 
 Verify sellers and creators, screen sanctions lists, pay out to a verified IBAN.
 
 - **Data subjects:** `creator`, `seller_representative`, `staff`
-- **Lawful basis:** `contract`, `legal_obligation`
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 79 fields in 8 tables
-- **Tables:** `creator_accounts`, `kyc_suspension_reviews`, `payout_attempts`, `payout_instruments`, `payout_lines`, `payout_status_history`, `payouts`, `seller_kyc_records`
+- **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 258 fields in 20 tables
+- **Tables:** `brand_application_documents`, `brand_application_history`, `brand_applications`, `brand_review_overlay`, `bv_auto_check_reports`, `bv_claim_conflicts`, `bv_claims`, `bv_domain_verifications`, `bv_screenings`, `bv_trademark_lookups`, `creator_accounts`, `creator_kyc`, `creator_payouts`, `kyc_suspension_reviews`, `payout_attempts`, `payout_instruments`, `payout_lines`, `payout_status_history`, `payouts`, `seller_kyc_records`
 - **Recipients and processors:** `cloud_primary`, `kyc_verifier`
 - **Retention:** `affiliate_attribution` (13 months), `kyc_records` (5 years), `orders_tax_records` (7 years)
 - **Residency:** `approved_region`, `in_country`
 - **Technical safeguards:** `blind_index_hmac`, `field_envelope`
-- **Open verification items:** 74 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 246 fields flagged VERIFY BEFORE LAUNCH
 
 ### Seller Center and Admin Console accounts (`seller_platform_ops`)
 
@@ -346,13 +360,13 @@ Staff and seller-user accounts and access control.
 
 - **Data subjects:** `seller_representative`, `shopper`, `staff`
 - **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2` across 302 fields in 30 tables
-- **Tables:** `ad_balances`, `ad_campaigns`, `ad_clicks`, `ad_config`, `ad_daily_spend`, `ad_impressions`, `ad_product_bids`, `ad_topups`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `channel_connections`, `channel_snapshots`, `crawl_targets`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `locations`, `match_labels`, `matching_config`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_matches`, `promotions`, `seller_analytics_facts`, `seller_analytics_freshness`, `seller_analytics_stock`, `signing_delegations`, `staff_accounts`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 578 fields in 53 tables
+- **Tables:** `ad_balances`, `ad_campaigns`, `ad_clicks`, `ad_config`, `ad_daily_spend`, `ad_impressions`, `ad_product_bids`, `ad_topups`, `admin_calendar_events`, `analytics_rollup_reconciliations`, `analytics_rollup_watermarks`, `catalog_import_errors`, `catalog_import_products`, `catalog_imports`, `channel_connections`, `channel_snapshots`, `crawl_targets`, `demand_forecasts`, `forecast_demand_series`, `forecast_runs`, `inventory_adjustments`, `inventory_levels`, `inventory_oversell_events`, `locations`, `match_labels`, `matching_config`, `odoo_channel_configs`, `odoo_product_links`, `platform_metrics_hourly`, `price_claims`, `price_enforcement_actions`, `price_events`, `product_matches`, `product_media_blob_graveyard`, `product_media_jobs`, `product_media_usage`, `product_media_versions`, `promotions`, `seller_analytics_facts`, `seller_analytics_freshness`, `seller_analytics_hourly`, `seller_analytics_stock`, `seller_analytics_suppression_memo`, `seller_eta_enrolments`, `seller_media_uploads`, `seller_notification_prefs`, `seller_payout_accounts`, `seller_settings_events`, `seller_shipping_profiles`, `seller_store_profiles`, `seller_team_invites`, `signing_delegations`, `staff_accounts`
 - **Recipients and processors:** `cloud_primary`, `identity_providers`, `psp_primary`
-- **Retention:** `analytics_events` (25 months), `catalog_content` (event-driven (no fixed period)), `catalog_import_records` (90 days), `orders_tax_records` (7 years), `seller_access_window` (30 days), `staff_access` (12 months), `stock_movement_evidence` (7 years)
-- **Residency:** `approved_region`, `global_ok`
-- **Technical safeguards:** `one_way_hash`
-- **Open verification items:** 118 fields flagged VERIFY BEFORE LAUNCH
+- **Retention:** `analytics_events` (25 months), `audit_log` (7 years), `catalog_content` (event-driven (no fixed period)), `catalog_import_records` (90 days), `delivery_records` (24 months), `kyc_records` (5 years), `notification_log` (12 months), `orders_tax_records` (7 years), `seller_access_window` (30 days), `staff_access` (12 months), `stock_movement_evidence` (7 years), `technical_dedup` (30 days), `user_content` (event-driven (no fixed period))
+- **Residency:** `approved_region`, `global_ok`, `in_country`
+- **Technical safeguards:** `blind_index_hmac`, `field_envelope`, `one_way_hash`
+- **Open verification items:** 183 fields flagged VERIFY BEFORE LAUNCH
 
 ### Plus, family and student plans (`subscriptions_plus`)
 
@@ -360,13 +374,13 @@ Subscriptions, trials, family members and student verification.
 
 - **Data subjects:** `shopper`, `visitor`
 - **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2` across 88 fields in 8 tables
-- **Tables:** `entitlements`, `plans`, `plus_savings_ledger`, `plus_signups`, `subscription_invoices`, `subscription_webhook_events`, `subscriptions`, `trial_claims`
-- **Recipients and processors:** `cloud_primary`, `psp_primary`
-- **Retention:** `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years)
+- **PII classes:** `P0`, `P1`, `P2` across 132 fields in 12 tables
+- **Tables:** `entitlements`, `family_groups`, `family_invites`, `family_members`, `plans`, `plus_savings_ledger`, `plus_signups`, `student_verifications`, `subscription_invoices`, `subscription_webhook_events`, `subscriptions`, `trial_claims`
+- **Recipients and processors:** `cloud_primary`, `kyc_verifier`, `psp_primary`
+- **Retention:** `account_active` (event-driven (no fixed period)), `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years)
 - **Residency:** `approved_region`, `global_ok`
-- **Technical safeguards:** `blind_index_hmac`, `psp_tokenized`
-- **Open verification items:** 23 fields flagged VERIFY BEFORE LAUNCH
+- **Technical safeguards:** `blind_index_hmac`, `one_way_hash`, `psp_tokenized`
+- **Open verification items:** 34 fields flagged VERIFY BEFORE LAUNCH
 
 ### Tax, invoicing and accounting records (`tax_accounting`)
 
@@ -374,13 +388,13 @@ Keep order, invoice and financial records for the legal retention period (spec B
 
 - **Data subjects:** `courier_agent`, `creator`, `seller_representative`, `shopper`, `staff`
 - **Lawful basis:** `contract`, `legal_obligation`, `legitimate_interest`
-- **PII classes:** `P0`, `P1`, `P2`, `P3` across 446 fields in 41 tables
-- **Tables:** `ad_balances`, `ad_clicks`, `ad_topups`, `categories`, `checkout_payment_events`, `cod_remittance_lines`, `cod_remittances`, `commissions`, `corporate_accounts`, `eta_signed_documents`, `eta_submissions`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `ledger_entry_chain`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `payment_events_raw`, `payment_intents`, `payment_refunds`, `payout_attempts`, `payout_lines`, `payout_status_history`, `payouts`, `postings`, `recon_runs`, `recon_tickets`, `refund_attempts`, `refund_legs`, `refunds`, `resale_proceeds`, `seller_orders`, `settlement_file_lines`, `settlement_files`, `signing_delegations`, `subscription_invoices`, `tax_categories`, `tax_documents`, `tax_exemption_audit`
+- **PII classes:** `P0`, `P1`, `P2`, `P3` across 476 fields in 43 tables
+- **Tables:** `ad_balances`, `ad_clicks`, `ad_topups`, `categories`, `checkout_payment_events`, `cod_remittance_lines`, `cod_remittances`, `commission_postings`, `commissions`, `corporate_accounts`, `creator_payouts`, `eta_signed_documents`, `eta_submissions`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `ledger_entry_chain`, `order_buyer_contacts`, `order_groups`, `order_lines`, `order_status_history`, `payment_events_raw`, `payment_intents`, `payment_refunds`, `payout_attempts`, `payout_lines`, `payout_status_history`, `payouts`, `postings`, `recon_runs`, `recon_tickets`, `refund_attempts`, `refund_legs`, `refunds`, `resale_proceeds`, `seller_orders`, `settlement_file_lines`, `settlement_files`, `signing_delegations`, `subscription_invoices`, `tax_categories`, `tax_documents`, `tax_exemption_audit`
 - **Recipients and processors:** `bnpl_provider`, `cloud_primary`, `courier`, `eta_portal`, `psp_failover_fawry`, `psp_primary`
 - **Retention:** `catalog_content` (event-driven (no fixed period)), `orders_tax_records` (7 years), `raw_webhooks_financial` (7 years)
 - **Residency:** `approved_region`, `global_ok`, `in_country`
 - **Technical safeguards:** `field_envelope`, `one_way_hash`, `psp_tokenized`
-- **Open verification items:** 275 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 304 fields flagged VERIFY BEFORE LAUNCH
 
 ### Transactional notifications (`transactional_comms`)
 
@@ -396,19 +410,33 @@ Order, delivery and security messages that do not need marketing consent.
 - **Technical safeguards:** none beyond access control
 - **Open verification items:** 0 fields flagged VERIFY BEFORE LAUNCH
 
+### Visual search by photo (`visual_search`)
+
+Embed a shopper-supplied query photo and return visually similar in-stock items. Zero retention of the image, no embedding is stored, never used for training, never shared with sellers (spec P3-08, VR-P3-13).
+
+- **Data subjects:** `seller_representative`, `shopper`
+- **Lawful basis:** `contract`, `legitimate_interest`
+- **PII classes:** `P0`, `P1`, `P2` across 35 fields in 5 tables
+- **Tables:** `visual_search_eval_pairs`, `visual_search_eval_runs`, `visual_search_requests`, `visual_search_uploads`, `visual_search_usage`
+- **Recipients and processors:** `cloud_primary`
+- **Retention:** `account_active` (event-driven (no fixed period)), `visual_search_transient` (48 hours)
+- **Residency:** `approved_region`
+- **Technical safeguards:** none beyond access control
+- **Open verification items:** 28 fields flagged VERIFY BEFORE LAUNCH
+
 ### Store credit, gift cards and ledger (`wallet_ledger`)
 
 Closed-loop store credit, gift cards and the double-entry ledger (spec B2, T4).
 
 - **Data subjects:** `gift_recipient`, `seller_representative`, `shopper`, `staff`
 - **Lawful basis:** `contract`, `legal_obligation`
-- **PII classes:** `P0`, `P1`, `P2` across 175 fields in 18 tables
-- **Tables:** `coin_debts`, `coin_events`, `credit_hold_lines`, `credit_holds`, `credit_lots`, `credit_transactions`, `gift_card_redemptions`, `gift_cards`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `ledger_entry_chain`, `payout_attempts`, `payout_lines`, `payout_status_history`, `payouts`, `postings`, `resale_proceeds`
+- **PII classes:** `P0`, `P1`, `P2` across 201 fields in 20 tables
+- **Tables:** `coin_debts`, `coin_events`, `credit_hold_lines`, `credit_holds`, `credit_lots`, `credit_transactions`, `gift_card_redemptions`, `gift_cards`, `journal_entries`, `ledger_account_types`, `ledger_accounts`, `ledger_entry_chain`, `ledger_integrity_drift_samples`, `ledger_integrity_runs`, `payout_attempts`, `payout_lines`, `payout_status_history`, `payouts`, `postings`, `resale_proceeds`
 - **Recipients and processors:** `cloud_primary`, `email_provider`, `sms_provider`, `whatsapp_bsp`
-- **Retention:** `gift_recipient_contact` (30 days), `orders_tax_records` (7 years)
+- **Retention:** `gift_recipient_contact` (30 days), `ledger_integrity_samples` (25 months), `orders_tax_records` (7 years)
 - **Residency:** `approved_region`
 - **Technical safeguards:** `field_envelope`, `one_way_hash`
-- **Open verification items:** 85 fields flagged VERIFY BEFORE LAUNCH
+- **Open verification items:** 93 fields flagged VERIFY BEFORE LAUNCH
 
 ## 4. Consent purposes
 
@@ -418,31 +446,38 @@ Closed-loop store credit, gift cards and the double-entry ledger (spec B2, T4).
 | `marketing_whatsapp` | 0 | none |
 | `marketing_email` | 0 | none |
 | `analytics` | 13 | `analytics_events`, `crash_reports` |
-| `personalization` | 48 | `accessibility_preferences`, `fit_model_params`, `outfit_calendar_events`, `outfits`, `style_profiles`, `stylist_feedback`, `user_features`, `user_style_vectors`, `wardrobe_items` |
-| `budget_insights` | 41 | `budget_cycles`, `budget_spend_events`, `budget_unlock_requests`, `budgets`, `installment_commitments`, `savings_goals` |
+| `personalization` | 88 | `accessibility_preferences`, `fit_model_params`, `outfit_calendar_events`, `outfits`, `style_profiles`, `stylist_chat_sessions`, `stylist_chat_settings`, `stylist_chat_turns`, `stylist_feedback`, `user_features`, `user_style_vectors`, `wardrobe_blob_graveyard`, `wardrobe_items`, `wardrobe_uploads` |
+| `budget_insights` | 42 | `budget_cycles`, `budget_spend_events`, `budget_unlock_requests`, `budgets`, `installment_commitments`, `savings_goals` |
 | `measurements` | 41 | `body_scan_capture`, `fit_feedback`, `size_demand_events`, `size_profiles`, `size_recommendation_log` |
-| `location_precise` | 2 | `addresses` |
+| `location_precise` | 2 | `delivery_snapshots`, `saved_addresses` |
 | `cross_border_ml` | 8 | `llm_external_calls` |
 
 ## 5. Special handling
 
-P3 fields (31) must be field-encrypted, hashed, tokenized or kept on device, must stay in country, and never go to an external LLM (spec T12).
+P3 fields (58) must be field-encrypted, hashed, tokenized or kept on device, must stay in country, and never go to an external LLM (spec T12).
 
 | Field | Encryption | Residency | Seller visibility |
 |---|---|---|---|
 | `users.phone_e164` | field_envelope | in_country | none |
 | `users.dob` | field_envelope | in_country | none |
+| `users.dob_ciphertext` | field_envelope | in_country | none |
+| `otp_challenges.phone_ciphertext` | field_envelope | in_country | none |
 | `age_block_devices.dob_hash` | blind_index_hmac | in_country | none |
-| `addresses.recipient_phone` | field_envelope | in_country | none |
-| `addresses.street` | field_envelope | in_country | none |
-| `addresses.building` | field_envelope | in_country | none |
-| `addresses.floor` | field_envelope | in_country | none |
-| `addresses.apartment` | field_envelope | in_country | none |
-| `addresses.landmark` | field_envelope | in_country | none |
-| `addresses.geo_lat` | field_envelope | in_country | none |
-| `addresses.geo_lng` | field_envelope | in_country | none |
-| `delivery_snapshots.recipient_phone` | field_envelope | in_country | none |
-| `delivery_snapshots.address_text` | field_envelope | in_country | full |
+| `age_gate_passes.dob_ciphertext` | field_envelope | in_country | none |
+| `saved_addresses.phone_enc` | field_envelope | in_country | none |
+| `saved_addresses.street_enc` | field_envelope | in_country | none |
+| `saved_addresses.building_enc` | field_envelope | in_country | none |
+| `saved_addresses.floor_enc` | field_envelope | in_country | none |
+| `saved_addresses.apartment_enc` | field_envelope | in_country | none |
+| `saved_addresses.landmark_enc` | field_envelope | in_country | none |
+| `saved_addresses.map_pin_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.phone_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.street_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.building_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.floor_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.apartment_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.landmark_enc` | field_envelope | in_country | none |
+| `delivery_snapshots.map_pin_enc` | field_envelope | in_country | none |
 | `corporate_accounts.contact_phone` | field_envelope | in_country | none |
 | `body_scan_capture.capture_images` | not_persisted | device_only | none |
 | `body_scan_capture.derived_measurements` | device_secure_storage | device_only | none |
@@ -458,9 +493,29 @@ P3 fields (31) must be field-encrypted, hashed, tokenized or kept on device, mus
 | `seller_kyc_records.national_id_number` | field_envelope | in_country | none |
 | `seller_kyc_records.national_id_document_ref` | field_envelope | in_country | none |
 | `payout_instruments.iban` | field_envelope | in_country | none |
+| `creator_kyc.legal_name_enc` | field_envelope | in_country | none |
+| `creator_kyc.national_id_enc` | field_envelope | in_country | none |
+| `creator_kyc.national_id_hash` | blind_index_hmac | in_country | none |
+| `creator_kyc.payout_iban_enc` | field_envelope | in_country | none |
+| `creator_kyc.payout_name_enc` | field_envelope | in_country | none |
+| `creator_kyc.tax_id_enc` | field_envelope | in_country | none |
+| `creator_kyc.tax_form_enc` | field_envelope | in_country | none |
 | `size_profiles.label` | field_envelope | in_country | none |
 | `size_profiles.measurements` | field_envelope | in_country | none |
 | `size_profiles.quick_start` | field_envelope | in_country | none |
+| `seller_payout_accounts.iban_enc` | field_envelope | in_country | none |
+| `seller_payout_accounts.holder_name_enc` | field_envelope | in_country | none |
+| `seller_shipping_profiles.origin_contact_phone_enc` | field_envelope | in_country | none |
+| `seller_team_invites.phone_blind` | blind_index_hmac | in_country | none |
+| `seller_team_invites.phone_enc` | field_envelope | in_country | none |
+| `seller_users.phone_ciphertext` | field_envelope | in_country | none |
+| `seller_otp_challenges.phone_ciphertext` | field_envelope | in_country | none |
+| `seller_totp.secret_ciphertext` | field_envelope | in_country | none |
+| `seller_staff_invites.phone_ciphertext` | field_envelope | in_country | none |
+| `brand_applications.pii_enc` | field_envelope | in_country | none |
+| `brand_applications.national_id_enc` | field_envelope | in_country | none |
+| `brand_application_documents.original_filename_enc` | field_envelope | in_country | none |
+| `auto_buy_mandates.psp_token_ref` | psp_tokenized | approved_region | none |
 
 Tables closed to promotions and ads (budget insights, spec section 12):
 
@@ -489,6 +544,8 @@ Source: named in the spec (1 Data). Storage: platform_db. Data subjects: `shoppe
 | `email` | P2 | account_auth | contract | account_active | cloud_primary, email_provider | approved_region | field_envelope | none | delete |  |
 | `dob` | P3 | age_assurance | contract | account_active | cloud_primary | in_country | field_envelope | none | delete | VERIFY |
 | `age_band` | P2 | age_assurance | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `dob_ciphertext` | P3 | age_assurance | contract | account_active | cloud_primary | in_country | field_envelope | none | delete | VERIFY |
+| `email_ciphertext` | P2 | account_auth | contract | account_active | cloud_primary | approved_region | field_envelope | none | delete |  |
 | `limited_capacity` | P2 | age_assurance | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
 | `locale` | P2 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
 | `status` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
@@ -526,6 +583,7 @@ Source: named in the spec (1 Data). Storage: platform_db. Data subjects: `shoppe
 | `attest_status` | P1 | account_auth | contract | device_records | cloud_primary, app_attestation | approved_region | none | none | delete |  |
 | `push_token` | P2 | transactional_comms | contract | device_records | cloud_primary, push_service | approved_region | none | none | delete |  |
 | `last_seen` | P1 | account_auth | contract | device_records | cloud_primary, app_attestation | approved_region | none | none | delete |  |
+| `install_secret_hash` | P2 | account_auth | contract | device_records | cloud_primary, app_attestation | approved_region | one_way_hash | none | delete |  |
 
 ### `sessions`
 
@@ -559,6 +617,11 @@ Source: derived (confirm when the ERD is final) (1 Rules). Storage: platform_db.
 | `attempts` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
 | `sent_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
 | `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `phone_ciphertext` | P3 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | in_country | field_envelope | none | delete |  |
+| `device_key_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `salt` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `issued_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `status` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
 
 ### `age_attestations`
 
@@ -580,6 +643,90 @@ Source: derived (confirm when the ERD is final) (1 Rules (under-18 soft block)).
 | `device_hash` | P2 | age_assurance | contract | underage_block | cloud_primary | in_country | one_way_hash | none | delete |  |
 | `dob_hash` | P3 | age_assurance | contract | underage_block | cloud_primary | in_country | blind_index_hmac | none | delete |  |
 | `blocked_until` | P1 | age_assurance | contract | underage_block | cloud_primary | in_country | none | none | delete |  |
+
+### `auth_sessions`
+
+Source: derived (confirm when the ERD is final) (1 Data (sessions: access token sid)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `family_id` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `device_id` | P2 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `platform` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `amr` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `last_used_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `uv` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+
+### `otp_send_log`
+
+Source: derived (confirm when the ERD is final) (1 Rules (3 sends per 15 min per phone, 10 per day per device)). Storage: platform_db. Data subjects: `shopper`, `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth, fraud_prevention | legitimate_interest | auth_credentials | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `phone_hash` | P2 | account_auth, fraud_prevention | legitimate_interest | auth_credentials | cloud_primary | approved_region | blind_index_hmac | none | delete | VERIFY |
+| `device_hash` | P2 | account_auth, fraud_prevention | legitimate_interest | auth_credentials | cloud_primary | approved_region | blind_index_hmac | none | delete | VERIFY |
+| `sent_at` | P1 | account_auth, fraud_prevention | legitimate_interest | auth_credentials | cloud_primary | approved_region | none | none | delete | VERIFY |
+
+### `age_gate_blocks`
+
+Source: derived (confirm when the ERD is final) (1 Rules (under-18 soft block 30 days)). Storage: platform_db. Data subjects: `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `key_hash` | P2 | age_assurance | contract | underage_block | cloud_primary | in_country | blind_index_hmac | none | delete |  |
+| `blocked_until` | P1 | age_assurance | contract | underage_block | cloud_primary | in_country | none | none | delete |  |
+
+### `age_gate_passes`
+
+Source: derived (confirm when the ERD is final) (1 Flow (DOB step before sign-in; pass valid 24 h)). Storage: platform_db. Data subjects: `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `key_hash` | P2 | age_assurance | contract | auth_credentials | cloud_primary | in_country | blind_index_hmac | none | delete |  |
+| `expires_at` | P1 | age_assurance | contract | auth_credentials | cloud_primary | in_country | none | none | delete |  |
+| `age_band` | P2 | age_assurance | contract | auth_credentials | cloud_primary | in_country | none | none | delete |  |
+| `dob_ciphertext` | P3 | age_assurance | contract | auth_credentials | cloud_primary | in_country | field_envelope | none | delete |  |
+
+### `auth_nonces`
+
+Source: derived (confirm when the ERD is final) (1 Security (Apple and Google nonce replay)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `key_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary | approved_region | one_way_hash | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+
+### `passkey_challenges`
+
+Source: derived (confirm when the ERD is final) (T5 Identity (passkeys)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `challenge` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `purpose` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary | approved_region | none | none | delete |  |
+
+### `passkey_credentials`
+
+Source: derived (confirm when the ERD is final) (T5 Identity (passkeys)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `credential_id` | P2 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `public_key` | P2 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `sign_count` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `backup_eligible` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `backed_up` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
 
 ### `consent_records`
 
@@ -672,42 +819,115 @@ Source: derived (confirm when the ERD is final) (B1 DPO dashboard). Storage: pla
 | `tia_ref` | P1 | privacy_rights | legal_obligation | dsar_records | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 | `approved_at` | P1 | privacy_rights | legal_obligation | dsar_records | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 
-### `addresses`
+### `saved_addresses`
 
-Source: derived (confirm when the ERD is final) (7 Flow step 1, T5 crypto row). Storage: platform_db. Data subjects: `shopper`.
+Source: derived (confirm when the ERD is final) (7 Flow step 1, T5 crypto row; docs/specs/addresses.md; migration 0050). Storage: platform_db. Data subjects: `shopper`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
 | `user_id` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
 | `label` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
-| `recipient_name` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `recipient_phone` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `governorate` | P2 | order_fulfilment | contract | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
-| `city_district` | P2 | order_fulfilment | contract | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
-| `street` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `building` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `floor` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `apartment` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `landmark` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `geo_lat` | P3 | order_fulfilment | consent (location_precise) | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
-| `geo_lng` | P3 | order_fulfilment | consent (location_precise) | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `recipient_name_enc` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `phone_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `phone_blind` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | blind_index_hmac | none | delete |  |
+| `governorate_code` | P2 | order_fulfilment | contract | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `city_code` | P2 | order_fulfilment | contract | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `street_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `building_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `floor_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `apartment_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `landmark_enc` | P3 | order_fulfilment | contract | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `map_pin_enc` | P3 | order_fulfilment | consent (location_precise) | account_active | cloud_primary | in_country | field_envelope | none | delete |  |
+| `dedupe_blind` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | blind_index_hmac | none | delete |  |
+| `courier_coverage` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `cod_eligible` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `quality_score` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
 | `is_default` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
 | `created_at` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `updated_at` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
 
 ### `delivery_snapshots`
 
-Source: derived (confirm when the ERD is final) (B1 Sellers row). Storage: platform_db. Data subjects: `shopper`.
+Source: derived (confirm when the ERD is final) (7 Saga, B1 Sellers row; docs/specs/addresses.md; migration 0050). Storage: platform_db. Data subjects: `shopper`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `seller_order_id` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | none | none | pseudonymize |  |
-| `recipient_name` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | field_envelope | full | pseudonymize |  |
-| `phone_relay_number` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | field_envelope | masked | pseudonymize |  |
-| `recipient_phone` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | field_envelope | none | pseudonymize |  |
-| `address_text` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | field_envelope | full | pseudonymize |  |
-| `governorate` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | approved_region | none | full | pseudonymize |  |
-| `delivery_notes` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier, seller_stores | in_country | none | full | pseudonymize |  |
+| `id` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `user_id` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `order_ref` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `source_address_id` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `gift` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `recipient_name_enc` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `phone_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `governorate_code` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | approved_region | none | none | pseudonymize |  |
+| `city_code` | P2 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | approved_region | none | none | pseudonymize |  |
+| `street_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `building_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `floor_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `apartment_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `landmark_enc` | P3 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `map_pin_enc` | P3 | order_fulfilment, delivery_logistics | consent (location_precise) | orders_tax_records | cloud_primary, courier | in_country | field_envelope | none | pseudonymize |  |
+| `courier_coverage` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `cod_eligible` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+| `created_at` | P1 | order_fulfilment, delivery_logistics | contract | orders_tax_records | cloud_primary, courier | in_country | none | none | pseudonymize |  |
+
+### `gift_address_tokens`
+
+Source: derived (confirm when the ERD is final) (8 Edge cases (hidden gift address); docs/specs/addresses.md; migration 0050). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `token_hash` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `owner_user_id` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `address_id` | P2 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `expires_at` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `revoked_at` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+| `created_at` | P1 | order_fulfilment | contract | account_active | cloud_primary | in_country | none | none | delete |  |
+
+### `couriers`
+
+Source: derived (confirm when the ERD is final) (7 Flow step 1 (courier coverage table); migration 0050). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `cod_supported` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `active` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `coverage_governorates`
+
+Source: derived (confirm when the ERD is final) (7 Flow step 1 (courier coverage table); migration 0050). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `name_ar` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `name_en` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `position` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `coverage_cities`
+
+Source: derived (confirm when the ERD is final) (7 Flow step 1 (courier coverage table); migration 0050). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `governorate_code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `name_ar` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `name_en` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `position` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `courier_coverage`
+
+Source: derived (confirm when the ERD is final) (7 Flow step 1 (courier coverage table); migration 0050). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `courier` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `governorate_code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `city_code` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `covered` | P1 | order_fulfilment | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
 
 ### `seller_delivery_access_grants`
 
@@ -753,7 +973,9 @@ Source: derived (confirm when the ERD is final) (4 Engine (index sync, Postgres 
 | `colors` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `materials` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `condition` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
+| `department` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `category_ids` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
+| `brand_id` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `verified_discount_pct` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `lowest_30d` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
 | `free_delivery_eligible` | P0 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | not_personal |  |
@@ -792,6 +1014,7 @@ Source: named in the spec (7 Data; migration 0019, docs/specs/orders.md). Storag
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | order_fulfilment, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `market` | P1 | order_fulfilment, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `user_id` | P2 | order_fulfilment, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `status` | P1 | order_fulfilment, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `payment_method` | P1 | order_fulfilment, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
@@ -1166,6 +1389,7 @@ Source: named in the spec (11 Data). Storage: platform_db. Data subjects: `selle
 |---|---|---|---|---|---|---|---|---|---|---|
 | `product_id` | P0 | personalization_stylist | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `vec` | P0 | personalization_stylist | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `vec_pg` | P0 | personalization_stylist | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `model_version` | P1 | personalization_stylist | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `updated_at` | P1 | personalization_stylist | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 
@@ -1201,6 +1425,62 @@ Source: derived (confirm when the ERD is final) (11 Data (columns not listed in 
 | `signal` | P2 | personalization_stylist | consent (personalization) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
 | `created_at` | P1 | personalization_stylist | consent (personalization) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
 | `item_id` | P2 | personalization_stylist | consent (personalization) | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+
+### `stylist_chat_sessions`
+
+Source: named in the spec (P3-07 Data (chat_sessions)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `state` | P2 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `history_enabled` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+
+### `stylist_chat_turns`
+
+Source: named in the spec (P3-07 Data (chat_turns)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `session_id` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `seq` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `role` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `client_message_id` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `text` | P2 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `reply_code` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `blocks` | P2 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `intent` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `source` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `prompt_hash` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `tokens_in` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `tokens_out` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `tool_calls` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | personalization_stylist | consent (personalization) | support_chats | cloud_primary | approved_region | none | none | delete |  |
+
+### `stylist_chat_settings`
+
+Source: derived (confirm when the ERD is final) (P3-07 API (stylist_chat_history setting)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `user_id` | P2 | personalization_stylist | consent (personalization) | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `history_enabled` | P1 | personalization_stylist | consent (personalization) | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | personalization_stylist | consent (personalization) | account_active | cloud_primary | approved_region | none | none | delete |  |
+
+### `stylist_chat_quota`
+
+Source: derived (confirm when the ERD is final) (P3-07 Quotas (30 chat turns/day)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `user_id` | P2 | personalization_stylist | contract | technical_dedup | cloud_primary | approved_region | none | none | delete |  |
+| `day` | P1 | personalization_stylist | contract | technical_dedup | cloud_primary | approved_region | none | none | delete |  |
+| `turns` | P1 | personalization_stylist | contract | technical_dedup | cloud_primary | approved_region | none | none | delete |  |
 
 ### `style_profiles`
 
@@ -1243,6 +1523,146 @@ Source: derived (confirm when the ERD is final) (28 feature 4 (wardrobe digitiza
 | `image_ref` | P2 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
 | `attributes` | P2 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
 | `created_at` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `image_state` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `attributes_source` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `vision_model_version` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `version` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+
+### `wardrobe_uploads`
+
+Source: derived (confirm when the ERD is final) (28 feature 4 (wardrobe digitization)). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `upload_id` | P2 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `content_type` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `size_bytes` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `issued_at` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `consumed_at` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | delete |  |
+
+### `wardrobe_blob_graveyard`
+
+Source: derived (confirm when the ERD is final) (28 feature 4 (wardrobe digitization); B1 erasure). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `upload_id` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `deleted_at` | P1 | personalization_stylist | consent (personalization) | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `product_media_jobs`
+
+Source: derived (confirm when the ERD is final) (19 Seller Center (catalog media), background removal (migration 0083)). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `store_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `created_by` | P2 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `original_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `content_type` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `size_bytes` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `decision` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `requested_model` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `model_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `model_version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `quality_score` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `quality_reasons` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `png_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `white_jpg_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `shadow_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `latency_ms` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `error_code` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `attempts` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `attached_product_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `promoted_image_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `promoted_cutout_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `current_version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `edit_count` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `promoted_version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `background_render_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+
+### `product_media_versions`
+
+Source: derived (confirm when the ERD is final) (19 Seller Center (catalog media); docs/specs/phase-3/product-media-background-removal.md (Editing a cutout); migration 0087). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `job_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `store_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `op` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `params` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `mask_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `png_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `white_jpg_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `shadow_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `background_render_ref` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `model_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `model_version` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `latency_ms` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `quality_score` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `quality_reasons` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | delete |  |
+
+### `product_media_usage`
+
+Source: derived (confirm when the ERD is final) (19 Seller Center (catalog media), per-store daily quota). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | technical_dedup | cloud_primary | approved_region | none | none | not_personal |  |
+| `day` | P1 | seller_platform_ops | contract | technical_dedup | cloud_primary | approved_region | none | none | not_personal |  |
+| `runs` | P1 | seller_platform_ops | contract | technical_dedup | cloud_primary | approved_region | none | none | not_personal |  |
+| `refine_units` | P1 | seller_platform_ops | contract | technical_dedup | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `product_media_blob_graveyard`
+
+Source: derived (confirm when the ERD is final) (19 Seller Center (catalog media); B1 erasure). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `upload_id` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `deleted_at` | P1 | seller_platform_ops | contract | user_content | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `home_banners`
+
+Source: derived (confirm when the ERD is final) (16 Feed, drops & social; 17 Promotions engine; 12 (budget data never used for targeting); docs/specs/phase-3/home-banners.md; migration 0084). Storage: platform_db. Data subjects: `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `status` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `title_ar` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `title_en` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `subtitle_ar` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `subtitle_en` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `image_key` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `art_variant` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `priority` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `starts_at` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `ends_at` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `sponsored` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `sponsor_ref` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cta_kind` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cta_target_id` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cta_query` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cta_price_min` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cta_price_max` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `created_by` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `updated_by` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `version` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `created_at` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `updated_at` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 
 ### `outfit_calendar_events`
 
@@ -1271,6 +1691,7 @@ Source: named in the spec (12 Data). Storage: platform_db. Data subjects: `shopp
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `user_id` | P2 | budget_insights | consent (budget_insights) | budget_data | cloud_primary | approved_region | none | none | delete |  |
+| `market` | P1 | budget_insights | consent (budget_insights) | budget_data | cloud_primary | approved_region | none | none | delete |  |
 | `amount` | P3 | budget_insights | consent (budget_insights) | budget_data | cloud_primary | approved_region | field_envelope | none | delete | VERIFY |
 | `per_category` | P3 | budget_insights | consent (budget_insights) | budget_data | cloud_primary | approved_region | field_envelope | none | delete |  |
 | `payday` | P2 | budget_insights | consent (budget_insights) | budget_data | cloud_primary | approved_region | none | none | delete |  |
@@ -1601,15 +2022,94 @@ Source: derived (confirm when the ERD is final) (B2/B3 payouts to a verified IBA
 
 ### `creator_accounts`
 
-Source: named in the spec (15.4 Data). Storage: platform_db. Data subjects: `creator`.
+Source: named in the spec (15.4 Data; migration 0075, ADR-0037). Storage: platform_db. Data subjects: `creator`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `user_id` | P2 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `handle` | P0 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `display_name` | P0 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
 | `status` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
-| `kyc_record_id` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `kyc_state` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `terms_version` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `terms_accepted_at` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `payout_pref` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `status_reason` | P2 | fraud_prevention | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `applied_at` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `decided_at` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `updated_at` | P1 | loyalty_referral, seller_onboarding_kyc | contract | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `creator_kyc`
+
+Source: derived (confirm when the ERD is final) (15.4 Rules (21+, KYC), ADR-0037; migration 0075). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `creator_id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+| `key_id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+| `legal_name_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `national_id_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `national_id_hash` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | blind_index_hmac | none | retain_legal | VERIFY |
+| `payout_iban_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `payout_name_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `tax_id_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `tax_form_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | field_envelope | none | retain_legal | VERIFY |
+| `submitted_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+| `reviewed_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+| `reviewed_by` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+| `review_reason` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary | in_country | none | none | retain_legal | VERIFY |
+
+### `creator_terms`
+
+Source: derived (confirm when the ERD is final) (15.4 Flow (terms accepted, AR/EN, versioned); migration 0075). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `version` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `locale` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `body` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `body_sha256` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `affiliate_links`
+
+Source: named in the spec (15.4 Data; migration 0075). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `creator_id` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `target_type` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `target_id` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `slug` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+| `disabled_at` | P1 | loyalty_referral | contract | affiliate_attribution | cloud_primary | approved_region | none | none | delete |  |
+
+### `creator_looks`
+
+Source: named in the spec (15.4 Data (curated looks), 27 UGC; migration 0075). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `creator_id` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `title` | P0 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `takedown_reason` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+
+### `creator_look_items`
+
+Source: derived (confirm when the ERD is final) (15.4 Data (creator_looks.items[]); migration 0075). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `look_id` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `position` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `product_id` | P1 | loyalty_referral | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
 
 ### `referral_codes`
 
@@ -1645,27 +2145,103 @@ Source: named in the spec (15.4 Data; migration 0026). Storage: platform_db. Dat
 
 ### `affiliate_clicks`
 
-Source: named in the spec (15.4 Data (partitioned)). Storage: platform_db. Data subjects: `visitor`, `creator`.
+Source: named in the spec (15.4 Data (partitioned monthly); migration 0076). Storage: platform_db. Data subjects: `visitor`, `creator`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `id` | P1 | loyalty_referral | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
-| `creator_id` | P1 | loyalty_referral | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
-| `visitor_pseudo_id` | P2 | loyalty_referral | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
-| `ip_hash` | P2 | loyalty_referral | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | one_way_hash | none | delete | VERIFY |
-| `clicked_at` | P1 | loyalty_referral | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `link_id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `creator_id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `ts` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `device_hash` | P2 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | one_way_hash | none | delete | VERIFY |
+| `ip_hash` | P2 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | one_way_hash | none | delete | VERIFY |
+| `ua_class` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `counted` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | delete | VERIFY |
+
+### `attributions`
+
+Source: named in the spec (15.4 Data; migration 0076). Storage: platform_db. Data subjects: `shopper`, `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `order_group_id` | P2 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `creator_id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `link_id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `click_id` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `click_at` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `buyer_user_id` | P2 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `rate_snapshot` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `window_end` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `status` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `void_reason` | P2 | fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `hold_reason` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `created_at` | P1 | loyalty_referral, fraud_prevention | legitimate_interest | affiliate_attribution | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 
 ### `commissions`
 
-Source: named in the spec (15.4 Data). Storage: platform_db. Data subjects: `creator`.
+Source: named in the spec (15.4 Data; migration 0076 and 0077). Storage: platform_db. Data subjects: `creator`.
 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
 | `creator_id` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
-| `order_id` | P2 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `order_group_id` | P2 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `order_line_id` | P2 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `base` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `rate_bps` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
 | `amount` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
-| `status` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `clawed_back` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `refunded_base` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `state` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `hold_reason` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `void_reason` | P2 | fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `month_key` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `closed_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `accrued_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `payout_id` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `updated_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `commission_postings`
+
+Source: derived (confirm when the ERD is final) (15.4 Failure handling (ledger intents), T4; migration 0076). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `commission_id` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `seq` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `kind` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `amount` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `posted_at` | P1 | loyalty_referral, tax_accounting | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `creator_monthly_accruals`
+
+Source: derived (confirm when the ERD is final) (15.4 Rules (max payout per creator per month); migration 0076). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `creator_id` | P1 | loyalty_referral, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
+| `month_key` | P1 | loyalty_referral, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
+| `accrued` | P1 | loyalty_referral, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
+
+### `creator_payouts`
+
+Source: derived (confirm when the ERD is final) (15.4, ADR-0037, T4 payouts; migration 0077). Storage: platform_db. Data subjects: `creator`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `creator_id` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `amount` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `state` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `hold_reason` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `attempt` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `provider_ref` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `failure_reason` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_by` | P2 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `updated_at` | P1 | loyalty_referral, tax_accounting, seller_onboarding_kyc | contract | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
 
 ### `subscriptions`
 
@@ -1739,6 +2315,8 @@ Source: named in the spec (14 Data; docs/specs/phase2/01-plus-subscriptions.md; 
 | `version` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
 | `active` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
 | `trial_days` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `kind` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `seat_limit` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
 | `effective_from` | P0 | subscriptions_plus | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
 | `notified_at` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
 | `created_by` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
@@ -1810,6 +2388,76 @@ Source: derived (confirm when the ERD is final) (14 API (recurring webhook, dedu
 | `provider` | P1 | subscriptions_plus, payment_processing | contract | raw_webhooks_financial | cloud_primary, psp_primary | approved_region | none | none | not_personal |  |
 | `event_id` | P1 | subscriptions_plus, payment_processing | contract | raw_webhooks_financial | cloud_primary, psp_primary | approved_region | none | none | not_personal |  |
 | `received_at` | P1 | subscriptions_plus, payment_processing | contract | raw_webhooks_financial | cloud_primary, psp_primary | approved_region | none | none | not_personal |  |
+
+### `family_groups`
+
+Source: named in the spec (14 family plan; docs/specs/phase-3/family-student-plans.md; migration 0060). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `owner_user_id` | P2 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `subscription_id` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `seat_limit` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `status` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `ending_notice_sent_at` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `ended_at` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `version` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `created_at` | P1 | subscriptions_plus | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `family_members`
+
+Source: named in the spec (14 family plan seats; docs/specs/phase-3/family-student-plans.md Data; migration 0060). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `group_id` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `user_id` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `role` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `status` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `seat_no` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `nickname` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `invited_at` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `seat_effective_from` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `seat_end_at` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `removed_at` | P2 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `removed_by` | P1 | subscriptions_plus, fraud_prevention | contract | orders_tax_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `family_invites`
+
+Source: named in the spec (14 family plan invites; docs/specs/phase-3/family-student-plans.md Data and Security; migration 0060). Storage: platform_db. Data subjects: `shopper`, `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `group_id` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `member_id` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `invitee_phone_hash` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | blind_index_hmac | none | delete |  |
+| `token_hash` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | one_way_hash | none | delete |  |
+| `expires_at` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `accepted_at` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `created_by` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary | approved_region | none | none | delete |  |
+
+### `student_verifications`
+
+Source: named in the spec (14 student plan; docs/specs/phase-3/family-student-plans.md Data (student_verifications P2); migration 0061). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `user_id` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `verifier` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `ref` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `status` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `verified_at` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `valid_until` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `notice_sent_at` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `version` | P1 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `created_at` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
+| `updated_at` | P2 | subscriptions_plus, fraud_prevention | contract | account_active | cloud_primary, kyc_verifier | approved_region | none | none | delete | VERIFY |
 
 ### `support_tickets`
 
@@ -2152,6 +2800,7 @@ Source: named in the spec (6 Data). Storage: platform_db. Data subjects: `shoppe
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | delete |  |
+| `market` | P1 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | delete |  |
 | `user_id` | P2 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | delete |  |
 | `currency` | P1 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | delete |  |
 | `version` | P1 | catalog_browse | contract | browsing_state | cloud_primary | approved_region | none | none | delete |  |
@@ -2228,6 +2877,7 @@ Source: derived (confirm when the ERD is final) (5 Product page, 19 Seller Cente
 | `description_ar` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
 | `description_en` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
 | `condition` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
+| `department` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
 | `status` | P1 | catalog_browse | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
 | `material` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
 | `size_chart_id` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | full | not_personal |  |
@@ -2274,6 +2924,9 @@ Source: derived (confirm when the ERD is final) (5 Product page). Storage: platf
 | `position` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `blurhash` | P0 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `image_version` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `media_job_id` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `image_ref` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
+| `cutout_ref` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 | `created_at` | P1 | catalog_browse | contract | catalog_content | cloud_primary | global_ok | none | none | not_personal |  |
 
 ### `product_defects`
@@ -2883,6 +3536,7 @@ Source: derived (confirm when the ERD is final) (17 Promotions engine). Storage:
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
+| `market` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
 | `owner_kind` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
 | `store_id` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
 | `kind` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | full | not_personal |  |
@@ -2943,6 +3597,7 @@ Source: named in the spec (9.2 Internal price ledger; migration 0024). Storage: 
 | Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `id` | P1 | catalog_browse, seller_platform_ops | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
+| `market` | P1 | catalog_browse, seller_platform_ops | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
 | `sku_id` | P0 | catalog_browse, seller_platform_ops | legal_obligation | orders_tax_records | cloud_primary | global_ok | none | none | retain_legal |  |
 | `store_id` | P1 | catalog_browse, seller_platform_ops | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | retain_legal |  |
 | `price_amount` | P0 | catalog_browse, seller_platform_ops | legal_obligation | orders_tax_records | cloud_primary | global_ok | none | none | retain_legal |  |
@@ -3010,6 +3665,7 @@ Source: derived (confirm when the ERD is final) (19.1 Seller analytics; migratio
 | `source` | P0 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `governorate` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | aggregate_k50 | pseudonymize | VERIFY |
 | `term` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | aggregate_k50 | pseudonymize | VERIFY |
+| `term_hash` | P2 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 | `ingested_at` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 
 ### `seller_analytics_stock`
@@ -3036,6 +3692,88 @@ Source: derived (confirm when the ERD is final) (19.1 freshness SLO <= 15 min; m
 | `store_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
 | `last_event_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
 | `last_ingest_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `seller_analytics_hourly`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 6, ADR-0045; migration 0088). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `metric` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `hour_utc` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `cairo_date` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `cairo_hour` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `utc_offset_min` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `value` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `held_value` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `version` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `platform_metrics_hourly`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 6, ADR-0045; migration 0088). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `metric` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `hour_utc` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `cairo_date` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `cairo_hour` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `utc_offset_min` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `value` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `version` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `updated_at` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `analytics_rollup_watermarks`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 6; migration 0088). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `consumer` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `applied_through` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `updated_at` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `analytics_rollup_reconciliations`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 6 (M1); migration 0088). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `scope` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `window_from` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `window_to` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `checked_rows` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `mismatches` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `corrected` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `skipped_concurrent` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `outcome` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `ran_at` | P1 | seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `seller_analytics_suppression_memo`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 4 (B2) and section 6; migration 0090). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `metric` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `dimension` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `dim_key` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `bucket` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `reason` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `first_hidden_at` | P1 | analytics_product, seller_platform_ops | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `analytics_erased_keys`
+
+Source: derived (confirm when the ERD is final) (dashboard foundations section 6, H3; migration 0090). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `shopper_key` | P2 | privacy_rights | legal_obligation | technical_dedup | cloud_primary | approved_region | none | none | delete |  |
+| `erased_at` | P1 | privacy_rights | legal_obligation | technical_dedup | cloud_primary | approved_region | none | none | delete |  |
 
 ### `tax_categories`
 
@@ -3758,6 +4496,76 @@ Source: derived (confirm when the ERD is final) (20.5 (Thompson sampling explora
 | `clicks` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 | `updated_at` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 
+### `visual_search_uploads`
+
+Source: derived (confirm when the ERD is final) (P3-08 Rules (query image zero retention); migration 0068). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `owner_id` | P2 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `content_type` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `expires_at` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `consumed_at` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+| `deleted_at` | P1 | visual_search | contract | visual_search_transient | cloud_primary | approved_region | none | none | delete |  |
+
+### `visual_search_requests`
+
+Source: named in the spec (P3-08 Data (visual_search_requests); migration 0068). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `ts` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `mode` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `outcome` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `latency_ms` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `result_count` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `category_guess` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `model_version` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `visual_search_usage`
+
+Source: derived (confirm when the ERD is final) (P3-08 Security (per-user daily caps, API4); migration 0068). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `day` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `subject` | P2 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `used` | P1 | visual_search | legitimate_interest | visual_search_transient | cloud_primary | approved_region | none | none | delete | VERIFY |
+
+### `visual_search_eval_pairs`
+
+Source: named in the spec (P3-08 Data (visual_search_eval_pairs, offline only); migration 0070). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `set_name` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `query_ref` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `expected_ids` | P0 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `category` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `basis` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `created_at` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | delete | VERIFY |
+
+### `visual_search_eval_runs`
+
+Source: derived (confirm when the ERD is final) (P3-08 Acceptance (quality gate); migration 0070). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `set_name` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `model_version` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `k` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `queries` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `recall_at_k` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `mrr` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `coverage` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `passed` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `ran_at` | P1 | visual_search | legitimate_interest | account_active | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
 ### `drops`
 
 Source: derived (confirm when the ERD is final) (16 Drop types and states; phase2 spec 07; migration 0042). Storage: platform_db. Data subjects: `seller_representative`.
@@ -4232,6 +5040,43 @@ Source: derived (confirm when the ERD is final) (9.7 channel_connections (oauth_
 | `created_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 | `revoked_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 
+### `odoo_channel_configs`
+
+Source: derived (confirm when the ERD is final) (9.2 / 19 seller channel integrations (Odoo, Phase 3 item 11); migration 0071). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `channel_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `store_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `target_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `db_name` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `odoo_uid` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `pricelist_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `stock_location_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `poll_interval_s` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `breaker_failures` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `breaker_opened_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `last_polled_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `last_error_code` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `updated_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `odoo_product_links`
+
+Source: derived (confirm when the ERD is final) (9.2 / 19 Odoo product to SKU link and last-synced state; migration 0071). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `channel_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `odoo_product_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `store_id` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `sku_id` | P0 | seller_platform_ops | contract | seller_access_window | cloud_primary | global_ok | none | none | not_personal | VERIFY |
+| `last_price_amount` | P0 | seller_platform_ops | contract | seller_access_window | cloud_primary | global_ok | none | none | not_personal | VERIFY |
+| `last_stock_source_version` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `last_stock_qty` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `last_synced_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P1 | seller_platform_ops | contract | seller_access_window | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
 ### `channel_snapshots`
 
 Source: derived (confirm when the ERD is final) (9.2 channel_snapshots (daily partitions); migration 0043). Storage: platform_db. Data subjects: `seller_representative`.
@@ -4328,4 +5173,896 @@ Source: derived (confirm when the ERD is final) (9.7 crawler SSRF and robots inc
 | `url_hash` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 | `detail` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
 | `created_at` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `seller_store_profiles`
+
+Source: derived (confirm when the ERD is final) (19, B5; migration 0055, docs/specs/seller-settings.md). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `display_name_ar` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `display_name_en` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `description_ar` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `description_en` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `logo_key` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `cover_key` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `social_links` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `return_change_of_mind_days` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `return_defect_days` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `return_policy_ar` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `return_policy_en` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `free_delivery_threshold_amount` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `vacation_enabled` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `vacation_until` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `vacation_eta_extra_days` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `version` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `created_at` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_at` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_by` | P2 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `seller_media_uploads`
+
+Source: derived (confirm when the ERD is final) (19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `store_id` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `slot` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `object_key` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `content_type` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `declared_bytes` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `status` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `reject_code` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `width` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `height` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `created_at` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `expires_at` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `confirmed_at` | P1 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+| `created_by` | P2 | seller_platform_ops | contract | catalog_content | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `seller_payout_accounts`
+
+Source: derived (confirm when the ERD is final) (T4 payouts, 19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `store_id` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `account_token` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `iban_last4` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `legal_name_score` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `status` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `created_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `activates_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `superseded_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `iban_enc` | P3 | seller_platform_ops | contract | kyc_records | cloud_primary | in_country | field_envelope | none | pseudonymize |  |
+| `holder_name_enc` | P3 | seller_platform_ops | contract | kyc_records | cloud_primary | in_country | field_envelope | none | pseudonymize |  |
+| `created_by` | P2 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `seller_shipping_profiles`
+
+Source: derived (confirm when the ERD is final) (21, 19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `handling_time_hours` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `courier_preferences` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `packaging_options` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `version` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `updated_at` | P1 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_governorate_code` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_city_code` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_street` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_building` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_landmark` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_contact_name` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_contact_phone_enc` | P3 | seller_platform_ops | contract | delivery_records | cloud_primary | in_country | field_envelope | none | pseudonymize |  |
+| `origin_lat` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `origin_lng` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `updated_by` | P2 | seller_platform_ops | contract | delivery_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `seller_notification_prefs`
+
+Source: derived (confirm when the ERD is final) (24, 19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+| `event_type` | P1 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+| `channel` | P1 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+| `enabled` | P1 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_at` | P1 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_by` | P2 | seller_platform_ops | contract | notification_log | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `seller_team_invites`
+
+Source: derived (confirm when the ERD is final) (19 team roles; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `store_id` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `role` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `token_hash` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `status` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `created_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `expires_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `responded_at` | P1 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `phone_blind` | P3 | seller_platform_ops | contract | kyc_records | cloud_primary | in_country | blind_index_hmac | none | pseudonymize |  |
+| `phone_enc` | P3 | seller_platform_ops | contract | kyc_records | cloud_primary | in_country | field_envelope | none | pseudonymize |  |
+| `phone_masked` | P2 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `invited_by` | P2 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `responded_by` | P2 | seller_platform_ops | contract | kyc_records | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `seller_eta_enrolments`
+
+Source: derived (confirm when the ERD is final) (B4, 19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `status` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `failure_code` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `requested_at` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `last_checked_at` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `last_verified_at` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_at` | P1 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `updated_by` | P2 | seller_platform_ops | contract | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `seller_settings_events`
+
+Source: derived (confirm when the ERD is final) (A2.9 audit, 19; migration 0055). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `store_id` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `area` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `kind` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `occurred_at` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `detail` | P1 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+| `actor_id` | P2 | seller_platform_ops | contract | audit_log | cloud_primary | approved_region | none | none | pseudonymize |  |
+
+### `seller_users`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `phone_hash` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `phone_ciphertext` | P3 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | in_country | field_envelope | none | delete |  |
+| `email_ciphertext` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | field_envelope | none | delete |  |
+| `email_hash` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `locale` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `status` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `strong_factor` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `shopper_user_id` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_otp_challenges`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `phone_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `phone_ciphertext` | P3 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | in_country | field_envelope | none | delete |  |
+| `email_ciphertext` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | field_envelope | none | delete |  |
+| `locale` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `channel` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `client_key_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `salt` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `code_hash` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | one_way_hash | none | delete |  |
+| `issued_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `attempts` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `status` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_otp_send_log`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `phone_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `client_hash` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `prefix` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `sent_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `verified` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_otp_proofs`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `proof_hash` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | one_way_hash | none | delete |  |
+| `seller_user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `otp_channel` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `consumed_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_passkey_challenges`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `challenge` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `purpose` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `seller_user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `otp_channel` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_passkey_credentials`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `credential_id` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `seller_user_id` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `public_key` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `sign_count` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `status` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `backup_eligible` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `backed_up` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `label` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_totp`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `seller_user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `secret_ciphertext` | P3 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | in_country | field_envelope | none | delete |  |
+| `status` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `last_used_step` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `failed_count` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `lock_count` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `locked_until` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `confirmed_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_recovery_codes`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `seller_user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `code_hash` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | one_way_hash | none | delete |  |
+| `used_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_sessions`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `seller_user_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `kind` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `restricted` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `install_id` | P2 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `amr` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `strong_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `last_used_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `revoke_reason` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_refresh_tokens`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `session_id` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `refresh_hash` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | one_way_hash | none | delete |  |
+| `rotation_no` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `issued_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `used_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | account_auth | contract | auth_credentials | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_memberships`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `seller_user_id` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `store_id` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `role` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `granted_by` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `seller_staff_invites`
+
+Source: derived (confirm when the ERD is final) (1, 19, T5; ADR-0031; migration 0053). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `store_id` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `role` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `phone_hash` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | blind_index_hmac | none | delete |  |
+| `phone_ciphertext` | P3 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | in_country | field_envelope | none | delete |  |
+| `invited_by` | P2 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `created_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `expires_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `accepted_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+| `revoked_at` | P1 | account_auth | contract | account_active | cloud_primary, sms_provider, whatsapp_bsp | approved_region | none | none | delete |  |
+
+### `bv_domain_verifications`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 brand domain ownership proof; migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `applicant_id` | P2 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `domain` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `method` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `status` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `nonce` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `email_local` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `email_code_hash` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `attempts` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `expires_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `verified_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `version` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `updated_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_claims`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 duplicate brand-claim registry; migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `applicant_id` | P2 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `kind` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `country` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `brand_name_norm` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `claim_domain` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `trademark_key` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `domain_verified_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `trademark_matched_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `submitted_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `updated_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_claim_conflicts`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 brand claim conflicts for trust_safety; migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `conflict_key` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `application_ids` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `reasons` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `status` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `outcome` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `winner_application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `resolved_by` | P2 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `resolved_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_trademark_lookups`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 trademark register evidence; migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `source` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `office` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `register_number` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `found` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `owner_name` | P2 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `mark_text` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `mark_classes` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `mark_status` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `registered_on` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `expires_on` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `owner_score` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `owner_band` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `recorded_by` | P2 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `retrieved_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_screenings`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 sanctions screening results (outcome and list ids only); migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `outcome` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `matched_list_ids` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `list_version` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `screened_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_auto_check_reports`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 deterministic auto-check reports (codes, reasons, evidence ids); migration 0052). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `application_id` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `risk` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `dual_approval_required` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `report` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, fraud_prevention | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | retain_legal | VERIFY |
+
+### `bv_history`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 append-only action history; migration 0052). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `application_id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `actor_id` | P2 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `action` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `ref_id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `created_at` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+
+### `brand_review_overlay`
+
+Source: derived (confirm when the ERD is final) (ADR-0031 cosign and provisioning-failure overlay; migration 0054). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `application_id` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `cosign_first_approver_id` | P2 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `cosign_requested_at` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `provisioning_state` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `provisioning_failure` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `conflicting_store_id` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `failed_at` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `retry_count` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `last_retry_at` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `updated_at` | P1 | seller_onboarding_kyc, security_audit | legitimate_interest | kyc_records | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+
+### `brand_applications`
+
+Source: derived (confirm when the ERD is final) (19 KYC onboarding, B5 public legal identity; migration 0051). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `applicant_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `version` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `brand_kind` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `country` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `brand_name` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `brand_name_norm` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `ownership_basis` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `trademark_register` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `trademark_number` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `trademark_owner_name` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `commercial_register_no` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `tax_card_no` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `company_reg_no` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `company_reg_country` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `vat_or_tax_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `website_domain` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `social_handles` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `eta_registration` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `description_ar` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `description_en` | P0 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `acknowledgements` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `pii_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | field_envelope | none | retain_legal | VERIFY |
+| `national_id_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | field_envelope | none | retain_legal | VERIFY |
+| `national_id_blind` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | blind_index_hmac | none | retain_legal | VERIFY |
+| `domain_verification` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `appeal_used` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `appeal_statement` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `submitted_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decision` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decision_reason_code` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decision_message_ar` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decision_message_en` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decided_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `reapply_after` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `appeal_allowed` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `decision_due_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `rejected_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `store_id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `assignee_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `claimed_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `requested_items` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `requested_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `updated_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+
+### `brand_application_documents`
+
+Source: derived (confirm when the ERD is final) (19 KYC documents in a private bucket; migration 0051). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `application_id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `applicant_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `requirement_code` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `original_filename_enc` | P3 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | field_envelope | none | retain_legal | VERIFY |
+| `content_type` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `size_bytes` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `sha256` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `object_key` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `upload_status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `scan_status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `review_status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `review_note_public` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `review_note_internal` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `created_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `uploaded_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+
+### `brand_application_history`
+
+Source: derived (confirm when the ERD is final) (19 KYC state history (append-only); migration 0051). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `application_id` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `applicant_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `from_status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `to_status` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `event` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `actor_type` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `actor_id` | P2 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `reason_code` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+| `occurred_at` | P1 | seller_onboarding_kyc | legal_obligation | kyc_records | cloud_primary, kyc_verifier | in_country | none | none | retain_legal | VERIFY |
+
+### `ad_click_reviews`
+
+Source: derived (confirm when the ERD is final) (Phase 2 ads click review (append-only); migration 0048). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `click_id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `decision` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `reason_code` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `decided_by` | P2 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `decided_at` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `admin_calendar_events`
+
+Source: derived (confirm when the ERD is final) (Admin gap routes A, platform calendar; migration 0049). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `kind` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `title_ar` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `title_en` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `note` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `starts_at` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `ends_at` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `status` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `version` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_by` | P2 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `updated_by` | P2 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `updated_at` | P1 | seller_platform_ops | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `admin_calendar_audit`
+
+Source: derived (confirm when the ERD is final) (Admin gap routes A, platform calendar audit; migration 0049). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `event_id` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `actor_id` | P2 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `action` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `before` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `after` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `at` | P1 | security_audit | legitimate_interest | audit_log | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `forecast_demand_series`
+
+Source: derived (confirm when the ERD is final) (20.8 demand forecasting, 19.1 sell-through; migration 0064). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `sku_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `category_code` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `size_label` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `governorate` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `day` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `units_gross` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `units_net` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `censored` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `flagged` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `shoppers` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `ingested_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `demand_forecasts`
+
+Source: derived (confirm when the ERD is final) (20.8 demand forecasting; migration 0064). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `store_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `scope` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `scope_key` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `horizon_days` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `as_of_date` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `model` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `model_version` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `status` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `p10` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `p50` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `p90` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `reason_codes` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `comparable_units` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `observed_days` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `backtest_origins` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `wape_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `baseline_wape_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `pinball_milli` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `coverage_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `bias_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `generated_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `forecast_runs`
+
+Source: derived (confirm when the ERD is final) (20.8 demand forecasting, nightly batch idempotency and model metrics; migration 0065). Storage: platform_db. Data subjects: `seller_representative`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `store_id` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `as_of_date` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `status` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `series_total` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `ok_count` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `insufficient_count` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `suppressed_count` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `served_models` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `mean_wape_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `mean_baseline_wape_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `mean_pinball_milli` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `mean_coverage_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `mean_bias_bps` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `error_code` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `started_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+| `finished_at` | P1 | seller_platform_ops | contract | analytics_events | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `auto_buy_mandate_texts`
+
+Source: named in the spec (P3-01 Data (mandate text versions stored immutably); migration 0056). Storage: platform_db. Data subjects: `visitor`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `version` | P0 | payment_processing | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `locale` | P0 | payment_processing | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `body` | P0 | payment_processing | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `body_sha256` | P0 | payment_processing | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+| `created_at` | P0 | payment_processing | contract | orders_tax_records | cloud_primary | global_ok | none | none | not_personal |  |
+
+### `auto_buy_mandates`
+
+Source: named in the spec (P3-01 Data; migration 0056). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `user_id` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `sku_id` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `size_label` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `target_price` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `max_price` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `currency` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `mode` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `psp_token_ref` | P3 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | psp_tokenized | none | pseudonymize |  |
+| `status` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `closed_reason` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `expires_at` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `mandate_version` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `mandate_locale` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `terms_sha256` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `accepted_at` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `accepted_device_id` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | pseudonymize |  |
+| `created_at` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `updated_at` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+
+### `auto_buy_attempts`
+
+Source: named in the spec (P3-01 Data; migration 0056). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `mandate_id` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `user_id` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `price_event_id` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `mode` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `state` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `trigger_price` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `charge_price` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `notice_sent_at` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `cancel_deadline` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `charge_started_at` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `reservation_ref` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `order_group_id` | P2 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `failure_reason` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `created_at` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+| `updated_at` | P1 | payment_processing, order_fulfilment | contract | orders_tax_records | cloud_primary, psp_primary | approved_region | none | none | retain_legal |  |
+
+### `calendar_events`
+
+Source: named in the spec (P3-02 Data (calendar_events); migration 0062). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `kind` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `starts_at` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `local_date` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `note` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `modesty` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `season_band` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `budget_piastres` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete | VERIFY |
+| `owned_slots` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `source` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `reminders_enabled` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `version` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+
+### `calendar_outfits`
+
+Source: named in the spec (P3-02 Data (calendar_outfits); migration 0062). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `event_id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `outfit_id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `status` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `updated_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+
+### `calendar_reminders`
+
+Source: named in the spec (P3-02 Data (calendar_reminders); migration 0063). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `event_id` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `user_id` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `offset_days` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `due_at` | P2 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `state` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `attempts` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `claimed_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `sent_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `skip_reason` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+| `created_at` | P1 | personalization_stylist | contract | personalization_data | cloud_primary | approved_region | none | none | delete |  |
+
+### `ranking_shadow_runs`
+
+Source: derived (confirm when the ERD is final) (20.5 ranking v2 shadow deployment; migration 0079). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `module` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `served_model_version` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `shadow_model_version` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `personalized` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `bot_filtered` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `candidate_count` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `k` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `overlap_permille` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `top1_same` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `mean_rank_shift_milli` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `ranking_shadow_items`
+
+Source: derived (confirm when the ERD is final) (20.5 ranking v2 shadow deployment, spec 12 Privacy; migration 0079). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `run_id` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `product_id` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `v1_rank` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `v2_rank` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `v2_score_milli` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `features` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `ranking_eval_runs`
+
+Source: derived (confirm when the ERD is final) (20.5 ranking v2 offline evaluation; migration 0080). Storage: platform_db. Data subjects: `staff`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `request_key` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `candidate_version` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `baseline_version` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `dataset` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `seed` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `requests` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `k` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `candidate_ndcg_bps` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `candidate_map_bps` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `baseline_ndcg_bps` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `baseline_map_bps` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `passed` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `reasons` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+| `created_at` | P1 | personalization_stylist | legitimate_interest | analytics_events | cloud_primary | approved_region | none | none | not_personal | VERIFY |
+
+### `ledger_integrity_runs`
+
+Source: derived (confirm when the ERD is final) (dashboard-foundations section 3; ADR-0046; migration 0089). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `id` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `run_kind` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `outcome` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `attempt_id` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `started_at` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `finished_at` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `ok` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `trial_ok` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `trial_offenders` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `chain_ok` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `chain_length` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `chain_head_hash` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `chain_failure` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `drift_count` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `negative_count` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `sample_truncated` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `error_code` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+| `report_sha256` | P1 | finance_integrity, wallet_ledger | legal_obligation | orders_tax_records | cloud_primary | approved_region | none | none | not_personal |  |
+
+### `ledger_integrity_drift_samples`
+
+Source: derived (confirm when the ERD is final) (dashboard-foundations section 3; ADR-0046; migration 0089, 0093; VR-DASH-08). Storage: platform_db. Data subjects: `shopper`.
+
+| Field | Class | Purpose | Basis | Retention | Processors | Residency | Encryption | Seller | On erasure | Verify |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `run_id` | P1 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `ord` | P1 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `account_id` | P2 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `sub` | P1 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `projected_minor` | P2 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `from_postings_minor` | P2 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `difference_minor` | P2 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
+| `created_at` | P1 | finance_integrity, wallet_ledger | legal_obligation | ledger_integrity_samples | cloud_primary | approved_region | none | none | pseudonymize | VERIFY |
 

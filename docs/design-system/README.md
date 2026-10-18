@@ -43,3 +43,29 @@ Choosing a state screen: `resolveScreenStatus({ isLoading, isOnline, hasError, i
 - [ ] Directional icons flip in RTL (`iconScaleX`); non-directional ones do not.
 - [ ] Decorative elements (Skeleton, Divider) are hidden from screen readers.
 - [ ] Checked manually with VoiceOver and TalkBack, largest font size, and Arabic RTL. (NOT done: no device run yet.)
+
+## Design documents index
+| Doc | What it covers |
+|---|---|
+| `brand.md` | Current identity (rebrand v2.1: ivory, teal ink, sand), palette, type, marks, imagery kit, font licences |
+| `rebrand-guide.md`, `brand-apply.md` | v1 to v2 migration notes, do and don't |
+| `foundation.md` | Token roles and component APIs (v1 values are historical) |
+| `navigation.md`, `discovery.md`, `purchase.md` | Mobile flows (tabs are now Home, Discover, Saved, Bag, Profile; see `design-board-v4.md`) |
+| `screens-wave-3.md`, `screens-wave-4a.md`, `screens-wave-4b.md`, `screens-wave-5a.md`, `screens-wave-5b.md` | Per-wave screen specs |
+| `brand-mode.md` | Seller mode inside the mobile app |
+| `seller-center.md`, `seller-center-phase2.md`, `admin-console.md`, `admin-console-phase2.md` | Web apps |
+| `design-board-v4.md` | Owner's final design board (8 screens): mapping to routes, decisions, deviations, QA checklist |
+| `arabic-review-pack.md` | Arabic copy review pack |
+| `screen-agent-brief.md` | v1 builder brief (historical identity) |
+
+## Screenshot folder conventions
+`docs/design-system/screenshots/` holds review captures, named `<prefix>-<screen>-<lang>-<variant>.png`.
+- `foundation-*`, `discovery-*`, `purchase-*`, `entry-*`, `brand-*`, `role-*`, `art-*`: first-wave captures (v1 identity unless re-shot).
+- `rebrand-*`: first v2 pass of the style guide.
+- `rebrand2-*`: v2.1 identity captures of the style guide (buttons, cards, fields, lists, hero, identity, typography); current.
+- `final-*`: reserved for final per-screen mobile captures; none are committed yet.
+- `design-board-v4.png`: owner's final design board, reference only (not a capture).
+- `web-*`: web apps, `web-<admin|seller|shopper>-<route>-<ar|en>-<desktop|mobile>.png`.
+Captures use synthetic fixture data and placeholder art; regenerate rather than hand-edit.
+
+See also: [UX principles (12 rules and how each is enforced)](ux-principles.md).

@@ -12,7 +12,20 @@ Every property is P0 or P1, snake_case, flat. No phone, email, DOB, address, mea
 | `world_selected` | 1 | client | consent: `personalization` | `world`, `previous_world?` | catalog | §3, §26 |
 | `store_viewed` | 1 | client | consent: `analytics` | `store_id`, `world`, `source` | catalog | §3, §26 |
 | `product_viewed` | 1 | client | consent: `analytics` | `product_id`, `store_id`, `source`, `position?` | catalog | §5, §26 |
-| `filter_applied` | 1 | client | consent: `analytics` | `filter_key`, `value_count`, `result_count` | search | §4, §26 |
+| `filter_applied` | 1 | client | consent: `analytics` | `filter_key`, `value_count`, `result_count`, `surface?` | search | §4, §26 |
+| `filter_sheet_opened` | 1 | client | consent: `analytics` | `surface` | search | §4, round-2 item 6 |
+| `filter_reset` | 1 | client | consent: `analytics` | `surface` | search | §4, round-2 item 6 |
+| `filter_chip_removed` | 1 | client | consent: `analytics` | `filter_key` | search | §4, round-2 item 6 |
+| `search_suggestion_tapped` | 1 | client | consent: `analytics` | `kind`, `position` | search | §4, round-2 item 8 |
+| `category_window_opened` | 1 | client | consent: `analytics` | `category_id`, `source` | catalog | §3, round-2 item 2 |
+| `category_window_selected` | 1 | client | consent: `analytics` | `category_id`, `has_count` | catalog | §3, round-2 item 2 |
+| `home_section_viewed` | 1 | client | consent: `analytics` | `section` | catalog | round-2 item 4 |
+| `home_section_see_all` | 1 | client | consent: `analytics` | `section` | catalog | round-2 item 4 |
+| `checkout_step_viewed` | 1 | client | consent: `analytics` | `step`, `store_count` | checkout | §7, ADR-0053 |
+| `checkout_step_completed` | 1 | client | consent: `analytics` | `step`, `ms_on_step` | checkout | §7, ADR-0053 |
+| `wishlist_item_removed` | 1 | client | consent: `analytics` | `intent` | wishlist | §8, round-2 item 9 |
+| `wishlist_add_to_bag` | 1 | client | consent: `analytics` | `intent`, `cool_off` | wishlist | §8, round-2 item 9 |
+| `wishlist_shared` | 1 | client | consent: `analytics` | `intent` | wishlist | §8, round-2 item 9 |
 | `search_performed` | 1 | client | consent: `analytics` | `term_char_count`, `result_count`, `scope`, `has_filters` | search | §4, §26 |
 | `search_no_result` | 1 | client | consent: `analytics` | `term_char_count`, `scope`, `has_filters` | search | §4, §26 |
 | `size_recommended` | 1 | server | consent: `measurements` | `product_id`, `confidence` | fit | §5, §10, §26 |
@@ -35,6 +48,8 @@ Every property is P0 or P1, snake_case, flat. No phone, email, DOB, address, mea
 | `order_delivered` | 1 | server | strictly necessary (no consent) | `seller_order_id`, `delivery_attempts` | checkout | §21, §26 |
 | `return_requested` | 1 | server | strictly necessary (no consent) | `return_id`, `reason` | returns | §22, §26 |
 | `refund_completed` | 1 | server | strictly necessary (no consent) | `refund_id`, `route`, `amount_minor` | refunds | §15.6, §22, §26 |
+| `home_banner_impression` | 1 | client | consent: `analytics` | `banner_id`, `position`, `sponsored`, `cta_kind` | catalog | §16, §26 |
+| `home_banner_click` | 1 | client | consent: `analytics` | `banner_id`, `position`, `sponsored`, `cta_kind` | catalog | §16, §26 |
 | `price_badge_viewed` | 1 | client | consent: `analytics` | `product_id`, `badge_type` | price-integrity | §5, §9, §26 |
 | `price_reported` | 1 | client | consent: `analytics` | `product_id`, `report_kind` | price-integrity | §9, §26 |
 | `plus_paywall_viewed` | 1 | client | consent: `analytics` | `entry_point` | plus | §14, §26 |
@@ -50,8 +65,8 @@ Every property is P0 or P1, snake_case, flat. No phone, email, DOB, address, mea
 | `drop_joined_queue` | 1 | server | strictly necessary (no consent) | `drop_id`, `drop_type` | drops | §16, §26 |
 | `drop_admitted` | 1 | server | strictly necessary (no consent) | `drop_id`, `wait_seconds` | drops | §16, §26 |
 | `game_played` | 1 | server | strictly necessary (no consent) | `game`, `odds_version`, `odds_disclosed`, `outcome_kind` | rewards | §15.5, phase2/06 |
-| `recommendation_impression` | 1 | client | consent: `personalization` | `module`, `model_version`, `item_count`, `personalized` | recommendations | phase2/05 |
-| `recommendation_click` | 1 | client | consent: `personalization` | `module`, `model_version`, `product_id`, `position` | recommendations | phase2/05 |
+| `recommendation_impression` | 1 | client | consent: `personalization` | `module`, `model_version`, `item_count`, `personalized`, `surface?` | recommendations | phase2/05 |
+| `recommendation_click` | 1 | client | consent: `personalization` | `module`, `model_version`, `product_id`, `position`, `surface?` | recommendations | phase2/05 |
 | `history_cleared` | 1 | server | strictly necessary (no consent) | `scope` | recommendations | §13, phase2/05 |
 | `personalization_changed` | 1 | server | strictly necessary (no consent) | `enabled` | recommendations | §13, phase2/05 |
 | `ad_impression` | 1 | server | strictly necessary (no consent) | `ad_id`, `campaign_id`, `surface`, `position` | ads | §17, phase2/10 |

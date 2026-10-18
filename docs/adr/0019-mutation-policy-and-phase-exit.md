@@ -34,3 +34,21 @@ Phase 0 is done when:
 - Phase 1 can start without pretending legal questions are answered, and without hiding them.
 - The mutation gate is honest and tightens over time.
 - Risk: floors below 80 on a critical module can linger; the checklist date is the control.
+
+## Per-module floors (ratchet), 2026-10-12
+
+Measured on Node 24 by `tooling/mutation/run-all.sh`; `break` is the score rounded down minus 3. Details and
+equivalent-mutant lists: `docs/plan/mutation-status.md`.
+
+| Module | Config | Score | break |
+|---|---|---:|---:|
+| Refunds domain | `packages/domain/stryker.refunds.mjs` | 94.35 | 91 |
+| Refunds application | `apps/api/stryker.refunds.mjs` | 92.62 | 89 |
+| Promotions | `packages/domain/stryker.promotions.mjs` | 90.29 | 87 |
+| Auto-buy | `packages/domain/stryker.auto-buy.mjs` | 100.00 | 97 |
+| Creators | `packages/domain/stryker.creators.mjs` | 95.42 | 92 |
+| Family and student seats | `packages/domain/stryker.family-student.mjs` | 97.63 | 94 |
+| Payouts | `packages/domain/stryker.payouts.mjs` | 93.46 | 90 |
+| Gift cards | `packages/domain/stryker.gift-cards.mjs` | 97.65 | 94 |
+| Store credit and spend order | `packages/domain/stryker.store-credit.mjs` | 91.98 | 88 |
+| Calendar gap-fill | `packages/domain/stryker.calendar-gap.mjs` | 89.12 | 86 |

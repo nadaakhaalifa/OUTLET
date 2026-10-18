@@ -1,5 +1,7 @@
 # Phase 0 exit checklist (independent audit)
 
+> **Update 2026-10-12.** This audit is a 2026-10-10 snapshot; the gate results below are not re-run here. Since then these items have artefacts on disk (existence only, not re-audited): rule 13 copy-lint (`tooling/copy-lint`, `.github/workflows/copy-lint.yml`, `docs/engineering/copy-lint.md`); rule 14 DORA (`tooling/dora`, `.github/workflows/dora.yml`, admin-web DORA view); the Admin app and Seller app (`apps/admin-web`, `apps/seller-web`); Pact and E2E harnesses (`tooling/pact`, `tooling/e2e`); k6 load (`tooling/load`); Postgres-backed adapters for the money modules. Still open: ADR-0002 (region), remote Turbo cache, any GitHub Actions run, terraform validation, device RTL. Current state: `status-2026-10.md`.
+
 Date: 2026-10-10. Branch: feat/phase-0-foundations. Scope: master prompt A2 rules 1-15 and P3 Phase 0 list.
 Strictness: DONE only when a test or an enforced check proves it. A document, a config that never ran, or a
 commitment is PARTIAL at best. Evidence below is from commands run during this audit, not from earlier reports.

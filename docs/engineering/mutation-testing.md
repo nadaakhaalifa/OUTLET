@@ -203,3 +203,12 @@ fork inside the agent sandbox. The ADR-0019 gate (>= 80% on ledger-adjacent mone
 **unproven**. Run it once on a normal runner and record the per-file table here; do not lower `break`.
 Payouts, reconciliation, refunds, store-credit and checkout domain code have unit and fast-check
 property tests but no Stryker config yet.
+
+## Money-critical modules, second wave (2026-10-12)
+
+Refunds (domain and application), promotions, auto-buy, creators, family and student seats, payouts, gift
+cards, store credit (lots, expiry, spend order) and the calendar gap-fill budget guard now have Stryker
+configs wired into `tooling/mutation/run-all.sh` and the `mutation` job of `.github/workflows/ci.yml`.
+Scores, floors, new test files and the equivalent-mutant list are in `docs/plan/mutation-status.md`; the
+numbers come from `reports/mutation-summary.md`. All ten areas are at or above 89%. The only branch left
+mostly unkilled on purpose is the ML-to-rules fallback in `calendar/gap.ts`, which no input reaches.

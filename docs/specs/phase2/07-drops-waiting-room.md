@@ -73,3 +73,11 @@ Written during the Phase 2 build (migration 0042, `packages/domain/src/drops`, `
 8. Per-user allowance is checked then recorded after the single-use token is consumed. One token per queue pass means one in-flight request per account; a unique constraint on (drop, sku, user) is not used because a user may legitimately hold two units under `per_user = 2`.
 9. "Shopper 18+" is satisfied by account creation (B6 gate); no separate age check runs on the queue route.
 10. Ticket TTL release after the token window is tracked in-process by the sweeper; the Redis adapter should use key TTLs instead.
+
+## Addendum: ops view and checkout admission (gap closure)
+
+**GET /v1/admin/drops/ops** (admin audience, passkey; roles trust_safety, ops, super_admin; 60/min per user). Keyset cursor (invalid -> 400). One row per active drop (SCHEDULED, EARLY_ACCESS, LIVE), ordered by (starts_at, id). Values come from stored counters only: `queue_depth` from the queue backend (null when unreachable), `admitted_last_minute` and `bot_block_rate_bps` (rejected / (admitted + rejected)) from `queue_tickets` and `admission_tokens` over 60 s (`AdmissionStore.countsSince`), `waitlist_size` from the drops store. `admission_health`: unmeasured when depth is null; degraded when a live, unpaused drop has people waiting and nobody was admitted in the window; else healthy. Nothing is invented: no source means null.
+
+**Checkout admission** (spec 16, T-LLM none). `POST /v1/checkout` accepts `admission_token`. If the bag has drop SKUs (`BagLine.dropId`), the server verifies the HS256 token (signature, drop, user, device hash, expiry) and consumes its jti exactly once (`DropAdmissionPort.redeem`, implemented by waiting-room `CheckoutDropAdmission`). Missing or no drop id or no port: 409 `admission_required` (fail closed). Invalid: 403 `admission_invalid`. Reused: 409 `admission_used`. Idempotent replay of the same key never re-consumes. Threat notes: token replay (single use), token theft (bound to user and device hash), queue outage (verification is stateless, Postgres single-use row).
+
+**Quote `plus_savings`** (checkout): for non-members, the delivery total the order would pay (Plus waives all delivery); null for members. Server computed, never client supplied.

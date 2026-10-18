@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stops a Proposed record from being Accepted. Open question numbers are in docs/open-questions.md, VR ids in docs/compliance/verify-register.md. No ADR that touches personal data, money or law is accepted without its named owner.
+Status values: Accepted (owner-accepted, or an engineering default marked as such), Proposed (draft, awaiting owner). 55 ADR files exist (0001-0041, 0043-0056; 0042 is unused). Owner-accepted: 0006, 0021, 0044, 0053 (owner request, presentation only), 0055 (product direction only; its legal points are Proposed). Numbering note: `reports/Viral feed onboarding checkout reviews.md` proposed "ADR-0045" for delayed registration; 0045 is the dashboard read path, so that proposal is superseded by ADR-0055. No other numbering collisions among 0045-0055 (checked against the file names). Engineering-default Accepted (reversible, owner may overrule): 0029, 0030, 0031, 0033, 0035, 0043, 0046, 0050. All others are Proposed, with a safe default applied in code. "Blocks" is what stops a Proposed record from being Accepted. Open question numbers are in docs/open-questions.md, VR ids in docs/compliance/verify-register.md. No ADR that touches personal data, money or law is accepted without its named owner.
 
 | ADR | Title | Status | Blocks |
 |---|---|---|---|
@@ -32,9 +32,71 @@ Status values: Accepted, Proposed (draft, awaiting owner). "Blocks" is what stop
 | [0026](0026-android-push-and-attestation.md) | Android push and attestation differences | Proposed | Owner confirmation; see the file |
 | [0027](0027-crawler-egress-isolation.md) | Crawler egress isolation | Proposed | Owner confirmation; see the file |
 | [0028](0028-kill-switch-polarity.md) | Kill-switch polarity and operator wording | Proposed | Owner confirmation; rename vs wording |
-| [0029](0029-production-composition-and-unconfigured-providers.md) | Production composition root and fail-closed unconfigured providers | Proposed | Owner confirmation |
-
+| [0029](0029-production-composition-and-unconfigured-providers.md) | Production composition root and fail-closed unconfigured providers | Accepted (engineering default; reversible) | None; Unconfigured providers fail closed |
+| [0030](0030-token-service-and-key-management.md) | Access token service, key management and the production auth composition | Accepted (engineering default) | Key custody and KMS choice stay with ADR-0002 |
+| [0031](0031-brand-onboarding-and-verification.md) | Brand onboarding and verification | Accepted (engineering defaults) | Legal items stay VERIFY BEFORE LAUNCH |
+| [0032](0032-aws-adapters-and-region.md) | AWS-compatible adapters (S3, KMS, Secrets Manager) and region neutrality | Proposed | Region is an owner decision (ADR-0002) |
+| [0033](0033-redis-usage-and-failure-modes.md) | Redis usage and failure modes | Accepted (engineering default) | Hosting region follows ADR-0002 |
+| [0034](0034-comms-providers.md) | Communication providers (push, SMS and OTP, WhatsApp, email) | Proposed | Owner picks vendors and signs contracts; VR-COMMS-01..05 |
+| [0035](0035-otel-pipeline.md) | OpenTelemetry pipeline (OTLP push, opt-in) | Accepted (engineering default) | Vendor/backend choice stays with infra |
+| [0036](0036-auto-buy-merchant-initiated-payments.md) | Price-drop auto-buy and merchant-initiated payments | Proposed | VR-P3-01, VR-P3-02; owner approves notify-and-confirm default |
+| [0037](0037-creator-payouts-and-tax.md) | Creator and affiliate payouts, KYC and tax | Proposed (default implemented: accrue only, payouts off) | VR-P3-03, VR-P3-04, VR-17, VR-22; Fable ledger checkpoint; owner sets rates and cash vs credit |
+| [0038](0038-resale-c2c.md) | Pre-loved resale (C2C) | Proposed | VR-P3-05; owner decision on trade-in vs C2C |
+| [0039](0039-photo-body-measurement-on-device.md) | Photo body measurement: on-device vs cloud | Proposed | VR-P3-06; DPO approval; accuracy threshold |
+| [0040](0040-gcc-expansion-data-and-currency.md) | GCC expansion: data, currency, tax, entity | Proposed | VR-P3-07; ADR-0002 Accepted first; owner picks country |
+| [0041](0041-partner-emoney-wallet.md) | Partner e-money wallet | Proposed | VR-03, VR-F1-04, VR-P3-08; owner decision |
+| 0042 | (number unused; no file) | n/a | n/a |
+| [0043](0043-wardrobe-digitization.md) | Wardrobe digitization: consent purpose, photo erasure, owned slots | Accepted (safe default) | Vision vendor: VR-P3-13 |
+| [0044](0044-bottom-tabs-discover-saved-profile.md) | Bottom tabs become Home, Discover, Saved, Bag, Profile | Accepted (owner decision, 2026-10-15) | Nothing |
+| [0045](0045-dashboard-metrics-read-path.md) | Dashboard metrics read path: outbox-fed rollups, exact facts for shopper metrics, complementary suppression | Proposed (decisions 1-3 buildable default) | DPO: decision 4, VR-DASH-02 |
+| [0046](0046-ledger-integrity-result-store.md) | Persist the ledger integrity result in an append-only table | Accepted (engineering default; reversible) | Reader roles in ADR-0049 |
+| [0047](0047-analytics-time-zone-and-display.md) | Analytics buckets in Africa/Cairo; display time zone, week start, RTL time axis | Proposed | Owner and Arabic UX reviewer; VR-DASH-01 |
+| [0048](0048-admin-identity-and-posture.md) | Admin identity endpoint and posture signals | Proposed (endpoint buildable default) | Security and Infra: edge attestation, VR-AC-04 |
+| [0049](0049-dashboard-role-permissions.md) | Role and visibility decisions raised by the dashboards | Proposed | Owner: each item (integrity readers, metric roles, payout visibility, store_analytics) |
+| [0050](0050-openapi-paths-without-controller.md) | Every OpenAPI path is served or marked planned | Accepted (engineering default; reversible) | Two planned paths wait on owner decisions |
+| [0051](0051-own-ai-ml-no-external-ai-vendor.md) | Own AI and ML (rules and in-house classical ML now, self-hosted open weights later), no external hosted AI vendor | Proposed (owner preference; would amend ADR-0025) | Owner: scope of "ready-made", GPU budget; Legal/DPO: ADR-0002 region, VR-AI-01..06 |
+| [0052](0052-gated-breakdowns-external-margins-and-pinned-releases.md) | Shopper-gated breakdowns: external margins, one-dimensional release, pinned release ledger | Proposed | DPO: VR-DASH-02, VR-DASH-05, VR-DASH-06 |
+| [0053](0053-checkout-step-pages.md) | Checkout as three step pages (overrides the one-page layout of master prompt section 7) | Accepted (owner request, presentation only; money flow unchanged) | None |
+| [0054](0054-ipad-support-and-size-classes.md) | iPad support (supportsTablet) with a width-based token zoom (IPAD_ZOOM, owner: 1.725x, controls ~1.45x) | Proposed (zoom owner-decided; supportsTablet pending, stays off) | iPad App Store obligations if turned on |
+| [0055](0055-guest-browsing-and-sign-in-at-checkout.md) | Guest browsing with a device-only bag and saved items; account required only at checkout; one idempotent merge endpoint (larger quantity wins) | Accepted (direction); legal points Proposed (VR-GUEST-01..05, VR-REGION-01); `flag.guest_browsing` default blocked | Overrides master prompt section 6 "Guest bag is not supported" and the onboarding-first order of section 1; chief-reviewer on the merge endpoint; VR-GUEST-04 (counsel), VR-GUEST-05 (analytics banner), VR-REGION-01 |
+| [0056](0056-seller-subscriptions-entitlements-and-brand-lifecycle.md) | Seller subscriptions as data-driven plans with typed entitlements; store lifecycle with orthogonal restrictions | Proposed | Owner and counsel decisions D1-D12 in `docs/specs/brand-and-owner-operating-model.md`; chief-reviewer on ledger, commission resolver and seller billing; VR-BM-01..07 |
 
 ## Convention
 - File name `NNNN-short-slug.md`; header lists Status, Date, Deciders, Spec refs.
 - Every Proposed ADR carries a safe default and the owner decision required, so work can continue without silently taking a legal or irreversible decision.
+
+## Owner decisions required
+Collated from `docs/plan/phase-3-plan.md`, `docs/plan/phase-3-money-review.md`, `docs/open-questions.md` and the ADRs above. "Default" is what the code does until the owner answers; nothing real (money, personal data, new market) is enabled by a default.
+
+| Decision | ADR / row | Default chosen | Blocks |
+|---|---|---|---|
+| Data residency and cross-border transfer (region, licence) | 0002; VR-01, VR-02 | No real personal data; synthetic only | Any real data, production Terraform, KMS, LLM/ML vendors, ADR-0016/0017/0032 |
+| Store credit is closed-loop, not e-money; funds flow and aggregator model | 0003, 0014, 0021; VR-03, VR-F1-07 | Closed-loop credit; sales behind kill switch | Gift-card and store-credit sales, real settlement |
+| Plus billing under App Store rules; Plus age gate 21 vs 18 | 0004, 0012; VR-08, VR-10 | Plan A (commerce-only perks via PSP); 21+ | Plus sales, App Review |
+| Refund deadline basis; free-delivery threshold scope and funding; reservation TTLs | 0009, 0010, 0011; VR-07 | Delivery basis; per-store threshold; configured TTLs | Returns policy text, checkout copy |
+| Price-integrity evidence for clearance SKUs without history | 0013; VR-07, VR-13 | Plain price, no % off | Verified-discount claims on new stock |
+| Launch checklist vs phased features (Mega Drop, creators) | 0008 | Phased as planned | Launch scope |
+| Search engine, vector store, waiting room, LLM provider and residency | 0022, 0023, 0024, 0025; VR-16, VR-P3-13, VR-P3-15 | Typesense (fallback Postgres FTS); pgvector; no vendor; rules-only chat | Real chat, visual search, wardrobe vision, flash drops |
+| Comms vendors (push, SMS/OTP, WhatsApp, email) | 0034; VR-COMMS-01..04 | Pluggable ports, Unconfigured | OTP delivery, notifications |
+| Certificate pinning approach; CI provenance level; observability backend | 0007, 0015, 0017 | SPKI + backup pins and kill switch design; Sigstore design | Release builds |
+| Auto-buy: notify-and-confirm only, or pursue unattended charge; charge at notified price vs up to max_price; mandate retention after deletion | 0036; VR-P3-01, VR-P3-02; review B-2, B-3 | Notify only; `kill.auto_buy.charge` blocked | Mode B, any MIT charge |
+| Creators: commission rates and caps, cash vs credit, who signs terms, stacking with referral reward (A-4), dual-approval threshold, click authentication model (A-1) | 0037; VR-P3-03, VR-P3-04, VR-17; review A-1..A-8 | Accrue only; payouts off; placeholders in `config.ts` | Creator program and payouts |
+| Resale: trade-in vs C2C vs neither | 0038; VR-P3-05 | No new resale | Resale features |
+| Photo body measurement: on-device only, accuracy threshold, fund test set | 0039; VR-P3-06 | Not built | Photo measurement |
+| First GCC country and entity | 0040; VR-P3-07, VR-P3-MKT-01..06 | Egypt only | Any non-EG market |
+| Partner e-money wallet: pursue at all | 0041; VR-03, VR-F1-04, VR-P3-08 | No | Wallet top-up/withdraw |
+| Wardrobe photo vendor and retention | 0043; VR-P3-13 | Manual add, fake vision | Photo-to-attribute |
+| Family and student prices, seat limits, student verifier | spec `docs/specs/phase-3/family-student-plans.md`; VR-P3-09 | Spec defaults, admin-editable | Family/student plan sales |
+| Kill-switch polarity and wording | 0028 | Current polarity | Admin wording only |
+| Named owners per VERIFY row; team size | open questions 12; register | Roles only | Register sign-off |
+| Fund labelers; approve Fable checkpoints | phase-2/3 plans | n/a | VR-13 threshold, money enablement |
+| Dashboard roles and visibility: who reads ledger integrity (finance only vs plus security), admin metric roles, `store_analytics` resource, payout hold reasons and next payout date for sellers, `ip_hash` in the audit list | 0049 | Finance only; counts ops+finance, money finance; no new resource; not shown; never returned | Security integrity view, wider metric access, seller payout detail |
+| Analytics display: Cairo vs UTC days, week start, RTL time-axis direction | 0047; VR-DASH-01 | Cairo buckets and display, week starts Saturday, axis decided after the chart spike | Chart pages, seller tiles |
+| Admin posture signal sources (edge IP allow-list attestation, device trust) | 0048; VR-AC-04 | Signed edge header or false; passkey session on a per-browser install id | Finance and super_admin sensitive writes in the console |
+| Seller-visible shopper breakdowns with complementary suppression; lawful basis of analytics facts and client ingest | 0045; VR-DASH-02, VR-DASH-03 | Breakdown series blocked; ingest blocked; server facts keep shopper_key only with analytics consent | Traffic-by-source and geography series, impressions and views from mobile |
+| Own AI/ML: does "no ready-made AI" allow self-hosted pretrained open weights; any external vendor even for P0 catalog text; GPU budget; who trains and labels | 0051 (amends 0025); VR-AI-01..06 | Rules and in-house classical ML only; every LLM and vision port Unconfigured; no external adapter | Stylist chat, wardrobe vision, visual search, seller copilot text |
+| Shopper-gated breakdowns design (external margins, one-dimensional release, pinned release ledger; amends 0045 decisions 4, 4b, 4c): DPO acceptance | 0052; VR-DASH-02, VR-DASH-05, VR-DASH-06 | Pure core may be rebuilt; `release.seller_analytics.*` stays blocked | Any release of seller breakdowns, per-day distinct visitors below 50 |
+| iPad: turn on `supportsTablet` (App Store obligations, likely irreversible); keep the no-fade text cap of 2 x zoom (3.45x phone size at full Dynamic Type, WCAG 1.4.4) or switch to the 2.0x curve; iPad zoom 1.725x (owner decided, continuous ramp from 600 pt) | 0054; `docs/specs/ipad-adaptation.md` sections 10 and 15; VR row for the text cap | `supportsTablet` off; 1.725x and no-fade cap as decided | iPad build in App Store Connect, 6B bespoke layouts |
+| Guest browsing legal points: unverified browsing with an 18+ notice, unencrypted device-only store and guest analytics banner, App Store 5.1.1(v), region/storefront listing (worldwide vs Egypt-only), longer seller return windows | 0055; VR-GUEST-01..05, VR-RW-01 | `flag.guest_browsing` default blocked; direction accepted; merge rule decided (larger quantity wins); TTLs accepted (bag 30 days idle, saved 180, viewed 30) | Turning the flag on in production |
+| Apple 5.1.1 re-check at submission (account required only at order placement) | 0055; VR-GUEST-03, VR-10 | Reviewer note "Browse without an account; sign-in is requested at checkout" | App Review |
+| Seller subscription model, entitlements, commissions, refunds, set-off, notice period, brand authorization, VAT tax point (ADR-0056 D1-D12) | 0056; `docs/specs/brand-and-owner-operating-model.md`; VR-BM-01..07 | Nothing built; no seller tiers in production | Seller plans, billing and brand lifecycle |

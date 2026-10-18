@@ -32,7 +32,7 @@ Source of truth: `packages/i18n/src/en.ts` and `ar.ts` (119 keys, EN/AR key pari
 ## 4. Proposed glossary (for reviewer decision, none approved)
 | Concept | EN (current/spec) | Current AR | Proposed AR options | Notes |
 |---|---|---|---|---|
-| Bag (cart) | Bag | الحقيبة | الشنطة / العربة / السلة | Pick one; avoid handbag reading |
+| Cart | Cart | السلة | decided by owner: "السلة" (not الحقيبة, which reads as a handbag) | Decided |
 | Z-OUTLET credit | Store credit (spec: HAUL credit) | رصيد متجر | رصيد Z-OUTLET | Never نقدي/فلوس; clarify not airtime |
 | Wallet | Wallet | (not present) | المحفظة | Closed-loop; must not imply cash |
 | Mobile number | Mobile number | رقم الموبايل / رقم هاتفك | رقم الموبايل | Use consistently |
@@ -63,7 +63,7 @@ Columns: Key, EN, AR, Flags and reasons, Reviewer proposal (blank), Status (blan
 | `tabs.home` | Home | الرئيسية | none raised | | Not reviewed |
 | `tabs.explore` | Explore | استكشف | none raised | | Not reviewed |
 | `tabs.stylist` | Stylist | المنسّق | B: 'المنسّق' is a coined literal of 'Stylist'; a native reviewer should pick the term (e.g. مستشار الأزياء / ستايليست) and keep it identical on every surface that names the AI stylist. | | Not reviewed |
-| `tabs.bag` | Bag | الحقيبة | C: spec says 'Bag'; 'الحقيبة' is MSA and also reads as a handbag. Egyptian shoppers say الشنطة or العربة/السلة for a cart. Decide one term (glossary: bag). | | Not reviewed |
+| `tabs.bag` | Cart | السلة | Owner decision: user-facing term is Cart (key stays `tabs.bag`). | | Decided |
 | `tabs.me` | Me | حسابي | A/B: 'حسابي' means 'my account', not 'Me'. Acceptable, but confirm it matches the Orders/Wallet/Budget hub scope. | | Not reviewed |
 | `home.title` | Real deals, verified | عروض حقيقية، موثّقة | E: price-claim wording (CPL 181/2018, spec §9). 'عروض حقيقية، موثّقة' asserts verified offers. Legal-grade review: 'عروض' vs 'خصومات', and 'موثّقة' vs 'تم التحقق منها' must match the Price Integrity badge terms. | | Not reviewed |
 | `home.devFixtureNotice` | Development build: placeholder content, not real products or prices. | نسخة تطوير: محتوى تجريبي وليس منتجات أو أسعارًا حقيقية. | A/C: dev-only text. Mixes 'تجريبي' and 'تطوير'. Must never ship to production. | | Not reviewed |

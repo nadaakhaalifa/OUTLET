@@ -2,6 +2,8 @@
 
 Status: IMPLEMENTED on fakes and PGlite, awaiting the Fable-tier money review (ADR-0021) and integrator wiring · Spec refs: master prompt §7, §6, §15.2, §15.6, §20.2, §20.7, §T4, §B2, §B3, §B8 · ADR-0003, ADR-0011, ADR-0018, ADR-0019, ADR-0021 · Related specs: `orders.md`, `inventory.md`, `promotions.md`, `tax-eta.md`, `cart.md`, `ledger-chart-of-accounts.md`.
 
+Mobile presentation note: the iOS checkout is three step pages (Delivery, Payment and voucher, Review) per ADR-0053; the API, saga, idempotency and no-drip-pricing rules in this spec are unchanged.
+
 Scope: quote, commit (saga), payment events, recovery. `GET /v1/order-groups/{id}` stays in `orders`. Hard limits: Paymob is not contracted, so only an in-repo fake and a recorded-fixture adapter exist behind `PaymentProviderPort`; no live network calls; every PSP endpoint, field or window assumption is a VERIFY row (VR-CHK-1..8, `docs/compliance/verify-register.md`).
 
 ## Flow
@@ -41,7 +43,7 @@ Migration `0033_checkout.sql`: `checkout_sagas` (PK `order_group_id`, `user_id`,
 | `POST /v1/webhooks/checkout/{provider}` (spec path `/v1/webhooks/{provider}`; namespaced so it cannot collide with a payments route, the integrator may alias) | public, HMAC over the RAW body + timestamp | dedup on event id | 600/min IP |
 
 ## Events (outbox, same transaction as the saga write)
-`order_group.paid`, `order_group.failed`, `order_group.expired`, `checkout.late_payment_refunded`, `checkout.apology_voucher_requested`, `checkout.saga_stuck`. Analytics (consent-aware, owned by the client and analytics ingest): `checkout_started`, `payment_selected`.
+`order_group.paid {user_id, method, total, order_group_id, sku_ids, paid_at_ms}` (the last three are additive, flat primitives: `sku_ids` is the sorted, comma-joined distinct SKU ids; consumers: creators attribution, auto-buy `CloseOnPurchase`), `order_group.cod_confirmed` (same payload), `order_group.failed`, `order_group.expired`, `checkout.late_payment_refunded`, `checkout.apology_voucher_requested`, `checkout.saga_stuck`. Analytics (consent-aware, owned by the client and analytics ingest): `checkout_started`, `payment_selected`.
 
 ## Failure handling
 PSP and other port calls: timeout 10 s (adapter), retried by the recovery sweeper with backoff (`next_wake_at = now + min(2^attempts, 300) s`), idempotent by key. Max 8 attempts on a step, then `checkout.saga_stuck` and the saga stays for Ops (never silently dropped). Webhook processor: unmatched or failed events stay in `checkout_payment_events` for replay (DLQ equivalent).

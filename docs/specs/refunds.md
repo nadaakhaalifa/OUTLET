@@ -53,6 +53,8 @@ There is deliberately no HTTP write: refunds exist only from `return.refund_inte
 ## Events
 Outbox (same transaction as the state change, ids and amounts as strings): `refund.requested`, `refund.approved`, `refund.completed`, `refund.failed`, `refund.manual_review`, `refund.intent_rejected`. Inbox: `return.refund_intent` (consumer contract test against the returns module schema).
 
+`order_line.refunded` (aggregate `refund`): one per refunded line, written in the same transaction as the refund's transition to `COMPLETED` (ledger-first is already done by then). Payload: `refund_id`, `seller_order_id`, `order_line_id`, `user_id`, `line_merchandise_gross` (line value after item discounts, null on refunds written before the field existed), `refunded_merchandise_gross` (cumulative goods over every COMPLETED refund of the seller order for that line), `delta`, `currency`. Consumer: creators `ApplyLineRefund` (monotonic, so a redelivery or a smaller cumulative claws back nothing). Producer spec: `docs/specs/commerce-events.md`.
+
 ## Failure handling
 Provider timeout 10 s (adapter), retry up to `MAX_REFUND_ATTEMPTS` with backoff, then `MANUAL_REVIEW` plus an alert event. Ledger unavailable: the pass throws and is retried by the sweeper. The sweeper is safe to run concurrently (guarded transitions return `stale`).
 

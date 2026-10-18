@@ -1,3 +1,5 @@
+> **Superseded (2026-10-12) by `docs/plan/status-2026-10.md`.** This file is a historical snapshot of a soft stop on 2026-10-11. The work it lists as uncommitted or partial has since been committed (commits 23f9ac6 and later); do not resume from it.
+
 # Resume handoff (soft stop at ~03:45 Cairo, 2026-10-11; resume 05:51 Cairo)
 
 Agents were stopped on purpose to avoid the session limit. Everything below is on disk but **not committed and not gate-green**. Last pushed commit before this work: `f0c998e` (Phase 2 specs, ADRs 0022-0027) plus ADR-0021. The money wave 4 and Phase 2 wave 5 code are uncommitted (about 190 changed or new files).

@@ -34,6 +34,8 @@ Sign convention is that of `ledger.ts`: a positive posting is a debit and a nega
 | `promo_receivable_seller:{store}` | Asset | Debit | Seller | Debited when a seller-funded discount is applied, credited when netted from the payable. | Promotions engine |
 | `provider_fee_expense` * | Expense | Debit | Platform | Debited at PSP and BNPL settlement. | Settlement files |
 | `courier_fee_expense` * | Expense | Debit | Platform | Debited at COD remittance. | Courier contract |
+| `creator_payable:{creator}` * | Liability | Credit | Shopper (creator user id) | Credited when a commission accrues after delivery and the return window, debited by a payout or a clawback. **May go negative** after a clawback of an already paid commission; reported as "owes platform" and netted from the next payout. | Commissions table and creator payouts |
+| `creator_commission_expense` * | Expense | Debit | Platform | Debited at accrual, credited by a clawback. | Commissions table |
 
 \* Not in §T4. Added so that settlement, remittance and payout have a counter-account. `promo_receivable_seller` is parameterised by store here, while §T4 lists it without a parameter, so that netting is per seller. Both are decisions for the owner (see Open items).
 
@@ -66,6 +68,14 @@ A refund is the mirror of the order components for the refunded portion, paid to
 - `clearingSettled`: Dr bank (gross − fee), Dr fee expense, Cr clearing. Fee account is `courier_fee_expense` for COD, `provider_fee_expense` otherwise.
 - `sellerPayout`: Dr `seller_payable`, Cr `bank_settlement`. A failed payout is a `reverseEntry`.
 - `sellerPromoNetted`: Dr `seller_payable`, Cr `promo_receivable_seller`.
+
+### R7. Creator commission (spec P3-04, ADR-0037)
+Added by migration 0074 (a forward INSERT into `ledger_account_types`; 0011 is generated and never rewritten). Both accounts are NOT in §T4.
+- `creatorCommissionAccrued`: Dr `creator_commission_expense`, Cr `creator_payable:{creator}`. Only after the line is `CLOSED` (delivered, return window over) on the part not refunded by then.
+- `creatorCommissionClawedBack`: Dr `creator_payable`, Cr `creator_commission_expense`. Pro rata and cumulative: the clawback is `held - commission(base - refundedBase)`, so a replayed or out-of-order refund message claws back nothing twice.
+- `creatorPayout`: Dr `creator_payable`, Cr `bank_settlement`. A rejected payout is a `reverseEntry`. Payouts are engaged OFF (`kill.creator_payouts` blocked, provider Unconfigured).
+- Commission base is the line gross minus the voucher-funded value, minus the VAT contained in it. Shipping, gift cards, Plus fees and store-credit top-ups are never in the base. VAT treatment of platform-funded commission is **VERIFY BEFORE LAUNCH (VR-P3-03)**.
+- Idempotency keys: `creator_commission:{commissionId}:{seq}` (seq 0 accrual, 1.. clawbacks, fixed in `commission_postings` in the claim transaction) and `creator_payout:{payoutId}~{attempt}`.
 
 ### R6. Gift cards and Plus
 - `giftCardSold`: Dr tender, Cr `gift_card_liability`. No VAT at sale (assumed due at redemption). Refuses store credit and COD as tender. **VERIFY BEFORE LAUNCH.**
@@ -131,6 +141,15 @@ A cart-level voucher is split across seller orders by `allocateVoucher` (largest
 ### 11. Reversal
 `reverseEntry` on example 1 negates every posting and references the original. Every affected account nets to 0 and the trial balance stays 0.
 
+### 12. Creator commission accrues
+A 1,140.00 EGP line (114,000 gross, no voucher). VAT contained is 14,000, so the base is 100,000. At 300 bps the commission is 3,000: Dr `creator_commission_expense` 3,000, Cr `creator_payable:u1` 3,000.
+
+### 13. Half the line is returned after accrual
+Refund of 57,000 gross is 50,000 of base, so the commission target falls to 1,500 and 1,500 is clawed back: Dr `creator_payable:u1` 1,500, Cr `creator_commission_expense` 1,500. Payable 1,500. Replaying the same refund claws back 0.
+
+### 14. Return after payout
+Accrual 3,000, payout 3,000 (Dr `creator_payable` 3,000, Cr `bank_settlement` 3,000), then a full return claws back 3,000. `creator_payable` is minus 3,000, shown to the creator as "owes platform 3,000" and blocking a new payout. The next accrual of 5,000 leaves 2,000 payable. The trial balance is 0 throughout.
+
 ## Edge cases
 - Zero components (no shipping, no discount, zero fee) emit no posting, since zero-amount postings are not allowed.
 - Commission plus VAT above merchandise throws. Discounts above merchandise throw.
@@ -173,5 +192,6 @@ Trial balance equals zero (integrity job). Unmatched lines older than 3 days in 
 4. Whether commission and VAT are returned to the seller, and platform-funded discounts reversed, on refund.
 5. VAT timing on Plus charges (at receipt or at period).
 6. Who bears PSP, BNPL and courier fees, and their VAT.
+7. Creator commission: VAT base when the platform funds it, withholding and VAT-registration threshold for individuals, and whether a creator payable may sit on the ledger before payouts are licensed (VR-P3-03, ADR-0037).
 7. Whether Z-OUTLET ever holds funds in its own bank account (open question 4). `bank_settlement` assumes a settlement account exists.
 8. Marketplace-agent model and withholding or reporting duties (open question 10).

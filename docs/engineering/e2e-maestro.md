@@ -35,7 +35,7 @@ Stable `testID`s now exist for the controls below and the flows select them with
 
 | testID | Where |
 |---|---|
-| `phone-input`, `otp-input`, `dob-day`, `dob-month`, `dob-year`, `dob-attest` | onboarding |
+| `phone-input`, `otp-input`, `dob-input`, `dob-attest` | onboarding |
 | `tab-home`, `tab-explore`, `tab-stylist`, `tab-bag`, `tab-me` | tab bar (`tabBarButtonTestID`) |
 | `me-row-<orders|wallet|budget|wishlists|sizeProfile|plus|rewards|giftCards|privacy|help|settings>` | Me menu |
 | `world-<local|global|everything|myStores>` (selected state) | worlds picker |

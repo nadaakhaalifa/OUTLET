@@ -43,6 +43,9 @@ consent_purposes:
   - cross_border_ml
 
 purposes:
+  visual_search:
+    title: Visual search by photo
+    description: Embed a shopper-supplied query photo and return visually similar in-stock items. Zero retention of the image, no embedding is stored, never used for training, never shared with sellers (spec P3-08, VR-P3-13).
   account_auth:
     title: Account, sign-in and session security
     description: Create and authenticate accounts (phone OTP, Apple, Google, passkey), keep sessions, detect abuse of sign-in.
@@ -64,6 +67,9 @@ purposes:
   wallet_ledger:
     title: Store credit, gift cards and ledger
     description: Closed-loop store credit, gift cards and the double-entry ledger (spec B2, T4).
+  finance_integrity:
+    title: Ledger integrity checks
+    description: Record the result of the nightly and intraday ledger checks (trial balance, hash chain, store-credit projection drift) so Finance can see and alert on a failure (ADR-0046, spec T4).
   tax_accounting:
     title: Tax, invoicing and accounting records
     description: Keep order, invoice and financial records for the legal retention period (spec B4).
@@ -356,6 +362,17 @@ processors:
     note: Seller Agreement carries a Data Processing Addendum (spec B1). Controller or processor role per activity is for counsel. Foreign sellers add a transfer.
 
 retention:
+  visual_search_transient:
+    description: Query-image upload rows (object key, owner, lifecycle), request telemetry (no user id) and daily quota counters. The image itself is deleted when the request finishes and by a sweeper once the 10-minute upload TTL passes.
+    period: {value: 48, unit: hours}
+    trigger: collection
+    after: delete
+    purge_job: purge_visual_search_transient
+    purge_metric: visual_search_purged_total
+    source: proposed
+    spec_ref: P3-08 Rules (zero retention default)
+    verify: true
+    note: Debug retention of query images is not implemented; if ever added it needs explicit consent and VR-P3-13 sign-off.
   account_active:
     description: Profile and account data while the account exists. After a deletion request and the 14-day cooling period, PII is erased or pseudonymized.
     period: null
@@ -559,6 +576,17 @@ retention:
     source: proposed
     verify: true
     note: Spec asks for opt-in only. Deletion on withdrawal within a short period is a proposal, not a spec value.
+  ledger_integrity_samples:
+    description: Capped sample of store-credit projection drift rows (user id, sub-balance, amounts) attached to an integrity run. The run rows themselves hold no user id and follow orders_tax_records.
+    period: {value: 25, unit: months}
+    trigger: collection
+    after: delete
+    purge_job: purge_ledger_integrity_samples
+    purge_metric: privacy_ledger_integrity_samples_purged_total
+    source: proposed
+    spec_ref: dashboard-foundations section 3, ADR-0046
+    verify: true
+    note: Safe default. Keeping user ids tied to a balance anomaly for 7 years needs the owner, Finance, counsel and DPO to agree (VR-DASH-08).
   fraud_signals:
     description: Device, IP and graph signals and risk assessments.
     period: {value: 24, unit: months}
@@ -721,6 +749,8 @@ tables:
       - {name: email, pii_class: P2, encryption: field_envelope, processors: [cloud_primary, email_provider], note: "Spec marks P2-enc. Apple private-relay addresses are valid."}
       - {name: dob, pii_class: P3, encryption: field_envelope, residency: in_country, purpose: [age_assurance], verify: true, note: "Basis depends on the age of majority (open question 6)."}
       - {name: age_band, pii_class: P2, encryption: none, purpose: [age_assurance]}
+      - {name: dob_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country, purpose: [age_assurance], verify: true, note: "Migration 0047: envelope-encrypted DOB copied from the age pass at sign-up. Column for the dob field above."}
+      - {name: email_ciphertext, pii_class: P2, encryption: field_envelope, note: "Migration 0047: envelope-encrypted e-mail from a verified Apple or Google identity."}
       - {name: limited_capacity, pii_class: P2, encryption: none, purpose: [age_assurance], note: "Set for ages 18 to 20 (spec B6)."}
       - {name: locale, pii_class: P2, encryption: none}
       - {name: status, pii_class: P1, encryption: none}
@@ -758,6 +788,7 @@ tables:
       - {name: attest_status, pii_class: P1, encryption: none}
       - {name: push_token, pii_class: P2, encryption: none, purpose: [transactional_comms], processors: [cloud_primary, push_service]}
       - {name: last_seen, pii_class: P1, encryption: none}
+      - {name: install_secret_hash, pii_class: P2, encryption: one_way_hash, note: "Migration 0092 (dashboard-foundations track 1): SHA-256 of the server-minted admin-web browser install token; web rows only. The token itself is never stored or logged. Cleared when a newer login revokes the device. Binds a session to a cookie jar; it is not device trust."}
 
   - name: sessions
     spec_ref: "1 Data"
@@ -791,6 +822,11 @@ tables:
       - {name: attempts, pii_class: P1, encryption: none}
       - {name: sent_at, pii_class: P1, encryption: none}
       - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: phone_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country, note: "Migration 0047: needed to bind the code hash to the phone; envelope-encrypted, expires with the challenge."}
+      - {name: device_key_hash, pii_class: P2, encryption: blind_index_hmac, note: "Migration 0047: HMAC of the attested device key; the code only verifies from the device it was sent for."}
+      - {name: salt, pii_class: P1, encryption: none}
+      - {name: issued_at, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
 
   - name: age_attestations
     spec_ref: "1 Data (columns not listed in spec)"
@@ -812,6 +848,90 @@ tables:
       - {name: device_hash, pii_class: P2, encryption: one_way_hash}
       - {name: dob_hash, pii_class: P3, encryption: blind_index_hmac, note: "Keyed HMAC, never a plain hash: a DOB has little entropy."}
       - {name: blocked_until, pii_class: P1, encryption: none}
+
+  - name: auth_sessions
+    spec_ref: "1 Data (sessions: access token sid)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none, note: "Migration 0047: the sid claim of the access token."}
+      - {name: family_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: device_id, pii_class: P2, encryption: none}
+      - {name: platform, pii_class: P1, encryption: none}
+      - {name: amr, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: last_used_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+      - {name: uv, pii_class: P1, encryption: none, note: "Migration 0092: true only when a passkey assertion with user verification opened the session. A session property, not biometric data."}
+
+  - name: otp_send_log
+    spec_ref: "1 Rules (3 sends per 15 min per phone, 10 per day per device)"
+    source: derived
+    data_subjects: [shopper, visitor]
+    defaults: {purpose: [account_auth, fraud_prevention], lawful_basis: legitimate_interest, retention: auth_credentials, processors: [cloud_primary], residency: approved_region, on_erasure: delete, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: phone_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: device_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: sent_at, pii_class: P1, encryption: none, note: "Rows older than 2 days are deleted on every insert."}
+
+  - name: age_gate_blocks
+    spec_ref: "1 Rules (under-18 soft block 30 days)"
+    source: derived
+    data_subjects: [visitor]
+    defaults: {purpose: [age_assurance], lawful_basis: contract, retention: underage_block, processors: [cloud_primary], residency: in_country, on_erasure: delete}
+    fields:
+      - {name: key_hash, pii_class: P2, encryption: blind_index_hmac, note: "Migration 0047: HMAC identifier of the attested device, the device id hash or the DOB. Never a plain hash."}
+      - {name: blocked_until, pii_class: P1, encryption: none}
+
+  - name: age_gate_passes
+    spec_ref: "1 Flow (DOB step before sign-in; pass valid 24 h)"
+    source: derived
+    data_subjects: [visitor]
+    defaults: {purpose: [age_assurance], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary], residency: in_country, on_erasure: delete}
+    fields:
+      - {name: key_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: age_band, pii_class: P2, encryption: none, purpose: [age_assurance]}
+      - {name: dob_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country, purpose: [age_assurance], note: "Held at most 24 h, then copied to users.dob_ciphertext at sign-up; expired rows are deleted on every insert."}
+
+  - name: auth_nonces
+    spec_ref: "1 Security (Apple and Google nonce replay)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: key_hash, pii_class: P2, encryption: one_way_hash, note: "provider:SHA-256 of the client nonce."}
+      - {name: expires_at, pii_class: P1, encryption: none}
+
+  - name: passkey_challenges
+    spec_ref: "T5 Identity (passkeys)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: challenge, pii_class: P1, encryption: none, note: "Random single-use WebAuthn challenge, TTL 5 minutes."}
+      - {name: purpose, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+
+  - name: passkey_credentials
+    spec_ref: "T5 Identity (passkeys)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: credential_id, pii_class: P2, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: public_key, pii_class: P2, encryption: none, note: "COSE public key, base64url. Not a secret."}
+      - {name: sign_count, pii_class: P1, encryption: none, note: "Clone detection counter."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: backup_eligible, pii_class: P1, encryption: none}
+      - {name: backed_up, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
 
   - name: consent_records
     spec_ref: "B1 Build requirements"
@@ -906,44 +1026,118 @@ tables:
       - {name: approved_at, pii_class: P1, encryption: none}
 
   # ---------------------------------------------------------------- addresses and delivery data (section 7, B1, T5)
-  - name: addresses
-    spec_ref: "7 Flow step 1, T5 crypto row"
+  - name: saved_addresses
+    spec_ref: "7 Flow step 1, T5 crypto row; docs/specs/addresses.md; migration 0050"
     source: derived
     data_subjects: [shopper]
-    description: Structured Egyptian address book. Spec T5 classifies addresses P3. Governorate and district are coarse and tagged P2 as a proposal for the DPO to confirm.
+    description: Structured Egyptian address book. P3 fields are field-encrypted (AAD address:<id>:<field>); governorate and city are coarse and P2 so coverage can be checked. Deleting an address never touches delivery_snapshots.
     defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: in_country, on_erasure: delete}
     fields:
       - {name: id, pii_class: P1, encryption: none}
       - {name: user_id, pii_class: P2, encryption: none}
       - {name: label, pii_class: P1, encryption: none}
-      - {name: recipient_name, pii_class: P2, encryption: field_envelope}
-      - {name: recipient_phone, pii_class: P3, encryption: field_envelope}
-      - {name: governorate, pii_class: P2, encryption: none, residency: approved_region, verify: true}
-      - {name: city_district, pii_class: P2, encryption: none, residency: approved_region, verify: true}
-      - {name: street, pii_class: P3, encryption: field_envelope}
-      - {name: building, pii_class: P3, encryption: field_envelope}
-      - {name: floor, pii_class: P3, encryption: field_envelope}
-      - {name: apartment, pii_class: P3, encryption: field_envelope}
-      - {name: landmark, pii_class: P3, encryption: field_envelope}
-      - {name: geo_lat, pii_class: P3, encryption: field_envelope, consent_purpose: location_precise, lawful_basis: consent, note: "Map pin, precise location."}
-      - {name: geo_lng, pii_class: P3, encryption: field_envelope, consent_purpose: location_precise, lawful_basis: consent, note: "Map pin, precise location."}
+      - {name: recipient_name_enc, pii_class: P2, encryption: field_envelope}
+      - {name: phone_enc, pii_class: P3, encryption: field_envelope}
+      - {name: phone_blind, pii_class: P2, encryption: blind_index_hmac}
+      - {name: governorate_code, pii_class: P2, encryption: none, residency: approved_region, verify: true}
+      - {name: city_code, pii_class: P2, encryption: none, residency: approved_region, verify: true}
+      - {name: street_enc, pii_class: P3, encryption: field_envelope}
+      - {name: building_enc, pii_class: P3, encryption: field_envelope}
+      - {name: floor_enc, pii_class: P3, encryption: field_envelope}
+      - {name: apartment_enc, pii_class: P3, encryption: field_envelope}
+      - {name: landmark_enc, pii_class: P3, encryption: field_envelope}
+      - {name: map_pin_enc, pii_class: P3, encryption: field_envelope, consent_purpose: location_precise, lawful_basis: consent, note: "Precise map pin (lat/lng) in one envelope."}
+      - {name: dedupe_blind, pii_class: P2, encryption: blind_index_hmac}
+      - {name: courier_coverage, pii_class: P1, encryption: none}
+      - {name: cod_eligible, pii_class: P1, encryption: none}
+      - {name: quality_score, pii_class: P1, encryption: none}
       - {name: is_default, pii_class: P1, encryption: none}
       - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
 
   - name: delivery_snapshots
-    spec_ref: "B1 Sellers row"
+    spec_ref: "7 Saga, B1 Sellers row; docs/specs/addresses.md; migration 0050"
     source: derived
     data_subjects: [shopper]
-    description: Immutable copy of delivery details taken at order time. Sellers see name, relay-masked phone and address, and lose access 30 days after delivery or return closure.
-    defaults: {purpose: [order_fulfilment, delivery_logistics], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary, courier, seller_stores], residency: in_country, on_erasure: pseudonymize}
+    description: Immutable encrypted copy of the delivery details taken at checkout (UPDATE and DELETE blocked by trigger). Gift snapshots hold the recipient's address and are readable by couriers only.
+    defaults: {purpose: [order_fulfilment, delivery_logistics], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary, courier], residency: in_country, on_erasure: pseudonymize}
     fields:
-      - {name: seller_order_id, pii_class: P1, encryption: none}
-      - {name: recipient_name, pii_class: P2, encryption: field_envelope, seller_visibility: full}
-      - {name: phone_relay_number, pii_class: P2, encryption: field_envelope, seller_visibility: masked, note: "Relay number where the courier supports it."}
-      - {name: recipient_phone, pii_class: P3, encryption: field_envelope, seller_visibility: none, note: "Real number, never shown to sellers."}
-      - {name: address_text, pii_class: P3, encryption: field_envelope, seller_visibility: full}
-      - {name: governorate, pii_class: P2, encryption: none, residency: approved_region, seller_visibility: full}
-      - {name: delivery_notes, pii_class: P2, encryption: none, seller_visibility: full, note: "Free text, may contain personal data."}
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: order_ref, pii_class: P1, encryption: none}
+      - {name: source_address_id, pii_class: P2, encryption: none}
+      - {name: gift, pii_class: P1, encryption: none}
+      - {name: recipient_name_enc, pii_class: P2, encryption: field_envelope}
+      - {name: phone_enc, pii_class: P3, encryption: field_envelope}
+      - {name: governorate_code, pii_class: P2, encryption: none, residency: approved_region}
+      - {name: city_code, pii_class: P2, encryption: none, residency: approved_region}
+      - {name: street_enc, pii_class: P3, encryption: field_envelope}
+      - {name: building_enc, pii_class: P3, encryption: field_envelope}
+      - {name: floor_enc, pii_class: P3, encryption: field_envelope}
+      - {name: apartment_enc, pii_class: P3, encryption: field_envelope}
+      - {name: landmark_enc, pii_class: P3, encryption: field_envelope}
+      - {name: map_pin_enc, pii_class: P3, encryption: field_envelope, consent_purpose: location_precise, lawful_basis: consent}
+      - {name: courier_coverage, pii_class: P1, encryption: none}
+      - {name: cod_eligible, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: gift_address_tokens
+    spec_ref: "8 Edge cases (hidden gift address); docs/specs/addresses.md; migration 0050"
+    source: derived
+    data_subjects: [shopper]
+    description: 128-bit hidden-address tokens for gift purchases. Only the SHA-256 hash is stored; the buyer never sees the address.
+    defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: in_country, on_erasure: delete}
+    fields:
+      - {name: token_hash, pii_class: P1, encryption: none}
+      - {name: owner_user_id, pii_class: P2, encryption: none}
+      - {name: address_id, pii_class: P2, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: couriers
+    spec_ref: "7 Flow step 1 (courier coverage table); migration 0050"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: code, pii_class: P1, encryption: none}
+      - {name: cod_supported, pii_class: P1, encryption: none}
+      - {name: active, pii_class: P1, encryption: none}
+
+  - name: coverage_governorates
+    spec_ref: "7 Flow step 1 (courier coverage table); migration 0050"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: code, pii_class: P1, encryption: none}
+      - {name: name_ar, pii_class: P1, encryption: none}
+      - {name: name_en, pii_class: P1, encryption: none}
+      - {name: position, pii_class: P1, encryption: none}
+
+  - name: coverage_cities
+    spec_ref: "7 Flow step 1 (courier coverage table); migration 0050"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: governorate_code, pii_class: P1, encryption: none}
+      - {name: code, pii_class: P1, encryption: none}
+      - {name: name_ar, pii_class: P1, encryption: none}
+      - {name: name_en, pii_class: P1, encryption: none}
+      - {name: position, pii_class: P1, encryption: none}
+
+  - name: courier_coverage
+    spec_ref: "7 Flow step 1 (courier coverage table); migration 0050"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: courier, pii_class: P1, encryption: none}
+      - {name: governorate_code, pii_class: P1, encryption: none}
+      - {name: city_code, pii_class: P1, encryption: none}
+      - {name: covered, pii_class: P1, encryption: none}
 
   - name: seller_delivery_access_grants
     spec_ref: "B1 Sellers row"
@@ -990,7 +1184,9 @@ tables:
       - {name: colors, pii_class: P0, encryption: none}
       - {name: materials, pii_class: P0, encryption: none}
       - {name: condition, pii_class: P0, encryption: none}
+      - {name: department, pii_class: P0, encryption: none}
       - {name: category_ids, pii_class: P0, encryption: none}
+      - {name: brand_id, pii_class: P0, encryption: none, note: "Catalog brand (nullable, logical reference to brands.id); migration 0096."}
       - {name: verified_discount_pct, pii_class: P0, encryption: none}
       - {name: lowest_30d, pii_class: P0, encryption: none}
       - {name: free_delivery_eligible, pii_class: P0, encryption: none}
@@ -1030,6 +1226,7 @@ tables:
     defaults: {purpose: [order_fulfilment, tax_accounting], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize}
     fields:
       - {name: id, pii_class: P1, encryption: none}
+      - {name: market, pii_class: P1, encryption: none, note: "Market code (ISO 3166-1 alpha-2), default EG. Migration 0072, ADR-0040. Scoping key, not personal data."}
       - {name: user_id, pii_class: P2, encryption: none}
       - {name: status, pii_class: P1, encryption: none}
       - {name: payment_method, pii_class: P1, encryption: none}
@@ -1407,6 +1604,7 @@ tables:
     fields:
       - {name: product_id, pii_class: P0, encryption: none}
       - {name: vec, pii_class: P0, encryption: none}
+      - {name: vec_pg, pii_class: P0, encryption: none, note: "pgvector mirror of vec (768-d), added by migration 0069 only when the vector extension exists."}
       - {name: model_version, pii_class: P1, encryption: none}
       - {name: updated_at, pii_class: P1, encryption: none}
 
@@ -1442,6 +1640,66 @@ tables:
       - {name: signal, pii_class: P2, encryption: none}
       - {name: created_at, pii_class: P1, encryption: none}
       - {name: item_id, pii_class: P2, encryption: none, note: "Product the user liked or swapped; user-linked preference signal."}
+
+  # ---- Stylist chat (spec P3-07, docs/specs/phase-3/stylist-chat.md; migrations 0066, 0067). ----
+  # Spec names chat_sessions / chat_turns; the tables carry the stylist_ prefix. Turn text is stored only
+  # with "save chat history" on (default off), scrubbed, and is nullified after 30 days (retention
+  # target stylist_chat_turns.text). Assistant text is never stored (rendered from reply_code).
+  - name: stylist_chat_sessions
+    spec_ref: "P3-07 Data (chat_sessions)"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: consent, consent_purpose: personalization, retention: support_chats, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: state, pii_class: P2, encryption: none, note: "Structured session memory: occasion, vibe, palette, scope, the budget the shopper typed (piastres), rejected item ids. No free text, no budget-suite value."}
+      - {name: history_enabled, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: stylist_chat_turns
+    spec_ref: "P3-07 Data (chat_turns)"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: consent, consent_purpose: personalization, retention: support_chats, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: session_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: seq, pii_class: P1, encryption: none}
+      - {name: role, pii_class: P1, encryption: none}
+      - {name: client_message_id, pii_class: P1, encryption: none}
+      - {name: text, pii_class: P2, encryption: none, verify: true, note: "Shopper message after the PII scrubber, only when history is on, user turns only; can still hold voluntarily typed personal details. Nullified after 30 days and immediately when history is turned off. Never sent anywhere unscrubbed."}
+      - {name: reply_code, pii_class: P1, encryption: none}
+      - {name: blocks, pii_class: P2, encryption: none, note: "Outfit ids, chip ids and reply codes. No prices, no titles."}
+      - {name: intent, pii_class: P1, encryption: none}
+      - {name: source, pii_class: P1, encryption: none}
+      - {name: prompt_hash, pii_class: P1, encryption: none, note: "Hash only (T12)."}
+      - {name: tokens_in, pii_class: P1, encryption: none}
+      - {name: tokens_out, pii_class: P1, encryption: none}
+      - {name: tool_calls, pii_class: P1, encryption: none, note: "Names of read-only tools used, for example search, stock."}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: stylist_chat_settings
+    spec_ref: "P3-07 API (stylist_chat_history setting)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: consent, consent_purpose: personalization, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: history_enabled, pii_class: P1, encryption: none, note: "Save chat history. Default false."}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: stylist_chat_quota
+    spec_ref: "P3-07 Quotas (30 chat turns/day)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: contract, retention: technical_dedup, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: day, pii_class: P1, encryption: none}
+      - {name: turns, pii_class: P1, encryption: none}
 
   - name: style_profiles
     spec_ref: "1 Flow (style vibes, favourite brands), 13"
@@ -1481,9 +1739,149 @@ tables:
     fields:
       - {name: id, pii_class: P1, encryption: none}
       - {name: user_id, pii_class: P2, encryption: none}
-      - {name: image_ref, pii_class: P2, encryption: none, note: "Spec: images are P2 and user-deletable. May show people or interiors."}
+      - {name: image_ref, pii_class: P2, encryption: none, note: "Spec: images are P2 and user-deletable. May show people or interiors. Object key in a private bucket (scheme wardrobe/yyyy/mm/uuid, no user data); EXIF/GPS stripped and scanned before use; never used for training (DPIA stylist risk 3)."}
       - {name: attributes, pii_class: P2, encryption: none}
       - {name: created_at, pii_class: P1, encryption: none}
+      - {name: image_state, pii_class: P1, encryption: none, note: "none, pending_scan, clean or infected. A photo is never served before the scan verdict is clean."}
+      - {name: attributes_source, pii_class: P1, encryption: none}
+      - {name: vision_model_version, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+
+  - name: wardrobe_uploads
+    spec_ref: "28 feature 4 (wardrobe digitization)"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: consent, consent_purpose: personalization, retention: user_content, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: upload_id, pii_class: P2, encryption: none, note: "Object key of a not yet adopted photo. Unconsumed rows are purged after one day."}
+      - {name: content_type, pii_class: P1, encryption: none}
+      - {name: size_bytes, pii_class: P1, encryption: none}
+      - {name: issued_at, pii_class: P1, encryption: none}
+      - {name: consumed_at, pii_class: P1, encryption: none}
+
+  - name: wardrobe_blob_graveyard
+    spec_ref: "28 feature 4 (wardrobe digitization); B1 erasure"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: consent, consent_purpose: personalization, retention: user_content, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: upload_id, pii_class: P1, encryption: none, note: "Key of an already deleted photo awaiting object-store erasure. The key scheme holds no user id or file name; the table has no user key."}
+      - {name: deleted_at, pii_class: P1, encryption: none}
+  - name: product_media_jobs
+    spec_ref: "19 Seller Center (catalog media), background removal (migration 0083)"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: user_content, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: created_by, pii_class: P2, encryption: none, note: "Staff user who uploaded the photo."}
+      - {name: original_ref, pii_class: P1, encryption: none, note: "Object key (scheme product-media/yyyy/mm/uuid, no store, user or file name) of the private original. Product photos may incidentally show a person (a model); EXIF/GPS stripped and scanned before use, never public, never used for training."}
+      - {name: content_type, pii_class: P1, encryption: none}
+      - {name: size_bytes, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: decision, pii_class: P1, encryption: none}
+      - {name: requested_model, pii_class: P1, encryption: none}
+      - {name: model_id, pii_class: P1, encryption: none}
+      - {name: model_version, pii_class: P1, encryption: none}
+      - {name: quality_score, pii_class: P1, encryption: none}
+      - {name: quality_reasons, pii_class: P1, encryption: none}
+      - {name: png_ref, pii_class: P1, encryption: none, note: "Key of the private transparent cutout derivative; signed GET <= 15 min."}
+      - {name: white_jpg_ref, pii_class: P1, encryption: none, note: "Key of the private white-background derivative."}
+      - {name: shadow_ref, pii_class: P1, encryption: none, note: "Key of the private soft-shadow derivative."}
+      - {name: latency_ms, pii_class: P1, encryption: none}
+      - {name: error_code, pii_class: P1, encryption: none}
+      - {name: attempts, pii_class: P1, encryption: none}
+      - {name: attached_product_id, pii_class: P1, encryption: none, note: "Product the cutout backs (migration 0085), set by a compare-and-set in the catalog write path."}
+      - {name: promoted_image_ref, pii_class: P1, encryption: none, note: "Key (catalog/yyyy/mm/uuid) of the copy promoted to the catalog image purpose; buried with the job's other keys."}
+      - {name: promoted_cutout_ref, pii_class: P1, encryption: none, note: "Key of the promoted transparent PNG copy; accepted cutouts only."}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+      - {name: current_version, pii_class: P1, encryption: none, note: "Version number of the cutout the job currently serves (migration 0087); 0 = legacy job without version rows."}
+      - {name: edit_count, pii_class: P1, encryption: none, note: "Number of manual refines on the job; cap enforced by the application."}
+      - {name: promoted_version, pii_class: P1, encryption: none, note: "Version whose catalog copies are held in promoted_*_ref; a later edit triggers re-promotion."}
+      - {name: background_render_ref, pii_class: P1, encryption: none, note: "Key of the private rendered-background derivative; same keyless scheme as png_ref; buried in product_media_blob_graveyard on delete."}
+
+  - name: product_media_versions
+    spec_ref: "19 Seller Center (catalog media); docs/specs/phase-3/product-media-background-removal.md (Editing a cutout); migration 0087"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: user_content, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: job_id, pii_class: P1, encryption: none, note: "FK to product_media_jobs, ON DELETE CASCADE; at most 5 versions per job (oldest non-current pruned)."}
+      - {name: store_id, pii_class: P1, encryption: none, note: "Tenant key for RLS (app_store_ids())."}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: op, pii_class: P1, encryption: none, note: "initial | rerun | refine."}
+      - {name: params, pii_class: P1, encryption: none, note: "Compact edit request: brush strokes quantised to 1/1000 integers, no free text, no PII; capped at 256 KB by CHECK."}
+      - {name: mask_ref, pii_class: P1, encryption: none, note: "Key of the private mask derivative; keyless scheme (no store, user or file name); buried on delete."}
+      - {name: png_ref, pii_class: P1, encryption: none, note: "Key of the private transparent cutout of this version; signed GET <= 15 min. Product photos may incidentally show a model; never public, never used for training."}
+      - {name: white_jpg_ref, pii_class: P1, encryption: none, note: "Key of the private white-background derivative."}
+      - {name: shadow_ref, pii_class: P1, encryption: none, note: "Key of the optional soft-shadow derivative."}
+      - {name: background_render_ref, pii_class: P1, encryption: none, note: "Key of the optional rendered-background derivative."}
+      - {name: model_id, pii_class: P1, encryption: none}
+      - {name: model_version, pii_class: P1, encryption: none}
+      - {name: latency_ms, pii_class: P1, encryption: none}
+      - {name: quality_score, pii_class: P1, encryption: none}
+      - {name: quality_reasons, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: product_media_usage
+    spec_ref: "19 Seller Center (catalog media), per-store daily quota"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: technical_dedup, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: day, pii_class: P1, encryption: none}
+      - {name: runs, pii_class: P1, encryption: none}
+      - {name: refine_units, pii_class: P1, encryption: none, note: "Daily quota consumption in quarter runs (refine with stored mask = 1, full run = 4). Store-level counter, no person."}
+
+  - name: product_media_blob_graveyard
+    spec_ref: "19 Seller Center (catalog media); B1 erasure"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: user_content, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: upload_id, pii_class: P1, encryption: none, note: "Key of an already deleted original or derivative awaiting object-store erasure. The key scheme holds no store, user or file name."}
+      - {name: deleted_at, pii_class: P1, encryption: none}
+
+  - name: home_banners
+    spec_ref: "16 Feed, drops & social; 17 Promotions engine; 12 (budget data never used for targeting); docs/specs/phase-3/home-banners.md; migration 0084"
+    source: derived
+    data_subjects: [visitor]
+    defaults: {purpose: [catalog_browse], lawful_basis: contract, retention: catalog_content, processors: [cloud_primary], residency: global_ok, on_erasure: not_personal, dsar_export: false}
+    fields:
+      - {name: id, pii_class: P0, encryption: none}
+      - {name: status, pii_class: P0, encryption: none}
+      - {name: title_ar, pii_class: P0, encryption: none}
+      - {name: title_en, pii_class: P0, encryption: none}
+      - {name: subtitle_ar, pii_class: P0, encryption: none}
+      - {name: subtitle_en, pii_class: P0, encryption: none}
+      - {name: image_key, pii_class: P0, encryption: none, note: "Object-store key (no scheme or host); never a URL."}
+      - {name: art_variant, pii_class: P0, encryption: none}
+      - {name: priority, pii_class: P0, encryption: none}
+      - {name: starts_at, pii_class: P0, encryption: none, note: "Visibility is decided by server time only."}
+      - {name: ends_at, pii_class: P0, encryption: none}
+      - {name: sponsored, pii_class: P0, encryption: none}
+      - {name: sponsor_ref, pii_class: P1, encryption: none, note: "Ads or finance reference. Never shown to shoppers."}
+      - {name: cta_kind, pii_class: P0, encryption: none}
+      - {name: cta_target_id, pii_class: P0, encryption: none}
+      - {name: cta_query, pii_class: P0, encryption: none}
+      - {name: cta_price_min, pii_class: P0, encryption: none, note: "Integer piastres. A browse filter, not a per-user value."}
+      - {name: cta_price_max, pii_class: P0, encryption: none, note: "Integer piastres."}
+      - {name: created_by, pii_class: P1, encryption: none, note: "Admin user id. Not a shopper."}
+      - {name: updated_by, pii_class: P1, encryption: none, note: "Admin user id. Not a shopper."}
+      - {name: version, pii_class: P0, encryption: none}
+      - {name: created_at, pii_class: P0, encryption: none}
+      - {name: updated_at, pii_class: P0, encryption: none}
 
   - name: outfit_calendar_events
     spec_ref: "28 feature 3 (outfit calendar)"
@@ -1519,6 +1917,7 @@ tables:
     defaults: {purpose: [budget_insights], lawful_basis: consent, consent_purpose: budget_insights, retention: budget_data, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
     fields:
       - {name: user_id, pii_class: P2, encryption: none}
+      - {name: market, pii_class: P1, encryption: none, note: "Market code (ISO 3166-1 alpha-2), default EG. Migration 0072, ADR-0040. Scoping key, not personal data."}
       - {name: amount, pii_class: P3, encryption: field_envelope, note: "Monthly spendable amount reveals financial position; treated as sensitive by this inventory (counsel to confirm class).", verify: true}
       - {name: per_category, pii_class: P3, encryption: field_envelope}
       - {name: payday, pii_class: P2, encryption: none}
@@ -1856,7 +2255,7 @@ tables:
       - {name: account_holder_name, pii_class: P2, encryption: none}
 
   - name: creator_accounts
-    spec_ref: "15.4 Data"
+    spec_ref: "15.4 Data; migration 0075, ADR-0037"
     source: spec_named
     data_subjects: [creator]
     defaults: {purpose: [loyalty_referral, seller_onboarding_kyc], lawful_basis: contract, retention: affiliate_attribution, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize}
@@ -1864,8 +2263,87 @@ tables:
       - {name: id, pii_class: P1, encryption: none}
       - {name: user_id, pii_class: P2, encryption: none}
       - {name: handle, pii_class: P0, encryption: none, note: "Public handle chosen by the creator."}
+      - {name: display_name, pii_class: P0, encryption: none, note: "Public display name chosen by the creator."}
       - {name: status, pii_class: P1, encryption: none}
-      - {name: kyc_record_id, pii_class: P1, encryption: none}
+      - {name: kyc_state, pii_class: P1, encryption: none}
+      - {name: terms_version, pii_class: P1, encryption: none}
+      - {name: terms_accepted_at, pii_class: P1, encryption: none}
+      - {name: payout_pref, pii_class: P1, encryption: none}
+      - {name: status_reason, pii_class: P2, encryption: none, purpose: [fraud_prevention], note: "Reviewer reason for a decision. Never shown to the shopper."}
+      - {name: applied_at, pii_class: P1, encryption: none}
+      - {name: decided_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: creator_kyc
+    spec_ref: "15.4 Rules (21+, KYC), ADR-0037; migration 0075"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [seller_onboarding_kyc], lawful_basis: legal_obligation, retention: kyc_records, processors: [cloud_primary], residency: in_country, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: key_id, pii_class: P1, encryption: none}
+      - {name: legal_name_enc, pii_class: P3, encryption: field_envelope}
+      - {name: national_id_enc, pii_class: P3, encryption: field_envelope}
+      - {name: national_id_hash, pii_class: P3, encryption: blind_index_hmac, note: "Blind index: one identity document backs one creator account."}
+      - {name: payout_iban_enc, pii_class: P3, encryption: field_envelope}
+      - {name: payout_name_enc, pii_class: P3, encryption: field_envelope}
+      - {name: tax_id_enc, pii_class: P3, encryption: field_envelope, note: "VERIFY BEFORE LAUNCH (VR-P3-03): tax identity shape pending Tax counsel."}
+      - {name: tax_form_enc, pii_class: P3, encryption: field_envelope, note: "VERIFY BEFORE LAUNCH (VR-P3-03): tax form fields pending Tax counsel."}
+      - {name: submitted_at, pii_class: P1, encryption: none}
+      - {name: reviewed_at, pii_class: P1, encryption: none}
+      - {name: reviewed_by, pii_class: P2, encryption: none, note: "Staff user id of the reviewer."}
+      - {name: review_reason, pii_class: P2, encryption: none}
+
+  - name: creator_terms
+    spec_ref: "15.4 Flow (terms accepted, AR/EN, versioned); migration 0075"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: version, pii_class: P0, encryption: none}
+      - {name: locale, pii_class: P0, encryption: none}
+      - {name: body, pii_class: P0, encryption: none, note: "Legal text, pending counsel (VR-P3-04)."}
+      - {name: body_sha256, pii_class: P0, encryption: none}
+      - {name: created_at, pii_class: P0, encryption: none}
+
+  - name: affiliate_links
+    spec_ref: "15.4 Data; migration 0075"
+    source: spec_named
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral], lawful_basis: contract, retention: affiliate_attribution, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: target_type, pii_class: P1, encryption: none}
+      - {name: target_id, pii_class: P1, encryption: none}
+      - {name: slug, pii_class: P1, encryption: none, note: "Unguessable (80 bits, CSPRNG). Public once shared."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: disabled_at, pii_class: P1, encryption: none}
+
+  - name: creator_looks
+    spec_ref: "15.4 Data (curated looks), 27 UGC; migration 0075"
+    source: spec_named
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: title, pii_class: P0, encryption: none, note: "Creator-authored public text (UGC, moderated)."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: takedown_reason, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: creator_look_items
+    spec_ref: "15.4 Data (creator_looks.items[]); migration 0075"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: look_id, pii_class: P1, encryption: none}
+      - {name: position, pii_class: P1, encryption: none}
+      - {name: product_id, pii_class: P1, encryption: none, note: "Catalog product id only. Prices are never stored here."}
 
   # ---- Referrals, rewards, plans (spec 15.4, 15.5, 14) ----
   - name: referral_codes
@@ -1901,28 +2379,104 @@ tables:
       - {name: settled_at, pii_class: P1, encryption: none}
 
   - name: affiliate_clicks
-    spec_ref: "15.4 Data (partitioned)"
+    spec_ref: "15.4 Data (partitioned monthly); migration 0076"
     source: spec_named
     data_subjects: [visitor, creator]
-    defaults: {purpose: [loyalty_referral], lawful_basis: legitimate_interest, retention: affiliate_attribution, processors: [cloud_primary], residency: approved_region, on_erasure: delete, verify: true}
+    defaults: {purpose: [loyalty_referral, fraud_prevention], lawful_basis: legitimate_interest, retention: affiliate_attribution, processors: [cloud_primary], residency: approved_region, on_erasure: delete, verify: true}
     fields:
       - {name: id, pii_class: P1, encryption: none}
+      - {name: link_id, pii_class: P1, encryption: none}
       - {name: creator_id, pii_class: P1, encryption: none}
-      - {name: visitor_pseudo_id, pii_class: P2, encryption: none}
+      - {name: ts, pii_class: P1, encryption: none}
+      - {name: device_hash, pii_class: P2, encryption: one_way_hash, note: "SHA-256 of the install id. Matches the buyer device hashes at order time."}
       - {name: ip_hash, pii_class: P2, encryption: one_way_hash}
-      - {name: clicked_at, pii_class: P1, encryption: none}
+      - {name: ua_class, pii_class: P1, encryption: none, note: "app, browser, bot or headless. No raw user agent is stored."}
+      - {name: counted, pii_class: P1, encryption: none}
+
+  - name: attributions
+    spec_ref: "15.4 Data; migration 0076"
+    source: spec_named
+    data_subjects: [shopper, creator]
+    defaults: {purpose: [loyalty_referral, fraud_prevention], lawful_basis: legitimate_interest, retention: affiliate_attribution, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, seller_visibility: none, verify: true}
+    fields:
+      - {name: order_group_id, pii_class: P2, encryption: none}
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: link_id, pii_class: P1, encryption: none}
+      - {name: click_id, pii_class: P1, encryption: none}
+      - {name: click_at, pii_class: P1, encryption: none}
+      - {name: buyer_user_id, pii_class: P2, encryption: none, note: "Never exposed to the creator: the creator sees amounts only."}
+      - {name: rate_snapshot, pii_class: P1, encryption: none}
+      - {name: window_end, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: void_reason, pii_class: P2, encryption: none, purpose: [fraud_prevention], note: "Fraud signal such as self_purchase. Silent: never shown to the creator or buyer."}
+      - {name: hold_reason, pii_class: P1, encryption: none, note: "HELD attribution: the fraud gate could not run (A-3). Never accrues until resolved."}
+      - {name: created_at, pii_class: P1, encryption: none}
 
   - name: commissions
-    spec_ref: "15.4 Data"
+    spec_ref: "15.4 Data; migration 0076 and 0077"
     source: spec_named
     data_subjects: [creator]
     defaults: {purpose: [loyalty_referral, tax_accounting], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
     fields:
       - {name: id, pii_class: P1, encryption: none}
       - {name: creator_id, pii_class: P1, encryption: none}
-      - {name: order_id, pii_class: P2, encryption: none}
+      - {name: order_group_id, pii_class: P2, encryption: none}
+      - {name: order_line_id, pii_class: P2, encryption: none}
+      - {name: base, pii_class: P1, encryption: none}
+      - {name: rate_bps, pii_class: P1, encryption: none}
       - {name: amount, pii_class: P1, encryption: none}
-      - {name: status, pii_class: P1, encryption: none}
+      - {name: clawed_back, pii_class: P1, encryption: none}
+      - {name: refunded_base, pii_class: P1, encryption: none}
+      - {name: state, pii_class: P1, encryption: none}
+      - {name: hold_reason, pii_class: P1, encryption: none}
+      - {name: void_reason, pii_class: P2, encryption: none, purpose: [fraud_prevention]}
+      - {name: month_key, pii_class: P1, encryption: none}
+      - {name: closed_at, pii_class: P1, encryption: none}
+      - {name: accrued_at, pii_class: P1, encryption: none}
+      - {name: payout_id, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: commission_postings
+    spec_ref: "15.4 Failure handling (ledger intents), T4; migration 0076"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral, tax_accounting], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: commission_id, pii_class: P1, encryption: none}
+      - {name: seq, pii_class: P1, encryption: none}
+      - {name: kind, pii_class: P1, encryption: none}
+      - {name: amount, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: posted_at, pii_class: P1, encryption: none}
+
+  - name: creator_monthly_accruals
+    spec_ref: "15.4 Rules (max payout per creator per month); migration 0076"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral, fraud_prevention], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal}
+    fields:
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: month_key, pii_class: P1, encryption: none}
+      - {name: accrued, pii_class: P1, encryption: none}
+
+  - name: creator_payouts
+    spec_ref: "15.4, ADR-0037, T4 payouts; migration 0077"
+    source: derived
+    data_subjects: [creator]
+    defaults: {purpose: [loyalty_referral, tax_accounting, seller_onboarding_kyc], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: creator_id, pii_class: P1, encryption: none}
+      - {name: amount, pii_class: P1, encryption: none}
+      - {name: state, pii_class: P1, encryption: none}
+      - {name: hold_reason, pii_class: P1, encryption: none}
+      - {name: attempt, pii_class: P1, encryption: none}
+      - {name: provider_ref, pii_class: P1, encryption: none}
+      - {name: failure_reason, pii_class: P1, encryption: none}
+      - {name: created_by, pii_class: P2, encryption: none, note: "Staff user id of the requester (dual approval needs a different approver)."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
 
   - name: subscriptions
     spec_ref: "14 Data"
@@ -1996,6 +2550,8 @@ tables:
       - {name: version, pii_class: P0, encryption: none, residency: global_ok}
       - {name: active, pii_class: P0, encryption: none, residency: global_ok}
       - {name: trial_days, pii_class: P0, encryption: none, residency: global_ok}
+      - {name: kind, pii_class: P0, encryption: none, residency: global_ok, note: "individual, family or student (migration 0059). A code keeps its kind."}
+      - {name: seat_limit, pii_class: P0, encryption: none, residency: global_ok, note: "Family only, owner included, 1..8 (migration 0059). Admin editable through a new plan version."}
       - {name: effective_from, pii_class: P0, encryption: none, residency: global_ok}
       - {name: notified_at, pii_class: P1, encryption: none}
       - {name: created_by, pii_class: P1, encryption: none, note: "Admin user id. Not a shopper."}
@@ -2067,6 +2623,77 @@ tables:
       - {name: provider, pii_class: P1, encryption: none}
       - {name: event_id, pii_class: P1, encryption: none}
       - {name: received_at, pii_class: P1, encryption: none}
+
+  # ---- Family and student plans (spec P3-03; migrations 0059-0061) ----
+  - name: family_groups
+    spec_ref: "14 family plan; docs/specs/phase-3/family-student-plans.md; migration 0060"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [subscriptions_plus], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, seller_visibility: none}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: owner_user_id, pii_class: P2, encryption: none, note: "The billing and contracting party."}
+      - {name: subscription_id, pii_class: P1, encryption: none}
+      - {name: seat_limit, pii_class: P1, encryption: none, note: "Snapshot of the plan version seat limit."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: ending_notice_sent_at, pii_class: P1, encryption: none}
+      - {name: ended_at, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: family_members
+    spec_ref: "14 family plan seats; docs/specs/phase-3/family-student-plans.md Data; migration 0060"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [subscriptions_plus, fraud_prevention], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, seller_visibility: none}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: group_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none, note: "Null while an invite is pending. Never shown to the owner: the owner sees the nickname only."}
+      - {name: role, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: seat_no, pii_class: P1, encryption: none}
+      - {name: nickname, pii_class: P2, encryption: none, note: "Typed by the owner, shown to the owner only, 40 chars. Deleted with the owner's account."}
+      - {name: invited_at, pii_class: P2, encryption: none}
+      - {name: seat_effective_from, pii_class: P2, encryption: none}
+      - {name: seat_end_at, pii_class: P2, encryption: none}
+      - {name: removed_at, pii_class: P2, encryption: none, note: "Feeds the seat-trading limit (2 removals per 90 days)."}
+      - {name: removed_by, pii_class: P1, encryption: none}
+
+  - name: family_invites
+    spec_ref: "14 family plan invites; docs/specs/phase-3/family-student-plans.md Data and Security; migration 0060"
+    source: spec_named
+    data_subjects: [shopper, visitor]
+    defaults: {purpose: [subscriptions_plus, fraud_prevention], lawful_basis: contract, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete, seller_visibility: none}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: group_id, pii_class: P1, encryption: none}
+      - {name: member_id, pii_class: P1, encryption: none}
+      - {name: invitee_phone_hash, pii_class: P2, encryption: blind_index_hmac, note: "Blind index of the invited phone. The phone itself is passed to the SMS or WhatsApp provider and never stored."}
+      - {name: token_hash, pii_class: P2, encryption: one_way_hash, note: "HMAC of a 128 bit single use token. The token only travels in the invite link."}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: accepted_at, pii_class: P2, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+      - {name: created_by, pii_class: P2, encryption: none, note: "The inviting owner."}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: student_verifications
+    spec_ref: "14 student plan; docs/specs/phase-3/family-student-plans.md Data (student_verifications P2); migration 0061"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [subscriptions_plus, fraud_prevention], lawful_basis: contract, retention: account_active, processors: [cloud_primary, kyc_verifier], residency: approved_region, on_erasure: delete, seller_visibility: none, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: verifier, pii_class: P1, encryption: none, note: "Verifier vendor name. No vendor is contracted yet (VR-P3-09)."}
+      - {name: ref, pii_class: P2, encryption: none, note: "Opaque verifier reference. No ID image, university email or student number is stored by us."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: verified_at, pii_class: P2, encryption: none}
+      - {name: valid_until, pii_class: P2, encryption: none, note: "At most 12 months after verified_at (CHECK)."}
+      - {name: notice_sent_at, pii_class: P1, encryption: none, note: "30 day heads-up before the student price can revert."}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P2, encryption: none}
+      - {name: updated_at, pii_class: P2, encryption: none}
 
   # ---- Notifications and CRM (spec 24) ----
   - name: support_tickets
@@ -2342,7 +2969,7 @@ tables:
       - {name: event_type, pii_class: P1, encryption: none}
       - {name: event_version, pii_class: P1, encryption: none}
       - {name: ordering_key, pii_class: P2, encryption: none}
-      - {name: payload, pii_class: P2, encryption: none, note: "Migration 0004: P0 to P2 only, never P3. Events carry ids, not contact data."}
+      - {name: payload, pii_class: P2, encryption: none, note: "Migration 0004: P0 to P2 only, never P3. Events carry ids, not contact data. Exception worth naming (H3, dashboard foundations): seller_order.placed, order_line.purchased, return_line.received and analytics.client_batch carry shopper_key (P2, pseudonymous) and, for purchases, governorate and size_label. They stay here until the outbox.published purge (30 days after publish) or indefinitely while unpublished; erasure propagation is by analytics_erased_keys (the consumer NULLs an erased key at ingest), because payloads are immutable by trigger."}
       - {name: headers, pii_class: P1, encryption: none}
       - {name: published_at, pii_class: P1, encryption: none}
       - {name: publish_attempts, pii_class: P1, encryption: none}
@@ -2412,6 +3039,7 @@ tables:
     defaults: {purpose: [catalog_browse], lawful_basis: contract, retention: browsing_state, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
     fields:
       - {name: id, pii_class: P1, encryption: none}
+      - {name: market, pii_class: P1, encryption: none, note: "Market code (ISO 3166-1 alpha-2), default EG. Migration 0072, ADR-0040. Scoping key, not personal data."}
       - {name: user_id, pii_class: P2, encryption: none, note: "Owner; makes the whole table personal data."}
       - {name: currency, pii_class: P1, encryption: none}
       - {name: version, pii_class: P1, encryption: none, note: "Optimistic concurrency counter."}
@@ -2488,6 +3116,7 @@ tables:
       - {name: description_ar, pii_class: P0, encryption: none}
       - {name: description_en, pii_class: P0, encryption: none}
       - {name: condition, pii_class: P0, encryption: none}
+      - {name: department, pii_class: P0, encryption: none, note: "Shopper department women|men|kids|unisex; public catalog attribute."}
       - {name: status, pii_class: P1, encryption: none, residency: approved_region}
       - {name: material, pii_class: P0, encryption: none}
       - {name: size_chart_id, pii_class: P1, encryption: none, note: "Logical FK to sizing."}
@@ -2534,6 +3163,9 @@ tables:
       - {name: position, pii_class: P0, encryption: none}
       - {name: blurhash, pii_class: P0, encryption: none}
       - {name: image_version, pii_class: P1, encryption: none, note: "Bumps when the image changes; keys stylist embeddings."}
+      - {name: media_job_id, pii_class: P1, encryption: none, note: "Background-removal job backing this image (migration 0085); logical FK to product_media_jobs."}
+      - {name: image_ref, pii_class: P1, encryption: none, note: "Catalog-purpose object key of the default image of a job-backed image (EXIF/GPS already stripped); served only as a short-lived signed link."}
+      - {name: cutout_ref, pii_class: P1, encryption: none, note: "Catalog-purpose object key of the transparent PNG; accepted cutouts only."}
       - {name: created_at, pii_class: P1, encryption: none}
 
   - name: product_defects
@@ -3147,6 +3779,7 @@ tables:
     defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: catalog_content, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, seller_visibility: full}
     fields:
       - {name: id, pii_class: P1, encryption: none}
+      - {name: market, pii_class: P1, encryption: none, note: "Market code (ISO 3166-1 alpha-2), default EG. Migration 0072, ADR-0040. Scoping key, not personal data."}
       - {name: owner_kind, pii_class: P1, encryption: none}
       - {name: store_id, pii_class: P1, encryption: none, note: "Tenant key for RLS. Logical reference until the stores FK migration."}
       - {name: kind, pii_class: P1, encryption: none}
@@ -3207,6 +3840,7 @@ tables:
     defaults: {purpose: [catalog_browse, seller_platform_ops], lawful_basis: legal_obligation, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal}
     fields:
       - {name: id, pii_class: P1, encryption: none}
+      - {name: market, pii_class: P1, encryption: none, note: "Market code (ISO 3166-1 alpha-2), default EG. Migration 0072, ADR-0040. Scoping key, not personal data."}
       - {name: sku_id, pii_class: P0, encryption: none, residency: global_ok}
       - {name: store_id, pii_class: P1, encryption: none}
       - {name: price_amount, pii_class: P0, encryption: none, residency: global_ok, note: "Piastres. Price history is public product information (price-evidence endpoint)."}
@@ -3265,7 +3899,7 @@ tables:
       - {name: occurred_at, pii_class: P1, encryption: none}
       - {name: product_id, pii_class: P1, encryption: none}
       - {name: sku_id, pii_class: P1, encryption: none}
-      - {name: shopper_key, pii_class: P2, encryption: none, seller_visibility: none, note: "Pseudonymous analytics id. Used only to count DISTINCT shoppers (k >= 50, repeat rate). Never selected into any seller-facing response."}
+      - {name: shopper_key, pii_class: P2, encryption: none, seller_visibility: none, note: "Pseudonymous analytics id (P2: personal data, HMAC of the user id, rotated yearly). Used only to count DISTINCT shoppers (k >= 50, repeat rate). Never selected into any seller-facing response. Erasure (H3, dashboard foundations track 6): forgetShopper NULLs it (null_field, not re-pseudonymised) for HMAC(user id) under every live key version and epoch BEFORE the user row is erased; the keys are kept 31 days in analytics_erased_keys. Rows leave after 25 months (purge target seller_analytics.facts)."}
       - {name: seller_order_id, pii_class: P1, encryption: none}
       - {name: qty, pii_class: P1, encryption: none}
       - {name: gross_minor, pii_class: P1, encryption: none}
@@ -3274,7 +3908,8 @@ tables:
       - {name: reason, pii_class: P1, encryption: none, note: "Return taxonomy code, never free text."}
       - {name: source, pii_class: P0, encryption: none}
       - {name: governorate, pii_class: P1, encryption: none, seller_visibility: aggregate_k50, note: "Released to sellers only in cells with >= 50 distinct shoppers."}
-      - {name: term, pii_class: P1, encryption: none, seller_visibility: aggregate_k50, note: "Normalised search term, rejected at ingest if it looks like a phone, email or URL; released only with >= 50 distinct shoppers."}
+      - {name: term, pii_class: P1, encryption: none, seller_visibility: aggregate_k50, note: "Normalised search term, rejected at ingest if it looks like a phone, email or URL; released only with >= 50 distinct shoppers. Free text typed by a shopper is P2 until the M9 vocabulary rule (track 5) ships; afterwards this column holds catalogue words only."}
+      - {name: term_hash, pii_class: P2, encryption: none, seller_visibility: none, note: "Migration 0090 (M9): SHA-256 hex of a search term that is not in the catalogue vocabulary. Never returned to a seller."}
       - {name: ingested_at, pii_class: P1, encryption: none}
 
   - name: seller_analytics_stock
@@ -3301,6 +3936,89 @@ tables:
       - {name: store_id, pii_class: P1, encryption: none}
       - {name: last_event_at, pii_class: P1, encryption: none}
       - {name: last_ingest_at, pii_class: P1, encryption: none}
+
+  # ---- Analytics rollups and erasure support (dashboard foundations track 6; migrations 0088 and 0090) ----
+  - name: seller_analytics_hourly
+    spec_ref: "dashboard foundations section 6, ADR-0045; migration 0088"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none, note: "Tenant; RLS key."}
+      - {name: metric, pii_class: P1, encryption: none}
+      - {name: hour_utc, pii_class: P1, encryption: none, note: "Partition key; whole monthly partitions are dropped after 25 months."}
+      - {name: cairo_date, pii_class: P1, encryption: none}
+      - {name: cairo_hour, pii_class: P1, encryption: none}
+      - {name: utc_offset_min, pii_class: P1, encryption: none}
+      - {name: value, pii_class: P1, encryption: none, note: "Additive aggregate (count or integer piastres). Holds no shopper key."}
+      - {name: held_value, pii_class: P1, encryption: none, note: "Increments parked by the anomaly guard (track 5), not published until released."}
+      - {name: version, pii_class: P1, encryption: none, note: "Bumped by every write; the reconciler's compare-and-set (M1)."}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: platform_metrics_hourly
+    spec_ref: "dashboard foundations section 6, ADR-0045; migration 0088"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: metric, pii_class: P1, encryption: none}
+      - {name: hour_utc, pii_class: P1, encryption: none}
+      - {name: cairo_date, pii_class: P1, encryption: none}
+      - {name: cairo_hour, pii_class: P1, encryption: none}
+      - {name: utc_offset_min, pii_class: P1, encryption: none}
+      - {name: value, pii_class: P1, encryption: none, note: "Platform-wide additive aggregate. No store, shopper or order identifier."}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: analytics_rollup_watermarks
+    spec_ref: "dashboard foundations section 6; migration 0088"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: consumer, pii_class: P1, encryption: none}
+      - {name: applied_through, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: analytics_rollup_reconciliations
+    spec_ref: "dashboard foundations section 6 (M1); migration 0088"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: scope, pii_class: P1, encryption: none}
+      - {name: window_from, pii_class: P1, encryption: none}
+      - {name: window_to, pii_class: P1, encryption: none}
+      - {name: checked_rows, pii_class: P1, encryption: none}
+      - {name: mismatches, pii_class: P1, encryption: none}
+      - {name: corrected, pii_class: P1, encryption: none}
+      - {name: skipped_concurrent, pii_class: P1, encryption: none}
+      - {name: outcome, pii_class: P1, encryption: none}
+      - {name: ran_at, pii_class: P1, encryption: none, note: "Rows older than 2 years are deleted by analytics_rollup_maintain_partitions."}
+
+  - name: seller_analytics_suppression_memo
+    spec_ref: "dashboard foundations section 4 (B2) and section 6; migration 0090"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [analytics_product, seller_platform_ops], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: metric, pii_class: P1, encryption: none}
+      - {name: dimension, pii_class: P1, encryption: none}
+      - {name: dim_key, pii_class: P1, encryption: none, note: "A dimension value (source, governorate, term) whose released cell was hidden. Never returned on the wire except as counts."}
+      - {name: bucket, pii_class: P1, encryption: none}
+      - {name: reason, pii_class: P1, encryption: none}
+      - {name: first_hidden_at, pii_class: P1, encryption: none, note: "Retention clock: rows are purged with the facts they protect (25 months)."}
+
+  - name: analytics_erased_keys
+    spec_ref: "dashboard foundations section 6, H3; migration 0090"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [privacy_rights], lawful_basis: legal_obligation, retention: technical_dedup, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: shopper_key, pii_class: P2, encryption: none, seller_visibility: none, note: "Purpose erasure_propagation: pseudonyms erased by forgetShopper, kept 31 days (longer than the 30 day outbox purge) so an older unpublished outbox payload cannot re-introduce them; the consumer NULLs a matching key at ingest."}
+      - {name: erased_at, pii_class: P1, encryption: none, note: "Retention clock: purged 31 days after."}
 
   # ---- tax-eta module (migration 0027, spec B4, docs/specs/tax-eta.md) ----------------------
   - name: tax_categories
@@ -4030,6 +4748,77 @@ tables:
       - {name: clicks, pii_class: P1, encryption: none}
       - {name: updated_at, pii_class: P1, encryption: none}
 
+  # ---- Phase 3: visual search (spec P3-08, migrations 0068-0070) ----
+  - name: visual_search_uploads
+    spec_ref: "P3-08 Rules (query image zero retention); migration 0068"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [visual_search], lawful_basis: contract, retention: visual_search_transient, processors: [cloud_primary], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none, note: "Object key of the private upload. The image bytes are not stored in the database."}
+      - {name: owner_id, pii_class: P2, encryption: none, note: "Owner, so another shopper's upload id answers 404. Deleted with the row."}
+      - {name: content_type, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: consumed_at, pii_class: P1, encryption: none}
+      - {name: deleted_at, pii_class: P1, encryption: none}
+
+  - name: visual_search_requests
+    spec_ref: "P3-08 Data (visual_search_requests); migration 0068"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [visual_search], lawful_basis: legitimate_interest, retention: visual_search_transient, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: ts, pii_class: P1, encryption: none}
+      - {name: mode, pii_class: P1, encryption: none}
+      - {name: outcome, pii_class: P1, encryption: none}
+      - {name: latency_ms, pii_class: P1, encryption: none}
+      - {name: result_count, pii_class: P1, encryption: none}
+      - {name: category_guess, pii_class: P1, encryption: none}
+      - {name: model_version, pii_class: P1, encryption: none, note: "No user id, no image, no embedding and no query text by design."}
+
+  - name: visual_search_usage
+    spec_ref: "P3-08 Security (per-user daily caps, API4); migration 0068"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [visual_search], lawful_basis: legitimate_interest, retention: visual_search_transient, processors: [cloud_primary], residency: approved_region, on_erasure: delete, verify: true}
+    fields:
+      - {name: day, pii_class: P1, encryption: none}
+      - {name: subject, pii_class: P2, encryption: none, note: "'global' or the user id. Counter only."}
+      - {name: used, pii_class: P1, encryption: none}
+
+  - name: visual_search_eval_pairs
+    spec_ref: "P3-08 Data (visual_search_eval_pairs, offline only); migration 0070"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [visual_search], lawful_basis: legitimate_interest, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: delete, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: set_name, pii_class: P1, encryption: none}
+      - {name: query_ref, pii_class: P1, encryption: none, note: "Catalog image id or opaque consented-sample id. Image bytes are never stored here."}
+      - {name: expected_ids, pii_class: P0, encryption: none}
+      - {name: category, pii_class: P1, encryption: none}
+      - {name: basis, pii_class: P1, encryption: none, note: "catalog_image or user_consented (VR-P3-13)."}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: visual_search_eval_runs
+    spec_ref: "P3-08 Acceptance (quality gate); migration 0070"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [visual_search], lawful_basis: legitimate_interest, retention: account_active, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: set_name, pii_class: P1, encryption: none}
+      - {name: model_version, pii_class: P1, encryption: none}
+      - {name: k, pii_class: P1, encryption: none}
+      - {name: queries, pii_class: P1, encryption: none}
+      - {name: recall_at_k, pii_class: P1, encryption: none}
+      - {name: mrr, pii_class: P1, encryption: none}
+      - {name: coverage, pii_class: P1, encryption: none}
+      - {name: passed, pii_class: P1, encryption: none}
+      - {name: ran_at, pii_class: P1, encryption: none}
+
   # ---- Phase 2: drops and waiting room (spec 16, migration 0042) ----
 
   - name: drops
@@ -4515,6 +5304,43 @@ tables:
       - {name: created_at, pii_class: P1, encryption: none}
       - {name: revoked_at, pii_class: P1, encryption: none}
 
+  - name: odoo_channel_configs
+    spec_ref: "9.2 / 19 seller channel integrations (Odoo, Phase 3 item 11); migration 0071"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: seller_access_window, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: channel_id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: target_id, pii_class: P1, encryption: none}
+      - {name: db_name, pii_class: P1, encryption: none, note: "Odoo database name. Not a credential. The login and API key live only in the secret manager behind channel_connections.token_ref."}
+      - {name: odoo_uid, pii_class: P1, encryption: none, note: "Numeric Odoo user id returned by authenticate; not personal data."}
+      - {name: pricelist_id, pii_class: P1, encryption: none}
+      - {name: stock_location_id, pii_class: P1, encryption: none}
+      - {name: poll_interval_s, pii_class: P1, encryption: none}
+      - {name: breaker_failures, pii_class: P1, encryption: none}
+      - {name: breaker_opened_at, pii_class: P1, encryption: none}
+      - {name: last_polled_at, pii_class: P1, encryption: none}
+      - {name: last_error_code, pii_class: P1, encryption: none, note: "Closed enum code only, never a remote message."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: odoo_product_links
+    spec_ref: "9.2 / 19 Odoo product to SKU link and last-synced state; migration 0071"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: seller_access_window, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: channel_id, pii_class: P1, encryption: none}
+      - {name: odoo_product_id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: sku_id, pii_class: P0, encryption: none, residency: global_ok}
+      - {name: last_price_amount, pii_class: P0, encryption: none, residency: global_ok, note: "Piastres."}
+      - {name: last_stock_source_version, pii_class: P1, encryption: none}
+      - {name: last_stock_qty, pii_class: P1, encryption: none}
+      - {name: last_synced_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
   - name: channel_snapshots
     spec_ref: "9.2 channel_snapshots (daily partitions); migration 0043"
     source: derived
@@ -4610,4 +5436,905 @@ tables:
       - {name: host, pii_class: P1, encryption: none}
       - {name: url_hash, pii_class: P1, encryption: none}
       - {name: detail, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: seller_store_profiles
+    spec_ref: "19, B5; migration 0055, docs/specs/seller-settings.md"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: catalog_content, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: display_name_ar, pii_class: P1, encryption: none}
+      - {name: display_name_en, pii_class: P1, encryption: none}
+      - {name: description_ar, pii_class: P1, encryption: none}
+      - {name: description_en, pii_class: P1, encryption: none}
+      - {name: logo_key, pii_class: P1, encryption: none}
+      - {name: cover_key, pii_class: P1, encryption: none}
+      - {name: social_links, pii_class: P1, encryption: none}
+      - {name: return_change_of_mind_days, pii_class: P1, encryption: none}
+      - {name: return_defect_days, pii_class: P1, encryption: none}
+      - {name: return_policy_ar, pii_class: P1, encryption: none}
+      - {name: return_policy_en, pii_class: P1, encryption: none}
+      - {name: free_delivery_threshold_amount, pii_class: P1, encryption: none}
+      - {name: vacation_enabled, pii_class: P1, encryption: none}
+      - {name: vacation_until, pii_class: P1, encryption: none}
+      - {name: vacation_eta_extra_days, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+      - {name: updated_by, pii_class: P2, encryption: none, note: "Seller staff user id."}
+
+  - name: seller_media_uploads
+    spec_ref: "19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: catalog_content, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: slot, pii_class: P1, encryption: none}
+      - {name: object_key, pii_class: P1, encryption: none}
+      - {name: content_type, pii_class: P1, encryption: none}
+      - {name: declared_bytes, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: reject_code, pii_class: P1, encryption: none}
+      - {name: width, pii_class: P1, encryption: none}
+      - {name: height, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: confirmed_at, pii_class: P1, encryption: none}
+      - {name: created_by, pii_class: P2, encryption: none, note: "Seller staff user id."}
+
+  - name: seller_payout_accounts
+    spec_ref: "T4 payouts, 19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, dsar_export: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: account_token, pii_class: P1, encryption: none}
+      - {name: iban_last4, pii_class: P1, encryption: none}
+      - {name: legal_name_score, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: activates_at, pii_class: P1, encryption: none}
+      - {name: superseded_at, pii_class: P1, encryption: none}
+      - {name: iban_enc, pii_class: P3, encryption: field_envelope, residency: in_country, note: "IBAN, AAD seller-bank:<id>:iban. Never returned by any API; only last4 is shown."}
+      - {name: holder_name_enc, pii_class: P3, encryption: field_envelope, residency: in_country, note: "Account holder name, AAD seller-bank:<id>:holder."}
+      - {name: created_by, pii_class: P2, encryption: none, note: "Seller staff user id."}
+
+  - name: seller_shipping_profiles
+    spec_ref: "21, 19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: delivery_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: handling_time_hours, pii_class: P1, encryption: none}
+      - {name: courier_preferences, pii_class: P1, encryption: none}
+      - {name: packaging_options, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+      - {name: origin_governorate_code, pii_class: P2, encryption: none, note: "Pickup address routing."}
+      - {name: origin_city_code, pii_class: P2, encryption: none}
+      - {name: origin_street, pii_class: P2, encryption: none, note: "Shipping origin address."}
+      - {name: origin_building, pii_class: P2, encryption: none}
+      - {name: origin_landmark, pii_class: P2, encryption: none}
+      - {name: origin_contact_name, pii_class: P2, encryption: none}
+      - {name: origin_contact_phone_enc, pii_class: P3, encryption: field_envelope, residency: in_country, note: "AAD seller-shipping:<store>:contact_phone; masked in responses."}
+      - {name: origin_lat, pii_class: P2, encryption: none, note: "Optional map pin."}
+      - {name: origin_lng, pii_class: P2, encryption: none}
+      - {name: updated_by, pii_class: P2, encryption: none}
+
+  - name: seller_notification_prefs
+    spec_ref: "24, 19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: notification_log, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: event_type, pii_class: P1, encryption: none}
+      - {name: channel, pii_class: P1, encryption: none}
+      - {name: enabled, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+      - {name: updated_by, pii_class: P2, encryption: none}
+
+  - name: seller_team_invites
+    spec_ref: "19 team roles; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, dsar_export: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: role, pii_class: P1, encryption: none}
+      - {name: token_hash, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: responded_at, pii_class: P1, encryption: none}
+      - {name: phone_blind, pii_class: P3, encryption: blind_index_hmac, residency: in_country, note: "HMAC blind index of the invitee phone."}
+      - {name: phone_enc, pii_class: P3, encryption: field_envelope, residency: in_country, note: "Invitee phone E.164."}
+      - {name: phone_masked, pii_class: P2, encryption: none, note: "Country prefix and last two digits only."}
+      - {name: invited_by, pii_class: P2, encryption: none}
+      - {name: responded_by, pii_class: P2, encryption: none}
+
+  - name: seller_eta_enrolments
+    spec_ref: "B4, 19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: failure_code, pii_class: P1, encryption: none}
+      - {name: requested_at, pii_class: P1, encryption: none}
+      - {name: last_checked_at, pii_class: P1, encryption: none}
+      - {name: last_verified_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+      - {name: updated_by, pii_class: P2, encryption: none, note: "Status record only; credentials are never stored here."}
+
+  - name: seller_settings_events
+    spec_ref: "A2.9 audit, 19; migration 0055"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: audit_log, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: area, pii_class: P1, encryption: none}
+      - {name: kind, pii_class: P1, encryption: none}
+      - {name: occurred_at, pii_class: P1, encryption: none}
+      - {name: detail, pii_class: P1, encryption: none}
+      - {name: actor_id, pii_class: P2, encryption: none, note: "Seller staff user id; pseudonymized on erasure."}
+
+  - name: seller_users
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: account_active, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: phone_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: phone_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country}
+      - {name: email_ciphertext, pii_class: P2, encryption: field_envelope}
+      - {name: email_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: locale, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: strong_factor, pii_class: P1, encryption: none}
+      - {name: shopper_user_id, pii_class: P2, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: seller_otp_challenges
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: phone_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: phone_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country}
+      - {name: email_ciphertext, pii_class: P2, encryption: field_envelope}
+      - {name: locale, pii_class: P1, encryption: none}
+      - {name: channel, pii_class: P1, encryption: none}
+      - {name: client_key_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: salt, pii_class: P1, encryption: none}
+      - {name: code_hash, pii_class: P1, encryption: one_way_hash}
+      - {name: issued_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: attempts, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+
+  - name: seller_otp_send_log
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: phone_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: client_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: prefix, pii_class: P2, encryption: none}
+      - {name: sent_at, pii_class: P1, encryption: none}
+      - {name: verified, pii_class: P1, encryption: none}
+
+  - name: seller_otp_proofs
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: proof_hash, pii_class: P1, encryption: one_way_hash}
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: otp_channel, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: consumed_at, pii_class: P1, encryption: none}
+
+  - name: seller_passkey_challenges
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: challenge, pii_class: P1, encryption: none}
+      - {name: purpose, pii_class: P1, encryption: none}
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: otp_channel, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+
+  - name: seller_passkey_credentials
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: account_active, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: credential_id, pii_class: P2, encryption: none}
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: public_key, pii_class: P2, encryption: none}
+      - {name: sign_count, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: backup_eligible, pii_class: P1, encryption: none}
+      - {name: backed_up, pii_class: P1, encryption: none}
+      - {name: label, pii_class: P2, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: seller_totp
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: secret_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: last_used_step, pii_class: P1, encryption: none}
+      - {name: failed_count, pii_class: P1, encryption: none}
+      - {name: lock_count, pii_class: P1, encryption: none}
+      - {name: locked_until, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: confirmed_at, pii_class: P1, encryption: none}
+
+  - name: seller_recovery_codes
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: code_hash, pii_class: P1, encryption: one_way_hash}
+      - {name: used_at, pii_class: P1, encryption: none}
+
+  - name: seller_sessions
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: kind, pii_class: P1, encryption: none}
+      - {name: restricted, pii_class: P1, encryption: none}
+      - {name: install_id, pii_class: P2, encryption: none}
+      - {name: amr, pii_class: P1, encryption: none}
+      - {name: strong_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: last_used_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+      - {name: revoke_reason, pii_class: P1, encryption: none}
+
+  - name: seller_refresh_tokens
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: auth_credentials, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: session_id, pii_class: P1, encryption: none}
+      - {name: refresh_hash, pii_class: P1, encryption: one_way_hash}
+      - {name: rotation_no, pii_class: P1, encryption: none}
+      - {name: issued_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: used_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+
+  - name: seller_memberships
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: account_active, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: seller_user_id, pii_class: P2, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: role, pii_class: P1, encryption: none}
+      - {name: granted_by, pii_class: P2, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+
+  - name: seller_staff_invites
+    spec_ref: "1, 19, T5; ADR-0031; migration 0053"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [account_auth], lawful_basis: contract, retention: account_active, processors: [cloud_primary, sms_provider, whatsapp_bsp], residency: approved_region, on_erasure: delete}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: role, pii_class: P1, encryption: none}
+      - {name: phone_hash, pii_class: P2, encryption: blind_index_hmac}
+      - {name: phone_ciphertext, pii_class: P3, encryption: field_envelope, residency: in_country}
+      - {name: invited_by, pii_class: P2, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: accepted_at, pii_class: P1, encryption: none}
+      - {name: revoked_at, pii_class: P1, encryption: none}
+
+  - name: bv_domain_verifications
+    spec_ref: "ADR-0031 brand domain ownership proof; migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: application_id, pii_class: P1, encryption: none, note: "Logical reference to the sellers module application; no FK."}
+      - {name: applicant_id, pii_class: P2, encryption: none, note: "Seller user id."}
+      - {name: domain, pii_class: P1, encryption: none, note: "Brand website registrable domain (a company asset, not personal)."}
+      - {name: method, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: nonce, pii_class: P1, encryption: none, note: "Random challenge nonce; the DNS token is an HMAC of it and is never stored."}
+      - {name: email_local, pii_class: P1, encryption: none, note: "One of admin, info, webmaster, hostmaster."}
+      - {name: email_code_hash, pii_class: P1, encryption: none, note: "HMAC of the one-time code; the code itself is never stored."}
+      - {name: attempts, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: verified_at, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: bv_claims
+    spec_ref: "ADR-0031 duplicate brand-claim registry; migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: applicant_id, pii_class: P2, encryption: none, note: "Seller user id."}
+      - {name: kind, pii_class: P1, encryption: none}
+      - {name: country, pii_class: P1, encryption: none}
+      - {name: brand_name_norm, pii_class: P1, encryption: none, note: "Normalised brand name (company asset)."}
+      - {name: claim_domain, pii_class: P1, encryption: none}
+      - {name: trademark_key, pii_class: P1, encryption: none, note: "Office and register number."}
+      - {name: domain_verified_at, pii_class: P1, encryption: none}
+      - {name: trademark_matched_at, pii_class: P1, encryption: none}
+      - {name: submitted_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: bv_claim_conflicts
+    spec_ref: "ADR-0031 brand claim conflicts for trust_safety; migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: conflict_key, pii_class: P1, encryption: none}
+      - {name: application_ids, pii_class: P1, encryption: none, note: "Application ids; never shown to applicants."}
+      - {name: reasons, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: outcome, pii_class: P1, encryption: none}
+      - {name: winner_application_id, pii_class: P1, encryption: none}
+      - {name: resolved_by, pii_class: P2, encryption: none, note: "Admin user id."}
+      - {name: resolved_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: bv_trademark_lookups
+    spec_ref: "ADR-0031 trademark register evidence; migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: source, pii_class: P1, encryption: none}
+      - {name: office, pii_class: P1, encryption: none}
+      - {name: register_number, pii_class: P1, encryption: none}
+      - {name: found, pii_class: P1, encryption: none}
+      - {name: owner_name, pii_class: P2, encryption: none, note: "Registered owner name; usually a legal entity but can be a sole trader."}
+      - {name: mark_text, pii_class: P1, encryption: none}
+      - {name: mark_classes, pii_class: P1, encryption: none}
+      - {name: mark_status, pii_class: P1, encryption: none}
+      - {name: registered_on, pii_class: P1, encryption: none}
+      - {name: expires_on, pii_class: P1, encryption: none}
+      - {name: owner_score, pii_class: P1, encryption: none}
+      - {name: owner_band, pii_class: P1, encryption: none}
+      - {name: recorded_by, pii_class: P2, encryption: none, note: "Admin user id."}
+      - {name: retrieved_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: bv_screenings
+    spec_ref: "ADR-0031 sanctions screening results (outcome and list ids only); migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: outcome, pii_class: P1, encryption: none}
+      - {name: matched_list_ids, pii_class: P1, encryption: none, note: "List entry ids only, never names."}
+      - {name: list_version, pii_class: P1, encryption: none}
+      - {name: screened_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: bv_auto_check_reports
+    spec_ref: "ADR-0031 deterministic auto-check reports (codes, reasons, evidence ids); migration 0052"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc, fraud_prevention], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: risk, pii_class: P1, encryption: none}
+      - {name: dual_approval_required, pii_class: P1, encryption: none}
+      - {name: report, pii_class: P1, encryption: none, note: "Check codes, reason codes and evidence ids only."}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: bv_history
+    spec_ref: "ADR-0031 append-only action history; migration 0052"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [security_audit], lawful_basis: legitimate_interest, retention: audit_log, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: actor_id, pii_class: P2, encryption: none, note: "Applicant or admin user id."}
+      - {name: action, pii_class: P1, encryption: none}
+      - {name: ref_id, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: brand_review_overlay
+    spec_ref: "ADR-0031 cosign and provisioning-failure overlay; migration 0054"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [seller_onboarding_kyc, security_audit], lawful_basis: legitimate_interest, retention: kyc_records, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, verify: true}
+    fields:
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: cosign_first_approver_id, pii_class: P2, encryption: none, note: "Admin user id of the first approver."}
+      - {name: cosign_requested_at, pii_class: P1, encryption: none}
+      - {name: provisioning_state, pii_class: P1, encryption: none}
+      - {name: provisioning_failure, pii_class: P1, encryption: none}
+      - {name: conflicting_store_id, pii_class: P1, encryption: none}
+      - {name: failed_at, pii_class: P1, encryption: none}
+      - {name: retry_count, pii_class: P1, encryption: none}
+      - {name: last_retry_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  # ---- Brand applications (applicant side, ADR-0031; migration 0051) ----
+  - name: brand_applications
+    spec_ref: "19 KYC onboarding, B5 public legal identity; migration 0051"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc], lawful_basis: legal_obligation, retention: kyc_records, processors: [cloud_primary, kyc_verifier], residency: in_country, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: applicant_id, pii_class: P2, encryption: none, note: "Seller identity id of the applicant (logical reference to seller_users)."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: brand_kind, pii_class: P1, encryption: none}
+      - {name: country, pii_class: P1, encryption: none}
+      - {name: brand_name, pii_class: P0, encryption: none, note: "Public once approved."}
+      - {name: brand_name_norm, pii_class: P1, encryption: none}
+      - {name: ownership_basis, pii_class: P1, encryption: none}
+      - {name: trademark_register, pii_class: P1, encryption: none}
+      - {name: trademark_number, pii_class: P0, encryption: none, note: "Public trademark register entry."}
+      - {name: trademark_owner_name, pii_class: P1, encryption: none, note: "Legal entity named in the register."}
+      - {name: commercial_register_no, pii_class: P2, encryption: none, note: "Business registration number; public legal identity (B5) once approved, masked to last 4 for the applicant view. Sole traders make it personal."}
+      - {name: tax_card_no, pii_class: P2, encryption: none, note: "Business tax registration (B5 public identity once approved); masked to last 4."}
+      - {name: company_reg_no, pii_class: P1, encryption: none, note: "Foreign company registry number (B5 public identity); masked to last 4."}
+      - {name: company_reg_country, pii_class: P1, encryption: none}
+      - {name: vat_or_tax_id, pii_class: P2, encryption: none, note: "Business VAT or tax id; masked to last 4."}
+      - {name: website_domain, pii_class: P0, encryption: none}
+      - {name: social_handles, pii_class: P0, encryption: none}
+      - {name: eta_registration, pii_class: P1, encryption: none}
+      - {name: description_ar, pii_class: P0, encryption: none}
+      - {name: description_en, pii_class: P0, encryption: none}
+      - {name: acknowledgements, pii_class: P1, encryption: none, note: "Seller Agreement, DPA versions and price-monitoring consent."}
+      - {name: pii_enc, pii_class: P3, encryption: field_envelope, note: "One encrypted blob: legal name, contact name, phone and email, signatory name and date of birth. AAD brand_application:<id>:pii."}
+      - {name: national_id_enc, pii_class: P3, encryption: field_envelope, note: "Signatory national id. Never returned after submit."}
+      - {name: national_id_blind, pii_class: P2, encryption: blind_index_hmac, note: "HMAC blind index for duplicate-claim detection."}
+      - {name: domain_verification, pii_class: P1, encryption: none, note: "Snapshot of the brand-verification record (domain, method, status)."}
+      - {name: appeal_used, pii_class: P1, encryption: none}
+      - {name: appeal_statement, pii_class: P2, encryption: none, note: "Free text written by the applicant."}
+      - {name: submitted_at, pii_class: P1, encryption: none}
+      - {name: decision, pii_class: P1, encryption: none}
+      - {name: decision_reason_code, pii_class: P1, encryption: none}
+      - {name: decision_message_ar, pii_class: P1, encryption: none}
+      - {name: decision_message_en, pii_class: P1, encryption: none}
+      - {name: decided_at, pii_class: P1, encryption: none}
+      - {name: reapply_after, pii_class: P1, encryption: none}
+      - {name: appeal_allowed, pii_class: P1, encryption: none}
+      - {name: decision_due_at, pii_class: P1, encryption: none}
+      - {name: rejected_at, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: assignee_id, pii_class: P2, encryption: none, note: "Reviewer staff id."}
+      - {name: claimed_at, pii_class: P1, encryption: none}
+      - {name: requested_items, pii_class: P1, encryption: none}
+      - {name: requested_at, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: brand_application_documents
+    spec_ref: "19 KYC documents in a private bucket; migration 0051"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc], lawful_basis: legal_obligation, retention: kyc_records, processors: [cloud_primary, kyc_verifier], residency: in_country, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: applicant_id, pii_class: P2, encryption: none, note: "Seller identity id of the applicant."}
+      - {name: requirement_code, pii_class: P1, encryption: none}
+      - {name: original_filename_enc, pii_class: P3, encryption: field_envelope, note: "File name written by the applicant; encrypted, display only."}
+      - {name: content_type, pii_class: P1, encryption: none}
+      - {name: size_bytes, pii_class: P1, encryption: none}
+      - {name: sha256, pii_class: P1, encryption: none}
+      - {name: object_key, pii_class: P1, encryption: none, note: "purpose/yyyy/mm/uuid; carries no user, store or file name."}
+      - {name: upload_status, pii_class: P1, encryption: none}
+      - {name: scan_status, pii_class: P1, encryption: none}
+      - {name: review_status, pii_class: P1, encryption: none}
+      - {name: review_note_public, pii_class: P1, encryption: none}
+      - {name: review_note_internal, pii_class: P2, encryption: none, note: "Reviewer note, staff only."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: uploaded_at, pii_class: P1, encryption: none}
+
+  - name: brand_application_history
+    spec_ref: "19 KYC state history (append-only); migration 0051"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_onboarding_kyc], lawful_basis: legal_obligation, retention: kyc_records, processors: [cloud_primary, kyc_verifier], residency: in_country, on_erasure: retain_legal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: application_id, pii_class: P1, encryption: none}
+      - {name: applicant_id, pii_class: P2, encryption: none, note: "Seller identity id of the applicant."}
+      - {name: from_status, pii_class: P1, encryption: none}
+      - {name: to_status, pii_class: P1, encryption: none}
+      - {name: event, pii_class: P1, encryption: none}
+      - {name: actor_type, pii_class: P1, encryption: none}
+      - {name: actor_id, pii_class: P2, encryption: none, note: "Applicant or reviewer id."}
+      - {name: reason_code, pii_class: P1, encryption: none}
+      - {name: occurred_at, pii_class: P1, encryption: none}
+
+  - name: ad_click_reviews
+    spec_ref: "Phase 2 ads click review (append-only); migration 0048"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [security_audit], lawful_basis: legitimate_interest, retention: audit_log, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: click_id, pii_class: P1, encryption: none}
+      - {name: decision, pii_class: P1, encryption: none}
+      - {name: reason_code, pii_class: P1, encryption: none}
+      - {name: decided_by, pii_class: P2, encryption: none, note: "Staff reviewer id."}
+      - {name: decided_at, pii_class: P1, encryption: none}
+
+  - name: admin_calendar_events
+    spec_ref: "Admin gap routes A, platform calendar; migration 0049"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: legitimate_interest, retention: audit_log, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: kind, pii_class: P1, encryption: none}
+      - {name: title_ar, pii_class: P1, encryption: none}
+      - {name: title_en, pii_class: P1, encryption: none}
+      - {name: note, pii_class: P1, encryption: none}
+      - {name: starts_at, pii_class: P1, encryption: none}
+      - {name: ends_at, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_by, pii_class: P2, encryption: none, note: "Staff id."}
+      - {name: updated_by, pii_class: P2, encryption: none, note: "Staff id."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: admin_calendar_audit
+    spec_ref: "Admin gap routes A, platform calendar audit; migration 0049"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [security_audit], lawful_basis: legitimate_interest, retention: audit_log, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: event_id, pii_class: P1, encryption: none}
+      - {name: actor_id, pii_class: P2, encryption: none, note: "Staff id."}
+      - {name: action, pii_class: P1, encryption: none}
+      - {name: before, pii_class: P1, encryption: none}
+      - {name: after, pii_class: P1, encryption: none}
+      - {name: at, pii_class: P1, encryption: none}
+
+  # ---- forecasting module (migrations 0064, 0065, spec docs/specs/phase-3/demand-forecasting.md) ----
+  - name: forecast_demand_series
+    spec_ref: "20.8 demand forecasting, 19.1 sell-through; migration 0064"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: sku_id, pii_class: P1, encryption: none}
+      - {name: category_code, pii_class: P1, encryption: none}
+      - {name: size_label, pii_class: P1, encryption: none}
+      - {name: governorate, pii_class: P1, encryption: none, note: "Aggregated per day; released to sellers only at k >= 50 distinct shoppers."}
+      - {name: day, pii_class: P1, encryption: none}
+      - {name: units_gross, pii_class: P1, encryption: none}
+      - {name: units_net, pii_class: P1, encryption: none}
+      - {name: censored, pii_class: P1, encryption: none}
+      - {name: flagged, pii_class: P1, encryption: none}
+      - {name: shoppers, pii_class: P1, encryption: none, note: "Per-day distinct shopper COUNT used only for the k-anonymity gate. No shopper key is stored."}
+      - {name: ingested_at, pii_class: P1, encryption: none}
+
+  - name: demand_forecasts
+    spec_ref: "20.8 demand forecasting; migration 0064"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: scope, pii_class: P1, encryption: none}
+      - {name: scope_key, pii_class: P1, encryption: none}
+      - {name: horizon_days, pii_class: P1, encryption: none}
+      - {name: as_of_date, pii_class: P1, encryption: none}
+      - {name: model, pii_class: P1, encryption: none}
+      - {name: model_version, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: p10, pii_class: P1, encryption: none}
+      - {name: p50, pii_class: P1, encryption: none}
+      - {name: p90, pii_class: P1, encryption: none}
+      - {name: reason_codes, pii_class: P1, encryption: none}
+      - {name: comparable_units, pii_class: P1, encryption: none}
+      - {name: observed_days, pii_class: P1, encryption: none}
+      - {name: backtest_origins, pii_class: P1, encryption: none}
+      - {name: wape_bps, pii_class: P1, encryption: none}
+      - {name: baseline_wape_bps, pii_class: P1, encryption: none}
+      - {name: pinball_milli, pii_class: P1, encryption: none}
+      - {name: coverage_bps, pii_class: P1, encryption: none}
+      - {name: bias_bps, pii_class: P1, encryption: none}
+      - {name: generated_at, pii_class: P1, encryption: none}
+
+  - name: forecast_runs
+    spec_ref: "20.8 demand forecasting, nightly batch idempotency and model metrics; migration 0065"
+    source: derived
+    data_subjects: [seller_representative]
+    defaults: {purpose: [seller_platform_ops], lawful_basis: contract, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: store_id, pii_class: P1, encryption: none}
+      - {name: as_of_date, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: series_total, pii_class: P1, encryption: none}
+      - {name: ok_count, pii_class: P1, encryption: none}
+      - {name: insufficient_count, pii_class: P1, encryption: none}
+      - {name: suppressed_count, pii_class: P1, encryption: none}
+      - {name: served_models, pii_class: P1, encryption: none}
+      - {name: mean_wape_bps, pii_class: P1, encryption: none}
+      - {name: mean_baseline_wape_bps, pii_class: P1, encryption: none}
+      - {name: mean_pinball_milli, pii_class: P1, encryption: none}
+      - {name: mean_coverage_bps, pii_class: P1, encryption: none}
+      - {name: mean_bias_bps, pii_class: P1, encryption: none}
+      - {name: error_code, pii_class: P1, encryption: none}
+      - {name: started_at, pii_class: P1, encryption: none}
+      - {name: finished_at, pii_class: P1, encryption: none}
+
+  # ---- Price-drop auto-buy (spec P3-01, ADR-0036; migration 0056). A mandate is the shopper's own
+  # explicit authorisation and doubles as chargeback evidence, so it follows order record retention. ----
+  - name: auto_buy_mandate_texts
+    spec_ref: "P3-01 Data (mandate text versions stored immutably); migration 0056"
+    source: spec_named
+    data_subjects: [visitor]
+    defaults: {purpose: [payment_processing], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, dsar_export: false}
+    fields:
+      - {name: version, pii_class: P0, encryption: none, residency: global_ok}
+      - {name: locale, pii_class: P0, encryption: none, residency: global_ok}
+      - {name: body, pii_class: P0, encryption: none, residency: global_ok, note: "Legal wording template with placeholders; DRAFT until counsel approves (VR-P3-02)."}
+      - {name: body_sha256, pii_class: P0, encryption: none, residency: global_ok}
+      - {name: created_at, pii_class: P0, encryption: none, residency: global_ok}
+
+  - name: auto_buy_mandates
+    spec_ref: "P3-01 Data; migration 0056"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [payment_processing, order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary, psp_primary], residency: approved_region, on_erasure: retain_legal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: sku_id, pii_class: P2, encryption: none, note: "What the shopper intends to buy."}
+      - {name: size_label, pii_class: P2, encryption: none}
+      - {name: target_price, pii_class: P2, encryption: none}
+      - {name: max_price, pii_class: P2, encryption: none}
+      - {name: currency, pii_class: P1, encryption: none}
+      - {name: mode, pii_class: P1, encryption: none}
+      - {name: psp_token_ref, pii_class: P3, encryption: psp_tokenized, on_erasure: pseudonymize, note: "Reference into the PSP vault only, never a card number. Never returned by any API or event."}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: closed_reason, pii_class: P1, encryption: none}
+      - {name: expires_at, pii_class: P1, encryption: none}
+      - {name: mandate_version, pii_class: P1, encryption: none}
+      - {name: mandate_locale, pii_class: P1, encryption: none}
+      - {name: terms_sha256, pii_class: P1, encryption: none}
+      - {name: accepted_at, pii_class: P2, encryption: none}
+      - {name: accepted_device_id, pii_class: P2, encryption: none, on_erasure: pseudonymize, note: "Scrubbed in place on account deletion; the accepted terms and notice evidence stay (chargeback defence, migration 0057)."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: auto_buy_attempts
+    spec_ref: "P3-01 Data; migration 0056"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [payment_processing, order_fulfilment], lawful_basis: contract, retention: orders_tax_records, processors: [cloud_primary, psp_primary], residency: approved_region, on_erasure: retain_legal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: mandate_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: price_event_id, pii_class: P1, encryption: none}
+      - {name: mode, pii_class: P1, encryption: none}
+      - {name: state, pii_class: P1, encryption: none}
+      - {name: trigger_price, pii_class: P2, encryption: none}
+      - {name: charge_price, pii_class: P2, encryption: none}
+      - {name: notice_sent_at, pii_class: P2, encryption: none, note: "Evidence that the pre-charge notice was sent (chargeback defence)."}
+      - {name: cancel_deadline, pii_class: P2, encryption: none}
+      - {name: charge_started_at, pii_class: P2, encryption: none}
+      - {name: reservation_ref, pii_class: P1, encryption: none}
+      - {name: order_group_id, pii_class: P2, encryption: none}
+      - {name: failure_reason, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  # ---- Phase 3 outfit calendar (spec P3-02, migrations 0062 and 0063) ----
+  - name: calendar_events
+    spec_ref: "P3-02 Data (calendar_events); migration 0062"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: contract, retention: personalization_data, processors: [cloud_primary], residency: approved_region, on_erasure: delete, seller_visibility: none, external_llm: never}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: kind, pii_class: P2, encryption: none, note: "Event type such as wedding guest or date; can reveal life events."}
+      - {name: starts_at, pii_class: P2, encryption: none}
+      - {name: local_date, pii_class: P2, encryption: none}
+      - {name: note, pii_class: P2, encryption: none, note: "Short free text, 200 chars max. Never sent to an LLM or a seller; imported device events carry no note."}
+      - {name: modesty, pii_class: P2, encryption: none, note: "Dress-code preference; can reveal religious practice. Not shared with sellers or ads."}
+      - {name: season_band, pii_class: P1, encryption: none}
+      - {name: budget_piastres, pii_class: P2, encryption: none, verify: true, note: "Budget the shopper typed for this event only; never read from the budget suite. DPO to confirm P2 versus P3 (same question as wishlists.budget_amount)."}
+      - {name: owned_slots, pii_class: P2, encryption: none, note: "Outfit slots the shopper says they already own (for example shoes)."}
+      - {name: source, pii_class: P1, encryption: none}
+      - {name: reminders_enabled, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P1, encryption: none}
+      - {name: version, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: calendar_outfits
+    spec_ref: "P3-02 Data (calendar_outfits); migration 0062"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: contract, retention: personalization_data, processors: [cloud_primary], residency: approved_region, on_erasure: delete, seller_visibility: none, external_llm: never}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: event_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: outfit_id, pii_class: P1, encryption: none}
+      - {name: status, pii_class: P2, encryption: none, note: "Planned, in bag, purchased or worn: user-linked behaviour."}
+      - {name: created_at, pii_class: P1, encryption: none}
+      - {name: updated_at, pii_class: P1, encryption: none}
+
+  - name: calendar_reminders
+    spec_ref: "P3-02 Data (calendar_reminders); migration 0063"
+    source: spec_named
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: contract, retention: personalization_data, processors: [cloud_primary], residency: approved_region, on_erasure: delete, seller_visibility: none, external_llm: never}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: event_id, pii_class: P1, encryption: none}
+      - {name: user_id, pii_class: P2, encryption: none}
+      - {name: offset_days, pii_class: P1, encryption: none}
+      - {name: due_at, pii_class: P2, encryption: none, note: "Derived from the event date."}
+      - {name: state, pii_class: P1, encryption: none}
+      - {name: attempts, pii_class: P1, encryption: none}
+      - {name: claimed_at, pii_class: P1, encryption: none}
+      - {name: sent_at, pii_class: P1, encryption: none}
+      - {name: skip_reason, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  # ---- Phase 3: ranking v2 shadow and offline evaluation (migrations 0079, 0080) ----
+  - name: ranking_shadow_runs
+    spec_ref: "20.5 ranking v2 shadow deployment; migration 0079"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: module, pii_class: P1, encryption: none}
+      - {name: served_model_version, pii_class: P1, encryption: none}
+      - {name: shadow_model_version, pii_class: P1, encryption: none}
+      - {name: personalized, pii_class: P1, encryption: none, note: "Boolean only; no user or session key is stored."}
+      - {name: bot_filtered, pii_class: P1, encryption: none}
+      - {name: candidate_count, pii_class: P1, encryption: none}
+      - {name: k, pii_class: P1, encryption: none}
+      - {name: overlap_permille, pii_class: P1, encryption: none}
+      - {name: top1_same, pii_class: P1, encryption: none}
+      - {name: mean_rank_shift_milli, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  - name: ranking_shadow_items
+    spec_ref: "20.5 ranking v2 shadow deployment, spec 12 Privacy; migration 0079"
+    source: derived
+    data_subjects: [shopper]
+    defaults: {purpose: [personalization_stylist], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: run_id, pii_class: P1, encryption: none}
+      - {name: product_id, pii_class: P1, encryption: none}
+      - {name: v1_rank, pii_class: P1, encryption: none}
+      - {name: v2_rank, pii_class: P1, encryption: none}
+      - {name: v2_score_milli, pii_class: P1, encryption: none}
+      - {name: features, pii_class: P1, encryption: none, note: "Closed ranking feature names only; a CHECK refuses budget, affordability, installment and measurement keys."}
+
+  - name: ranking_eval_runs
+    spec_ref: "20.5 ranking v2 offline evaluation; migration 0080"
+    source: derived
+    data_subjects: [staff]
+    defaults: {purpose: [personalization_stylist], lawful_basis: legitimate_interest, retention: analytics_events, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal, verify: true}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: request_key, pii_class: P1, encryption: none}
+      - {name: candidate_version, pii_class: P1, encryption: none}
+      - {name: baseline_version, pii_class: P1, encryption: none}
+      - {name: dataset, pii_class: P1, encryption: none}
+      - {name: seed, pii_class: P1, encryption: none}
+      - {name: requests, pii_class: P1, encryption: none}
+      - {name: k, pii_class: P1, encryption: none}
+      - {name: candidate_ndcg_bps, pii_class: P1, encryption: none}
+      - {name: candidate_map_bps, pii_class: P1, encryption: none}
+      - {name: baseline_ndcg_bps, pii_class: P1, encryption: none}
+      - {name: baseline_map_bps, pii_class: P1, encryption: none}
+      - {name: passed, pii_class: P1, encryption: none}
+      - {name: reasons, pii_class: P1, encryption: none}
+      - {name: created_at, pii_class: P1, encryption: none}
+
+  # ---------------------------------------------------------------- ledger integrity result (ADR-0046, dashboard foundations track 3)
+  - name: ledger_integrity_runs
+    spec_ref: "dashboard-foundations section 3; ADR-0046; migration 0089"
+    source: derived
+    data_subjects: [shopper]
+    description: One immutable row per integrity attempt start and outcome. No user id; counts and a report hash only.
+    defaults: {purpose: [finance_integrity, wallet_ledger], lawful_basis: legal_obligation, retention: orders_tax_records, processors: [cloud_primary], residency: approved_region, on_erasure: not_personal}
+    fields:
+      - {name: id, pii_class: P1, encryption: none}
+      - {name: run_kind, pii_class: P1, encryption: none}
+      - {name: outcome, pii_class: P1, encryption: none}
+      - {name: attempt_id, pii_class: P1, encryption: none}
+      - {name: started_at, pii_class: P1, encryption: none}
+      - {name: finished_at, pii_class: P1, encryption: none}
+      - {name: ok, pii_class: P1, encryption: none}
+      - {name: trial_ok, pii_class: P1, encryption: none}
+      - {name: trial_offenders, pii_class: P1, encryption: none, note: "Currency and signed total per offending currency; no counterparty."}
+      - {name: chain_ok, pii_class: P1, encryption: none}
+      - {name: chain_length, pii_class: P1, encryption: none}
+      - {name: chain_head_hash, pii_class: P1, encryption: none, note: "Never copied into alert payloads."}
+      - {name: chain_failure, pii_class: P1, encryption: none, note: "Sequence number, entry id and reason of the first chain break; journal entry ids, no user id."}
+      - {name: drift_count, pii_class: P1, encryption: none}
+      - {name: negative_count, pii_class: P1, encryption: none}
+      - {name: sample_truncated, pii_class: P1, encryption: none}
+      - {name: error_code, pii_class: P1, encryption: none}
+      - {name: report_sha256, pii_class: P1, encryption: none}
+
+  - name: ledger_integrity_drift_samples
+    spec_ref: "dashboard-foundations section 3; ADR-0046; migration 0089, 0093; VR-DASH-08"
+    source: derived
+    data_subjects: [shopper]
+    description: Capped (50) store-credit drift sample per run. A ledger account id tied to a balance anomaly is pseudonymous personal data (the raw user id is not stored, 0093); own retention, run rows stay immutable.
+    defaults: {purpose: [finance_integrity, wallet_ledger], lawful_basis: legal_obligation, retention: ledger_integrity_samples, processors: [cloud_primary], residency: approved_region, on_erasure: pseudonymize, verify: true}
+    fields:
+      - {name: run_id, pii_class: P1, encryption: none}
+      - {name: ord, pii_class: P1, encryption: none}
+      - {name: account_id, pii_class: P2, encryption: none, note: "Pseudonymous ledger account id (0093); the raw user id is not stored. Resolving it to a person needs ledger_accounts, which carries the erasure handling. 25 months, then purged by the retention job."}
+      - {name: sub, pii_class: P1, encryption: none}
+      - {name: projected_minor, pii_class: P2, encryption: none}
+      - {name: from_postings_minor, pii_class: P2, encryption: none}
+      - {name: difference_minor, pii_class: P2, encryption: none}
       - {name: created_at, pii_class: P1, encryption: none}

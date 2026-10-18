@@ -110,6 +110,8 @@ Origin `client` events are emitted by the app and need the listed consent. Origi
 | `order_delivered` | checkout | server | `strictly_necessary` | `seller_order_id`, `delivery_attempts` | seller_order_id=P1, delivery_attempts=P0 | `analytics_25m` | §21, §26 |
 | `return_requested` | returns | server | `strictly_necessary` | `return_id`, `reason` | return_id=P1, reason=P1 | `analytics_25m` | §22, §26 |
 | `refund_completed` | refunds | server | `strictly_necessary` | `refund_id`, `route`, `amount_minor` | refund_id=P1, route=P1, amount_minor=P1 | `analytics_25m` | §15.6, §22, §26 |
+| `home_banner_impression` | catalog | client | `analytics` | `banner_id`, `position`, `sponsored`, `cta_kind` | banner_id=P1, position=P0, sponsored=P0, cta_kind=P0 | `analytics_25m` | §16, §26 |
+| `home_banner_click` | catalog | client | `analytics` | `banner_id`, `position`, `sponsored`, `cta_kind` | banner_id=P1, position=P0, sponsored=P0, cta_kind=P0 | `analytics_25m` | §16, §26 |
 | `price_badge_viewed` | price-integrity | client | `analytics` | `product_id`, `badge_type` | product_id=P1, badge_type=P0 | `analytics_25m` | §5, §9, §26 |
 | `price_reported` | price-integrity | client | `analytics` | `product_id`, `report_kind` | product_id=P1, report_kind=P0 | `analytics_25m` | §9, §26 |
 | `plus_paywall_viewed` | plus | client | `analytics` | `entry_point` | entry_point=P0 | `analytics_25m` | §14, §26 |

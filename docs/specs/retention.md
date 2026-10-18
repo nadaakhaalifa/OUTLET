@@ -8,7 +8,7 @@ Status: implemented for the tables that exist in migrations 0001-0046. Source of
 3. `RunRetention.runTarget`: cutoff = now minus the rule period (calendar-aware, UTC); count eligible/held and the oldest eligible row; if not a dry run, loop `purgeBatch` (1000 rows, one short transaction each, `statement_timeout` 15 s, `FOR UPDATE SKIP LOCKED`) until a batch returns fewer rows than the batch size or 200 batches ran (status PARTIAL, finished next night).
 4. Every run writes `retention_purge_runs` (rule, target, dry_run, cutoff, started, finished, status, rows purged/eligible/held, batches, oldest eligible, error code). Counts only, no row content.
 5. Metrics (JSON log lines `retention.metric`, same convention as the worker gauges): the inventory counter per rule (`privacy_sessions_purged_total` and so on), `retention_eligible_rows`, `retention_held_rows`, `retention_oldest_eligible_lag_seconds`. Alert on lag growing above one day.
-6. Workers: `retention.purge.<rule>` nightly at 03:00 to 03:48 Cairo, four minutes apart (13 jobs). A failed target throws, so the scheduler records the failure and the dead-man gauge alerts.
+6. Workers: `retention.purge.<rule>` nightly at 03:01 to 03:46 Cairo, three minutes apart (16 jobs). A failed target throws, so the scheduler records the failure and the dead-man gauge alerts.
 
 ## Rules
 - A row exactly at the cutoff is kept; one older is purged.
