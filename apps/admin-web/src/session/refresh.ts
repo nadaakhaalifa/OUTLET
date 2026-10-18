@@ -1,5 +1,6 @@
 import { sessionTokens } from "../api/schemas";
 import type { Transport } from "../api/transport";
+import { INSTALL_HEADER } from "./install-token";
 import { toState, type SessionState } from "./port";
 
 /** Refresh this many ms before the access token expires, so a render never races expiry. */
@@ -17,14 +18,19 @@ export type RefreshOutcome =
 export async function refreshIfNeeded(
   state: SessionState,
   nowMs: number,
-  deps: { readonly transport: Transport; readonly installId: string },
+  deps: {
+    readonly transport: Transport;
+    /** The server-minted install token from the `__Host-admin-install` cookie; null when the cookie is absent. */
+    readonly installToken: string | null;
+  },
 ): Promise<RefreshOutcome> {
   if (state.accessExpiresAtMs - nowMs > REFRESH_SKEW_MS) return { kind: "fresh", state };
   try {
     const res = await deps.transport.send({
       method: "POST",
       path: "/v1/auth/refresh",
-      body: { refresh_token: state.refreshToken, device_install_id: deps.installId },
+      headers: deps.installToken === null ? {} : { [INSTALL_HEADER]: deps.installToken },
+      body: { refresh_token: state.refreshToken },
     });
     const tokens = sessionTokens.safeParse(res.json);
     if (res.status !== 200 || !tokens.success || tokens.data.second_factor_required === true) return { kind: "signed_out" };

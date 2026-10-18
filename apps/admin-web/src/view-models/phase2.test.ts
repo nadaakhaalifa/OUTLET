@@ -199,6 +199,6 @@ describe("navigation", () => {
     expect(ids(["marketing"])).not.toContain("engineering");
     expect(ids(["security"])).toContain("engineering");
     expect(ids(["support"])).not.toContain("plus");
-    expect(ids(null)).toEqual(expect.arrayContaining(["plus", "gift-cards", "drops", "price-matching", "resale-hub"]));
+    expect(ids(null)).toEqual([]);
   });
 });

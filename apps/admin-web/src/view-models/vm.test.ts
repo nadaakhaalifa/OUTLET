@@ -251,10 +251,17 @@ describe("queues", () => {
 });
 
 describe("rbac nav, posture, pii, errors", () => {
-  it("hides links the role cannot use and treats unknown roles as show-all", () => {
+  it("hides links the role cannot use and fails closed on unknown identity", () => {
     expect(navFor(["dpo"]).map((i) => i.id)).toEqual(["home", "approvals", "elevation", "privacy", "pii"]);
     expect(navFor(["marketing"]).map((i) => i.id)).not.toContain("finance");
-    expect(navFor(null).length).toBeGreaterThan(navFor(["dpo"]).length);
+    // not_admin, 5xx and malformed identity all reach the nav as null/unrecognised roles: nothing privileged.
+    expect(navFor(null)).toEqual([]);
+    expect(navFor([])).toEqual([]);
+    expect(navFor(["bogus"] as unknown as Parameters<typeof navFor>[0])).toEqual([]);
+    expect(navFor(["super_admin"]).map((i) => i.id)).not.toContain("finance");
+    expect(navAllowsPath(null, "/")).toBe(false);
+    expect(navAllowsPath(null, "/finance")).toBe(false);
+    expect(navAllowsPath([], "/finance")).toBe(false);
     expect(navAllowsPath(["support"], "/finance")).toBe(false);
     expect(navAllowsPath(["finance"], "/finance")).toBe(true);
   });
@@ -283,5 +290,17 @@ describe("rbac nav, posture, pii, errors", () => {
   it("maps api errors to honest states", () => {
     expect(errorState({ kind: "forbidden" })).toMatchObject({ kind: "error", messageKey: "state.forbidden" });
     expect(errorState({ kind: "contract", requestId: "r1" })).toMatchObject({ messageKey: "state.contract", requestId: "r1" });
+  });
+});
+
+describe("reconciliation tickets as break rows (ADR-0050 repoint)", () => {
+  it("maps a served ticket to a break row, with the delta as the difference", async () => {
+    const { reconTicketList } = await import("../api/schemas");
+    const parsed = reconTicketList.parse({
+      items: [{ id: "0192f3a4-5b6c-7d8e-9f01-000000000001", source: "psp_settlement", kind: "amount_mismatch", severity: "high", status: "escalated", ref: "S-1", detail: "x", amount_delta: { amount: "-250", currency: "EGP" }, item_at: iso(NOW), first_seen_at: iso(NOW - 4 * 86_400_000), last_seen_at: iso(NOW), escalated_at: iso(NOW), resolved_at: null, last_run_id: null }],
+      page: { next_cursor: null, has_more: false },
+    });
+    const rows = breakRows(parsed.items, NOW);
+    expect(rows[0]).toMatchObject({ kind: "psp_settlement:amount_mismatch", status: "escalated", reference: "S-1", differenceMinor: -250n, open: true, escalate: true });
   });
 });

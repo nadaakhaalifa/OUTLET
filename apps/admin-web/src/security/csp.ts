@@ -8,6 +8,8 @@ export interface CspOptions {
   readonly apiOrigin: string | null;
   /** Dev server needs eval for React refresh; never set in production. */
   readonly development: boolean;
+  /** Document store origin for the brand document viewer (img-src, frame-src). null: no widening. */
+  readonly documentOrigin?: string | null;
   readonly reportUri?: string;
 }
 
@@ -29,11 +31,12 @@ export function buildCsp(o: CspOptions): string {
   if (!isValidNonce(o.nonce)) throw new Error("invalid_csp_nonce");
   const script = ["'self'", `'nonce-${o.nonce}'`, "'strict-dynamic'", ...(o.development ? ["'unsafe-eval'"] : [])];
   const connect = ["'self'", ...(o.apiOrigin === null ? [] : [o.apiOrigin])];
+  const docs = o.documentOrigin === undefined || o.documentOrigin === null ? [] : [o.documentOrigin];
   const directives: Array<readonly [string, readonly string[]]> = [
     ["default-src", ["'none'"]],
     ["script-src", script],
     ["style-src", ["'self'", `'nonce-${o.nonce}'`]],
-    ["img-src", ["'self'", "data:"]],
+    ["img-src", ["'self'", "data:", ...docs]],
     ["font-src", ["'self'"]],
     ["connect-src", connect],
     ["form-action", ["'self'"]],
@@ -41,6 +44,7 @@ export function buildCsp(o: CspOptions): string {
     ["base-uri", ["'none'"]],
     ["object-src", ["'none'"]],
     ["manifest-src", ["'self'"]],
+    ...(docs.length === 0 ? [] : [["frame-src", docs] as const]),
   ];
   const parts = directives.map(([k, v]) => `${k} ${v.join(" ")}`);
   if (!o.development) parts.push("upgrade-insecure-requests");

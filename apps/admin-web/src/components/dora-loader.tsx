@@ -23,7 +23,7 @@ export function DoraLoader({ labels: L }: { readonly labels: DoraLabels }) {
   return (
     <div>
       <label htmlFor={`${id}-t`}>{L.input}</label>
-      <textarea id={`${id}-t`} rows={6} dir="ltr" value={text} onChange={(e) => setText(e.target.value)} style={{ inlineSize: "100%" }} />
+      <textarea className="wide" id={`${id}-t`} rows={6} dir="ltr" value={text} onChange={(e) => setText(e.target.value)} />
       <div className="row">
         <label htmlFor={`${id}-f`}>{L.file}</label>
         <input id={`${id}-f`} type="file" accept="application/json,.json" onChange={(e) => {

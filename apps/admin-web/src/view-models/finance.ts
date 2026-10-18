@@ -61,6 +61,7 @@ export function breakRows(items: readonly ReconBreakWire[], serverNowMs: number)
       const exp = b.expected === undefined ? null : parseMinor(b.expected.amount);
       const act = b.actual === undefined ? null : parseMinor(b.actual.amount);
       const age = Math.max(0, serverNowMs - Date.parse(b.detected_at));
+      const delta = b.amount_delta === undefined ? null : parseMinor(b.amount_delta.amount);
       const open = b.status !== "resolved";
       return {
         id: b.id,
@@ -69,7 +70,7 @@ export function breakRows(items: readonly ReconBreakWire[], serverNowMs: number)
         reference: b.reference ?? null,
         expectedMinor: exp,
         actualMinor: act,
-        differenceMinor: exp !== null && act !== null ? act - exp : null,
+        differenceMinor: exp !== null && act !== null ? act - exp : delta,
         ageMs: age,
         escalate: open && age > ESCALATION_AGE_MS,
         open,

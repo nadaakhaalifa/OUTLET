@@ -55,7 +55,7 @@ export function PasskeyLogin({ labels }: PasskeyLoginProps) {
 
   return (
     <div>
-      <button type="button" className="btn primary" onClick={go} disabled={pending}>
+      <button type="button" className="btn primary brand" onClick={go} disabled={pending}>
         {pending ? labels.working : labels.signIn}
       </button>
       {message === null ? null : <p role="alert" className="notice error">{message}</p>}

@@ -7,6 +7,7 @@ import type { AdminMe } from "../api/schemas";
 import { createFetchTransport, type Transport } from "../api/transport";
 import { createTranslator, pickLocale, type Locale, type Translator } from "../i18n";
 import { ApiSession } from "../session/api-session";
+import { INSTALL_COOKIE, INSTALL_COOKIE_OPTIONS, parseInstallToken, type InstallTokenStore } from "../session/install-token";
 import { decodeSessionCookie, encodeSessionCookie, SESSION_COOKIE } from "../session/refresh";
 import type { SessionState, SessionStore } from "../session/port";
 import { evaluatePosture, type Posture } from "../view-models/posture";
@@ -57,12 +58,34 @@ export function cookieSessionStore(): SessionStore {
   };
 }
 
+/**
+ * Install-token cookie adapter (`__Host-admin-install`). Written by server actions (sign-in rotates it) and
+ * cleared on sign-out; read by the Next server for refresh and, later, for /v1/admin/me. Render cannot set
+ * cookies, so a write there is best effort, exactly like the session cookie.
+ */
+export function cookieInstallTokenStore(): InstallTokenStore {
+  return {
+    async read(): Promise<string | null> {
+      return parseInstallToken((await cookies()).get(INSTALL_COOKIE)?.value);
+    },
+    async write(token: string | null): Promise<void> {
+      try {
+        const jar = await cookies();
+        if (token === null) jar.delete(INSTALL_COOKIE);
+        else jar.set(INSTALL_COOKIE, token, INSTALL_COOKIE_OPTIONS);
+      } catch {
+        // Not in a mutable context (render). Sign-in and the proxy own this cookie.
+      }
+    },
+  };
+}
+
 export function makeSession(transport: Transport): ApiSession {
   return new ApiSession({
     transport,
     store: cookieSessionStore(),
     credentials: { getAssertion: async () => ({ ok: false, error: "unsupported" }) },
-    installId: () => "00000000-0000-4000-8000-000000000000",
+    installTokens: cookieInstallTokenStore(),
     newIdempotencyKey: () => crypto.randomUUID(),
   });
 }

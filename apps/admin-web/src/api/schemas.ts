@@ -34,6 +34,8 @@ export const sessionTokens = z.object({
   refresh_token: z.string(),
   refresh_expires_at: ts,
   second_factor_required: z.boolean().optional(),
+  /** Web passkey assertion only: the server-minted browser install token, returned once (43-char base64url). */
+  install_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
 });
 export type SessionTokens = z.infer<typeof sessionTokens>;
 export const passkeyOptions = z.object({ challenge_id: uuid, challenge: z.string(), rp_id: z.string(), expires_at: ts });
@@ -220,18 +222,49 @@ export const ledgerBalance = z.object({
 export type LedgerBalanceWire = z.infer<typeof ledgerBalance>;
 export const ledgerBalances = z.object({ items: z.array(ledgerBalance) });
 
-/** openapi.yaml listAdminReconciliationBreaks (proposed; no controller yet). */
+/**
+ * Finance reconciliation tickets (served: GET /v1/admin/finance/reconciliation/tickets, recon.controller.ts ticketWire).
+ * ADR-0050 deleted the never-served /v1/admin/reconciliation/breaks; the console keeps its break-row view model by
+ * mapping each ticket to a `ReconBreakWire`.
+ */
+export const reconTicket = z.object({
+  id: uuid,
+  source: z.string(),
+  kind: z.string(),
+  severity: z.string(),
+  status: z.enum(["open", "escalated", "resolved"]),
+  ref: z.string(),
+  amount_delta: money,
+  first_seen_at: ts,
+});
+export type ReconTicketWire = z.infer<typeof reconTicket>;
+
 export const reconBreak = z.object({
   id: uuid,
-  kind: z.enum(["psp_settlement", "courier_cod", "wallet_projection", "ledger_balance"]),
-  status: z.enum(["open", "ticketed", "resolved"]),
+  /** `<source>:<finding kind>`, for example `psp_settlement:amount_mismatch`. */
+  kind: z.string(),
+  status: z.enum(["open", "escalated", "resolved"]),
   expected: money.optional(),
   actual: money.optional(),
+  /** actual - expected, when the ticket carries only the delta. */
+  amount_delta: money.optional(),
   reference: z.string().optional(),
   detected_at: ts,
 });
 export type ReconBreakWire = z.infer<typeof reconBreak>;
 export const reconBreakList = z.object({ items: z.array(reconBreak), page });
+
+export const ticketToBreak = (t: ReconTicketWire): ReconBreakWire => ({
+  id: t.id,
+  kind: `${t.source}:${t.kind}`,
+  status: t.status,
+  amount_delta: t.amount_delta,
+  reference: t.ref,
+  detected_at: t.first_seen_at,
+});
+export const reconTicketList = z
+  .object({ items: z.array(reconTicket), page })
+  .transform((v): z.infer<typeof reconBreakList> => ({ items: v.items.map(ticketToBreak), page: v.page }));
 
 // ---- price integrity (openapi.yaml, proposed) ----------------------------------------------
 export const priceAction = z.object({
@@ -291,6 +324,9 @@ export const plusPlanSchema = z.object({
   active: z.boolean(),
   effective_from: ts,
   members_notified_at: tsOrNull,
+  /** Family / student plans (spec P3-03). Older servers omit both: treated as an individual plan. */
+  kind: z.enum(["individual", "family", "student"]).optional(),
+  seat_limit: z.number().int().min(1).max(8).nullable().optional(),
 });
 export type PlusPlanWire = z.infer<typeof plusPlanSchema>;
 export const plusPlanList = z.object({ items: z.array(plusPlanSchema) });

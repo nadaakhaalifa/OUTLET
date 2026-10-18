@@ -185,6 +185,7 @@ export async function setLocaleAction(form: FormData): Promise<void> {
 const plusForm = (form: FormData) => ({
   code: field(form, "code").trim(), interval: field(form, "interval"), priceEgp: field(form, "price_egp"),
   trialDays: field(form, "trial_days").trim(), effectiveFrom: field(form, "effective_from"),
+  kind: field(form, "kind"), seatLimit: field(form, "seat_limit"),
 });
 
 /** Step 1 of a price change: ask for a dual approval (the requester can never approve it). */

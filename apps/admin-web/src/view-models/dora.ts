@@ -1,3 +1,4 @@
+import "../lib/zod-jitless";
 import type { DoraReport } from "../api/schemas";
 import { doraReport } from "../api/schemas";
 

@@ -1,20 +1,23 @@
 import { passkeyOptions, sessionTokens, type PasskeyOptions } from "../api/schemas";
 import { NetworkError, type Transport } from "../api/transport";
 import { err, ok, type Result } from "../lib/result";
+import { INSTALL_HEADER, parseInstallToken, type InstallTokenStore } from "./install-token";
 import { toState, type CredentialPort, type SessionFailure, type SessionPort, type SessionState, type SessionStore } from "./port";
 
 export interface ApiSessionDeps {
   readonly transport: Transport;
   readonly store: SessionStore;
   readonly credentials: CredentialPort;
-  readonly installId: () => string;
+  /** Holds the SERVER-minted install token (httpOnly cookie in production). The client never makes one up. */
+  readonly installTokens: InstallTokenStore;
   readonly newIdempotencyKey: () => string;
 }
 
 /**
  * SessionPort over /v1/auth/passkey/assert/options, /v1/auth/passkey/assert, /v1/auth/refresh, /v1/auth/logout.
- * GAP: the contract's DeviceInfo.platform enum is ios|android only and the admin audience is not selectable on
- * these routes yet; the server will reject "web" until the contract adds it (see docs/specs/admin-console-web.md).
+ * Web sign-in (spec track 1): the assertion carries `device: {platform: "web"}` and no install id. The server
+ * answers with `install_token`, which is kept in the install-token store and sent as `X-Admin-Install` on refresh.
+ * A response without a token is refused, not stored: such a session could never refresh.
  */
 export class ApiSession implements SessionPort {
   constructor(private readonly d: ApiSessionDeps) {}
@@ -41,10 +44,14 @@ export class ApiSession implements SessionPort {
         method: "POST",
         path: "/v1/auth/passkey/assert",
         headers: { "idempotency-key": this.d.newIdempotencyKey() },
-        body: { challenge_id: challengeId, credential, device: { platform: "web", install_id: this.d.installId() } },
+        body: { challenge_id: challengeId, credential, device: { platform: "web" } },
       });
       const tokens = sessionTokens.safeParse(res.json);
       if (res.status !== 200 || !tokens.success || tokens.data.second_factor_required === true) return err("rejected");
+      const install = parseInstallToken(tokens.data.install_token);
+      if (install === null) return err("rejected");
+      // Rotated at every login: the new value replaces the old one before the new session is stored.
+      await this.d.installTokens.write(install);
       const state = toState(tokens.data);
       await this.d.store.write(state);
       return ok(state);
@@ -64,11 +71,13 @@ export class ApiSession implements SessionPort {
   async refresh(): Promise<Result<SessionState, SessionFailure>> {
     const cur = await this.d.store.read();
     if (cur === null) return err("rejected");
+    const install = await this.d.installTokens.read();
     try {
       const res = await this.d.transport.send({
         method: "POST",
         path: "/v1/auth/refresh",
-        body: { refresh_token: cur.refreshToken, device_install_id: this.d.installId() },
+        headers: install === null ? {} : { [INSTALL_HEADER]: install },
+        body: { refresh_token: cur.refreshToken },
       });
       const tokens = sessionTokens.safeParse(res.json);
       if (res.status !== 200 || !tokens.success || tokens.data.second_factor_required === true) {
@@ -86,6 +95,7 @@ export class ApiSession implements SessionPort {
   async signOut(): Promise<void> {
     const cur = await this.d.store.read();
     await this.d.store.write(null);
+    await this.d.installTokens.write(null);
     if (cur === null) return;
     try {
       await this.d.transport.send({

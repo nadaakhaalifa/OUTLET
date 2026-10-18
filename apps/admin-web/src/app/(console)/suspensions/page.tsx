@@ -5,6 +5,7 @@ import { reinstateFromReviewAction, upholdReviewAction } from "../../../server/a
 import { getConsole } from "../../../server/console";
 import { ORDINARY_REASON_CODES } from "../../../view-models/common";
 import { reviewQueue } from "../../../view-models/kyc";
+import { meterClass } from "../../../view-models/meter";
 
 export default async function SuspensionsPage({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
   const c = await getConsole();
@@ -29,7 +30,7 @@ export default async function SuspensionsPage({ searchParams }: { searchParams: 
                   <td>{formatDateTime(new Date(v.dueAtMs).toISOString(), c.locale)}</td>
                   <td>
                     {v.clock === null ? null : <Badge tone={v.overdue ? "bad" : "neutral"}>{clockText(v.clock, c.t)}</Badge>}
-                    <span className={v.overdue ? "meter late" : "meter"} aria-hidden="true"><span style={{ inlineSize: `${Math.round(v.elapsed * 100)}%` }} /></span>
+                    <span className={v.overdue ? "meter late" : "meter"} aria-hidden="true"><span className={meterClass(v.elapsed)} /></span>
                   </td>
                   <td><Badge tone={v.state === "OPEN" ? "warn" : "neutral"}>{v.state}</Badge></td>
                   <td className="row">

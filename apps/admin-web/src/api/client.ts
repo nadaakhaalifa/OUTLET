@@ -2,6 +2,8 @@ import type { z } from "zod";
 import type { admin } from "@outlet/domain";
 import { err, ok, type Result } from "../lib/result";
 import type { SessionPort } from "../session/port";
+import * as B from "./brand-schemas";
+import * as P3 from "./phase3-schemas";
 import * as S from "./schemas";
 import { NetworkError, type Transport, type TransportRequest } from "./transport";
 
@@ -83,8 +85,8 @@ export function createAdminApi(deps: ClientDeps) {
     });
   }
 
-  async function call<T extends z.ZodType>(schema: T, req: TransportRequest, write = false): Promise<ApiResult<z.output<T>>> {
-    const r = await exec(req, write);
+  async function call<T extends z.ZodType>(schema: T, req: TransportRequest, write = false, key?: string): Promise<ApiResult<z.output<T>>> {
+    const r = await exec(req, write, key);
     if (!r.ok) return r;
     const parsed = schema.safeParse(r.value.json);
     if (!parsed.success) return err({ kind: "contract", status: r.value.status });
@@ -163,14 +165,17 @@ export function createAdminApi(deps: ClientDeps) {
 
     // finance
     ledgerBalances: (limit = 200) => call(S.ledgerBalances, { method: "GET", path: "/v1/admin/ledger/balances", query: { limit } }),
-    reconciliationBreaks: () => call(S.reconBreakList, { method: "GET", path: "/v1/admin/reconciliation/breaks", query: { limit: 100 } }),
+    reconciliationBreaks: () => call(S.reconTicketList, { method: "GET", path: "/v1/admin/finance/reconciliation/tickets", query: { limit: 100 } }),
 
     // price integrity
     priceActions: () => call(S.priceActionList, { method: "GET", path: "/v1/admin/price-integrity/actions", query: { limit: 100 } }),
 
     // Phase 2
     plusPlans: () => call(S.plusPlanList, { method: "GET", path: "/v1/admin/plus/plans" }),
-    publishPlusPlan: (b: { code: string; interval: "month" | "year"; price_minor: string; trial_days: number; effective_from: string; approval_id: string }) =>
+    publishPlusPlan: (b: {
+      code: string; interval: "month" | "year"; price_minor: string; trial_days: number; effective_from: string; approval_id: string;
+      kind?: "individual" | "family" | "student"; seat_limit?: number;
+    }) =>
       call(S.plusPlanPublished, { method: "POST", path: "/v1/admin/plus/plans", body: b }, true),
     setPlusPlanActive: (planId: string, active: boolean) =>
       call(S.plusPlanResult, { method: "PATCH", path: `/v1/admin/plus/plans/${enc(planId)}`, body: { active } }, true),
@@ -184,12 +189,63 @@ export function createAdminApi(deps: ClientDeps) {
     voidGiftCard: (id: string) => call(S.anyObject, { method: "POST", path: `/v1/gift-cards/${enc(id)}/void`, body: {} }, true),
     adsConfig: () => call(S.adsConfig, { method: "GET", path: "/v1/admin/ads/config" }),
 
+    // Phase 3: creators, creator payouts (operations listCreatorsForReview .. recordCreatorPayoutOutcome), ranking v2
+    creators: (status?: P3.CreatorStatus) =>
+      call(P3.creatorAccountList, { method: "GET", path: "/v1/admin/creators", query: { status, limit: 50 } }),
+    decideCreator: (id: string, action: P3.CreatorDecision, reason: string | null) =>
+      call(P3.creatorAccount, { method: "POST", path: `/v1/admin/creators/${enc(id)}/decision`, body: { action, reason } }, true),
+    creatorPayouts: (q: { status?: P3.CreatorPayoutState; creator_id?: string } = {}) =>
+      call(P3.creatorPayoutList, { method: "GET", path: "/v1/admin/creator-payouts", query: { status: q.status, creator_id: q.creator_id, limit: 50 } }),
+    createCreatorPayout: (creator_id: string) =>
+      call(P3.creatorPayout, { method: "POST", path: "/v1/admin/creator-payouts", body: { creator_id } }, true),
+    approveCreatorPayout: (id: string) => call(P3.creatorPayout, { method: "POST", path: `/v1/admin/creator-payouts/${enc(id)}/approve`, body: {} }, true),
+    cancelCreatorPayout: (id: string) => call(P3.creatorPayout, { method: "POST", path: `/v1/admin/creator-payouts/${enc(id)}/cancel`, body: {} }, true),
+    sendCreatorPayout: (id: string) => call(P3.creatorPayout, { method: "POST", path: `/v1/admin/creator-payouts/${enc(id)}/send`, body: {} }, true),
+    recordCreatorPayoutOutcome: (id: string, b: { outcome: "settled" | "rejected"; provider_ref?: string; reason?: string }) =>
+      call(P3.creatorPayout, { method: "POST", path: `/v1/admin/creator-payouts/${enc(id)}/outcome`, body: b }, true),
+    rankingShadowSummary: (windowHours = 24) =>
+      call(P3.rankingShadowSummary, { method: "GET", path: "/v1/admin/ranking/shadow/summary", query: { window_hours: windowHours } }),
+    rankingEvaluations: () => call(P3.rankingEvaluationList, { method: "GET", path: "/v1/admin/ranking/evaluations", query: { limit: 50 } }),
+    runRankingEvaluation: (b: { request_key: string; candidate: string; baseline: string; seed?: number; requests?: number; k?: number }) =>
+      call(P3.rankingEvaluationRun, { method: "POST", path: "/v1/admin/ranking/evaluations", body: b }, true),
+    evaluateRankingGuardrails: (b: Record<string, unknown>) =>
+      call(P3.guardrailDecision, { method: "POST", path: "/v1/admin/ranking/guardrails/evaluate", body: b }, true),
+
     // moderation / promotions
     moderationQueue: (status: "HELD" | "SUBMITTED" | "AUTO_CHECKED" = "HELD") =>
       call(S.moderationQueue, { method: "GET", path: "/v1/admin/moderation/queue", query: { status, limit: 50 } }),
     moderate: (targetType: string, targetId: string, decision: "publish" | "reject") =>
       call(S.moderationDecisionResult, { method: "POST", path: `/v1/admin/moderation/${enc(targetType)}/${enc(targetId)}/decision`, body: { decision } }, true),
     promotions: () => call(S.promotionList, { method: "GET", path: "/v1/admin/promotions", query: { limit: 50 } }),
+
+    // brand application review (docs/specs/admin-brand-review-web.md). Every write takes the form's own Idempotency-Key so a double submit replays.
+    brandQueue: (q: {
+      status?: B.BrandStatus; kind?: B.BrandKind; country?: string; assignee?: "me" | "unassigned" | "any";
+      sla_breached?: boolean; cursor?: string; limit?: number;
+    } = {}) =>
+      call(B.adminBrandApplicationList, {
+        method: "GET",
+        path: "/v1/admin/brand-applications",
+        query: {
+          status: q.status, kind: q.kind, country: q.country, assignee: q.assignee,
+          sla_breached: q.sla_breached === undefined ? undefined : String(q.sla_breached), cursor: q.cursor, limit: q.limit ?? 50,
+        },
+      }),
+    brandApplication: (id: string) => call(B.adminBrandApplication, { method: "GET", path: `/v1/admin/brand-applications/${enc(id)}` }),
+    claimBrand: (id: string, key: string) =>
+      call(B.adminBrandApplication, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/claim`, body: {} }, true, key),
+    releaseBrand: (id: string, key: string) =>
+      call(B.adminBrandApplication, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/release`, body: {} }, true, key),
+    decideBrand: (id: string, body: Record<string, unknown>, key: string) =>
+      call(B.adminBrandApplication, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/decision`, body }, true, key),
+    cosignBrand: (id: string, internal_note: string, key: string) =>
+      call(B.adminBrandApplication, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/cosign`, body: { internal_note } }, true, key),
+    brandDocumentReadUrl: (id: string, documentId: string, reason_code: B.DocumentReadReason, key: string) =>
+      call(B.documentReadUrl, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/documents/${enc(documentId)}/read-url`, body: { reason_code } }, true, key),
+    brandTrademarkLookup: (id: string, key: string) =>
+      call(B.trademarkEvidence, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/trademark-lookup`, body: { mode: "auto" } }, true, key),
+    resolveBrandConflict: (id: string, outcome: B.ConflictOutcome, internal_note: string, key: string) =>
+      call(B.adminBrandApplication, { method: "POST", path: `/v1/admin/brand-applications/${enc(id)}/conflict-resolution`, body: { outcome, internal_note } }, true, key),
   };
 }
 

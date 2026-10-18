@@ -16,6 +16,11 @@ export const PHASE2_SWITCH_KEYS = [
   "kill.drop_type.public", "kill.drop_type.members_only", "kill.drop_type.flash_hour", "kill.drop_type.mystery_box",
   "kill.drop_type.price_ladder", "kill.drop_type.last_chance", "kill.search_engine",
   "kill.courier.bosta", "kill.courier.aramex", "kill.courier.mylerz",
+  "kill.plus.family", "kill.plus.student", "kill.price_drop_auto_buy", "kill.auto_buy.charge", "kill.stylist_chat",
+  "kill.visual_search", "kill.demand_forecasting", "kill.calendar_gap_fill", "kill.calendar_reminders",
+  "kill.ranking_v2_shadow", "kill.wardrobe", "kill.wardrobe_vision", "kill.creator_program", "kill.creator_payouts", "kill.public_catalog", "kill.odoo_channel",
+  "kill.background_removal", "kill.home_banners",
+  "kill.analytics.ingest", "kill.analytics.producers", "kill.analytics.consumers",
 ] as const;
 
 export const ALL_SWITCH_KEYS: readonly string[] = [...EXPECTED_KILL_SWITCHES, ...PHASE2_SWITCH_KEYS];
@@ -46,6 +51,27 @@ const BLOCKED_EN: Readonly<Record<string, string>> = {
   "kill.courier.bosta": "AWB creation queues and the seller sees label pending",
   "kill.courier.aramex": "AWB creation queues and the seller sees label pending",
   "kill.courier.mylerz": "AWB creation queues and the seller sees label pending",
+  "kill.plus.family": "Answers 503 family_unavailable; existing members keep benefits until period end",
+  "kill.plus.student": "Answers 503 student_unavailable; renewals follow the stored verification",
+  "kill.price_drop_auto_buy": "No new rules, the evaluator does nothing and shoppers see paused; stored rules stay armed",
+  "kill.auto_buy.charge": "Shoppers are only notified and no charge call is ever made",
+  "kill.stylist_chat": "Chat answers 503 stylist_chat_disabled and the app shows the structured stylist; sessions can still be read and deleted",
+  "kill.visual_search": "Image search answers 503 visual_search_disabled and the PDP similar list uses attributes",
+  "kill.demand_forecasting": "The nightly batch does nothing and the seller forecast read answers 503 demand_forecasting_disabled; stored forecasts are kept",
+  "kill.calendar_gap_fill": "Events still work, outfit generation answers 503 calendar_gap_fill_disabled",
+  "kill.calendar_reminders": "Due reminders stay pending and nothing is sent",
+  "kill.ranking_v2_shadow": "v2 scores are not computed or logged; v1 serving is unaffected",
+  "kill.wardrobe": "Wardrobe writes answer 503 wardrobe_disabled; shoppers can still list, read and delete their items",
+  "kill.wardrobe_vision": "Suggest-attributes answers 503 wardrobe_vision_disabled; items are described by hand",
+  "kill.creator_program": "No new links or applications, clicks are not attributed and accruals pause; stored data stays readable",
+  "kill.creator_payouts": "Accruals continue, no payout instruction is ever created or sent",
+  "kill.odoo_channel": "Odoo seller channel polling and connection tests stop: no outbound call to any seller Odoo is made and no stock or price sync runs",
+  "kill.background_removal": "Automatic background removal stops: process and re-run answer 503 background_removal_disabled; sellers keep and can use their originals",
+  "kill.home_banners": "In-app offer banners are hidden: the Home carousel list is empty; admins can still edit and schedule banners",
+  "kill.public_catalog": "Every /v1/public catalog route answers 503 public_catalog_disabled; authenticated routes are unaffected",
+  "kill.analytics.ingest": "The ingest route answers 503 analytics_ingest_disabled, the tracker drops batches and counts them; nothing is stored",
+  "kill.analytics.producers": "Server producers append no analytics event; checkout, payment and return transitions still commit",
+  "kill.analytics.consumers": "The consumers are not registered: events are acknowledged unrouted and stay replayable",
 };
 const BLOCKED_AR: Readonly<Record<string, string>> = {
   "kill.plus.sales": "لا اشتراكات جديدة؛ الأعضاء الحاليون يحتفظون بمزاياهم",
@@ -72,6 +98,27 @@ const BLOCKED_AR: Readonly<Record<string, string>> = {
   "kill.courier.bosta": "يُؤجَّل إنشاء بوليصة الشحن ويرى البائع أن الملصق قيد الانتظار",
   "kill.courier.aramex": "يُؤجَّل إنشاء بوليصة الشحن ويرى البائع أن الملصق قيد الانتظار",
   "kill.courier.mylerz": "يُؤجَّل إنشاء بوليصة الشحن ويرى البائع أن الملصق قيد الانتظار",
+  "kill.plus.family": "يرد بالخطأ 503 family_unavailable ويحتفظ الأعضاء الحاليون بمزاياهم حتى نهاية الفترة",
+  "kill.plus.student": "يرد بالخطأ 503 student_unavailable وتتبع التجديدات التحقق المخزن",
+  "kill.price_drop_auto_buy": "لا قواعد جديدة ولا يعمل المقيّم ويرى المتسوقون حالة الإيقاف؛ تبقى القواعد المخزنة مفعّلة",
+  "kill.auto_buy.charge": "يُبلَّغ المتسوقون فقط ولا يُنفَّذ أي خصم",
+  "kill.stylist_chat": "ترد المحادثة بالخطأ 503 stylist_chat_disabled ويعرض التطبيق المستشار المنظم؛ يمكن قراءة الجلسات وحذفها",
+  "kill.visual_search": "يرد البحث بالصورة بالخطأ 503 visual_search_disabled وتعتمد قائمة المشابه على الخصائص",
+  "kill.demand_forecasting": "لا تعمل الدفعة الليلية وترد قراءة التوقع بالخطأ 503 demand_forecasting_disabled؛ تبقى التوقعات المخزنة",
+  "kill.calendar_gap_fill": "تعمل المناسبات وترد صناعة الإطلالات بالخطأ 503 calendar_gap_fill_disabled",
+  "kill.calendar_reminders": "تبقى التذكيرات المستحقة معلّقة ولا يُرسل شيء",
+  "kill.ranking_v2_shadow": "لا تُحسب درجات النسخة الثانية ولا تُسجَّل ولا يتأثر عرض النسخة الأولى",
+  "kill.wardrobe": "ترد كتابة الخزانة بالخطأ 503 wardrobe_disabled ويمكن للمتسوقين قراءة عناصرهم وحذفها",
+  "kill.wardrobe_vision": "يرد اقتراح الخصائص بالخطأ 503 wardrobe_vision_disabled ويُوصف العنصر يدويا",
+  "kill.creator_program": "لا روابط ولا طلبات جديدة ولا يُنسب النقر وتتوقف الاستحقاقات وتبقى البيانات مقروءة",
+  "kill.creator_payouts": "تستمر الاستحقاقات ولا تُنشأ أي تعليمات صرف ولا تُرسل",
+  "kill.odoo_channel": "يتوقف ربط قناة Odoo واختبارها ومزامنة المخزون والأسعار منها",
+  "kill.background_removal": "تتوقف الإزالة التلقائية للخلفية: يرد التشغيل وإعادته بالخطأ 503 ويحتفظ البائعون بصورهم الأصلية ويستخدمونها",
+  "kill.home_banners": "تُخفى لافتات العروض داخل التطبيق: تكون قائمة شريط الرئيسية فارغة ويمكن للمشرفين التعديل والجدولة",
+  "kill.public_catalog": "ترد كل مسارات الكتالوج العام بالخطأ 503 public_catalog_disabled ولا تتأثر المسارات المصادق عليها",
+  "kill.analytics.ingest": "ترد مسارات استقبال التحليلات بالخطأ 503 analytics_ingest_disabled ويُسقط التطبيق الدفعات ويعدّها ولا يُخزَّن شيء",
+  "kill.analytics.producers": "لا تُضيف المنتِجات من جهة الخادم أي حدث تحليلي وتظل عمليات الدفع والإرجاع تُنفَّذ كالمعتاد",
+  "kill.analytics.consumers": "لا تُسجَّل المستهلكات: تُقرّ الأحداث دون توجيه وتبقى قابلة لإعادة التشغيل",
 };
 const LABEL_EN: Readonly<Record<string, string>> = {
   "kill.payment.card": "Card payments", "kill.payment.apple_pay": "Apple Pay", "kill.payment.mobile_wallet": "Mobile wallets",
@@ -86,6 +133,27 @@ const LABEL_EN: Readonly<Record<string, string>> = {
   "kill.drop_type.members_only": "Members-only drops", "kill.drop_type.flash_hour": "Flash-hour drops", "kill.drop_type.mystery_box": "Mystery-box drop type",
   "kill.drop_type.price_ladder": "Price-ladder drops", "kill.drop_type.last_chance": "Last-chance drops", "kill.search_engine": "Typesense search engine",
   "kill.courier.bosta": "Bosta courier", "kill.courier.aramex": "Aramex courier", "kill.courier.mylerz": "Mylerz courier",
+  "kill.plus.family": "Family plan sales and seat changes",
+  "kill.plus.student": "Student plan",
+  "kill.price_drop_auto_buy": "Price-drop auto-buy",
+  "kill.auto_buy.charge": "Auto-buy unattended charge",
+  "kill.stylist_chat": "Stylist chat",
+  "kill.visual_search": "Visual search",
+  "kill.demand_forecasting": "Demand forecasting",
+  "kill.calendar_gap_fill": "Outfit calendar gap fill",
+  "kill.calendar_reminders": "Outfit calendar reminders",
+  "kill.ranking_v2_shadow": "Ranking v2 shadow scoring",
+  "kill.wardrobe": "Wardrobe",
+  "kill.wardrobe_vision": "Wardrobe photo suggestions",
+  "kill.creator_program": "Creator program",
+  "kill.creator_payouts": "Creator payouts",
+  "kill.odoo_channel": "Odoo seller channel",
+  "kill.background_removal": "Product photo background removal",
+  "kill.home_banners": "Home offer banners",
+  "kill.public_catalog": "Public catalog",
+  "kill.analytics.ingest": "Client analytics ingest",
+  "kill.analytics.producers": "Analytics producers (server facts)",
+  "kill.analytics.consumers": "Analytics consumers",
 };
 const LABEL_AR: Readonly<Record<string, string>> = {
   "kill.payment.card": "الدفع بالبطاقة", "kill.payment.apple_pay": "Apple Pay", "kill.payment.mobile_wallet": "محافظ الموبايل",
@@ -100,6 +168,27 @@ const LABEL_AR: Readonly<Record<string, string>> = {
   "kill.drop_type.members_only": "إصدارات الأعضاء", "kill.drop_type.flash_hour": "إصدارات الساعة الخاطفة", "kill.drop_type.mystery_box": "نوع صندوق المفاجآت",
   "kill.drop_type.price_ladder": "إصدارات السعر المتدرج", "kill.drop_type.last_chance": "إصدارات الفرصة الأخيرة", "kill.search_engine": "محرك البحث Typesense",
   "kill.courier.bosta": "شركة بوسطة", "kill.courier.aramex": "شركة أرامكس", "kill.courier.mylerz": "شركة مايلرز",
+  "kill.plus.family": "مبيعات الخطة العائلية",
+  "kill.plus.student": "الخطة الطلابية",
+  "kill.price_drop_auto_buy": "الشراء التلقائي عند انخفاض السعر",
+  "kill.auto_buy.charge": "الخصم التلقائي للشراء التلقائي",
+  "kill.stylist_chat": "محادثة المستشار",
+  "kill.visual_search": "البحث بالصورة",
+  "kill.demand_forecasting": "توقع الطلب",
+  "kill.calendar_gap_fill": "ملء فجوات تقويم الإطلالات",
+  "kill.calendar_reminders": "تذكيرات تقويم الإطلالات",
+  "kill.ranking_v2_shadow": "التسجيل الظلي لترتيب النسخة الثانية",
+  "kill.wardrobe": "الخزانة الرقمية",
+  "kill.wardrobe_vision": "اقتراحات الخزانة من الصور",
+  "kill.creator_program": "برنامج صانعي المحتوى",
+  "kill.creator_payouts": "مدفوعات صانعي المحتوى",
+  "kill.odoo_channel": "قناة Odoo",
+  "kill.background_removal": "إزالة خلفية صور المنتجات",
+  "kill.home_banners": "لافتات العروض في الرئيسية",
+  "kill.public_catalog": "الكتالوج العام",
+  "kill.analytics.ingest": "استقبال تحليلات التطبيق",
+  "kill.analytics.producers": "منتِجات التحليلات (حقائق الخادم)",
+  "kill.analytics.consumers": "مستهلكات التحليلات",
 };
 
 export interface KillSwitchRow {
@@ -115,16 +204,17 @@ export interface KillSwitchRow {
   readonly group: SwitchGroup;
 }
 
-export const SWITCH_GROUPS = ["payments", "plus", "gift_cards", "rewards", "drops", "discovery", "logistics", "other"] as const;
+export const SWITCH_GROUPS = ["payments", "plus", "gift_cards", "rewards", "drops", "discovery", "creators", "logistics", "other"] as const;
 export type SwitchGroup = (typeof SWITCH_GROUPS)[number];
 
 export function groupOf(key: string): SwitchGroup {
   if (key.startsWith("kill.payment.")) return "payments";
-  if (key.startsWith("kill.plus.")) return "plus";
+  if (key.startsWith("kill.plus.") || key.startsWith("kill.auto_buy.") || key === "kill.price_drop_auto_buy") return "plus";
   if (key === "kill.gift_card_sales" || key === "kill.gift_card_redemption") return "gift_cards";
   if (key === "kill.games" || key === "kill.rewards_coins") return "rewards";
   if (key === "kill.drops" || key === "kill.waiting_room" || key === "kill.mystery_box" || key.startsWith("kill.drop_type.")) return "drops";
-  if (["kill.stylist_llm", "kill.ml_ranking", "kill.stylist_ml", "kill.llm_search_parse", "kill.search_engine", "kill.sponsored_products", "kill.crawlers"].includes(key)) return "discovery";
+  if (["kill.stylist_llm", "kill.ml_ranking", "kill.stylist_ml", "kill.llm_search_parse", "kill.search_engine", "kill.sponsored_products", "kill.crawlers", "kill.stylist_chat", "kill.visual_search", "kill.demand_forecasting", "kill.calendar_gap_fill", "kill.calendar_reminders", "kill.ranking_v2_shadow", "kill.wardrobe", "kill.wardrobe_vision", "kill.public_catalog", "kill.odoo_channel", "kill.home_banners"].includes(key)) return "discovery";
+  if (key.startsWith("kill.creator_")) return "creators";
   if (key.startsWith("kill.courier.") || key === "kill.hub_consolidation" || key === "kill.resale_lane") return "logistics";
   return "other";
 }
