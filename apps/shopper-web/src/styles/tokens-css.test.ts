@@ -1,0 +1,66 @@
+import { colors, radius, shadows } from "@outlet/ui-tokens";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { contrast, tokensCss } from "./tokens-css";
+
+describe("tokens", () => {
+  it("emits every colour token of both schemes (kebab-cased) from @outlet/ui-tokens", () => {
+    const css = tokensCss();
+    const kebab = (s: string): string => s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+    for (const scheme of ["light", "dark"] as const) {
+      for (const [k, v] of Object.entries(colors[scheme])) expect(css, `${scheme}.${k}`).toContain(`--c-${kebab(k)}:${v};`);
+    }
+  });
+  it("derives radii and soft card shadows from the tokens and leaves no v1 hex literal", () => {
+    const css = tokensCss();
+    expect(css).toContain(`--r-md:${radius.md}px`);
+    expect(css).toContain(`--r-pill:${radius.pill}px`);
+    expect(css).toContain(`--shadow-card:${shadows.card.shadowOffset.width}px ${shadows.card.shadowOffset.height}px ${shadows.card.shadowRadius}px`);
+    expect(css).toContain("--shadow-lift:");
+    for (const v1 of ["#6B1D2A", "#F7F3EB", "#0A0807"]) expect(css.toUpperCase()).not.toContain(v1);
+  });
+
+  it("emits light, dark-by-preference and forced-dark blocks", () => {
+    const css = tokensCss();
+    expect(css).toContain(":root{");
+    expect(css).toContain("prefers-color-scheme:dark");
+    expect(css).toContain('[data-theme="dark"]');
+    expect(css).toContain(`--c-text-primary:${colors.light.textPrimary}`);
+  });
+  for (const scheme of ["light", "dark"] as const) {
+    const c = colors[scheme];
+    it(`${scheme}: text and control pairs meet WCAG AA (4.5:1)`, () => {
+      expect(contrast(c.textPrimary, c.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.textPrimary, c.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.textSecondary, c.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.textSecondary, c.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.onAccent, c.accent)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.onDanger, c.danger)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.accent, c.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.danger, c.background)).toBeGreaterThanOrEqual(4.5);
+    });
+    it(`${scheme}: form control outlines use textSecondary (3:1 non-text contrast); border token is decorative only`, () => {
+      expect(contrast(c.textSecondary, c.background)).toBeGreaterThanOrEqual(3);
+      expect(contrast(c.textSecondary, c.surface)).toBeGreaterThanOrEqual(3);
+      // Documented finding: ui-tokens `border` is below 3:1, so it must never be the only boundary of a control.
+      expect(contrast(c.border, c.background)).toBeLessThan(3);
+    });
+  }
+});
+
+describe("shopper-web additional pairs", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    it(`${scheme}: verified-savings, brand and secondary text meet AA on the page background`, () => {
+      const c = colors[scheme];
+      expect(contrast(c.savings, c.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.brand, c.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.onBrand, c.brand)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(c.textSecondary, c.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+  it("web mark geometry is the same file as the mobile source of truth", () => {
+    const mobile = readFileSync(join(__dirname, "../../../mobile/src/art/brand-geometry.ts"), "utf8");
+    expect(readFileSync(join(__dirname, "../lib/brand-geometry.ts"), "utf8")).toBe(mobile);
+  });
+});
