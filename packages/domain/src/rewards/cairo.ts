@@ -1,6 +1,7 @@
 /** Cairo calendar helpers. The server clock decides; the app clock is never trusted (spec edge cases). */
+import { EG_MARKET } from "../market/eg";
 const FMT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Africa/Cairo",
+  timeZone: EG_MARKET.timezone,
   year: "numeric",
   month: "2-digit",
   day: "2-digit",

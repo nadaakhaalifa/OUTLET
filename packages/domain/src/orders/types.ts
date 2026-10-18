@@ -61,6 +61,8 @@ export interface Transition {
     readonly dispatchByMs?: number;
     readonly packedAtMs?: number;
     readonly shippedAtMs?: number;
+    readonly deliveredAtMs?: number;
+    readonly closedAtMs?: number;
     readonly cancelledAtMs?: number;
   };
   readonly cancelInitiator?: CancelInitiator;

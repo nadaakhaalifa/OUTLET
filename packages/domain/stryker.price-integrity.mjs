@@ -16,7 +16,7 @@ export default {
   cleanTempDir: true,
   reporters: ["clear-text", "progress", "json"],
   jsonReporter: { fileName: "reports/mutation/price-integrity.json" },
-  thresholds: { high: 90, low: 80, break: 80 },
+  thresholds: { high: 90, low: 85, break: 87 },
   timeoutMS: 20000,
   ignoreStatic: false,
   concurrency: 2,

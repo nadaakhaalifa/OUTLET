@@ -24,6 +24,8 @@ import {
   parseImportFile,
   publicSellerIdentity,
   publishBlockers,
+  publishWarnings,
+  displayName,
   referencedUploadIds,
   sanitizePriceBlock,
   validateImportRows,
@@ -208,6 +210,7 @@ describe("listing lifecycle", () => {
   it("publish gate lists every unmet requirement", () => {
     const ok = {
       titleAr: "فستان",
+      titleEn: "Dress",
       descriptionAr: "وصف",
       condition: "new_with_tags" as const,
       imageCount: 1,
@@ -228,6 +231,43 @@ describe("listing lifecycle", () => {
     expect(bad.map((b) => b.pointer).sort()).toEqual(
       ["/defect_photo_upload_ids", "/description/ar", "/image_upload_ids", "/size_chart_id"].sort(),
     );
+  });
+});
+
+describe("bilingual names", () => {
+  const base = {
+    titleAr: "فستان",
+    titleEn: "Dress",
+    descriptionAr: "وصف",
+    condition: "new_with_tags" as const,
+    imageCount: 1,
+    defectPhotoCount: 0,
+    pricedSkuCount: 1,
+    categoryRequiresSizeChart: false,
+    sizeChartStatus: "none" as const,
+  };
+  it("publish requires both names", () => {
+    expect(publishBlockers({ ...base, titleEn: undefined })).toEqual([{ pointer: "/title/en", code: "title_en_missing" }]);
+    expect(publishBlockers({ ...base, titleEn: "   " }).map((i) => i.code)).toEqual(["title_en_missing"]);
+    expect(publishBlockers({ ...base, titleEn: "12345" }).map((i) => i.code)).toEqual(["title_en_missing"]);
+    expect(publishBlockers({ ...base, titleEn: "A" }).map((i) => i.code)).toEqual(["title_en_missing"]);
+    expect(publishBlockers({ ...base, titleEn: "x".repeat(121) }).map((i) => i.code)).toEqual(["text_too_long"]);
+    expect(publishBlockers({ ...base, titleAr: "1234" }).map((i) => i.code)).toEqual(["title_ar_missing"]);
+    expect(publishBlockers({ ...base, titleAr: "1234", titleEn: undefined }).map((i) => i.code)).toEqual(["title_ar_missing", "title_en_missing"]);
+  });
+  it("warnings: names block, department and one-language description do not", () => {
+    const w = publishWarnings({ department: "unisex", title: { ar: "فستان" }, description: { ar: "وصف" } });
+    expect(w).toEqual([
+      { pointer: "/title/en", code: "title_en_missing", blocking: true },
+      { pointer: "/department", code: "department_not_chosen", blocking: false },
+      { pointer: "/description/en", code: "description_en_missing", blocking: false },
+    ]);
+    expect(publishWarnings({ department: "women", title: { ar: "فستان", en: "Dress" } })).toEqual([]);
+  });
+  it("displayName falls back to the other language, never blank", () => {
+    expect(displayName({ ar: "فستان" }, "en")).toBe("فستان");
+    expect(displayName({ ar: "فستان", en: "Dress" }, "en")).toBe("Dress");
+    expect(displayName({ ar: "  ", en: "Dress" }, "ar")).toBe("Dress");
   });
 });
 
@@ -358,7 +398,10 @@ describe("bulk import validation", () => {
     expect(r.rowsOk).toBe(2);
     expect(r.products).toHaveLength(1);
     expect(r.products[0]?.draft.skus.map((s) => s.price.amount)).toEqual([129_950n, 129_950n]);
-    expect(r.errors).toEqual([{ row: 4, column: "title_ar", code: "arabic_text_required" }]);
+    expect(r.errors).toEqual([
+      { row: 4, column: "title_ar", code: "title_ar_missing" },
+      { row: 4, column: "title_en", code: "title_en_missing" },
+    ]);
   });
 
   it("fails every row of a product when one row is bad", () => {
@@ -393,6 +436,21 @@ describe("bulk import validation", () => {
     expect(r.errors[0]).toEqual({ row: 2, column: "defect_photo_upload_ids", code: "defect_photo_required" });
     const ok = good1.replace("new_with_tags", "minor_defect").replace(/,$/, `,${UP2}`);
     expect(validateImportRows(file([ok]), ctx()).products).toHaveLength(1);
+  });
+
+  it("reads the optional department column: valid, blank (default) and invalid values", () => {
+    const withDept = (cell: string) => {
+      const parsed = parseImportFile([`${HEADER},department`, `${good1},${cell}`].join("\n"));
+      if (!parsed.ok) throw new Error("fixture parse failed");
+      return validateImportRows(parsed, ctx());
+    };
+    const ok = withDept("women");
+    expect(ok.products[0]?.draft.department).toBe("women");
+    expect(withDept("").products[0]?.draft.department).toBeUndefined();
+    expect(withDept(" Kids ").products[0]?.draft.department).toBe("kids");
+    const bad = withDept("accessories");
+    expect(bad.products).toEqual([]);
+    expect(bad.errors[0]).toEqual({ row: 2, column: "department", code: "invalid_value" });
   });
 
   it("fails the whole file for unknown or missing columns", () => {

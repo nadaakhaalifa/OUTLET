@@ -1,15 +1,16 @@
 import { parseCsv, type CsvErrorCode } from "./csv";
 import { parseEgpDecimal } from "./price-input";
+import { bilingualNameIssues } from "./names";
 import { validateProductDraft } from "./product";
-import { CONDITIONS, LIMITS, type Condition, type IssueCode, type ProductDraft, type SkuDraft } from "./types";
+import { CONDITIONS, DEPARTMENTS, LIMITS, type Condition, type Department, type IssueCode, type ProductDraft, type SkuDraft } from "./types";
 
-export const IMPORT_REQUIRED_COLUMNS = ["product_ref", "title_ar", "category_slug", "condition", "size_label", "price_egp"] as const;
+export const IMPORT_REQUIRED_COLUMNS = ["product_ref", "title_ar", "title_en", "category_slug", "condition", "size_label", "price_egp"] as const;
 export const IMPORT_OPTIONAL_COLUMNS = [
-  "title_en",
   "description_ar",
   "description_en",
   "brand_slug",
   "material",
+  "department",
   "color",
   "seller_sku",
   "barcode_gtin",
@@ -26,6 +27,7 @@ const PRODUCT_LEVEL: readonly string[] = [
   "category_slug",
   "brand_slug",
   "condition",
+  "department",
   "material",
   "image_upload_ids",
   "defect_photo_upload_ids",
@@ -130,6 +132,7 @@ function columnForPointer(pointer: string): { column?: string; skuIndex?: number
     "/description/en": "description_en",
     "/material": "material",
     "/condition": "condition",
+    "/department": "department",
     "/image_upload_ids": "image_upload_ids",
     "/defect_photo_upload_ids": "defect_photo_upload_ids",
     "/skus": "size_label",
@@ -238,6 +241,10 @@ export function validateImportRows(file: Extract<ParsedImport, { ok: true }>, ct
     const conditionOk = (CONDITIONS as readonly string[]).includes(condition);
     if (!conditionOk) addError({ row: first.line, column: "condition", code: "condition_invalid" });
 
+    const departmentCell = (c.department ?? "").trim().toLowerCase();
+    const departmentOk = departmentCell === "" || (DEPARTMENTS as readonly string[]).includes(departmentCell);
+    if (!departmentOk) addError({ row: first.line, column: "department", code: "invalid_value" });
+
     const category = ctx.categories.get(c.category_slug ?? "");
     if (category === undefined) addError({ row: first.line, column: "category_slug", code: "category_not_found" });
     else if (!category.active) addError({ row: first.line, column: "category_slug", code: "category_inactive" });
@@ -265,6 +272,7 @@ export function validateImportRows(file: Extract<ParsedImport, { ok: true }>, ct
       categoryId: category?.id ?? "00000000-0000-0000-0000-000000000000",
       ...(brandId !== undefined ? { brandId } : {}),
       condition: conditionOk ? (condition as Condition) : "new_with_tags",
+      ...(departmentCell !== "" && departmentOk ? { department: departmentCell as Department } : {}),
       ...((c.material ?? "") !== "" ? { material: c.material ?? "" } : {}),
       imageUploadIds: imageIds,
       defectPhotoUploadIds: defectIds,
@@ -274,7 +282,15 @@ export function validateImportRows(file: Extract<ParsedImport, { ok: true }>, ct
       addError({ row: first.line, column: "description_ar", code: "arabic_text_required" });
     }
 
-    for (const issue of validateProductDraft(draft)) {
+    // Bilingual names are enforced at ingest: the bulk path has no per-item editor to finish drafts in.
+    const nameIssues = bilingualNameIssues(draft.title, "/title");
+    const draftIssues = validateProductDraft(draft).filter(
+      (d) => !(d.code === "arabic_text_required" && nameIssues.some((n) => n.pointer === d.pointer)),
+    );
+    for (const n of nameIssues) {
+      if (!draftIssues.some((d) => d.pointer === n.pointer)) draftIssues.push(n);
+    }
+    for (const issue of draftIssues) {
       if (issue.code === "condition_invalid") continue; // already reported from the raw cell
       const { column, skuIndex } = columnForPointer(issue.pointer);
       const target = skuIndex !== undefined ? group[skuIndex] : first;

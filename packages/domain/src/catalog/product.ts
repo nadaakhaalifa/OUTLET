@@ -3,7 +3,7 @@ import type { Money } from "../money";
 import { isValidGtin } from "./gtin";
 import { isPriceInRange } from "./price-input";
 import { checkText } from "./text";
-import { CONDITIONS, LIMITS, type Issue, type ListingStatus, type ProductDraft, type SkuDraft } from "./types";
+import { CONDITIONS, DEFAULT_DEPARTMENT, DEPARTMENTS, LIMITS, type Department, type Issue, type ListingStatus, type ProductDraft, type SkuDraft } from "./types";
 
 export class CatalogValidationError extends DomainError {
   constructor(readonly issues: readonly Issue[]) {
@@ -38,6 +38,9 @@ export function validateProductDraft(d: ProductDraft): Issue[] {
   }
   if (d.material !== undefined) {
     push(checkText(d.material, { pointer: "/material", max: LIMITS.materialMax, requireArabic: false }));
+  }
+  if (d.department !== undefined && !DEPARTMENTS.includes(d.department)) {
+    issues.push({ pointer: "/department", code: "invalid_value" });
   }
   if (!CONDITIONS.includes(d.condition)) issues.push({ pointer: "/condition", code: "condition_invalid" });
   if (d.condition === "minor_defect" && d.defectPhotoUploadIds.length < 1) {
@@ -89,6 +92,8 @@ export interface Product {
   readonly categoryId: string;
   readonly brandId?: string;
   readonly condition: ProductDraft["condition"];
+  /** Shopper department; `unisex` when the seller never chose one. */
+  readonly department: Department;
   readonly material?: string;
   readonly imageUploadIds: readonly string[];
   readonly defectPhotoUploadIds: readonly string[];
@@ -142,6 +147,7 @@ export function createProduct(draft: ProductDraft, env: CreateProductEnv): Produ
     categoryId: draft.categoryId,
     ...(draft.brandId !== undefined ? { brandId: draft.brandId } : {}),
     condition: draft.condition,
+    department: draft.department ?? DEFAULT_DEPARTMENT,
     ...(draft.material !== undefined && draft.material.trim() !== "" ? { material: clean(draft.material) } : {}),
     imageUploadIds: [...draft.imageUploadIds],
     defectPhotoUploadIds: [...draft.defectPhotoUploadIds],
@@ -158,6 +164,7 @@ export interface ProductPatch {
   readonly title?: ProductDraft["title"];
   readonly description?: NonNullable<ProductDraft["description"]>;
   readonly condition?: ProductDraft["condition"];
+  readonly department?: Department;
   readonly material?: string;
   readonly sizeChartId?: string;
   readonly imageUploadIds?: readonly string[];
@@ -179,6 +186,7 @@ export function applyProductPatch(p: Product, patch: ProductPatch, nowMs: number
         }
       : {}),
     ...(patch.condition !== undefined ? { condition: patch.condition } : {}),
+    ...(patch.department !== undefined ? { department: patch.department } : {}),
     ...(patch.material !== undefined ? { material: clean(patch.material) } : {}),
     ...(patch.sizeChartId !== undefined ? { sizeChartId: patch.sizeChartId } : {}),
     ...(patch.imageUploadIds !== undefined ? { imageUploadIds: [...patch.imageUploadIds] } : {}),
@@ -191,6 +199,7 @@ export function applyProductPatch(p: Product, patch: ProductPatch, nowMs: number
     categoryId: next.categoryId,
     ...(next.brandId !== undefined ? { brandId: next.brandId } : {}),
     condition: next.condition,
+    department: next.department,
     ...(next.material !== undefined ? { material: next.material } : {}),
     imageUploadIds: next.imageUploadIds,
     defectPhotoUploadIds: next.defectPhotoUploadIds,

@@ -1,6 +1,7 @@
 /** Public surface of the catalog domain (A2.3). Pure: no IO, no clock, no randomness. */
 export * from "./types";
 export * from "./text";
+export * from "./names";
 export * from "./gtin";
 export * from "./price-input";
 export * from "./product";

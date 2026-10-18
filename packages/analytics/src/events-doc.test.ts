@@ -1,11 +1,23 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { analyticsEvents, ANALYTICS_EVENT_NAMES } from "./analytics-events";
 import { renderEventsDoc } from "./events-doc";
 import { VALID_PROPS } from "./test-fixtures";
 import { createRecordingTransport, ConsentGatedTracker } from "./tracker";
 
-const DOC = new URL("../../../docs/analytics/events.md", import.meta.url);
+// Walk up to the repo docs so the check also works inside Stryker's sandbox copy (.stryker-tmp/...).
+const findDoc = (): string => {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 10; i += 1) {
+    const candidate = join(dir, "docs", "analytics", "events.md");
+    if (existsSync(candidate)) return candidate;
+    dir = dirname(dir);
+  }
+  throw new Error("docs/analytics/events.md not found");
+};
+const DOC = findDoc();
 
 describe("events.md registry check", () => {
   it("committed doc matches the generated output", () => {

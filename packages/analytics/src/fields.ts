@@ -99,5 +99,16 @@ export const gameOutcomeKind = z.enum(["coins", "voucher", "nothing"]);
 export const stylistSource = z.enum(["llm", "rules"]);
 export const recommendationModule = z.enum([
   "because_you_bought", "similar_viewed", "similar_for_less", "goes_with", "restock", "price_dropped",
+  // Discover ("For you") modules, mobile UX round 2 item 5.
+  "because_saved", "goes_with_bag", "picked_for_you", "popular_now", "recently_viewed",
 ]);
+/** Listing surfaces that own a filter icon (mobile UX round 2 item 6). */
+export const filterSurface = z.enum(["shop_all", "home", "search", "saved", "discover"]);
+export const checkoutStep = z.enum(["delivery", "payment", "review"]);
+export const homeSection = z.enum(["stores", "all_pieces"]);
+export const suggestionKind = z.enum(["query", "store", "category"]);
+export const categoryWindowSource = z.enum(["home_department", "discover_department", "discover_tile"]);
 export const adSurface = z.enum(["search", "category"]);
+
+/** Closed CTA kinds of a home offer banner (mirrors the HomeBannerCta union of the API). */
+export const bannerCtaKind = z.enum(["drop", "store", "category", "search", "voucher"]);

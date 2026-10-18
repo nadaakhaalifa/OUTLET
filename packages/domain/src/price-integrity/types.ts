@@ -13,7 +13,7 @@ export const EXTERNAL_STALE_MS = 72 * MS_PER_HOUR;
 /** Product-match confidence threshold in basis points (0.92, spec 9.2). */
 export const MATCH_CONF_TAU_BP = 9_200;
 
-export const PRICE_EVENT_SOURCES = ["seller", "import", "channel_sync", "admin", "system"] as const;
+export const PRICE_EVENT_SOURCES = ["seller", "import", "channel_sync", "admin", "system", "odoo"] as const;
 export type PriceEventSource = (typeof PRICE_EVENT_SOURCES)[number];
 
 /** One immutable change point of a SKU's price. `valid_to` is implied by the next event. */

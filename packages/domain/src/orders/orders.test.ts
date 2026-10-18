@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { InvalidTransitionError, SELLER_ORDER_STATES, type SellerOrderState } from "../state-machine";
 import { buyerAccessOpen, buyerViewForSeller } from "./buyer-view";
-import { AcceptWindowElapsedError, NotCancellableError } from "./errors";
+import { AcceptWindowElapsedError, NotCancellableError, ReturnsOpenError } from "./errors";
 import {
   acceptDeadline,
   acceptWindowOpen,
+  closeAfterMsForWindowDays,
   decideAccept,
   decideAcceptSlaExpiry,
   decideCancel,
+  decideClose,
+  decideDeliver,
+  decideOutForDelivery,
   decidePack,
   decideReject,
   decideShip,
@@ -192,5 +196,48 @@ describe("intake validation", () => {
     expect(commissionFor(money(5n), 1_000).amount).toBe(0n); // 0.5 rounds to even 0
     expect(commissionFor(money(15n), 1_000).amount).toBe(2n); // 1.5 rounds to even 2
     expect(() => commissionFor(money(1n), 10_001)).toThrow(InvalidOrderIntakeError);
+  });
+});
+
+describe("delivery and closure decisions", () => {
+  const DAY = 86_400_000;
+  const base = { paymentType: "prepaid", acceptByMs: null } as const;
+
+  it("SHIPPED passes through OUT_FOR_DELIVERY; DELIVER stamps the courier-confirmed time", () => {
+    const ofd = decideOutForDelivery({ ...base, status: "SHIPPED" });
+    expect(ofd).toMatchObject({ from: "SHIPPED", to: "OUT_FOR_DELIVERY", actorType: "COURIER" });
+    const d = decideDeliver({ ...base, status: "OUT_FOR_DELIVERY" }, 1_234);
+    expect(d).toMatchObject({ to: "DELIVERED", stamps: { deliveredAtMs: 1_234 } });
+    expect(() => decideDeliver({ ...base, status: "SHIPPED" }, 1)).toThrow();
+    expect(() => decideDeliver({ ...base, status: "PACKED" }, 1)).toThrow();
+  });
+
+  it("close happens only for DELIVERED once the window has elapsed, never earlier and never from other states", () => {
+    const o = { ...base, status: "DELIVERED", deliveredAtMs: 1_000 } as const;
+    const after = 33 * DAY;
+    expect(decideClose(o, 1_000 + after - 1, after)).toBeNull();
+    expect(decideClose(o, 1_000 + after, after)).toMatchObject({ to: "CLOSED", event: "CLOSE", stamps: { closedAtMs: 1_000 + after } });
+    expect(decideClose({ ...o, deliveredAtMs: null }, 1e15, after)).toBeNull();
+    for (const status of ["SHIPPED", "CANCELLED", "CLOSED", "RETURN_REQUESTED", "REFUNDED"] as const) {
+      expect(decideClose({ ...o, status }, 1e15, after)).toBeNull();
+    }
+  });
+});
+
+describe("closure return gate (A-9)", () => {
+  const base = { ...({ status: "DELIVERED", paymentType: "prepaid", acceptByMs: null } as const), deliveredAtMs: 0 };
+  it("closeAfterMsForWindowDays: integer days, floor 30, +3 margin, fail to floor", () => {
+    const D = 86_400_000;
+    expect(closeAfterMsForWindowDays(null)).toBe(33 * D);
+    expect(closeAfterMsForWindowDays(7)).toBe(33 * D);
+    expect(closeAfterMsForWindowDays(45)).toBe(48 * D);
+    expect(closeAfterMsForWindowDays(45.5)).toBe(33 * D);
+    expect(closeAfterMsForWindowDays(-1)).toBe(33 * D);
+  });
+  it("throws ReturnsOpenError while a return is open; closes when none", () => {
+    const D = 86_400_000;
+    expect(() => decideClose({ ...base, openReturns: 1 }, 40 * D, 33 * D)).toThrow(ReturnsOpenError);
+    expect(decideClose({ ...base, openReturns: 0 }, 40 * D, 33 * D)?.to).toBe("CLOSED");
+    expect(decideClose({ ...base, openReturns: 1 }, 10 * D, 33 * D)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import type { Money } from "../money";
 import type { Product } from "./product";
-import type { Condition, ReturnClass } from "./types";
+import type { Condition, Department, ReturnClass } from "./types";
 import { publicSellerIdentity, type PublicSellerIdentity, type SellerLegalRecord } from "./seller-identity";
 
 /** The only price information the catalog ever emits. Produced by pricing-integrity, never by this module. */
@@ -50,6 +50,7 @@ export interface PublicProductView {
   readonly title: { readonly ar: string; readonly en?: string };
   readonly description?: { readonly ar: string; readonly en?: string };
   readonly condition: Condition;
+  readonly department: Department;
   readonly material?: string;
   readonly skus: readonly PublicSku[];
   readonly returnEligibility: { readonly returnable: boolean; readonly windowDays?: number; readonly reasonCode?: string };
@@ -113,6 +114,7 @@ export function buildPublicProductView(i: PublicViewInputs): PublicProductView |
     title: p.title,
     ...(p.description !== undefined ? { description: p.description } : {}),
     condition: p.condition,
+    department: p.department,
     ...(p.material !== undefined ? { material: p.material } : {}),
     skus,
     returnEligibility: returnEligibility(i.returnClass),

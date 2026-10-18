@@ -18,7 +18,7 @@ export default {
   cleanTempDir: true,
   reporters: ["clear-text", "progress", "json"],
   jsonReporter: { fileName: "reports/mutation/inventory.json" },
-  thresholds: { high: 80, low: 60, break: 71 },
+  thresholds: { high: 90, low: 80, break: 91 },
   timeoutMS: 20000,
   ignoreStatic: false,
   concurrency: 2,

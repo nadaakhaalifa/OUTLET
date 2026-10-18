@@ -17,7 +17,7 @@ export default {
   cleanTempDir: true,
   reporters: ["clear-text", "progress", "json"],
   jsonReporter: { fileName: "reports/mutation/ledger-posting.json" },
-  thresholds: { high: 80, low: 60, break: 80 },
+  thresholds: { high: 95, low: 85, break: 94 },
   timeoutMS: 20000,
   ignoreStatic: false,
   concurrency: 2,

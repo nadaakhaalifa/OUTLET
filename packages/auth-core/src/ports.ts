@@ -60,6 +60,10 @@ export const passkeyCredentialSchema = z.object({
   credentialId: z.string().min(1),
   publicKey: z.string().min(1),
   signCount: z.number().int().nonnegative(),
+  /** WebAuthn BE flag: fixed for the life of a credential (a change is a verification failure). */
+  backupEligible: z.boolean().optional(),
+  /** WebAuthn BS flag: whether the credential is currently synced/backed up. */
+  backedUp: z.boolean().optional(),
 });
 export type PasskeyCredential = z.infer<typeof passkeyCredentialSchema>;
 
@@ -73,7 +77,8 @@ export interface PasskeyVerifier {
     challenge: string;
     response: unknown;
     credential: PasskeyCredential;
-  }): Promise<PasskeyResult<{ credentialId: string; newSignCount: number; userHandle: string }>>;
+    /** `userHandle` is null when the authenticator did not return one (non resident credential). */
+  }): Promise<PasskeyResult<{ credentialId: string; newSignCount: number; userHandle: string | null; backupEligible?: boolean; backedUp?: boolean }>>;
 }
 
 // ---- Device attestation -------------------------------------------------------------

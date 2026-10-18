@@ -39,9 +39,17 @@ export const PAUSE_MONTHS_MAX = 3;
 export const DEFAULT_PLUS_MIN_AGE = 21;
 export const PLUS_VAT_BPS = 1_400n;
 
+/** `individual` is every Phase 2 plan. `family` carries a seat limit; `student` needs a verified status. */
+export const PLAN_KINDS = ["individual", "family", "student"] as const;
+export type PlanKind = (typeof PLAN_KINDS)[number];
+
 export interface PlusPlan {
   readonly id: string;
   readonly code: string;
+  /** Absent means `individual` (every plan published before Phase 3). */
+  readonly kind?: PlanKind;
+  /** Family only: the adult seat limit including the owner. Absent for other kinds. */
+  readonly seatLimit?: number | null;
   readonly interval: PlusInterval;
   readonly priceMinor: bigint;
   readonly version: number;
@@ -84,4 +92,14 @@ export interface PlusSubscription {
 export const DEFAULT_PLAN_DEFINITIONS = [
   { code: "plus_monthly", interval: "month", priceMinor: 20_000n, trialDays: 14 },
   { code: "plus_yearly", interval: "year", priceMinor: 80_000n, trialDays: 14 },
+] as const;
+
+/**
+ * Spec P3-03 development seeds. Family 1,200 EGP per year comes from the §14 table; the student price
+ * is a placeholder an admin replaces (no decision exists). Neither carries a trial: one trial per
+ * person is claimed through the individual plans only.
+ */
+export const DEFAULT_FAMILY_STUDENT_PLAN_DEFINITIONS = [
+  { code: "plus_family", kind: "family", interval: "year", priceMinor: 120_000n, trialDays: 0, seatLimit: 4 },
+  { code: "plus_student", kind: "student", interval: "year", priceMinor: 60_000n, trialDays: 0, seatLimit: null },
 ] as const;

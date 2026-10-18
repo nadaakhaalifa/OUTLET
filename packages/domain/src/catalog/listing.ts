@@ -1,5 +1,6 @@
 import { DomainError } from "../errors";
-import type { Condition, Issue, ListingStatus } from "./types";
+import type { Condition, Department, Issue, ListingStatus } from "./types";
+import { bilingualNameIssues } from "./names";
 import { containsArabicLetter } from "./text";
 
 export const LISTING_EVENTS = ["publish", "pause", "resume", "auto_pause_price_parity", "delist"] as const;
@@ -65,6 +66,8 @@ export type SizeChartStatus = "none" | "unvalidated" | "validated";
 
 export interface PublishCandidate {
   readonly titleAr: string;
+  /** Absent on legacy rows: blocks publish with `title_en_missing`. */
+  readonly titleEn?: string | undefined;
   readonly descriptionAr: string | undefined;
   readonly condition: Condition;
   readonly imageCount: number;
@@ -74,10 +77,44 @@ export interface PublishCandidate {
   readonly sizeChartStatus: SizeChartStatus;
 }
 
+export interface PublishWarning {
+  readonly pointer: string;
+  readonly code: "department_not_chosen" | "title_en_missing" | "title_ar_missing" | "description_en_missing" | "description_ar_missing";
+  /** true: publish is refused until fixed. false: a hint only. */
+  readonly blocking: boolean;
+}
+
+export interface WarningInput {
+  readonly department: Department;
+  readonly title?: { readonly ar: string; readonly en?: string | undefined };
+  readonly description?: { readonly ar: string; readonly en?: string | undefined } | undefined;
+}
+
+/**
+ * Publish hints for the seller editor. Missing or malformed names are BLOCKING (same codes as the publish
+ * gate); a missing department or a one-language description is a non-blocking warning.
+ */
+export function publishWarnings(c: WarningInput): readonly PublishWarning[] {
+  const out: PublishWarning[] = [];
+  if (c.title !== undefined) {
+    for (const i of bilingualNameIssues(c.title, "/title")) {
+      if (i.code === "title_en_missing" || i.code === "title_ar_missing") out.push({ pointer: i.pointer, code: i.code, blocking: true });
+    }
+  }
+  if (c.department === "unisex") out.push({ pointer: "/department", code: "department_not_chosen", blocking: false });
+  if (c.description !== undefined) {
+    const ar = c.description.ar.trim().length > 0;
+    const en = (c.description.en ?? "").trim().length > 0;
+    if (ar && !en) out.push({ pointer: "/description/en", code: "description_en_missing", blocking: false });
+    if (en && !ar) out.push({ pointer: "/description/ar", code: "description_ar_missing", blocking: false });
+  }
+  return out;
+}
+
 /** Publish gate (spec section 2.4). Returns the unmet requirements; empty means publishable. */
 export function publishBlockers(c: PublishCandidate): readonly Issue[] {
   const out: Issue[] = [];
-  if (!containsArabicLetter(c.titleAr)) out.push({ pointer: "/title/ar", code: "arabic_text_required" });
+  out.push(...bilingualNameIssues({ ar: c.titleAr, en: c.titleEn }, "/title"));
   if (c.descriptionAr === undefined || !containsArabicLetter(c.descriptionAr)) {
     out.push({ pointer: "/description/ar", code: "arabic_text_required" });
   }

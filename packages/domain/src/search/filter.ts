@@ -14,6 +14,18 @@ export type World = (typeof WORLDS)[number];
 export const CONDITIONS = ["new_with_tags", "new_without_tags", "sample", "minor_defect"] as const;
 export type Condition = (typeof CONDITIONS)[number];
 
+export const DEPARTMENTS = ["women", "men", "kids", "unisex"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
+
+/**
+ * Department filter semantics (reference for every engine): a document matches when its department
+ * is any of the requested ones. Women and Men shoppers also see `unisex` products; Kids is strict.
+ */
+export function departmentMatches(requested: readonly Department[], docDepartment: Department): boolean {
+  if (requested.includes(docDepartment)) return true;
+  return docDepartment === "unisex" && (requested.includes("women") || requested.includes("men"));
+}
+
 export interface SearchFilter {
   readonly budgetMax?: bigint;
   readonly fitsRemainingBudget?: boolean;
@@ -25,6 +37,8 @@ export interface SearchFilter {
   readonly world?: World;
   readonly storeIds?: readonly string[];
   readonly categoryIds?: readonly string[];
+  /** Catalog brand ids (products.brand_id). Matches nothing until the index carries brand data. */
+  readonly brandIds?: readonly string[];
   readonly minVerifiedDiscountPct?: number;
   readonly priceMin?: bigint;
   readonly priceMax?: bigint;
@@ -32,6 +46,7 @@ export interface SearchFilter {
   readonly colors?: readonly string[];
   readonly materials?: readonly string[];
   readonly conditions?: readonly Condition[];
+  readonly departments?: readonly Department[];
   readonly freeDeliveryEligible?: boolean;
   readonly verifiedDiscountOnly?: boolean;
   readonly lowest30dOnly?: boolean;
@@ -41,7 +56,7 @@ export interface SearchFilter {
 
 export type FilterKey = keyof SearchFilter;
 
-const ARRAY_KEYS = ["storeIds", "categoryIds", "colors", "materials", "conditions"] as const satisfies readonly FilterKey[];
+const ARRAY_KEYS = ["storeIds", "categoryIds", "brandIds", "colors", "materials", "conditions", "departments"] as const satisfies readonly FilterKey[];
 
 export function isArrayKey(k: FilterKey): k is (typeof ARRAY_KEYS)[number] {
   return (ARRAY_KEYS as readonly string[]).includes(k);

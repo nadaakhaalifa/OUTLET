@@ -3,8 +3,9 @@
  * stored as UTC epoch milliseconds; these helpers only decide which Cairo calendar day an instant is
  * in. Egypt observes DST, so the offset is taken from the IANA zone, never hard coded.
  */
+import { EG_MARKET } from "../market/eg";
 const FORMAT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Africa/Cairo",
+  timeZone: EG_MARKET.timezone,
   year: "numeric",
   month: "2-digit",
   day: "2-digit",

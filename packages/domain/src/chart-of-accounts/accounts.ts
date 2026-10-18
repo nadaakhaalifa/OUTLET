@@ -30,7 +30,9 @@ export type AccountTypeName =
   | "promo_expense_platform"
   | "promo_receivable_seller"
   | "provider_fee_expense"
-  | "courier_fee_expense";
+  | "courier_fee_expense"
+  | "creator_payable"
+  | "creator_commission_expense";
 
 export interface AccountTypeDefinition {
   readonly type: AccountTypeName;
@@ -257,6 +259,31 @@ export const ACCOUNT_TYPES: Readonly<Record<AccountTypeName, AccountTypeDefiniti
     status: "active",
     verify: "VERIFY BEFORE LAUNCH: courier contract terms. Not in spec T4.",
   },
+  creator_payable: {
+    type: "creator_payable",
+    category: "liability",
+    normalBalance: "credit",
+    owner: "shopper",
+    parameters: ["creator"],
+    purpose: "Affiliate commission owed to a creator (keyed by the creator's user id) after the return window. Negative means the creator owes us after a clawback.",
+    lifecycle: "Credited when a commission accrues, debited by a payout or a clawback. A negative balance is reported explicitly and netted from the next payout, never hidden.",
+    reconciledAgainst: "Commissions table (accrued minus clawed back minus paid) and creator payout batches",
+    inSpecT4: false,
+    status: "active",
+    verify: "VERIFY BEFORE LAUNCH: creator withholding and VAT treatment (VR-P3-03), and whether a creator payable may sit on the ledger before payouts are licensed (ADR-0037). Not in spec T4.",
+  },
+  creator_commission_expense: {
+    type: "creator_commission_expense",
+    category: "expense",
+    normalBalance: "debit",
+    owner: "platform",
+    parameters: [],
+    purpose: "Cost of affiliate commission the platform funds.",
+    lifecycle: "Debited when a commission accrues, credited by a clawback. Closed to retained earnings at period end.",
+    inSpecT4: false,
+    status: "active",
+    verify: "VERIFY BEFORE LAUNCH: VAT base for platform-funded commission (VR-P3-03). Not in spec T4.",
+  },
 };
 
 const SEGMENT = /^[A-Za-z0-9_-]+$/;
@@ -300,6 +327,8 @@ export const chart = {
   promoExpensePlatform: "promo_expense_platform" as AccountId,
   providerFeeExpense: "provider_fee_expense" as AccountId,
   courierFeeExpense: "courier_fee_expense" as AccountId,
+  creatorPayable: (creator: string): AccountId => `creator_payable:${segment("creator", creator)}`,
+  creatorCommissionExpense: "creator_commission_expense" as AccountId,
 } as const;
 
 export interface DescribedAccount {

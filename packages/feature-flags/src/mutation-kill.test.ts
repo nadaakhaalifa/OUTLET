@@ -43,12 +43,36 @@ describe("registry content", () => {
       "kill.referral_payouts": { description: "Referral reward payouts" },
       "kill.gift_card_sales": { description: "Gift card sales" },
     });
-    expect(RELEASE_FLAGS).toStrictEqual({
+    expect(Object.keys(RELEASE_FLAGS)).toEqual([
+      "release.budget_suite",
+      "release.us_storefront_linkout",
+      "release.market.additional_markets",
+      // Dashboard foundations (Phase A, Wave 0): every one default-blocked.
+      "release.admin_console.identity",
+      "release.seller_center.role_nav",
+      "release.admin.ledger_integrity",
+      "release.seller_analytics.series",
+      "release.seller_analytics.shopper_series",
+      "release.admin.metrics",
+      "release.admin.audit_log",
+      "release.admin.attention",
+      "release.seller.balance",
+      "release.admin.finance_views",
+      "flag.guest_browsing",
+    ]);
+    expect({
+      "release.budget_suite": RELEASE_FLAGS["release.budget_suite"],
+      "release.us_storefront_linkout": RELEASE_FLAGS["release.us_storefront_linkout"],
+      "release.market.additional_markets": RELEASE_FLAGS["release.market.additional_markets"],
+    }).toStrictEqual({
       "release.budget_suite": {
         description: "Budget suite and affordability (§12). Blocked: budget routes answer 404 and affordability filters are ignored",
       },
       "release.us_storefront_linkout": {
         description: "US-only web purchase link-out (spec section on App Store storefronts); VERIFY BEFORE LAUNCH",
+      },
+      "release.market.additional_markets": {
+        description: "Any market other than EG (ADR-0040). Blocked: only the default market EG is available; no other market has been researched",
       },
     });
   });
@@ -57,7 +81,7 @@ describe("registry content", () => {
     const rels = FLAG_REGISTRY.filter((d) => d.kind === "release");
     expect(kills.map((d) => d.key)).toEqual([...Object.keys(KILL_SWITCHES), ...Object.keys(PHASE2_KILL_SWITCHES)]);
     expect(rels.map((d) => d.key)).toEqual(Object.keys(RELEASE_FLAGS));
-    expect(FLAG_REGISTRY).toHaveLength(14 + Object.keys(PHASE2_KILL_SWITCHES).length + 2);
+    expect(FLAG_REGISTRY).toHaveLength(14 + Object.keys(PHASE2_KILL_SWITCHES).length + Object.keys(RELEASE_FLAGS).length);
     expect(FLAG_REGISTRY[0]).toStrictEqual({
       key: "kill.payment.card",
       kind: "kill_switch",
@@ -66,9 +90,9 @@ describe("registry content", () => {
       failClosed: true,
     });
     expect(FLAG_REGISTRY[FLAG_REGISTRY.length - 1]).toStrictEqual({
-      key: "release.us_storefront_linkout",
+      key: "flag.guest_browsing",
       kind: "release",
-      description: RELEASE_FLAGS["release.us_storefront_linkout"].description,
+      description: RELEASE_FLAGS["flag.guest_browsing"].description,
       defaultValue: false,
       failClosed: true,
     });
@@ -237,5 +261,23 @@ describe("FlagClient exact decisions", () => {
     expect(await c.isPaymentMethodEnabled("apple_pay")).toBe(true);
     expect(calls).toEqual(["kill.payment.instapay", "kill.payment.apple_pay"]);
     expect(ctxs).toEqual([{ targetingKey: "u" }, {}]);
+  });
+});
+
+describe("dashboard foundations flag changes (spec 12.4)", () => {
+  it("adds kill.analytics.producers and release.seller_analytics.shopper_series, removes breakdown_series, all default-blocked", async () => {
+    expect(Object.keys(PHASE2_KILL_SWITCHES)).toContain("kill.analytics.producers");
+    expect(Object.keys(RELEASE_FLAGS)).toContain("release.seller_analytics.shopper_series");
+    expect(Object.keys(RELEASE_FLAGS)).not.toContain("release.seller_analytics.breakdown_series");
+    expect(isKnownFlag("release.seller_analytics.breakdown_series")).toBe(false);
+    const c = new FlagClient({ provider: new InMemoryFlagProvider({}) });
+    expect(await c.isEnabled("kill.analytics.producers")).toBe(false);
+    expect(await c.isEnabled("release.seller_analytics.shopper_series")).toBe(false);
+  });
+  it("descriptions carry the gates: producers need VR-DASH-03, shopper_series is DPO-controlled, series is ungated only, ingest needs VR-DASH-03 and VR-DASH-07", () => {
+    expect(PHASE2_KILL_SWITCHES["kill.analytics.producers"].description).toMatch(/VR-DASH-03/);
+    expect(PHASE2_KILL_SWITCHES["kill.analytics.ingest"].description).toMatch(/VR-DASH-03.*VR-DASH-07/);
+    expect(RELEASE_FLAGS["release.seller_analytics.shopper_series"].description).toMatch(/DPO/);
+    expect(RELEASE_FLAGS["release.seller_analytics.series"].description).toMatch(/UNGATED/);
   });
 });

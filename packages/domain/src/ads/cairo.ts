@@ -1,6 +1,7 @@
 /** Daily budgets reset on the Cairo calendar day (spec 10, "timezone day reset Cairo"). */
+import { EG_MARKET } from "../market/eg";
 const FORMAT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Africa/Cairo",
+  timeZone: EG_MARKET.timezone,
   year: "numeric",
   month: "2-digit",
   day: "2-digit",

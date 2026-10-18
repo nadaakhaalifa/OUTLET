@@ -21,7 +21,7 @@ export default {
   htmlReporter: { fileName: "reports/mutation/index.html" },
   jsonReporter: { fileName: "reports/mutation/mutation.json" },
   // high = green, low = amber, break = CI failure (ratchet set at the measured baseline; target 80).
-  thresholds: { high: 80, low: 60, break: 63 },
+  thresholds: { high: 95, low: 85, break: 92 },
   timeoutMS: 20000,
   ignoreStatic: false,
   concurrency: 1,

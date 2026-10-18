@@ -11,3 +11,5 @@ export * from "./recycled-number";
 export * from "./account-merge";
 export * from "./age-gate";
 export * from "./passkey-counter";
+export * from "./totp";
+export * from "./step-up";

@@ -5,3 +5,4 @@ export * from './age-policy.js';
 export * from './dsar.js';
 export * from './deletion.js';
 export * from './retention.js';
+export * from './audit-redaction.js';

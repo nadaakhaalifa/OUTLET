@@ -1,5 +1,5 @@
 import { sellerOrderMachine, type SellerOrderEvent, type SellerOrderState } from "../state-machine";
-import { AcceptWindowElapsedError, NotCancellableError } from "./errors";
+import { AcceptWindowElapsedError, NotCancellableError, ReturnsOpenError } from "./errors";
 import {
   ACCEPT_SLA_MS,
   DISPATCH_SLA_MS,
@@ -50,6 +50,37 @@ export function decidePack(o: OrderFacts, nowMs: number): Transition {
 export function decideShip(o: OrderFacts, nowMs: number): Transition {
   const to = step(o.status, "SHIP");
   return { from: o.status, to, event: "SHIP", actorType: "COURIER", reasonCode: null, stamps: { shippedAtMs: nowMs } };
+}
+
+/** Courier-driven: SHIPPED -> OUT_FOR_DELIVERY. A repeated delivery event is a no-op for the caller. */
+export function decideOutForDelivery(o: OrderFacts): Transition {
+  const to = step(o.status, "OUT_FOR_DELIVERY");
+  return { from: o.status, to, event: "OUT_FOR_DELIVERY", actorType: "COURIER", reasonCode: null, stamps: {} };
+}
+
+/** Courier-driven: OUT_FOR_DELIVERY -> DELIVERED. `deliveredAtMs` is the courier-confirmed time (spec B5). */
+export function decideDeliver(o: OrderFacts, deliveredAtMs: number): Transition {
+  const to = step(o.status, "DELIVER");
+  return { from: o.status, to, event: "DELIVER", actorType: "COURIER", reasonCode: null, stamps: { deliveredAtMs } };
+}
+
+/**
+ * System sweep: DELIVERED -> CLOSED once the return window plus the grace has elapsed (spec 20.1,
+ * T4). Returns null while the window is open or when the order is not DELIVERED, so the sweep never
+ * throws on a row that moved under it.
+ */
+export function decideClose(
+  o: OrderFacts & { readonly deliveredAtMs: number | null; readonly openReturns?: number },
+  nowMs: number,
+  closeAfterMs: number,
+): Transition | null {
+  if (o.status !== "DELIVERED" || o.deliveredAtMs === null) return null;
+  const elapsed = nowMs - o.deliveredAtMs >= closeAfterMs;
+  if (!elapsed) return null;
+  // A line with a non-terminal return is never closed (CPL 181/2018; creators accrual gate A-9).
+  if ((o.openReturns ?? 0) > 0) throw new ReturnsOpenError("a return on this order is still open");
+  const to = sellerOrderMachine.transition(o.status, "CLOSE", { returnWindowElapsed: true, deliveryAttempts: 0 });
+  return { from: o.status, to, event: "CLOSE", actorType: "SYSTEM", reasonCode: "return_window_elapsed", stamps: { closedAtMs: nowMs } };
 }
 
 /** Rejection never refunds: it only decides the transition and names the reason for the saga. */
@@ -106,3 +137,18 @@ export const isCancellable = (status: SellerOrderState): boolean => SHOPPER_CANC
  * cancelling a COD order only voids it. The saga (F-1) decides routing; this is a hint on the event.
  */
 export const refundRequired = (o: OrderFacts): boolean => o.paymentType === "prepaid" && o.status !== "PENDING_PAYMENT";
+
+const DAY_MS = 86_400_000;
+/** Statutory floor: 30 days for defects (CPL 181/2018), counted from courier-confirmed delivery. */
+export const MIN_RETURN_WINDOW_DAYS = 30;
+/** Payout margin after the window (spec 20.1 / T4). */
+export const CLOSE_MARGIN_DAYS = 3;
+
+/**
+ * Delay from delivery to closure for a seller's own window. Integer days; a seller can lengthen the
+ * window but never go below the statutory 30 days. Unknown or invalid policy falls back to the floor.
+ */
+export function closeAfterMsForWindowDays(windowDays: number | null): number {
+  const d = windowDays !== null && Number.isInteger(windowDays) && windowDays > 0 ? Math.max(windowDays, MIN_RETURN_WINDOW_DAYS) : MIN_RETURN_WINDOW_DAYS;
+  return (d + CLOSE_MARGIN_DAYS) * DAY_MS;
+}

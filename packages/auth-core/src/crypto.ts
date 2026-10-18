@@ -101,3 +101,79 @@ export function constantTimeEqual(a: string, b: string): boolean {
 export function sha256Hex(s: string): string {
   return toHex(sha256(utf8(s)));
 }
+
+// ---- SHA-1 / HMAC-SHA-1 (RFC 3174 / RFC 2104). Only for TOTP (RFC 6238), never for new integrity uses. ----
+
+const rotl = (x: number, n: number): number => (x << n) | (x >>> (32 - n));
+
+export function sha1(data: Uint8Array): Uint8Array {
+  let h0 = 0x67452301;
+  let h1 = 0xefcdab89;
+  let h2 = 0x98badcfe;
+  let h3 = 0x10325476;
+  let h4 = 0xc3d2e1f0;
+  const bitLen = data.length * 8;
+  const padded = new Uint8Array(((data.length + 9 + 63) >> 6) << 6);
+  padded.set(data);
+  padded[data.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor(bitLen / 2 ** 32));
+  view.setUint32(padded.length - 4, bitLen >>> 0);
+  const w = new Uint32Array(80);
+  for (let off = 0; off < padded.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+    for (let i = 16; i < 80; i++) w[i] = rotl((w[i - 3] ?? 0) ^ (w[i - 8] ?? 0) ^ (w[i - 14] ?? 0) ^ (w[i - 16] ?? 0), 1) >>> 0;
+    let a = h0;
+    let b = h1;
+    let c = h2;
+    let d = h3;
+    let e = h4;
+    for (let i = 0; i < 80; i++) {
+      let f: number;
+      let k: number;
+      if (i < 20) {
+        f = (b & c) | (~b & d);
+        k = 0x5a827999;
+      } else if (i < 40) {
+        f = b ^ c ^ d;
+        k = 0x6ed9eba1;
+      } else if (i < 60) {
+        f = (b & c) | (b & d) | (c & d);
+        k = 0x8f1bbcdc;
+      } else {
+        f = b ^ c ^ d;
+        k = 0xca62c1d6;
+      }
+      const t = (rotl(a, 5) + (f >>> 0) + e + k + (w[i] ?? 0)) >>> 0;
+      e = d;
+      d = c;
+      c = rotl(b, 30) >>> 0;
+      b = a;
+      a = t;
+    }
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+  }
+  const out = new Uint8Array(20);
+  const ov = new DataView(out.buffer);
+  [h0, h1, h2, h3, h4].forEach((v, i) => ov.setUint32(i * 4, v));
+  return out;
+}
+
+export function hmacSha1(key: Uint8Array, message: Uint8Array): Uint8Array {
+  const k0 = key.length > 64 ? sha1(key) : key;
+  const block = new Uint8Array(64);
+  block.set(k0);
+  const ipad = new Uint8Array(64 + message.length);
+  const opad = new Uint8Array(64 + 20);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = (block[i] ?? 0) ^ 0x36;
+    opad[i] = (block[i] ?? 0) ^ 0x5c;
+  }
+  ipad.set(message, 64);
+  opad.set(sha1(ipad), 64);
+  return sha1(opad);
+}

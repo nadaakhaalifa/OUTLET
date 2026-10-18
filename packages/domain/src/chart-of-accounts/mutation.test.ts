@@ -253,6 +253,33 @@ const EXPECTED_ACCOUNT_TYPES = {
     "inSpecT4": false,
     "status": "active",
     "verify": "VERIFY BEFORE LAUNCH: courier contract terms. Not in spec T4."
+  },
+  "creator_payable": {
+    "type": "creator_payable",
+    "category": "liability",
+    "normalBalance": "credit",
+    "owner": "shopper",
+    "parameters": [
+      "creator"
+    ],
+    "purpose": "Affiliate commission owed to a creator (keyed by the creator's user id) after the return window. Negative means the creator owes us after a clawback.",
+    "lifecycle": "Credited when a commission accrues, debited by a payout or a clawback. A negative balance is reported explicitly and netted from the next payout, never hidden.",
+    "reconciledAgainst": "Commissions table (accrued minus clawed back minus paid) and creator payout batches",
+    "inSpecT4": false,
+    "status": "active",
+    "verify": "VERIFY BEFORE LAUNCH: creator withholding and VAT treatment (VR-P3-03), and whether a creator payable may sit on the ledger before payouts are licensed (ADR-0037). Not in spec T4."
+  },
+  "creator_commission_expense": {
+    "type": "creator_commission_expense",
+    "category": "expense",
+    "normalBalance": "debit",
+    "owner": "platform",
+    "parameters": [],
+    "purpose": "Cost of affiliate commission the platform funds.",
+    "lifecycle": "Debited when a commission accrues, credited by a clawback. Closed to retained earnings at period end.",
+    "inSpecT4": false,
+    "status": "active",
+    "verify": "VERIFY BEFORE LAUNCH: VAT base for platform-funded commission (VR-P3-03). Not in spec T4."
   }
 };
 

@@ -4,13 +4,24 @@ import type { Money } from "../money";
 export const CONDITIONS = ["new_with_tags", "new_without_tags", "sample", "minor_defect"] as const;
 export type Condition = (typeof CONDITIONS)[number];
 
+/**
+ * Shopper department (Home boxes: Women / Men / Kids). Accessories is deliberately a category, not
+ * a department. `unisex` is the default for products that have no explicit department.
+ */
+export const DEPARTMENTS = ["women", "men", "kids", "unisex"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
+export const DEFAULT_DEPARTMENT: Department = "unisex";
+
 export const LISTING_STATUSES = ["draft", "active", "paused", "auto_paused_price_parity", "delisted"] as const;
 export type ListingStatus = (typeof LISTING_STATUSES)[number];
 
 export const RETURN_CLASSES = ["standard", "hygiene", "personalized", "non_returnable"] as const;
 export type ReturnClass = (typeof RETURN_CLASSES)[number];
 
-/** Arabic is mandatory, English optional (spec B5, A2.15). */
+/**
+ * Arabic is always present; `en` is optional on the type only because legacy rows predate the bilingual rule.
+ * Publishing / activating requires both (see names.ts).
+ */
 export interface LocalizedText {
   readonly ar: string;
   readonly en?: string;
@@ -54,6 +65,8 @@ export const ISSUE_CODES = [
   "cell_too_long",
   "no_rows",
   "not_publishable",
+  "title_en_missing",
+  "title_ar_missing",
 ] as const;
 export type IssueCode = (typeof ISSUE_CODES)[number];
 
@@ -72,6 +85,7 @@ export interface ProductDraft {
   readonly categoryId: string;
   readonly brandId?: string;
   readonly condition: Condition;
+  readonly department?: Department;
   readonly material?: string;
   readonly imageUploadIds: readonly string[];
   readonly defectPhotoUploadIds: readonly string[];

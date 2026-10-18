@@ -486,3 +486,68 @@ export function planPlusRecognition(net: Money, periods: number): Money[] {
   }
   return allocate(net, Array.from({ length: periods }, () => 1n));
 }
+
+// --------------------------------------------------------------------------
+// Creator commission (spec P3-04, ADR-0037). Ledger-first: these entries are posted before the
+// commission row changes state. The creator is identified by user id.
+// --------------------------------------------------------------------------
+
+/** Commission earned after delivery and return-window closure. */
+export function creatorCommissionAccrued(
+  input: { readonly creatorId: string; readonly amount: Money },
+  meta: EntryMeta,
+): JournalEntry {
+  requirePositive("amount", input.amount);
+  return build(
+    meta,
+    "creator_commission_accrued",
+    toPostings(
+      [
+        { account: chart.creatorCommissionExpense, side: "debit", amount: input.amount },
+        { account: chart.creatorPayable(input.creatorId), side: "credit", amount: input.amount },
+      ],
+      1n,
+    ),
+  );
+}
+
+/**
+ * Commission taken back after a refund or return. A reversing entry of the accrual shape. It may
+ * drive creator_payable negative (already paid); callers report that explicitly.
+ */
+export function creatorCommissionClawedBack(
+  input: { readonly creatorId: string; readonly amount: Money },
+  meta: EntryMeta,
+): JournalEntry {
+  requirePositive("amount", input.amount);
+  return build(
+    meta,
+    "creator_commission_clawed_back",
+    toPostings(
+      [
+        { account: chart.creatorPayable(input.creatorId), side: "debit", amount: input.amount },
+        { account: chart.creatorCommissionExpense, side: "credit", amount: input.amount },
+      ],
+      1n,
+    ),
+  );
+}
+
+/** A creator payout leaving the bank. A rejected payout is undone with reverseEntry. */
+export function creatorPayout(
+  input: { readonly creatorId: string; readonly amount: Money; readonly bankAccount: string },
+  meta: EntryMeta,
+): JournalEntry {
+  requirePositive("amount", input.amount);
+  return build(
+    meta,
+    "creator_payout",
+    toPostings(
+      [
+        { account: chart.creatorPayable(input.creatorId), side: "debit", amount: input.amount },
+        { account: chart.bankSettlement(input.bankAccount), side: "credit", amount: input.amount },
+      ],
+      1n,
+    ),
+  );
+}

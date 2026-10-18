@@ -91,7 +91,12 @@ export type ResourceType = (typeof RESOURCE_TYPES)[number];
 export const ACTIONS = ["read", "create", "update", "delete", "approve", "export", "grant", "invoke"] as const;
 export type Action = (typeof ACTIONS)[number];
 
-export type ResourceState = "active" | "deleted";
+/**
+ * `draft`, `paused` and `suspended` describe a tenant store. Only `suspended` changes a decision
+ * (store-scoped rules are refused with 403); the other states are carried so callers pass the real
+ * state instead of a constant.
+ */
+export type ResourceState = "active" | "deleted" | "draft" | "paused" | "suspended";
 
 export interface Resource {
   readonly type: ResourceType;
@@ -169,6 +174,7 @@ export const DENY_REASONS = [
   "passkey_required",
   "resource_not_found",
   "resource_deleted",
+  "resource_suspended",
   "not_owned",
   "reason_required",
   "dual_approval_required",

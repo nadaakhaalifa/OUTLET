@@ -134,6 +134,10 @@ function evaluateRule(rule: Rule, req: AuthzRequest, actor: Actor): RuleOutcome 
   if (!inScope(rule, live, actor, resource)) {
     return { ok: false, failure: fail(STAGE_SCOPE, "not_owned", 404) };
   }
+  if (rule.scope === "store" && resource.state === "suspended") {
+    // After the scope check, so a foreign store still answers 404 and never reveals its state.
+    return { ok: false, failure: fail(STAGE_SCOPE, "resource_suspended", 403) };
+  }
   if (rule.requiresReason === true && (req.reason === undefined || req.reason.trim() === "")) {
     return { ok: false, failure: fail(STAGE_REASON, "reason_required", 403) };
   }
