@@ -13,6 +13,7 @@ import {
 import type { AgeGate } from "./age-gate";
 import { attestDevice, type Attestation, type Clock } from "./common";
 import type { SessionIssuer } from "./session-issuer";
+import type { RecycledNumberStepUp, StepUpChallenge } from "./step-up";
 
 export interface VerifyOtpDeps {
   readonly attestation: AttestationVerifier;
@@ -25,6 +26,8 @@ export interface VerifyOtpDeps {
   readonly pepper: Uint8Array;
   /** Supplies the age band recorded by the passed age gate for a new account. */
   readonly ageGate?: AgeGate;
+  /** Recycled-number step-up (VR-GUEST-06). Required: there is no "off" switch, so it cannot be left out by mistake. */
+  readonly stepUp: RecycledNumberStepUp;
 }
 
 export interface VerifyOtpInput {
@@ -58,6 +61,11 @@ export type VerifyOtpResult =
   | { readonly kind: "no_account" }
   /** Create mode on a number whose account is suspended: nothing was created and no session opened. */
   | { readonly kind: "account_unavailable" }
+  /**
+   * Correct code, but the account was idle for more than 180 days and this install never held one of its
+   * sessions (recycled number). No session, device row or token was created; the code is consumed.
+   */
+  | { readonly kind: "step_up_required"; readonly challenge: StepUpChallenge }
   /** Unknown challenge, wrong device, wrong code and replay are indistinguishable to the caller. */
   | { readonly kind: "invalid"; readonly attemptsRemaining: number | null }
   | { readonly kind: "expired" }
@@ -109,6 +117,11 @@ export class VerifyOtp {
       }
       // The directory returns the existing row on a repeat sign-in, so our fresh id survives only on creation.
       isNewAccount = user.id === newId;
+    }
+    // Only an account that existed before this call can be a recycled number. Fail closed: a read error throws.
+    if (!isNewAccount) {
+      const challenge = await d.stepUp.check({ user, installId: input.installId, nowMs });
+      if (challenge !== null) return { kind: "step_up_required", challenge };
     }
     const issued = await d.issuer.open({
       user,

@@ -147,6 +147,8 @@ export class PasskeyService {
 
     const stored = await d.credentials.find(input.credentialId);
     if (stored === null || stored.status !== "active") return { kind: "rejected", reason: "unknown_credential" };
+    // A challenge bound to an account (the recycled-number step-up) is satisfied only by that account's credential.
+    if (challenge.userId !== null && challenge.userId !== stored.userId) return { kind: "rejected", reason: "unknown_credential" };
 
     let verified;
     try {

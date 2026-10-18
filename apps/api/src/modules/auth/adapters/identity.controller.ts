@@ -7,12 +7,15 @@ import type { SellerRefresh } from "../seller/application/sessions";
 import { AuthenticatedSelf, Public, RateLimit } from "../../../platform/decorators";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
 import { ProblemError, Problems } from "../../../platform/problem";
+import { assertGuestBrowsingEnabled, type PublicReadGate } from "../../../platform/public-read";
+import { GUEST_BROWSING_GATE } from "../../../platform/tokens";
 import { ZodPipe } from "../../../platform/zod.pipe";
 import type { AgeGate } from "../application/age-gate";
 import type { PasskeyService } from "../application/passkeys";
 import type { ListSessions, RefreshSession, RevokeSession } from "../application/sessions";
 import type { SocialLogin, SocialLoginFailure } from "../application/social-login";
 import {
+  accountUnavailableProblem,
   ageBlockedProblem,
   ageGateRequiredProblem,
   attestationFrom,
@@ -20,6 +23,8 @@ import {
   DeviceSchema,
   PasskeyDeviceSchema,
   iso,
+  noAccountProblem,
+  SignInModeSchema,
   tokenPair,
 } from "./http-common";
 import { AGE_GATE, LIST_SESSIONS, PASSKEYS, REFRESH_SESSION, REVOKE_SESSION, SOCIAL_LOGIN } from "./tokens";
@@ -38,6 +43,8 @@ const SocialLoginSchema = z
     nonce: z.string().min(8).max(256),
     device: DeviceSchema,
     locale: LocaleSchema.optional(),
+    /** Omitted = create (checkout sign-up). existing_only = quiet sign-in: never creates an account (404 no_account). */
+    mode: SignInModeSchema.optional(),
   })
   .strict();
 
@@ -56,7 +63,13 @@ const PasskeyRegisterSchema = z
   .strict();
 
 const PasskeyAssertSchema = z
-  .object({ challenge_id: UuidSchema, credential: WebAuthnCredential, device: PasskeyDeviceSchema })
+  .object({
+    challenge_id: UuidSchema,
+    credential: WebAuthnCredential,
+    device: PasskeyDeviceSchema,
+    /** Assertion never creates an account in any mode; existing_only is accepted so quiet sign-in sends one mode everywhere. */
+    mode: SignInModeSchema.optional(),
+  })
   .strict();
 
 const SessionListQuerySchema = z
@@ -95,6 +108,8 @@ export class IdentityController {
     @Inject(REVOKE_SESSION) private readonly revoke: RevokeSession,
     @Inject(LIST_SESSIONS) private readonly listSessions: ListSessions,
     @Inject(SELLER_REFRESH) private readonly sellerRefresh: SellerRefresh,
+    /** `flag.guest_browsing`: existing_only is guest-specific and fails closed (404) while blocked, as on OTP verify. */
+    @Inject(GUEST_BROWSING_GATE) private readonly guestGate: PublicReadGate,
   ) {}
 
   // ---- Age gate -------------------------------------------------------------------------
@@ -147,6 +162,7 @@ export class IdentityController {
   }
 
   private async socialLogin(provider: "apple" | "google", req: ApiRequest, body: z.infer<typeof SocialLoginSchema>) {
+    if (body.mode === "existing_only") await assertGuestBrowsingEnabled(this.guestGate);
     const result = await this.social.execute({
       provider,
       idToken: body.id_token,
@@ -155,10 +171,15 @@ export class IdentityController {
       platform: body.device.platform,
       language: toLanguage(body.locale ?? DEFAULT_LOCALE),
       attestation: attestationFrom(req, body.device.platform),
+      mode: body.mode ?? "create",
     });
     switch (result.kind) {
       case "ok":
         return tokenPair(result);
+      case "no_account":
+        throw noAccountProblem();
+      case "account_unavailable":
+        throw accountUnavailableProblem();
       case "attestation_failed":
         throw attestationProblem();
       case "age_gate_required":
@@ -232,6 +253,7 @@ export class IdentityController {
     @Req() req: ApiRequest,
     @Body(new ZodPipe(PasskeyAssertSchema)) body: z.infer<typeof PasskeyAssertSchema>,
   ) {
+    if (body.mode === "existing_only") await assertGuestBrowsingEnabled(this.guestGate);
     const r = await this.passkeys.assert({
       challengeId: body.challenge_id,
       credentialId: body.credential.id,

@@ -10,12 +10,16 @@ import {
 } from "../../../platform/decorators";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
 import {
+  accountUnavailableProblem,
   ageBlockedProblem,
   ageGateRequiredProblem,
   attestationFrom,
   attestationProblem,
   DeviceSchema,
   iso,
+  noAccountProblem,
+  SignInModeSchema,
+  stepUpProblem,
   tokenPair,
   toMe,
 } from "./http-common";
@@ -42,7 +46,7 @@ const OtpVerifySchema = z
     code: z.string().regex(/^[0-9]{6}$/),
     device: DeviceSchema,
     /** Omitted = create (checkout sign-up). existing_only = quiet sign-in, never creates an account (G-9). */
-    mode: z.enum(["create", "existing_only"]).optional(),
+    mode: SignInModeSchema.optional(),
   })
   .strict();
 
@@ -154,9 +158,11 @@ export class AuthController {
       case "ok":
         return tokenPair(result);
       case "account_unavailable":
-        throw new ProblemError(403, "account-unavailable", "This account is not available", { code: "account_unavailable" });
+        throw accountUnavailableProblem();
       case "no_account":
-        throw new ProblemError(404, "no-account", "No account exists for this number", { code: "no_account" });
+        throw noAccountProblem();
+      case "step_up_required":
+        throw stepUpProblem(result.challenge);
       case "attestation_failed":
         throw attestationProblem();
       case "expired":

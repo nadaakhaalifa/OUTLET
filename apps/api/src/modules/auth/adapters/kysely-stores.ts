@@ -91,7 +91,7 @@ export class KyselyUserDirectory implements UserDirectory {
     return rows[0] === undefined ? null : this.toUser(rows[0]);
   }
 
-  private async findByIdentity(trx: Tx, provider: string, hash: Uint8Array): Promise<unknown> {
+  private async findRowByIdentity(trx: Tx, provider: string, hash: Uint8Array): Promise<unknown> {
     const r = await sql`select ${USER_SELECT} from identities i join users u on u.id = i.user_id
       where i.provider = ${provider} and i.subject_hash = ${Buffer.from(hash)} and u.status = 'active'`.execute(trx);
     return r.rows[0];
@@ -112,7 +112,7 @@ export class KyselyUserDirectory implements UserDirectory {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const raw = await asSystem(this.db, async (trx) => {
-          const existing = await this.findByIdentity(trx, input.provider, hash);
+          const existing = await this.findRowByIdentity(trx, input.provider, hash);
           if (existing !== undefined) return existing;
           // An identity whose account is not active (suspended) is never re-created or reused.
           const blocked = await sql`select 1 from identities i join users u on u.id = i.user_id
@@ -141,7 +141,13 @@ export class KyselyUserDirectory implements UserDirectory {
 
   async findByPhone(phoneE164: string): Promise<User | null> {
     const hash = await this.cipher.blindIndex("identity:phone", phoneE164);
-    const row = await asSystem(this.db, (trx) => this.findByIdentity(trx, "phone", hash));
+    const row = await asSystem(this.db, (trx) => this.findRowByIdentity(trx, "phone", hash));
+    return row === undefined ? null : this.toUser(row);
+  }
+
+  async findByIdentity(provider: "apple" | "google", subject: string): Promise<User | null> {
+    const hash = await this.cipher.blindIndex(`identity:${provider}`, subject);
+    const row = await asSystem(this.db, (trx) => this.findRowByIdentity(trx, provider, hash));
     return row === undefined ? null : this.toUser(row);
   }
 

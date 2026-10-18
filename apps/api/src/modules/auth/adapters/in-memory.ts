@@ -155,7 +155,11 @@ export class InMemoryUserDirectory implements UserDirectory {
     const key = `${input.provider}:${input.subject}`;
     const existingId = this.byIdentity.get(key);
     const existing = existingId === undefined ? undefined : this.byId.get(existingId);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      // Same as the Kysely adapter: a suspended identity is never reused or re-created.
+      if (existing.status !== "active") throw new AccountUnavailableError();
+      return existing;
+    }
     const user: User = {
       id: input.newId,
       phoneE164: null,
@@ -170,8 +174,15 @@ export class InMemoryUserDirectory implements UserDirectory {
     this.byIdentity.set(key, user.id);
     return user;
   }
+  async findByIdentity(provider: "apple" | "google", subject: string): Promise<User | null> {
+    const id = this.byIdentity.get(`${provider}:${subject}`);
+    const u = id === undefined ? undefined : this.byId.get(id);
+    return u !== undefined && u.status === "active" ? u : null;
+  }
+  /** Active accounts only, like the Kysely adapter (`status = 'active'`). */
   async findById(id: string): Promise<User | null> {
-    return this.byId.get(id) ?? null;
+    const u = this.byId.get(id);
+    return u !== undefined && u.status === "active" ? u : null;
   }
 }
 

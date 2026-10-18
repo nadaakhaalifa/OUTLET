@@ -6,7 +6,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DEV_ATTESTATION_PREFIX } from "../index";
 import { GUEST_BROWSING_GATE } from "../../../platform/tokens";
 import { createHarness, INSTALL_ID, login, type Harness } from "../../../test/harness";
@@ -182,13 +182,6 @@ describe("races, suspended accounts, contract", () => {
     const values = [...block.slice(block.indexOf("mode:")).matchAll(/^\s+- (\w+)$/gm)].map((m) => m[1]);
     expect(values).toEqual(["create", "existing_only"]);
   });
-
-  // TODO(blocker before real users, spec section 1 "Recycled numbers"): NOT IMPLEMENTED in either mode. A number unused
-  // for more than 180 days that signs in on a NEW device must get step_up_required (email link or passkey) before any
-  // stored value is shown; tokens must not unlock wallet or orders until the second factor passes.
-  it.skip("VR-GUEST-06: recycled number (180 days idle) on a new device returns step_up_required", () => {
-    expect(true).toBe(false);
-  });
 });
 
 describe("default mode is unchanged", () => {
@@ -202,5 +195,136 @@ describe("default mode is unchanged", () => {
     const o2 = await otp(h, p2);
     expect((await verify(h, o2, { mode: "create" })).status).toBe(200);
     expect(await deps(h).users.findByPhone(p2)).not.toBeNull();
+  });
+});
+
+/**
+ * VR-GUEST-06 (spec section 1 "Recycled numbers"): a correct OTP on a number whose account was idle for more than
+ * 180 days, from an install that never held one of its sessions, issues NO tokens. Both modes answer a typed
+ * 403 step_up_required with an account-bound passkey challenge; only that account's passkey completes it.
+ */
+describe("VR-GUEST-06 recycled-number step-up", () => {
+  const DAY = 86_400_000;
+  const NEW_INSTALL = "0192f3a4-5b6c-4d8e-9f01-23456789ffff";
+  const ORIGIN = "https://outletnk.invalid";
+  let su: Harness;
+  beforeAll(async () => {
+    su = await createHarness({ customise: (b) => b.overrideProvider(GUEST_BROWSING_GATE).useValue({ enabled: async () => true }) });
+  }, 60_000);
+  afterAll(async () => su.close());
+
+  const verifyOn = (o: Awaited<ReturnType<typeof otp>>, installId: string, extra: object = {}, code = o.code) =>
+    su.http().post("/v1/auth/otp/verify").set(o.a).send({ challenge_id: o.challenge_id, code, device: { platform: "ios", install_id: installId }, ...extra });
+
+  /** An account last used `idleDays` ago on INSTALL_ID, with a registered passkey. */
+  async function staleAccount(idleDays: number) {
+    const p = phone();
+    const first = await login(su, p);
+    const bearer = { Authorization: `Bearer ${first.accessToken}` };
+    const opts = await su.http().post("/v1/auth/passkey/register/options").set(bearer).send({});
+    const credentialId = `cred-su-${p.slice(-6)}`;
+    const reg = await su.http().post("/v1/auth/passkey/register").set(bearer).send({
+      challenge_id: opts.body.challenge_id,
+      credential: { id: credentialId, credentialId, publicKey: `pk-${credentialId}`, signCount: 0, origin: ORIGIN, challenge: opts.body.challenge },
+    });
+    expect(reg.status).toBe(204);
+    su.clock.advance(idleDays * DAY);
+    return { p, userId: first.userId, credentialId };
+  }
+  const assertStepUp = (challengeId: string, challenge: string, c: { credentialId: string; userId: string }, signCount: number, a: { "X-App-Attest": string; "X-Client-Platform": string }) => {
+    su.grantAgeGate(a["X-App-Attest"].slice(DEV_ATTESTATION_PREFIX.length));
+    return su.http().post("/v1/auth/passkey/assert").set(a).send({
+      challenge_id: challengeId,
+      credential: { id: c.credentialId, credentialId: c.credentialId, signCount, userHandle: c.userId, origin: ORIGIN, challenge },
+      device: { platform: "ios", install_id: NEW_INSTALL },
+    });
+  };
+
+  it.each([["create (default)", {}], ["existing_only", { mode: "existing_only" }]])(
+    "%s: idle > 180 days on a new install answers 403 step_up_required with no tokens, no session and no account hints",
+    async (_name, extra) => {
+      const acct = await staleAccount(181);
+      const sess0 = deps(su).sessions.size;
+      const users0 = deps(su).users.size;
+      const o = await otp(su, acct.p);
+      const r = await verifyOn(o, NEW_INSTALL, extra);
+      expect(r.status).toBe(403);
+      expect(r.body.code).toBe("step_up_required");
+      expect(r.body.step_up_factors).toBe("passkey");
+      expect(r.body.passkey_challenge_id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(typeof r.body.passkey_challenge).toBe("string");
+      expect(r.body.passkey_rp_id).toBeTruthy();
+      const text = JSON.stringify(r.body);
+      expect(text).not.toMatch(/access_token|refresh_token|"user"/);
+      expect(text).not.toContain(acct.userId);
+      expect(text).not.toContain(acct.p.slice(-4));
+      expect(deps(su).sessions.size).toBe(sess0);
+      expect(deps(su).users.size).toBe(users0);
+      // The code was consumed: replaying it does not fall through to a session.
+      expect((await verifyOn(o, NEW_INSTALL, extra)).status).toBe(422);
+    },
+  );
+
+  it("the account's own passkey completes the step-up (200, same account); the challenge is single use", async () => {
+    const acct = await staleAccount(200);
+    const o = await otp(su, acct.p);
+    const r = await verifyOn(o, NEW_INSTALL);
+    expect(r.status).toBe(403);
+    const done = await assertStepUp(r.body.passkey_challenge_id, r.body.passkey_challenge, acct, 1, o.a);
+    expect(done.status).toBe(200);
+    expect(done.body.user.id).toBe(acct.userId);
+    expect(done.body.access_token).toBeTruthy();
+    expect((await assertStepUp(r.body.passkey_challenge_id, r.body.passkey_challenge, acct, 2, o.a)).status).toBe(401);
+    // Once the new install holds a session, it is a known device: OTP alone works there from now on.
+    expect((await verifyOn(await otp(su, acct.p), NEW_INSTALL)).status).toBe(200);
+  });
+
+  it("another account's passkey cannot satisfy the account-bound challenge (401, no session)", async () => {
+    const victim = await staleAccount(0);
+    const attacker = await staleAccount(181); // advances the clock: the victim is now idle too
+    const o = await otp(su, victim.p);
+    const r = await verifyOn(o, NEW_INSTALL);
+    expect(r.status).toBe(403);
+    const sess0 = deps(su).sessions.size;
+    const bad = await assertStepUp(r.body.passkey_challenge_id, r.body.passkey_challenge, attacker, 1, o.a);
+    expect(bad.status).toBe(401);
+    expect(bad.body.code).toBe("invalid_passkey_assertion");
+    expect(deps(su).sessions.size).toBe(sess0);
+  });
+
+  it("no step-up on the account's known install, within 180 days, or for a brand-new account", async () => {
+    const known = await staleAccount(400);
+    expect((await verifyOn(await otp(su, known.p), INSTALL_ID)).status).toBe(200);
+    const recent = await staleAccount(179);
+    expect((await verifyOn(await otp(su, recent.p), NEW_INSTALL)).status).toBe(200);
+    const fresh = await verifyOn(await otp(su, phone()), NEW_INSTALL);
+    expect(fresh.status).toBe(200);
+    expect(fresh.body.is_new_account).toBe(true);
+  });
+
+  it("no enumeration oracle: a wrong code on a recycled number answers exactly like a wrong code on an unknown number", async () => {
+    const acct = await staleAccount(181);
+    const a = await otp(su, acct.p);
+    const b = await otp(su, phone());
+    const ra = await verifyOn(a, NEW_INSTALL, { mode: "existing_only" }, "000000");
+    const rb = await verifyOn(b, NEW_INSTALL, { mode: "existing_only" }, "000000");
+    const strip = (x: Record<string, unknown>) => { const { request_id: _r, ...rest } = x; return rest; };
+    expect(ra.status).toBe(422);
+    expect(strip(ra.body)).toEqual(strip(rb.body));
+  });
+
+  it("fails closed: if the activity lookup fails, no tokens are issued", async () => {
+    const acct = await staleAccount(1);
+    const o = await otp(su, acct.p);
+    const spy = vi.spyOn(deps(su).sessions, "listByUser").mockRejectedValueOnce(new Error("db down"));
+    const sess0 = deps(su).sessions.size;
+    try {
+      const r = await verifyOn(o, INSTALL_ID);
+      expect(r.status).toBeGreaterThanOrEqual(500);
+      expect(JSON.stringify(r.body)).not.toMatch(/access_token|refresh_token/);
+      expect(deps(su).sessions.size).toBe(sess0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

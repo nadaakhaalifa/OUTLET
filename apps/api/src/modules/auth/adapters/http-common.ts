@@ -4,6 +4,7 @@ import { UuidSchema } from "@outlet/validation";
 import { headerValue, type ApiRequest } from "../../../platform/http-types";
 import { ProblemError } from "../../../platform/problem";
 import type { Attestation } from "../application/common";
+import type { StepUpChallenge } from "../application/step-up";
 import type { User } from "../domain/ports";
 
 export const DeviceSchema = z
@@ -60,6 +61,36 @@ export function ageBlockedProblem(blockedUntilMs: number): ProblemError {
   return new ProblemError(403, "age-blocked", "This service is not available to you yet", {
     code: "age_blocked",
     extensions: { blocked_until: iso(blockedUntilMs) },
+  });
+}
+
+/** Sign-in modes. Omitted = create (checkout sign-up). existing_only = quiet sign-in, never creates (ADR-0055 G-9). */
+export const SignInModeSchema = z.enum(["create", "existing_only"]);
+
+export function accountUnavailableProblem(): ProblemError {
+  return new ProblemError(403, "account-unavailable", "This account is not available", { code: "account_unavailable" });
+}
+
+export function noAccountProblem(): ProblemError {
+  return new ProblemError(404, "no-account", "No account exists for this sign-in", { code: "no_account" });
+}
+
+/**
+ * Recycled-number step-up (VR-GUEST-06). 403, no tokens. The body carries only the server's constant factor
+ * list and an account-bound passkey challenge: no user id, masked phone, e-mail hint or enrolled-factor list.
+ */
+export function stepUpProblem(challenge: StepUpChallenge): ProblemError {
+  return new ProblemError(403, "step-up-required", "Confirm it is you with a second factor", {
+    detail: "This number was not used for a long time on this device. Sign in with your passkey to continue.",
+    code: "step_up_required",
+    // Problem extensions are scalar (platform/problem.ts), so the step-up fields are flat (OpenAPI StepUpRequiredProblem).
+    extensions: {
+      step_up_factors: challenge.factors.join(","),
+      passkey_challenge_id: challenge.passkey.challengeId,
+      passkey_challenge: challenge.passkey.challenge,
+      passkey_rp_id: challenge.passkey.rpId,
+      passkey_expires_at: iso(challenge.passkey.expiresAtMs),
+    },
   });
 }
 

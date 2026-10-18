@@ -95,6 +95,7 @@ import { SessionIssuer } from "./application/session-issuer";
 import { GetMe, GetSession, ListSessions, RefreshSession, RevokeSession } from "./application/sessions";
 import { SocialLogin } from "./application/social-login";
 import { VerifyOtp } from "./application/verify-otp";
+import { RecycledNumberStepUp } from "./application/step-up";
 
 const APPLE_ISSUERS = ["https://appleid.apple.com"] as const;
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"] as const;
@@ -229,7 +230,7 @@ export class AuthModule {
         },
         {
           provide: VERIFY_OTP,
-          inject: [CLOCK, CSPRNG, ID_GENERATOR, "AUTH_DEPS", SESSION_ISSUER, AUTH_ATTESTATION, AGE_GATE],
+          inject: [CLOCK, CSPRNG, ID_GENERATOR, "AUTH_DEPS", SESSION_ISSUER, AUTH_ATTESTATION, AGE_GATE, PASSKEYS],
           useFactory: (
             clock: Clock,
             rng: Csprng,
@@ -238,6 +239,7 @@ export class AuthModule {
             issuer: SessionIssuer,
             attestation: AttestationVerifier,
             ageGate: AgeGate,
+            passkeys: PasskeyService,
           ) =>
             new VerifyOtp({
               attestation,
@@ -249,6 +251,7 @@ export class AuthModule {
               newId: () => ids.uuidV7(),
               pepper: deps.pepper,
               ageGate,
+              stepUp: new RecycledNumberStepUp({ sessions: deps.sessions, passkeyChallenges: passkeys }),
             }),
         },
         {

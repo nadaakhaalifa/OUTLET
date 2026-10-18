@@ -182,7 +182,7 @@ paths:
       tags:
         - Auth
       summary: Verify a phone OTP and start a session
-      description: "Default mode (mode omitted or create): a new number gets an account (the checkout sign-up). mode existing_only (quiet sign-in, ADR-0055 G-9, behind flag.guest_browsing; 404 while blocked): a correct code for a number with NO account answers 404 no_account and creates no user, device, session or token (the code is consumed). Existence is revealed only after a correct code, i.e. to the holder of the number; a wrong code answers the same 422 for known and unknown numbers and OTP request never consults accounts. The age gate is unchanged: the device must have passed /v1/auth/age-gate before OTP request. The 200 body carries is_new_account (true only when create mode just created the user). Create mode on a number whose account is suspended answers 403 account_unavailable (nothing created, no session)."
+      description: "Default mode (mode omitted or create): a new number gets an account (the checkout sign-up). mode existing_only (quiet sign-in, ADR-0055 G-9, behind flag.guest_browsing; 404 while blocked): a correct code for a number with NO account answers 404 no_account and creates no user, device, session or token (the code is consumed). Existence is revealed only after a correct code, i.e. to the holder of the number; a wrong code answers the same 422 for known and unknown numbers and OTP request never consults accounts. The age gate is unchanged: the device must have passed /v1/auth/age-gate before OTP request. The 200 body carries is_new_account (true only when create mode just created the user). Create mode on a number whose account is suspended answers 403 account_unavailable (nothing created, no session). Recycled-number step-up (master prompt section 1, VR-GUEST-06), both modes: after a CORRECT code, when the existing account was last used more than 180 days ago and this device.install_id never held one of its sessions, the answer is 403 step_up_required with NO tokens (no session or device row is created; the code is consumed). The body carries step_up_factors (the server's constant list, currently passkey; never per account) and an account-bound passkey assertion challenge (passkey_challenge_id, passkey_challenge, passkey_rp_id, passkey_expires_at); answer it with POST /v1/auth/passkey/assert. Only that account's passkey satisfies it. No user id, masked phone, e-mail or enrolled-factor hint is returned. A wrong code never reaches this check, so it is no enumeration oracle."
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyOptional"
       security:
@@ -229,7 +229,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/SignInForbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -244,7 +244,7 @@ paths:
       tags:
         - Auth
       summary: Sign in with Apple
-      description: "Requires X-App-Attest and a passed /v1/auth/age-gate (403 age-gate-required / age-blocked otherwise). The ID token is verified server side (RS256, kid from the provider JWKS, iss, aud, exp, nonce; Apple may send the SHA-256 of the raw nonce). A nonce is single use. 401 problem invalid-identity-token with code invalid_identity_token, identity_token_expired, audience_mismatch, issuer_mismatch, nonce_mismatch or nonce_reused; 503 identity_provider_unavailable. Accounts are never linked by email; a new identity creates an account without a verified phone."
+      description: "Requires X-App-Attest and a passed /v1/auth/age-gate (403 age-gate-required / age-blocked otherwise). The ID token is verified server side (RS256, kid from the provider JWKS, iss, aud, exp, nonce; Apple may send the SHA-256 of the raw nonce). A nonce is single use. 401 problem invalid-identity-token with code invalid_identity_token, identity_token_expired, audience_mismatch, issuer_mismatch, nonce_mismatch or nonce_reused; 503 identity_provider_unavailable. Accounts are never linked by email; a new identity creates an account without a verified phone. mode existing_only (quiet sign-in, ADR-0055 G-9, behind flag.guest_browsing; 404 while blocked): an identity with no active account answers 404 no_account after the token verified and creates nothing (the nonce is consumed). Create mode on an identity whose account is suspended answers 403 account_unavailable (nothing created, no session)."
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyOptional"
       security:
@@ -286,6 +286,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/Unprocessable"
         "429":
@@ -298,7 +302,7 @@ paths:
       tags:
         - Auth
       summary: Sign in with Google
-      description: "Same contract as /v1/auth/apple; the nonce is echoed verbatim by Google."
+      description: "Same contract as /v1/auth/apple (including mode existing_only, 404 no_account and 403 account_unavailable); the nonce is echoed verbatim by Google."
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyOptional"
       security:
@@ -340,6 +344,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/Unprocessable"
         "429":
@@ -403,7 +411,7 @@ paths:
       tags:
         - Auth
       summary: Sign in with a passkey
-      description: "The master prompt writes /passkey/{register|assert}; specified as two explicit paths. For device.platform web the 200 body also carries install_token (43 characters, base64url): the admin-web server stores it in the __Host-admin-install cookie and sends it back as X-Admin-Install on refresh and GET /v1/admin/me. 403 web_sign_in_not_allowed when the account may not sign in from a browser (for example no admin grant)."
+      description: "The master prompt writes /passkey/{register|assert}; specified as two explicit paths. For device.platform web the 200 body also carries install_token (43 characters, base64url): the admin-web server stores it in the __Host-admin-install cookie and sends it back as X-Admin-Install on refresh and GET /v1/admin/me. 403 web_sign_in_not_allowed when the account may not sign in from a browser (for example no admin grant). Assertion never creates an account in any mode; mode existing_only is accepted (behind flag.guest_browsing, 404 while blocked) so quiet sign-in sends one mode on every method. A challenge returned by a 403 step_up_required from /v1/auth/otp/verify is bound to that account: another account's passkey is rejected with the same 401 invalid_passkey_assertion."
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyOptional"
       security:
@@ -447,6 +455,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/Unprocessable"
         "429":
@@ -32432,6 +32442,15 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    SignInForbidden:
+      description: "Sign-in refused: attestation, age gate, suspended account, or the recycled-number step-up (code step_up_required, no tokens issued)."
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SignInForbiddenProblem"
     NotFound:
       description: Unknown, not owned by the caller, or from another tenant. Deliberately indistinguishable (API1/API3/API5).
       headers:
@@ -34298,6 +34317,8 @@ components:
           type: string
         device:
           $ref: "#/components/schemas/DeviceInfo"
+        mode:
+          $ref: "#/components/schemas/SignInMode"
     AgeGateRequest:
       type: object
       additionalProperties: false
@@ -34375,6 +34396,8 @@ components:
           description: WebAuthn assertion response. Must carry `id` (the credential id).
         device:
           $ref: "#/components/schemas/DeviceInfo"
+        mode:
+          $ref: "#/components/schemas/SignInMode"
     TokenPair:
       type: object
       additionalProperties: false
@@ -34399,10 +34422,36 @@ components:
           $ref: "#/components/schemas/Me"
         second_factor_required:
           type: boolean
-          description: True when a recycled number on a new device must complete a second factor before stored value is shown.
+          description: "Always false when present: tokens are never issued while a second factor is outstanding. A recycled number on a new device gets 403 step_up_required from /v1/auth/otp/verify instead (see SignInForbiddenProblem)."
         is_new_account:
           type: boolean
           description: "Present on POST /v1/auth/otp/verify only. True only when this call (create mode) just created the account; false for an existing account and for existing_only. Omitted by every other sign-in flow."
+    SignInMode:
+      type: string
+      enum:
+        - create
+        - existing_only
+      description: "Omitted means create (checkout sign-up). existing_only (quiet sign-in, ADR-0055 G-9) never creates an account: an unknown identity answers 404 no_account. Guest-specific: 404 while flag.guest_browsing is blocked."
+    SignInForbiddenProblem:
+      description: "A 403 problem from a sign-in route. code is one of attestation_failed, age_gate_required, age_blocked, account_unavailable or step_up_required. The step-up fields are present only when code is step_up_required (recycled-number step-up, VR-GUEST-06); they never name or describe the account."
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            step_up_factors:
+              type: string
+              enum:
+                - passkey
+              description: "Comma-separated factors the SERVER offers (constant, never per account). Currently passkey only; email_link is not built."
+            passkey_challenge_id:
+              $ref: "#/components/schemas/Uuid"
+            passkey_challenge:
+              type: string
+              description: base64url, 32 random bytes. Bound to the account; answer with POST /v1/auth/passkey/assert.
+            passkey_rp_id:
+              type: string
+            passkey_expires_at:
+              $ref: "#/components/schemas/Timestamp"
     PasskeyAssertResult:
       description: "TokenPair plus, for platform web only, the server-minted install token."
       allOf:

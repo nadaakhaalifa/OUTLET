@@ -98,6 +98,11 @@ export interface UserDirectory {
   }): Promise<User>;
   /** Read only: resolves an existing active account by verified phone; never creates anything. */
   findByPhone(phoneE164: string): Promise<User | null>;
+  /**
+   * Read only: resolves `identities(provider, subject)` to an existing ACTIVE account; never creates anything.
+   * A suspended account answers null (same as unknown), like findByPhone.
+   */
+  findByIdentity(provider: "apple" | "google", subject: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
 }
 

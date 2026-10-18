@@ -74,6 +74,22 @@ describe("kysely/pglite findByPhone and suspended accounts", () => {
     expect(after.n).toBe(before.n);
     await raw.query(`update users set status = 'active' where id = $1`, [u.id]);
   });
+
+  it("findByIdentity ignores a suspended account; find-or-create by identity answers AccountUnavailableError and creates nothing", async () => {
+    const { raw, db } = await dbPromise;
+    const users = new KyselyUserDirectory(db, cipher);
+    const subject = `sub-${randomUUID()}`;
+    const u = await users.findOrCreateByIdentity({ provider: "google", subject, email: null, language: "ar", newId: randomUUID(), nowMs: 1_800_000_000_000 });
+    await raw.query(`update users set status = 'suspended' where id = $1`, [u.id]);
+    expect(await users.findByIdentity("google", subject)).toBeNull();
+    const before = (await raw.query(`select count(*)::int as n from users`)).rows[0] as { n: number };
+    await expect(
+      users.findOrCreateByIdentity({ provider: "google", subject, email: null, language: "ar", newId: randomUUID(), nowMs: 1_800_000_000_001 }),
+    ).rejects.toBeInstanceOf(AccountUnavailableError);
+    const after = (await raw.query(`select count(*)::int as n from users`)).rows[0] as { n: number };
+    expect(after.n).toBe(before.n);
+    await raw.query(`update users set status = 'active' where id = $1`, [u.id]);
+  });
 });
 
 describe("kysely/pglite under the app_user role (RLS applies)", () => {

@@ -100,6 +100,19 @@ export function describeAuthStoresContract(name: string, make: () => Promise<Sto
       expect(a.email).toBe("a@example.com");
     });
 
+    it("users: findByIdentity is read only (null for an unknown subject, creates nothing) and is provider-scoped", async () => {
+      const f = await make();
+      const subject = `sub-${randomUUID()}`;
+      expect(await f.users.findByIdentity("apple", subject)).toBeNull();
+      expect(await f.users.findByIdentity("apple", subject)).toBeNull();
+      // Had findByIdentity created a row, find-or-create would return that row instead of our fresh id.
+      const wanted = randomUUID();
+      const created = await f.users.findOrCreateByIdentity({ provider: "apple", subject, email: null, language: "ar", newId: wanted, nowMs: NOW });
+      expect(created.id).toBe(wanted);
+      expect((await f.users.findByIdentity("apple", subject))?.id).toBe(wanted);
+      expect(await f.users.findByIdentity("google", subject)).toBeNull();
+    });
+
     it("users: concurrent first sign-ins for one phone converge on one account", async () => {
       const f = await make();
       const p = phone();

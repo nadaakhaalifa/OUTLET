@@ -6,7 +6,7 @@ import {
   type IdentityVerification,
   MS,
 } from "@outlet/auth-core";
-import type { NonceStore, User, UserDirectory, UserLanguage } from "../domain/ports";
+import { AccountUnavailableError, type NonceStore, type User, type UserDirectory, type UserLanguage } from "../domain/ports";
 import type { AgeGate } from "./age-gate";
 import { attestDevice, type Attestation, type Clock } from "./common";
 import type { IssuedSession, SessionIssuer } from "./session-issuer";
@@ -34,6 +34,11 @@ export interface SocialLoginInput {
   readonly platform: "ios" | "android";
   readonly language: UserLanguage;
   readonly attestation: Attestation | null;
+  /**
+   * `create` (default, the checkout sign-up): an unknown identity gets an account. `existing_only` (quiet sign-in,
+   * ADR-0055 G-9): an unknown or suspended identity answers `no_account` and NOTHING is created.
+   */
+  readonly mode?: "create" | "existing_only";
 }
 
 export type SocialLoginFailure = Extract<IdentityVerification, { ok: false }>["reason"] | "nonce_reused";
@@ -43,6 +48,10 @@ export type SocialLoginResult =
   | { readonly kind: "attestation_failed" }
   | { readonly kind: "age_gate_required" }
   | { readonly kind: "age_blocked"; readonly blockedUntilMs: number }
+  /** `existing_only` and no active account for this identity. Reached only after the token verified (and the nonce is consumed). */
+  | { readonly kind: "no_account" }
+  /** Create mode on an identity whose account is suspended: nothing created, no session. */
+  | { readonly kind: "account_unavailable" }
   | { readonly kind: "rejected"; readonly reason: SocialLoginFailure };
 
 export class SocialLogin {
@@ -77,16 +86,28 @@ export class SocialLogin {
     if (!fresh) return { kind: "rejected", reason: "nonce_reused" };
 
     const { identity } = verdict;
-    const age = await d.ageGate.passInfo(deviceKey);
-    const user = await d.users.findOrCreateByIdentity({
-      age,
-      provider: input.provider,
-      subject: identity.subject,
-      email: identity.emailVerified ? identity.email : null,
-      language: input.language,
-      newId: d.newId(),
-      nowMs,
-    });
+    let user: User | null;
+    if (input.mode === "existing_only") {
+      // Read only. Existence is revealed only to the holder of a valid, fresh provider token for this subject.
+      user = await d.users.findByIdentity(input.provider, identity.subject);
+      if (user === null) return { kind: "no_account" };
+    } else {
+      const age = await d.ageGate.passInfo(deviceKey);
+      try {
+        user = await d.users.findOrCreateByIdentity({
+          age,
+          provider: input.provider,
+          subject: identity.subject,
+          email: identity.emailVerified ? identity.email : null,
+          language: input.language,
+          newId: d.newId(),
+          nowMs,
+        });
+      } catch (error) {
+        if (error instanceof AccountUnavailableError) return { kind: "account_unavailable" };
+        throw error;
+      }
+    }
     const issued = await d.issuer.open({
       user,
       installId: input.installId,
