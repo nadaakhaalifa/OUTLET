@@ -1,0 +1,5 @@
+# Reserved (temporarily unfilled) migration numbers, one per line. Must be empty on merge: an in-flight change owns a number only until it creates the file.
+# 0088 to 0091 belong to dashboard-foundations tracks 6, 3, 4/6 and 7 (spec section 6, migration plan). Each owner deletes its own line when it creates its file.
+# They are listed here only so that 0092_web_sessions (track 1, T1-a) can exist before them without a sequence gap.
+0091
+0095
