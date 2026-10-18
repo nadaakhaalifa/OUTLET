@@ -124,6 +124,8 @@ resource "aws_cloudfront_distribution" "this" {
   web_acl_id      = aws_wafv2_web_acl.this.arn
   price_class     = "PriceClass_100"
   http_version    = "http2and3"
+  # S3 origin serves the web apps entry document; a custom (API) origin must not rewrite "/".
+  default_root_object = var.origin_is_s3 ? "index.html" : null
 
   origin {
     origin_id                = "primary"

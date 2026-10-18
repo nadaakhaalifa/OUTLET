@@ -10,6 +10,9 @@ data "aws_region" "current" {}
 # 'logs' key only, the CloudWatch Logs service principal. Without that statement a log group cannot use
 # the key and creation fails with AccessDenied.
 data "aws_iam_policy_document" "key" {
+  # checkov:skip=CKV_AWS_109: key policy; resource "*" means this key, and the account-root statement is the AWS default that enables IAM policies
+  # checkov:skip=CKV_AWS_111: same, kms:* applies to this key only; workloads get least-privilege IAM grants in their own modules
+  # checkov:skip=CKV_AWS_356: same, in a key policy resource "*" can only mean the key the policy is attached to
   for_each = var.keys
 
   statement {

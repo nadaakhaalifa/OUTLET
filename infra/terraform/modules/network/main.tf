@@ -2,6 +2,7 @@
 # Data stores live in private subnets only. PROVIDER ASSUMPTION: AWS, pending ADR-0002.
 
 data "aws_availability_zones" "available" {
+  # checkov:skip=CKV_AWS_394: zone names are region specific and the region is undecided (ADR-0002); subnets take the first N zones by slice, so a new zone never changes existing subnets
   state = "available"
 }
 
