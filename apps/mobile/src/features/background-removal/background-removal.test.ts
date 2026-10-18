@@ -95,7 +95,7 @@ describe("ApiCutoutPort", () => {
       [`POST ${BASE}/${JOB}/accept`]: () => ({ body: jobBody({ decision: "accepted" }) }),
       [`POST ${BASE}/${JOB}/rerun`]: (b) => ({ body: jobBody({ status: "PENDING", requested_model: (b as { model: string }).model, quality_score: null, attempts: 2 }) }),
     });
-    const f = async (input: string) => (input.startsWith("https://up.test") ? new Response(null, { status: 200 }) : new Response(new Blob(["x"], { type: "image/jpeg" })));
+    const f = async (input: string) => (new URL(input).host === "up.test" ? new Response(null, { status: 200 }) : new Response(new Blob(["x"], { type: "image/jpeg" })));
     const port = new ApiCutoutPort(ctx, STORE, { fetch: f, sleep: noSleep });
     const j = await port.start("file://a.jpg");
     expect(j).toMatchObject({ status: "READY", qualityScore: 82, cutoutUrl: "https://s.test/c.png", simulated: false });
