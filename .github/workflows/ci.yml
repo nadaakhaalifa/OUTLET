@@ -175,7 +175,9 @@ jobs:
           curl -fsSLO "${base}/checksums.txt"
           grep " ${tarball}\$" checksums.txt | sha256sum -c -
           tar -xzf "${tarball}" conftest
-          ./conftest test infra/terraform --policy infra/terraform/policy --parser hcl2 --all-namespaces
+          # Only .tf files: the directory also holds .checkov.yaml, which the hcl2 parser cannot read.
+          find infra/terraform -name '*.tf' -not -path '*/.terraform/*' -print0 \
+            | xargs -0 ./conftest test --policy infra/terraform/policy --parser hcl2 --all-namespaces
       - name: Checkov
         uses: bridgecrewio/checkov-action@c13aafd679d3814a25067d10fcaf98c4f7594931 # v12.3131.0
         with:

@@ -4,4 +4,4 @@ packages:
 allowBuilds:
   esbuild: true
   "@swc/core": true
-  protobufjs: set this to true or false
+  protobufjs: false
