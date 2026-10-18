@@ -245,6 +245,14 @@ export interface DashboardData {
   readonly payout: PayoutSummary;
   readonly trust: PriceTrustView;
   readonly health: StoreHealth;
+  /** Optional (absent = the section is hidden, never zero-filled): daily gross sales, oldest first, last 7 Cairo days. */
+  readonly salesTrend?: readonly bigint[] | undefined;
+  /** Optional: newest orders that are past the awaiting queue (shipped, delivered ...). */
+  readonly recentOrders?: readonly BrandOrder[] | undefined;
+  /** Optional: value of parcels handed to the courier and not yet released to the seller. */
+  readonly inTransit?: bigint | null | undefined;
+  /** Optional: current seller subscription plan (ADR-0056). Read-only here; changes are in the Seller Center. */
+  readonly plan?: { readonly code: string; readonly name: Bilingual } | undefined;
 }
 
 export const LOW_STOCK_THRESHOLD = 3;
@@ -439,6 +447,8 @@ export interface BrandProduct {
   readonly totalStock: number;
   readonly sizes: number;
   readonly claim: "none" | "verified_discount" | "lowest_30d" | "launch_price";
+  /** Verified reference price (VRP). Shown struck-through ONLY when claim is verified_discount; otherwise ignored. */
+  readonly referencePrice?: bigint | null | undefined;
   readonly updatedAtMs: number;
 }
 

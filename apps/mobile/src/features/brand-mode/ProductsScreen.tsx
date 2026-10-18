@@ -3,10 +3,11 @@ import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Illustration, ProductArt } from "../../art";
-import { Badge, Button, EmptyState, ImageSlot, PressScale, Reveal, Screen, SearchField, Skeleton, Text, Chip } from "../../ui";
+import { Badge, Button, EmptyState, ImageSlot, PressScale, Reveal, Screen, SearchField, Skeleton, Text, Chip, useTheme } from "../../ui";
 import { localizeDigits } from "../money-display";
 import { FailureView, StaleBanner, useBrand, useLoad, useMoney } from "./kit";
-import { can, filterProducts, type BrandProduct, type ProductFilter } from "./model";
+import { verifiedOffPct } from "./dashboardModel";
+import { LOW_STOCK_THRESHOLD, can, filterProducts, type BrandProduct, type ProductFilter } from "./model";
 
 const FILTERS: readonly ProductFilter[] = ["all", "active", "draft", "paused", "lowStock"];
 
@@ -55,20 +56,33 @@ export function ProductsScreen() {
 function ProductRow(props: { p: BrandProduct; locale: "ar" | "en"; money: (m: bigint) => string; onPress: () => void }) {
   const { t } = useTranslation();
   const { p } = props;
+  const { spacing } = useTheme();
   const title = props.locale === "en" ? (p.titleEn ?? p.titleAr) : p.titleAr;
   const n = (v: number) => localizeDigits(String(v), props.locale);
   const kind = p.titleAr.includes("حذاء") ? "heel" : p.titleAr.includes("حقيبة") ? "bag" : p.titleAr.includes("قميص") ? "shirt" : "dress";
   const live = p.status === "active";
+  // % off and the struck-through reference appear ONLY for a verified discount with a reference price; plain/launch/30-day show the price alone.
+  const off = verifiedOffPct(p.claim, p.priceFrom, p.referencePrice);
+  const low = p.status === "active" && p.totalStock <= LOW_STOCK_THRESHOLD;
   return (
-    <PressScale onPress={props.onPress} accessibilityRole="button" accessibilityLabel={`${title}, ${t(`brandMode.products.status.${p.status}`)}`}>
+    <PressScale onPress={props.onPress} accessibilityRole="button" accessibilityLabel={`${title}, ${t(`brandMode.products.status.${p.status}`)}`} testID={`brand-product-${p.id}`}>
       <View style={{ gap: 10 }}>
         <ImageSlot style={{ width: "100%" }} imageUri={p.coverUri ?? undefined} imageNode={p.coverUri === null ? <ProductArt kind={kind} seed={p.id} ratio="3:4" /> : undefined} />
         <View style={{ gap: 4 }}>
           <Text variant="callout" numberOfLines={2}>{title}</Text>
-          <Text variant="headline" weight="600" numeric secondary={p.priceFrom === null}>{p.priceFrom === null ? t("brandMode.products.noPrice") : props.money(p.priceFrom)}</Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: spacing.sm }}>
+            <Text variant="headline" weight="600" numeric secondary={p.priceFrom === null}>{p.priceFrom === null ? t("brandMode.products.noPrice") : props.money(p.priceFrom)}</Text>
+            {off !== null && p.referencePrice !== null && p.referencePrice !== undefined ? (
+              <>
+                <Text variant="caption" secondary numeric style={{ textDecorationLine: "line-through" }} testID={`brand-product-ref-${p.id}`}>{props.money(p.referencePrice)}</Text>
+                <Text variant="caption" weight="600" color="savings" numeric>{t("brandMode.products.offPct", { pct: n(off) })}</Text>
+              </>
+            ) : null}
+          </View>
           <Text variant="caption" secondary>{t("brandMode.products.meta", { sizes: n(p.sizes), stock: n(p.totalStock) })}</Text>
           <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
             <Badge label={t(`brandMode.products.status.${p.status}`)} kind={live ? "verified" : "neutral"} />
+            {low ? <Badge label={t("brandMode.products.lowStock")} kind="neutral" /> : null}
             {p.claim !== "none" ? <Badge label={t(`brandMode.products.claim.${p.claim}`)} kind={p.claim === "verified_discount" ? "verified" : p.claim === "lowest_30d" ? "lowest30" : "launch"} /> : null}
           </View>
         </View>

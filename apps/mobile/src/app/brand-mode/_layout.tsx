@@ -8,6 +8,7 @@ import { EmptyState } from "../../ui";
 import { useGuestGateMode } from "../../features/me/useGuest";
 import { BrandSessionProvider } from "../../features/brand-mode/kit";
 import { BRAND_TABS } from "../../features/brand-mode/tabs";
+import { enterDemoBrand } from "../../features/brand-mode/state";
 
 /** Structural subset of the navigator's tab-bar props (same approach as the shopping tabs). */
 interface BarProps {
@@ -48,6 +49,9 @@ function DevPreview(props: { children: ReactNode }) {
 /** Brand mode: its own flat tab bar (Dashboard / Products / Orders / Store), separate from the shopping tabs. */
 export default function BrandTabsLayout() {
   const mode = useGuestGateMode();
+  // Dev-only deep link (`/brand-mode?demo=1`): switches to the seeded demo brand. A no-op unless the release guard allows it.
+  const { demo } = useGlobalSearchParams<{ demo?: string }>();
+  if (demo === "1") enterDemoBrand();
   if (mode === "unknown") return null;
   // A guest has no brand account: an honest state, not a failed session call (no 401 screen, no sign-up prompt).
   if (mode === "guest") return <BrandGuestState />;

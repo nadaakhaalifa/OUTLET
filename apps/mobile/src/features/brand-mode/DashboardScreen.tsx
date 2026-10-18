@@ -7,8 +7,8 @@ import { Illustration } from "../../art";
 import { Avatar, Banner, Button, Card, Icon, PressScale, Reveal, Screen, Skeleton, Text, useTheme, useToast } from "../../ui";
 import { formatAmount, localizeDigits } from "../money-display";
 import { FailureView, ProgressRule, StaleBanner, useBrand, useLoad, useMoney } from "./kit";
-import { countdownLabel, countdownTone, kpiTiles, sectionOrder, type KpiTile } from "./dashboardModel";
-import { buildDashboard, orderActions, serverNow, slaCountdown, type BrandOrder, type DashboardData, type DashboardView } from "./model";
+import { countdownLabel, countdownTone, kpiTiles, sectionOrder, trendBars, type KpiTile } from "./dashboardModel";
+import { buildDashboard, orderActions, queueOf, serverNow, slaCountdown, type BrandOrder, type DashboardData, type DashboardView } from "./model";
 
 const GAP = 24;
 /** Soft tint of a solid #RRGGBB token (alpha suffix): keeps the token as the single colour source. */
@@ -27,7 +27,7 @@ export function DashboardScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { colors } = useTheme();
+  const { colors, spacing } = useTheme();
   const { port, account, clock, syncClock, locale } = useBrand();
   const money = useMoney();
   const { state, reload, reloading } = useLoad<DashboardData>("dashboard", () => port.dashboard());
@@ -54,6 +54,8 @@ export function DashboardScreen() {
     }
   };
 
+  const bars = trendBars(data?.salesTrend);
+  const recent = (data?.recentOrders ?? []).filter((o) => queueOf(o.status) !== "awaiting");
   const ladderGood = data !== null && data.trust.ladder === "good_standing";
 
   return (
@@ -66,6 +68,9 @@ export function DashboardScreen() {
               <Icon name={ladderGood ? "checkmark-circle" : "alert-circle-outline"} size={14} color={ladderGood ? "savings" : "textSecondary"} />
               <Text variant="caption" weight="500" color={ladderGood ? "savings" : "textSecondary"} accessibilityRole="none">{t(`brandMode.dashboard.ladder.${data.trust.ladder}`)}</Text>
             </View>
+          ) : null}
+          {data?.plan !== undefined ? (
+            <Text variant="caption" secondary testID="dashboard-plan">{t("brandMode.dashboard.plan", { plan: locale === "ar" ? data.plan.name.ar : data.plan.name.en })}</Text>
           ) : null}
         </View>
         <Avatar name={name} size={44} />
@@ -86,6 +91,8 @@ export function DashboardScreen() {
             </Text>
             {view.sales.kind === "unavailable" || view.orders.kind === "unavailable" ? <Text variant="caption" secondary>{t("brandMode.common.notEnoughDataHint")}</Text> : null}
           </View>
+
+          {bars !== null ? <TrendCard bars={bars} values={data.salesTrend ?? []} /> : null}
 
           {sectionOrder(view).map((key, i) => {
             switch (key) {
@@ -147,6 +154,7 @@ export function DashboardScreen() {
                           <Stat label={t("brandMode.dashboard.payoutEligible")} value={view.payoutEligible.kind === "value" ? money(view.payoutEligible.value) : null} />
                           <Stat label={t("brandMode.dashboard.payoutPending")} value={data.payout.pendingRelease === null ? null : money(data.payout.pendingRelease)} />
                         </View>
+                        {data.inTransit !== undefined ? <Stat label={t("brandMode.dashboard.inTransit")} value={data.inTransit === null ? null : money(data.inTransit)} /> : null}
                         {view.payoutHeld !== null ? (
                           <Text variant="callout" color="danger">
                             {t("brandMode.dashboard.payoutHeld")}: {money(view.payoutHeld)}. {data.payout.heldReasons.length === 0 ? t("brandMode.dashboard.payoutHeldNoReason") : t("brandMode.dashboard.payoutHeldReason", { reasons: data.payout.heldReasons.join(", ") })}
@@ -195,6 +203,24 @@ export function DashboardScreen() {
             }
           })}
 
+          {recent.length > 0 ? (
+            <Section title={t("brandMode.dashboard.recentTitle")} actionLabel={t("brandMode.dashboard.seeAll")} onAction={toOrders}>
+              <Card variant="outlined" style={{ paddingVertical: spacing.xs }}>
+                {recent.slice(0, 4).map((o, idx) => (
+                  <PressScale key={o.id} onPress={toOrders} accessibilityRole="button" accessibilityLabel={`${o.lines[0]?.title ?? o.id}, ${t(`brandMode.orders.queues.${queueOf(o.status)}`)}`} innerStyle={{ minHeight: spacing.xxxl + spacing.sm, justifyContent: "center", borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: colors.hairline }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }} testID={`dashboard-recent-${o.id}`}>
+                      <View style={{ flex: 1, minWidth: 0, gap: spacing.xs / 2 }}>
+                        <Text variant="callout" weight="500" numberOfLines={1} accessibilityRole="none">{o.lines[0]?.title ?? o.id}</Text>
+                        <Text variant="caption" secondary numberOfLines={1} accessibilityRole="none">{t(`brandMode.orders.queues.${queueOf(o.status)}`)}</Text>
+                      </View>
+                      <Text variant="callout" weight="600" numeric accessibilityRole="none">{money(o.subtotal)}</Text>
+                    </View>
+                  </PressScale>
+                ))}
+              </Card>
+            </Section>
+          ) : null}
+
           <Button title={t("brandMode.common.backToShopping")} variant="ghost" icon="storefront-outline" onPress={() => router.replace("/(tabs)")} testID="brand-to-shopping" />
         </>
       ) : null}
@@ -241,6 +267,30 @@ function KpiCell(props: { tile: KpiTile }) {
         )}
       </View>
     </Card>
+  );
+}
+
+/** 7-day gross sales bars (oldest first, today highlighted). Drawn only from real daily values; hidden when there is nothing to show. */
+function TrendCard(props: { bars: readonly number[]; values: readonly bigint[] }) {
+  const { t } = useTranslation();
+  const { colors, spacing } = useTheme();
+  const chartH = spacing.xxxl * 2;
+  const { locale } = useBrand();
+  const money = useMoney();
+  const total = props.values.reduce((n, v) => n + v, 0n);
+  return (
+    <View testID="dashboard-trend"><Card variant="outlined" style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.md }}>
+        <Text variant="headline" weight="600" accessibilityRole="header">{t("brandMode.dashboard.trendTitle")}</Text>
+        <Text variant="callout" numeric secondary accessibilityRole="none">{money(total)}</Text>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, height: chartH }} accessible accessibilityLabel={t("brandMode.dashboard.trendA11y", { total: money(total), days: localizeDigits(String(props.bars.length), locale) })}>
+        {props.bars.map((b, i) => (
+          <View key={i} style={{ flex: 1, height: Math.max(spacing.xs, Math.round(b * chartH)), borderRadius: radius.sm, backgroundColor: i === props.bars.length - 1 ? colors.savings : colors.fill }} />
+        ))}
+      </View>
+      <Text variant="caption" secondary>{t("brandMode.dashboard.trendCaption")}</Text>
+    </Card></View>
   );
 }
 

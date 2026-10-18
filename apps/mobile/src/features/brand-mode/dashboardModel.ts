@@ -43,3 +43,18 @@ export function countdownLabel(sla: { remainingMs: number; hours: number; minute
   if (sla.hours === 0) return { kind: "minutes", minutes: sla.minutes };
   return { kind: "hoursMinutes", hours: sla.hours, minutes: sla.minutes };
 }
+
+/** Bar heights (0..1) for the 7-day sales trend. null when there is nothing honest to draw (fewer than 2 days or all zero). */
+export function trendBars(trend: readonly bigint[] | undefined): readonly number[] | null {
+  if (trend === undefined || trend.length < 2) return null;
+  const max = trend.reduce((m, v) => (v > m ? v : m), 0n);
+  if (max <= 0n) return null;
+  return trend.map((v) => Number((v * 1000n) / max) / 1000);
+}
+
+/** Percent of whole piastres the verified discount represents (integer floor, same rule as the price engine); null unless the claim is verified. */
+export function verifiedOffPct(claim: string, price: bigint | null, reference: bigint | null | undefined): number | null {
+  if (claim !== "verified_discount" || price === null || reference === null || reference === undefined || reference <= price) return null;
+  const pct = Number(((reference - price) * 100n) / reference);
+  return pct >= 5 ? pct : null;
+}

@@ -25,6 +25,7 @@ export function useBrand(): BrandSession {
 
 /** Last good values survive tab switches and offline refreshes (memory only; cleared with the app process). */
 const cache = new Map<string, unknown>();
+let lastPort: BrandPort | null = null;
 export function clearBrandCache(): void { cache.clear(); }
 
 export function useLoad<T>(key: string, loader: () => Promise<T>): { state: LoadState<T>; reload: () => void; reloading: boolean } {
@@ -51,7 +52,11 @@ export function useLoad<T>(key: string, loader: () => Promise<T>): { state: Load
 export function BrandSessionProvider(props: { children: ReactNode }) {
   const { i18n } = useTranslation();
   const locale: DisplayLocale = i18n.language === "en" ? "en" : "ar";
-  const port = useMemo(() => getBrandPort(), []);
+  const port = useMemo(() => {
+    const p = getBrandPort();
+    if (p !== lastPort) { cache.clear(); lastPort = p; } // a different brand (e.g. the dev demo brand) must not see the previous one's cached lists
+    return p;
+  }, []);
   const [account, setAccount] = useState<BrandAccount | null>(null);
   const [failure, setFailure] = useState<BrandFailure | null>(null);
   const [clock, setClock] = useState<ServerClock>({ offsetMs: 0 });

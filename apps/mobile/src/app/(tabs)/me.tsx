@@ -20,6 +20,7 @@ import { SELL_ROUTE, SIGN_IN_ROUTE } from "../../features/me/routes";
 import { useGuestGateMode } from "../../features/me/useGuest";
 import { TextAction } from "../../features/purchase/TextAction";
 import { useServices } from "../../state/services";
+import { demoBrandAvailable, enterDemoBrand } from "../../features/brand-mode/state";
 import { TabBarInsetContext, tabBarZoomExtra } from "@outlet/ui-native";
 import { chevronName, Divider, Icon, IconButton, Eyebrow, ListRow, PressScale, Reveal, SegmentedControl, Text, useTheme } from "../../ui";
 import { Monogram } from "../../art";
@@ -179,6 +180,12 @@ export default function MeScreen() {
           <TestId id="me-row-sell">
             <ListRow title={t("guestMe.sellRow")} leadingIcon="storefront-outline" divider onPress={() => router.push(SELL_ROUTE)} />
           </TestId>
+          {/* Development fixtures only: never rendered in a release build or against a real API (isDemoBrandAllowed). */}
+          {demoBrandAvailable() ? (
+            <TestId id="me-row-demo-brand">
+              <ListRow title="DEV · Sign in as demo brand (Nile Outlet)" leadingIcon="flask-outline" divider onPress={() => { if (enterDemoBrand()) router.push("/brand-mode"); }} />
+            </TestId>
+          ) : null}
           {guest ? (
             <TestId id="me-quiet-sign-in">
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, flexWrap: "wrap" }}>

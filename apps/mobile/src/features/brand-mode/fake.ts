@@ -22,6 +22,15 @@ const CATEGORIES: readonly Category[] = [
   { id: "c-bag", name: { ar: "حقائب", en: "Bags" }, sized: false },
 ];
 
+/** Optional replacement data (the dev-only demo brand). Absent: the original small fixture. */
+export interface BrandSeed {
+  readonly account: BrandAccount;
+  readonly orders: readonly BrandOrder[];
+  readonly products: readonly BrandProduct[];
+  readonly settings: StoreSettings;
+  readonly dashboard: (orders: readonly BrandOrder[], now: number) => DashboardData;
+}
+
 export class InMemoryBrandPort implements BrandPort {
   private orders: BrandOrder[];
   private products: BrandProduct[];
@@ -31,7 +40,7 @@ export class InMemoryBrandPort implements BrandPort {
   private strongAtMs: number | null = null;
   private seq = 100;
 
-  constructor(private readonly now: () => number = Date.now, private readonly role: BrandAccount["role"] = "owner") {
+  constructor(private readonly now: () => number = Date.now, private readonly role: BrandAccount["role"] = "owner", private readonly seed?: BrandSeed) {
     const t = this.now();
     const line = (id: string, title: string, size: string, qty: number, price: bigint) => ({ id, title, sizeLabel: size, qty, unitPrice: price });
     this.orders = [
@@ -60,16 +69,22 @@ export class InMemoryBrandPort implements BrandPort {
       version: 1,
     };
     this.members = [{ id: "m-1", name: "Member One", role: "owner", status: "active" }];
+    if (seed !== undefined) {
+      this.orders = [...seed.orders];
+      this.products = [...seed.products];
+      this.settings = seed.settings;
+    }
   }
 
   private async lag(): Promise<void> { await Promise.resolve(); }
   private guardRole(ok: boolean): void { if (!ok) throw new BrandPortError("forbidden"); }
 
-  async account(): Promise<BrandAccount> { return { ...FAKE_ACCOUNT, role: this.role }; }
+  async account(): Promise<BrandAccount> { return { ...(this.seed?.account ?? FAKE_ACCOUNT), role: this.role }; }
 
   async dashboard(): Promise<DashboardData> {
     await this.lag();
     const t = this.now();
+    if (this.seed !== undefined) return this.seed.dashboard(this.orders, t);
     return {
       serverNowMs: t,
       freshnessAtMs: t - 4 * 60_000,

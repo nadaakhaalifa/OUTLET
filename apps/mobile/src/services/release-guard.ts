@@ -35,3 +35,17 @@ export function currentBackendConfig(rawUrl: string | null): BackendConfig {
   const isRelease = typeof __DEV__ !== "undefined" && !__DEV__;
   return resolveBackendConfig(rawUrl, !isRelease);
 }
+
+/**
+ * The "Sign in as demo brand" shortcut (seeded in-memory brand) exists ONLY in a development build on the in-memory
+ * fixture backend. Any release build, and any dev build pointed at a real API, gets `false`: it never renders and never works.
+ */
+export function isDemoBrandAllowed(cfg: BackendConfig, isDev: boolean): boolean {
+  return isDev && cfg.kind === "fixture";
+}
+
+/** Runtime view of {@link isDemoBrandAllowed}. */
+export function currentDemoBrandAllowed(rawUrl: string | null): boolean {
+  const isDev = typeof __DEV__ === "undefined" || __DEV__;
+  return isDemoBrandAllowed(currentBackendConfig(rawUrl), isDev);
+}

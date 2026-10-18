@@ -2,9 +2,11 @@
 import { router } from "expo-router";
 import { getBrandModePort, setBrandModePort, type BrandModeEntry, type BrandModePort } from "../me/model";
 import { apiBaseUrlFromEnv, createAdapterContext, getApiRuntime } from "../../services/runtime";
-import { BackendNotConfiguredError, currentBackendConfig } from "../../services/release-guard";
+import { BackendNotConfiguredError, currentBackendConfig, currentDemoBrandAllowed } from "../../services/release-guard";
+import { registerDevHint } from "../../services/dev-hints";
 import { ApiBrandPort } from "./api";
 import { InMemoryBrandPort } from "./fake";
+import { createDemoBrandPort } from "./demo-brand";
 import type { BrandPort } from "./model";
 
 let current: BrandPort | null = null;
@@ -25,6 +27,23 @@ export function getBrandPort(): BrandPort {
 }
 export function setBrandPort(p: BrandPort | null): void {
   current = p;
+  demoActive = false;
+}
+
+let demoActive = false;
+/** Whether the dev-only "Sign in as demo brand" shortcut may be offered (never true in a release build or against a real API). */
+export function demoBrandAvailable(): boolean {
+  return currentDemoBrandAllowed(apiBaseUrlFromEnv());
+}
+/** Switches brand mode to the seeded "Nile Outlet" demo brand. Returns false (and changes nothing) unless the guard allows it. */
+export function enterDemoBrand(): boolean {
+  if (!demoBrandAvailable()) return false;
+  if (!demoActive) {
+    current = createDemoBrandPort();
+    demoActive = true;
+    registerDevHint("brand-demo", "Demo brand \"Nile Outlet\": seeded in-memory data (12 products, 6 orders). Sample numbers only; nothing is sent anywhere.");
+  }
+  return true;
 }
 
 /**
