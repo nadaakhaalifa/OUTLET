@@ -15,5 +15,15 @@ export default defineConfig({
   ],
   // PGlite suites boot a WASM Postgres and apply ~46 migrations; under `pnpm -r test` the machine
   // runs every package at once, which made a few of them miss the 5 s / 10 s defaults.
-  test: { environment: "node", include: ["src/**/*.test.ts"], testTimeout: 30_000, hookTimeout: 60_000 },
+  // maxWorkers: every PGlite file boots its own WASM Postgres (CPU bound). With one worker per core the
+  // full suite starved itself and heavy migrations/load tests missed their timeouts; capping at half the
+  // cores keeps per-file wall time stable without raising any individual timeout.
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
+    maxWorkers: 4,
+    minWorkers: 1,
+  },
 });

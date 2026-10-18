@@ -1,4 +1,6 @@
 import { randomInt } from "node:crypto";
+import { formatLogLine } from "../platform/telemetry/logger";
+import { instruments } from "../platform/telemetry/metrics";
 import type { CapabilityGate, LogFields, WorkerClock, WorkerLogger, WorkerMetrics, WorkerTimers, JobOutcome } from "./scheduler";
 
 export const systemWorkerClock: WorkerClock = { nowMs: () => Date.now() };
@@ -15,7 +17,7 @@ export const cryptoRandom = (): number => randomInt(0, 1_000_000) / 1_000_000;
 /** JSON lines on stdout. Fields are ids and counters only (see WorkerLogger). */
 export const jsonLogger = (write: (line: string) => void = (l) => process.stdout.write(`${l}\n`)): WorkerLogger => ({
   log(level, event, fields: LogFields) {
-    write(JSON.stringify({ level, event, ...fields }));
+    write(formatLogLine(level, event, fields));
   },
 });
 
@@ -37,6 +39,29 @@ export const logMetrics = (logger: WorkerLogger): WorkerMetrics => ({
     });
   },
 });
+
+/**
+ * Worker metrics into the OTel meter (no-op instruments when telemetry is not configured), while
+ * keeping the `worker.metric` log line as the fallback so alerts keep working without a collector.
+ */
+export const otelMetrics = (logger: WorkerLogger, telemetryEnabled: boolean): WorkerMetrics => {
+  const fallback = logMetrics(logger);
+  if (!telemetryEnabled) return fallback;
+  return {
+    jobRan(name, outcome, durationMs) {
+      const i = instruments();
+      i.counter("outlet.worker.job.runs").add(1, { job: name, outcome });
+      i.histogram("outlet.worker.job.duration").record(durationMs / 1000, { job: name, outcome });
+      fallback.jobRan(name, outcome, durationMs);
+    },
+    deadMan(name, s) {
+      const i = instruments();
+      if (s.lastSuccessAtMs !== null) i.setGauge("outlet.worker.last_success", s.lastSuccessAtMs / 1000, { job: name });
+      i.setGauge("outlet.worker.consecutive_failures", s.consecutiveFailures, { job: name });
+      fallback.deadMan(name, s);
+    },
+  };
+};
 
 export class RecordingMetrics implements WorkerMetrics {
   readonly runs: { name: string; outcome: JobOutcome }[] = [];

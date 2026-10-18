@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
+import { AutoBuyModule, FakeAutoBuyFlags, FakeBudgetGate, FakeCardVault, FakeCatalogQuote, FakeDeliverability, FakeInventoryHold, FakeMemberEligibility, FakeMitCheckout, FakeNotices, FakeRisk, InMemoryAutoBuyStore, MissingAutoBuyPortsError } from "./modules/auto-buy";
 import { ConfigError, loadConfig } from "./config/env";
 import { MissingDatabaseConfigError, createPersistence } from "./persistence";
 import { createPgliteDatabase, type PgliteInstance } from "./platform/db";
@@ -68,5 +69,24 @@ describe("persistence composition", () => {
     expect(createPersistence(cfg, db)).toBeDefined();
     // The production composition (Postgres stores plus Unconfigured providers) replaces the refusal.
     expect(() => AppModule.register(cfg, {}, { production: { db } })).not.toThrow();
+  });
+
+  it("auto-buy: dev boot supplies a fake opsAudit; production without a real opsAudit refuses to boot", () => {
+    expect(() => AppModule.register(loadConfig({ NODE_ENV: "development" }))).not.toThrow();
+    const prod = { ...loadConfig({ NODE_ENV: "development" }), adapters: "production" as const };
+    const ports = {
+      store: new InMemoryAutoBuyStore(),
+      flags: new FakeAutoBuyFlags(false, false),
+      eligibility: new FakeMemberEligibility(),
+      catalog: new FakeCatalogQuote(),
+      deliverability: new FakeDeliverability(),
+      risk: new FakeRisk(),
+      budget: new FakeBudgetGate(),
+      vault: new FakeCardVault(),
+      inventory: new FakeInventoryHold(),
+      mit: new FakeMitCheckout(),
+      notices: new FakeNotices(),
+    };
+    expect(() => AutoBuyModule.forRoot(prod, ports)).toThrow(MissingAutoBuyPortsError);
   });
 });

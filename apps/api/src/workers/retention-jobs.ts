@@ -7,7 +7,7 @@ const MIN = 60_000;
 export const RETENTION_RULES: readonly string[] = [...new Set(TARGETS.map((t) => t.ruleId))].sort();
 
 /**
- * One nightly job per rule family, staggered four minutes apart from 03:00 Cairo (13 jobs, last at 03:48) (low-traffic, after the
+ * One nightly job per rule family, staggered three minutes apart from 03:00 Cairo (16 jobs, 03:01 to 03:46, clear of forecasting at 03:15 and creators at 03:50) (low-traffic, after the
  * 02:30 ledger integrity run and before the 04:00 payout cycle). Each purges in batches of 1000 and reports
  * counters; a failed target throws so the scheduler records the failure.
  */
@@ -17,7 +17,7 @@ export const RETENTION_JOB_SPECS: readonly JobSpec[] = RETENTION_RULES.map((rule
   method: "run",
   args: () => [ruleId],
   ownerModule: "retention",
-  cadence: { kind: "cairo", hour: 3, minute: i * 4 },
+  cadence: { kind: "cairo", hour: 3, minute: i * 3 + 1 },
   timeoutMs: 20 * MIN,
   criticality: "routine",
   idempotency: "delete/nullify of rows strictly older than the cutoff; legal holds and guards re-evaluated each batch; a rerun finds nothing left",

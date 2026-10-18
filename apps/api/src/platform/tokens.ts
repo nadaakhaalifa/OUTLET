@@ -8,3 +8,10 @@ export const RATE_LIMITER = Symbol("RATE_LIMITER");
 export const POLICY_RULES = Symbol("POLICY_RULES");
 export const AUTHENTICATOR = Symbol("AUTHENTICATOR");
 export const AUDIT_SINK = Symbol("AUDIT_SINK");
+/** Kill switch for the anonymous `/v1/public/*` catalog reads (see public-read.ts). */
+export const PUBLIC_READ_GATE = Symbol("PUBLIC_READ_GATE");
+/**
+ * `flag.guest_browsing` (ADR-0055). Shaped like PUBLIC_READ_GATE but DEFAULT BLOCKED everywhere: guest browsing
+ * routes (the merge and the guest-only public reads) answer 404 until the release flag is on.
+ */
+export const GUEST_BROWSING_GATE = Symbol("GUEST_BROWSING_GATE");

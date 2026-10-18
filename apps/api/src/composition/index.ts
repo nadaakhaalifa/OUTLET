@@ -23,3 +23,13 @@ export {
 } from "./money-adapters";
 export { subBalanceStates } from "./credit-balances";
 export { composeMoney, createMoneyLates, MoneyBridgeModule, type MoneyLates, type MoneyWiring, type MoneyWiringOptions } from "./money-wiring";
+export { Phase3BridgeModule, createPhase3Lates, lazy, type Phase3Lates } from "./phase3-wiring";
+export { AddressBookDeliverability, CheckoutCapBudgetGate, LiveSkuQuote, PlusMemberEligibility, type QuoteSources } from "./auto-buy-adapters";
+export {
+  CatalogSellerSkuResolver,
+  CrawlStoreChannelDirectory,
+  InventoryStockSink,
+  PriceIntegrityPriceSink,
+  type SellerSkuLookup,
+  type StockSyncUseCase,
+} from "./odoo-adapters";

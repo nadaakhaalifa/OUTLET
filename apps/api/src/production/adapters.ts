@@ -1,6 +1,8 @@
 import type { FlagClient } from "../../../../packages/feature-flags/src/index";
 import { FLAG_REGISTRY, type FlagKey } from "../../../../packages/feature-flags/src/index";
-import type { FlagAdminBackend } from "../modules/admin";
+import type { AdminStore, FlagAdminBackend } from "../modules/admin";
+import type { VoidApprovalPort } from "../modules/gift-cards";
+import { QueueUnavailableError, type QueuePort } from "../modules/waiting-room";
 import { ProviderNotConfiguredError } from "./unconfigured";
 
 /**
@@ -50,5 +52,50 @@ export class FlagBackendOverRegistry implements FlagAdminBackend {
 
   async set(): Promise<FlagView | null> {
     throw new ProviderNotConfiguredError("flags.provider", "set");
+  }
+}
+
+type ApprovalRecord = NonNullable<Awaited<ReturnType<AdminStore["getApproval"]>>>;
+
+/**
+ * Gift-card void approvals over the admin module's approvals store. `find` reads the persisted dual
+ * approval; the use case checks it covers exactly this card, amount and time (`approvalCovers`).
+ * `consume` is single-use per process; across processes replay is harmless because the approval is bound
+ * to one card id and a voided card cannot be voided again. A durable consumption table is a
+ * follow-up (needs a migration and an inventory entry; see docs/plan/api-client-gap.md).
+ */
+export class AdminStoreVoidApprovals implements VoidApprovalPort {
+  private readonly consumed = new Set<string>();
+  constructor(private readonly store: Pick<AdminStore, "getApproval">) {}
+  async find(approvalId: string): Promise<ApprovalRecord | null> {
+    return this.store.getApproval(approvalId);
+  }
+  async consume(approvalId: string): Promise<boolean> {
+    if (this.consumed.has(approvalId)) return false;
+    this.consumed.add(approvalId);
+    return true;
+  }
+}
+
+/**
+ * Ops counters must report "unmeasured" (null), never throw, when the queue backend is not configured.
+ * Every call delegates; only an Unconfigured provider error on `size` is mapped to QueueUnavailableError.
+ */
+export class UnmeasuredWhenUnavailableQueue implements QueuePort {
+  constructor(private readonly q: QueuePort) {}
+  join: QueuePort["join"] = (...a) => this.q.join(...a);
+  heartbeat: QueuePort["heartbeat"] = (...a) => this.q.heartbeat(...a);
+  peek: QueuePort["peek"] = (...a) => this.q.peek(...a);
+  reject: QueuePort["reject"] = (...a) => this.q.reject(...a);
+  admit: QueuePort["admit"] = (...a) => this.q.admit(...a);
+  expire: QueuePort["expire"] = (...a) => this.q.expire(...a);
+  finish: QueuePort["finish"] = (...a) => this.q.finish(...a);
+  async size(dropId: string): Promise<number> {
+    try {
+      return await this.q.size(dropId);
+    } catch (e) {
+      if (e instanceof ProviderNotConfiguredError) throw new QueueUnavailableError();
+      throw e;
+    }
   }
 }

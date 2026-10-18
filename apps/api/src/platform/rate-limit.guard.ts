@@ -87,6 +87,11 @@ export class RateLimitGuard implements CanActivate {
         const p = await resolvePrincipal(req, this.authenticator, this.clock);
         return p?.actor.id;
       }
+      case "session": {
+        // The verified token's session id (never the unattested client install id).
+        const p = await resolvePrincipal(req, this.authenticator, this.clock);
+        return p === null ? undefined : `${p.actor.id}:${p.claims.sid}`;
+      }
       case "device":
         return (
           headerValue(req, "x-device-id") ??

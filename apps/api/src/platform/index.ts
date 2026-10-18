@@ -2,6 +2,7 @@ export * from "./decorators";
 export * from "./http-types";
 export * from "./ports";
 export * from "./problem";
+export * from "./public-read";
 export * from "./request-context";
 export * from "./tokens";
 export * from "./zod.pipe";

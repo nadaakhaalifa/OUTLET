@@ -17,6 +17,7 @@ export const PROVIDERS = {
   "courier.aramex": { kind: "external", note: "Aramex API via egress proxy (VR-11)" },
   "eta.portal": { kind: "external", note: "ETA e-invoice and e-receipt portal (VR-06)" },
   "messaging.sms-whatsapp": { kind: "external", note: "SMS and WhatsApp business provider" },
+  "messaging.email": { kind: "external", note: "Transactional and marketing email provider" },
   "push.apns-fcm": { kind: "external", note: "APNs and FCM push" },
   "llm.gateway-provider": { kind: "external", note: "LLM vendor (VR-02 transfer licence)" },
   "kms.envelope": { kind: "external", note: "KMS envelope field encryption and HMAC keys (ADR-0002)" },
@@ -71,6 +72,24 @@ const PASS_THROUGH = new Set<string | symbol>([
 ]);
 
 const bound = new Set<ProviderName>();
+const realProbes = new Map<ProviderName, (() => Promise<boolean>) | null>();
+
+/** Records a provider bound to a REAL adapter, with an optional cheap reachability probe for /v1/ready. */
+export function markConfigured(provider: ProviderName, probe: (() => Promise<boolean>) | null = null): void {
+  realProbes.set(provider, probe);
+}
+
+/** Status for /v1/ready: configured (real adapter, reachable or unprobed), unreachable (probe failed) or unconfigured. */
+export async function providerStatus(provider: ProviderName): Promise<"configured" | "unreachable" | "unconfigured"> {
+  if (!realProbes.has(provider)) return "unconfigured";
+  const p = realProbes.get(provider);
+  if (p === null || p === undefined) return "configured";
+  return (await p()) ? "configured" : "unreachable";
+}
+
+export function isRealProvider(provider: ProviderName): boolean {
+  return realProbes.has(provider);
+}
 
 /** Providers that have been bound to an Unconfigured adapter in this process (names only). */
 export function boundUnconfigured(): readonly ProviderName[] {
@@ -85,6 +104,7 @@ export function markUnconfigured(provider: ProviderName): void {
 /** Test helper: the registry is process-global so that /v1/ready can list it. */
 export function resetBoundUnconfigured(): void {
   bound.clear();
+  realProbes.clear();
 }
 
 /**

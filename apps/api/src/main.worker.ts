@@ -2,8 +2,14 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ConfigError, loadConfig } from "./config/env";
+import { startTelemetry, traceJob } from "./platform/telemetry";
 import { MODULE_BINDINGS } from "./production/bindings";
 import { PRODUCTION_RUNTIME, type ProductionRuntime } from "./production/compose";
+import { BRAND_EVENT_CONSUMER, type BrandEventConsumerPort } from "./modules/admin";
+import { AUTO_BUY_EVENT_CONSUMER } from "./modules/auto-buy";
+import { CreatorTokens } from "./modules/creators";
+import { ORDER_DELIVERY_CONSUMER } from "./modules/orders";
+import { SEARCH_SYNC_EVENT_CONSUMER } from "./modules/search";
 import { createProductionRelay } from "./production/relay";
 import {
   EnvCapabilityGate,
@@ -14,7 +20,7 @@ import {
   buildJobs,
   cryptoRandom,
   jsonLogger,
-  logMetrics,
+  otelMetrics,
   systemTimers,
   systemWorkerClock,
   type LeaderLock,
@@ -26,6 +32,7 @@ import {
  * Run two or more replicas safely: every job takes a leader lock first.
  */
 async function bootstrap(): Promise<void> {
+  const telemetry = startTelemetry(process.env, "outlet-worker");
   const config = loadConfig(process.env);
   const app = await NestFactory.createApplicationContext(AppModule.register(config), { bufferLogs: false });
   app.enableShutdownHooks();
@@ -48,7 +55,7 @@ async function bootstrap(): Promise<void> {
     clock: systemWorkerClock,
     timers: systemTimers,
     lock,
-    metrics: logMetrics(logger),
+    metrics: otelMetrics(logger, telemetry.enabled),
     logger,
     // Production default: drops stay blocked (kill.drops is blocked by the flag registry) unless the operator overrides.
     gate: new EnvCapabilityGate(process.env["WORKER_BLOCKED_CAPABILITIES"] ?? (config.adapters === "production" ? "drops" : undefined)),
@@ -65,7 +72,23 @@ async function bootstrap(): Promise<void> {
   let outboxRelay: { runOnce(): Promise<object> } | undefined;
   if (config.adapters === "production") {
     const runtime = app.get<ProductionRuntime>(PRODUCTION_RUNTIME, { strict: false });
-    outboxRelay = createProductionRelay(runtime);
+    const brandEvents = app.get<BrandEventConsumerPort | null>(BRAND_EVENT_CONSUMER, { strict: false });
+    const autoBuyEvents = app.get<{ handle(e: { messageId: string; type: string; payload: unknown }): Promise<unknown> } | null>(AUTO_BUY_EVENT_CONSUMER, { strict: false });
+    // The creators module is `blocked` in production (bindings.ts): its consumer is not in the graph
+    // until it is composed, and a missing provider means "acknowledge unrouted", not a boot failure.
+    type EventHandler = { handle(e: { messageId: string; type: string; payload: unknown; occurredAtMs?: number }): Promise<unknown> };
+    const optional = (token: symbol): EventHandler | null => {
+      try {
+        return app.get<EventHandler>(token, { strict: false });
+      } catch {
+        return null;
+      }
+    };
+    const creatorEvents = optional(CreatorTokens.CREATOR_EVENT_CONSUMER);
+    const orderEvents = optional(ORDER_DELIVERY_CONSUMER);
+    const searchEvents = optional(SEARCH_SYNC_EVENT_CONSUMER);
+    const relay = createProductionRelay(runtime, { brandEvents, autoBuyEvents, creatorEvents, orderEvents, searchEvents });
+    outboxRelay = { runOnce: () => traceJob("outbox.relay", () => relay.runOnce()) };
   } else {
     logger.log("warn", "worker.no_outbox_relay", { reason: "DEV_FIXTURES: no Postgres outbox" });
   }
@@ -92,6 +115,7 @@ async function bootstrap(): Promise<void> {
     void scheduler
       .shutdown(25_000)
       .then(closePool)
+      .then(() => telemetry.shutdown())
       .then(() => app.close())
       .then(() => process.exit(0));
   };

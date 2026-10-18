@@ -7,6 +7,7 @@ import type {
   IdempotencyStore,
   StoredResponse,
 } from "@outlet/idempotency";
+import { assertAuditDiff } from "@outlet/privacy";
 import type { AuditRecord } from "@outlet/policy";
 import { sql, type Kysely } from "kysely";
 import type { ExportAuditEntry } from "../modules/seller-analytics";
@@ -152,7 +153,7 @@ export class KyselyAuditSink implements AuditSink {
   async record(e: AuditRecord): Promise<void> {
     const targetId = e.resourceId !== null && UUID.test(e.resourceId) ? e.resourceId : null;
     const actorId = e.actorId !== null && UUID.test(e.actorId) ? e.actorId : null;
-    const diff = { effect: e.effect, ruleId: e.ruleId, reason: e.reason, httpStatus: e.httpStatus, approverIds: e.approverIds };
+    const diff = assertAuditDiff({ effect: e.effect, ruleId: e.ruleId, reason: e.reason, httpStatus: e.httpStatus, approverIds: e.approverIds });
     await this.db.transaction().execute(async (trx) => {
       await sql`SELECT set_config('app.role', 'system', true)`.execute(trx);
       await sql`
@@ -170,7 +171,7 @@ export class KyselyExportAudit {
   async record(e: ExportAuditEntry): Promise<void> {
     const actorId = UUID.test(e.actorId) ? e.actorId : null;
     const storeId = UUID.test(e.storeId) ? e.storeId : null;
-    const diff = { report: e.report, rowCount: e.rowCount, watermark: e.watermark, fromMs: e.fromMs, toMs: e.toMs };
+    const diff = assertAuditDiff({ report: e.report, rowCount: e.rowCount, watermark: e.watermark, fromMs: e.fromMs, toMs: e.toMs });
     await this.db.transaction().execute(async (trx) => {
       await sql`SELECT set_config('app.role', 'system', true)`.execute(trx);
       await sql`

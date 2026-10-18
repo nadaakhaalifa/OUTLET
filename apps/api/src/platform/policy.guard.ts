@@ -1,7 +1,7 @@
 import { type CanActivate, type ExecutionContext, Inject, Injectable, Logger } from "@nestjs/common";
 import { ModuleRef, Reflector } from "@nestjs/core";
 import { decide, type Rule } from "@outlet/policy";
-import { AUTHZ_META, type AuthzMeta } from "./decorators";
+import { AUTHZ_META, ENROL_META, type AuthzMeta } from "./decorators";
 import { headerValue, type ApiRequest } from "./http-types";
 import type { AuditSink, Authenticator, Clock, ResourceResolver } from "./ports";
 import { resolvePrincipal } from "./principal";
@@ -42,6 +42,11 @@ export class PolicyGuard implements CanActivate {
     if (principal === null) throw Problems.unauthenticated();
     if (principal.claims.aud !== meta.audience) throw Problems.unauthenticated("invalid_credentials");
     if (principal.actor.status !== "active") throw Problems.forbidden("account_not_active");
+    if (principal.claims.scope === "seller:enrol") {
+      const allowed = this.reflector.getAllAndOverride<boolean | undefined>(ENROL_META, [context.getHandler(), context.getClass()]) === true;
+      // A restricted enrol token (identity already has a strong factor) reaches nothing.
+      if (!allowed || principal.actor.tokenScopes.includes("seller:enrol_restricted")) throw Problems.forbidden("strong_factor_required");
+    }
 
     if (meta.kind === "self") return true;
 

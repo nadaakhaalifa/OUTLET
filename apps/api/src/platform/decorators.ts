@@ -3,6 +3,7 @@ import type { Audience } from "@outlet/auth-core";
 import type { Action, ResourceType } from "@outlet/policy";
 
 export const AUTHZ_META = "outlet:authz";
+export const ENROL_META = "outlet:allow-seller-enrol";
 export const IDEMPOTENT_META = "outlet:idempotent";
 export const RATE_LIMIT_META = "outlet:rate-limit";
 
@@ -46,7 +47,7 @@ export interface IdempotentOptions {
 }
 export const Idempotent = (options: IdempotentOptions) => SetMetadata(IDEMPOTENT_META, options);
 
-export type RateLimitDimension = "ip" | "user" | "device" | "phone" | "challenge";
+export type RateLimitDimension = "ip" | "user" | "device" | "phone" | "challenge" | "session";
 
 export interface RateLimitSpec {
   readonly dimension: RateLimitDimension;
@@ -65,3 +66,9 @@ export const RateLimit = (rules: readonly RateLimitSpec[], onLimiterError: "clos
 
 /** Opt a route out of the default limit (health probes). */
 export const SkipRateLimit = () => RateLimit([]);
+
+/**
+ * A seller ENROL token (phone OTP only, scope seller:enrol) is refused on every seller route
+ * unless the route opts in with this decorator (enrolment, drafts, logout). Deny by default.
+ */
+export const AllowSellerEnrol = () => SetMetadata(ENROL_META, true);

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { parseAwsEnv, type AwsConfig } from "../production/adapters/aws/config";
+import { parseRedisEnv, type RedisConfig } from "../production/adapters/redis/config";
 
 /**
  * Environment configuration, parsed once at boot. Everything is validated; nothing reads
@@ -67,6 +69,10 @@ export interface AppConfig {
   readonly passkeyOrigin: string;
   readonly appleClientId: string;
   readonly googleClientId: string;
+  /** Optional AWS-compatible providers (S3, KMS, Secrets Manager). Absent pieces stay Unconfigured (ADR-0032). */
+  readonly aws?: AwsConfig;
+  /** Optional Redis (rate limits, waiting room, flags, cache). Unset = previous bindings (ADR-0033). */
+  readonly redis?: RedisConfig | undefined;
 }
 
 export function loadConfig(env: Readonly<Record<string, string | undefined>>): AppConfig {
@@ -88,6 +94,10 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
   if (!devFixtures && raw.SIZE_DEMAND_PSEUDONYM_KEY === undefined) {
     issues.push("SIZE_DEMAND_PSEUDONYM_KEY: required when DEV_FIXTURES is off");
   }
+  const awsParsed = parseAwsEnv(env);
+  issues.push(...awsParsed.issues);
+  const redisParsed = parseRedisEnv(env);
+  issues.push(...redisParsed.issues);
   if (issues.length > 0) throw new ConfigError("invalid environment configuration", issues);
   return {
     env: raw.NODE_ENV,
@@ -107,5 +117,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     passkeyOrigin: raw.PASSKEY_ORIGIN,
     appleClientId: raw.APPLE_CLIENT_ID,
     googleClientId: raw.GOOGLE_CLIENT_ID,
+    aws: awsParsed.config,
+    redis: redisParsed.config,
   };
 }

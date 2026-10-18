@@ -57,8 +57,9 @@ describe("GET /v1/ready and /v1/health under the production composition", () => 
     expect(r.status).toBe(200);
   });
 
-  it("unauthenticated requests to protected routes fail closed with 401 (auth is not composed)", async () => {
-    const r = await http().get("/v1/me/sessions");
-    expect([401, 404]).toContain(r.status);
+  it("unauthenticated requests to protected routes fail closed with 401 (auth is composed; no signing keys are configured)", async () => {
+    expect((await http().get("/v1/me/sessions")).status).toBe(401);
+    expect((await http().get("/v1/me")).status).toBe(401);
+    expect((await http().get("/v1/me").set("Authorization", "Bearer dev_x")).status).toBe(401);
   });
 });

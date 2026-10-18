@@ -6,6 +6,9 @@ import { ModuleRef } from "@nestjs/core";
 import { loadConfig } from "../config/env";
 import { MODULE_BINDINGS, unboundModuleDirs } from "./bindings";
 import { composeProduction, PRODUCTION_RUNTIME } from "./compose";
+import { ORDER_LINE_RETURNS } from "../modules/orders";
+import { ODOO_POLL_BATCH } from "../modules/channel-odoo";
+import { JOB_SPECS } from "../workers";
 import { bootProduction, newTestDb, PROD_ENV, type ProductionTestApp } from "./test/test-support";
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,12 +37,14 @@ describe("production composition registry", () => {
     }
   });
 
-  it("composes exactly one import per composed module plus the auth stand-in, money bridge and runtime", async () => {
+  it("composes exactly one import per composed module plus the money bridge, runtime and the admin brand-review slice (auth is a composed module)", async () => {
     const config = loadConfig({ ...PROD_ENV });
     const db = await newTestDb();
     const c = composeProduction(config, { db });
     const composed = Object.values(MODULE_BINDINGS).filter((b) => b.status === "composed").length;
-    expect(c.imports.length).toBe(composed + 3);
+    // + money bridge, + production runtime, + BrandReviewModule (a slice of the admin module, not its own directory),
+    // + the Phase 3 late-binding bridge (auto-buy and Odoo ports).
+    expect(c.imports.length).toBe(composed + 4);
   }, 60_000);
 
   it("the whole graph boots over PGlite with real stores and exposes the worker runtime", () => {
@@ -52,5 +57,19 @@ describe("production composition registry", () => {
   it("no dev fixture token leaks into the production graph", () => {
     // The dev OTP mailbox only exists in the dev auth module, which production does not import.
     expect(() => booted.app.get("DEV_OTP_MAILBOX", { strict: false })).toThrow();
+  });
+
+  it("orders is composed with a lineReturns port (mandatory once creators is composed; creators stays blocked)", () => {
+    expect(MODULE_BINDINGS["creators"]?.status).toBe("blocked");
+    expect(booted.app.get(ORDER_LINE_RETURNS, { strict: false })).not.toBeNull();
+  });
+
+  it("the Odoo poll batch is scheduled, resolvable from the production graph, and does nothing with no channel due", async () => {
+    expect(MODULE_BINDINGS["channel-odoo"]?.status).toBe("composed");
+    const spec = JOB_SPECS.find((j) => j.name === "channel-odoo.poll-batch");
+    expect(spec).toBeDefined();
+    expect(spec?.token).toBe(ODOO_POLL_BATCH);
+    const batch = booted.app.get<{ execute(limit: number): Promise<{ polled: number; failed: number }> }>(ODOO_POLL_BATCH, { strict: false });
+    expect(await batch.execute(20)).toEqual({ polled: 0, failed: 0 });
   });
 });

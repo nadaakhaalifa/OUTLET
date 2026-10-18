@@ -22,9 +22,16 @@ import {
   type SizingDb,
   type SizingModuleOptions,
 } from "./modules/sizing";
+import {
+  KyselyBreachRepository,
+  KyselyConsentRepository,
+  KyselyDeletionBlockers,
+  KyselyPrivacyRequestRepository,
+  type PrivacyDb,
+} from "./modules/privacy";
 import { KyselyOrderRepository, type OrdersDb } from "./modules/orders";
 import { KyselyReturnRepository, type ReturnsDb } from "./modules/returns";
-import { KyselyPromotionRepository, type PromotionDb } from "./modules/promotions";
+import { KyselyCalendarStore, KyselyPromotionRepository, type PromotionDb } from "./modules/promotions";
 import { KyselyFulfillmentRepository, type FulfillmentDb } from "./modules/fulfillment";
 import { KyselySavedSearchRepository, type SearchDb } from "./modules/search";
 import { KyselyWishlistRepository, type WishlistDb } from "./modules/wishlists";
@@ -42,6 +49,7 @@ import {
   type TaxEtaDb,
 } from "./modules/tax-eta";
 import { KyselySellerAnalyticsStore, type SellerAnalyticsDb } from "./modules/seller-analytics";
+import { KyselySettingsRepository, type SettingsDb } from "./modules/seller-settings";
 import { KyselyAdminAudit, KyselyAdminStore, KyselySellerKyc, type AdminDb } from "./modules/admin";
 import { KyselyReviewStore, type ReviewDb } from "./modules/reviews";
 import { STORES_SYSTEM_SESSION, type StoresDb, type StoresModuleOptions } from "./modules/stores";
@@ -60,10 +68,16 @@ import { KyselyRefundStore, type RefundsDb } from "./modules/refunds";
 import { KyselyStoreCredit, type StoreCreditDb } from "./modules/store-credit";
 import { KyselyPayoutStore, type PayoutsDb } from "./modules/payouts";
 import { KyselyReconStore, type ReconDb } from "./modules/reconciliation";
-import { KyselySubscriptionStore, type PlusDb } from "./modules/subscriptions";
+import { KyselyFamilyStore, KyselyStudentStore, KyselySubscriptionStore, type PlusDb } from "./modules/subscriptions";
 import { KyselyGiftCardStore, type GiftCardDb } from "./modules/gift-cards";
 import { KyselyBudgetStore, type BudgetDb } from "./modules/budget";
-import { KyselyStylistStore, type StylistDb } from "./modules/stylist";
+import { KyselyAddressStore, type AddressDb } from "./modules/addresses";
+import { KyselyBrandApplicationRepository, type SellersDb } from "./modules/sellers";
+import { KyselyStylistChatStore, KyselyStylistStore, type ChatDb, type StylistDb } from "./modules/stylist";
+import { KyselyOutfitCalendarStore, KyselyStoreDeliveryEta, type OutfitCalendarDb } from "./modules/outfit-calendar";
+import { KyselyProductMediaStore, type ProductMediaDb } from "./modules/product-media";
+import { KyselyHomeBannerStore, type HomeBannerDb } from "./modules/home-banners";
+import { KyselyWardrobeStore, type WardrobeDb } from "./modules/wardrobe";
 import { KyselyAuditStore, KyselyTokenUsage, type GatewayDb } from "./modules/llm-gateway";
 import { KyselyRecoStore, PgVectorIndex, type RecoDb } from "./modules/recommendations";
 import { KyselyHistoryStore, type HistoryDb } from "./modules/history";
@@ -74,7 +88,13 @@ import { KyselyAdmissionStore, type WaitingRoomDb } from "./modules/waiting-room
 import { KyselyCrawlStore, type CrawlDb } from "./modules/price-crawler";
 import { KyselyHubStore, type HubDb } from "./modules/hub-consolidation";
 import { KyselyResaleStore, type ResaleDb } from "./modules/resale-lane";
+import { KyselyForecastStore, type ForecastingDb } from "./modules/forecasting";
+import { KyselyCreatorStore, type CreatorDb } from "./modules/creators";
+import { KyselyOdooStore, type OdooDb } from "./modules/channel-odoo";
+import { KyselyRankingStore, type RankingDb } from "./modules/ranking";
 import { KyselyAdsStore, type AdsDb } from "./modules/ads";
+import { KyselyAutoBuyStore, type AutoBuyDb } from "./modules/auto-buy";
+import { KyselyBrandVerificationStore, type BrandVerificationDb } from "./modules/brand-verification";
 import type { LedgerUnitOfWork } from "./composition/ledger-gateway";
 import { KyselyOutboxStore, KyselyTransactionRunner, createPgDatabase } from "./platform/db";
 import type { PlatformTables } from "./platform/db";
@@ -101,6 +121,8 @@ export interface PersistenceWiring {
   /** True when createPersistence built the pool itself (and so the caller must destroy it on shutdown). */
   readonly ownsPool: boolean;
   readonly stores: StoresModuleOptions;
+  readonly addresses: { readonly store: KyselyAddressStore };
+  readonly sellers: { readonly repository: KyselyBrandApplicationRepository };
   readonly catalog: CatalogPersistence;
   readonly wishlists: { readonly repository: KyselyWishlistRepository };
   readonly cart: { readonly repository: KyselyCartRepository };
@@ -109,10 +131,18 @@ export interface PersistenceWiring {
   readonly inventory: { readonly store: KyselyInventoryStore; readonly directory: LevelBackedSkuDirectory };
   readonly orders: { readonly repository: KyselyOrderRepository };
   readonly returns: { readonly repository: KyselyReturnRepository };
-  readonly promotions: { readonly repository: KyselyPromotionRepository };
+  readonly promotions: { readonly repository: KyselyPromotionRepository; readonly calendar: KyselyCalendarStore };
   readonly fulfillment: { readonly repository: KyselyFulfillmentRepository };
   readonly search: { readonly savedSearches: KyselySavedSearchRepository };
   readonly priceIntegrity: PriceIntegrityPersistence;
+  /** Privacy stores over the shared pool; the events they write join the outbox in the same transaction. */
+  readonly privacy: {
+    readonly db: PrivacyDb;
+    readonly consent: KyselyConsentRepository;
+    readonly requests: KyselyPrivacyRequestRepository;
+    readonly breach: KyselyBreachRepository;
+    readonly blockers: KyselyDeletionBlockers;
+  };
   readonly referrals: { readonly store: KyselyReferralStore };
   readonly tax: {
     readonly config: KyselyTaxConfigRepository;
@@ -121,6 +151,7 @@ export interface PersistenceWiring {
     readonly delegations: KyselySigningDelegations;
   };
   readonly sellerAnalytics: { readonly store: KyselySellerAnalyticsStore };
+  readonly sellerSettings: { readonly repo: KyselySettingsRepository };
   readonly admin: { readonly store: KyselyAdminStore; readonly audit: KyselyAdminAudit; readonly kyc: KyselySellerKyc };
   readonly reviews: { readonly store: KyselyReviewStore };
   /** Wave 4 money core. One shared pool, system role (see the identity note above). */
@@ -141,10 +172,18 @@ export interface PersistenceWiring {
   readonly retention: { readonly executor: KyselyPurgeExecutor; readonly runs: KyselyPurgeRunStore };
   /** Phase 2 stores (system role, same identity note as above). Non-store ports stay with the module's real adapters. */
   readonly phase2: {
-    readonly subscriptions: { readonly store: KyselySubscriptionStore };
+    readonly subscriptions: {
+      readonly store: KyselySubscriptionStore;
+      readonly familyStore: KyselyFamilyStore;
+      readonly studentStore: KyselyStudentStore;
+    };
     readonly giftCards: { readonly store: KyselyGiftCardStore };
     readonly budget: { readonly store: KyselyBudgetStore };
-    readonly stylist: { readonly store: KyselyStylistStore };
+    readonly stylist: { readonly store: KyselyStylistStore; readonly chatStore: KyselyStylistChatStore };
+    readonly outfitCalendar: { readonly store: KyselyOutfitCalendarStore; readonly eta: KyselyStoreDeliveryEta };
+    readonly wardrobe: { readonly store: KyselyWardrobeStore };
+    readonly productMedia: { readonly store: KyselyProductMediaStore };
+    readonly homeBanners: { readonly store: KyselyHomeBannerStore };
     readonly llmGateway: { readonly audit: KyselyAuditStore; readonly usage: KyselyTokenUsage };
     readonly recommendations: { readonly store: KyselyRecoStore; readonly vectors: PgVectorIndex };
     readonly history: { readonly store: KyselyHistoryStore };
@@ -155,7 +194,14 @@ export interface PersistenceWiring {
     readonly hub: { readonly store: KyselyHubStore };
     readonly resale: { readonly store: KyselyResaleStore };
     readonly ads: { readonly store: KyselyAdsStore };
+    readonly autoBuy: { readonly store: KyselyAutoBuyStore };
+    readonly forecasting: { readonly store: KyselyForecastStore };
+    readonly creators: { readonly store: KyselyCreatorStore };
+    readonly channelOdoo: { readonly store: KyselyOdooStore };
+    readonly ranking: { readonly shadowStore: KyselyRankingStore; readonly evalStore: KyselyRankingStore };
   };
+  /** Brand verification (ADR-0031). Not composed in production until the sellers module supplies the application port. */
+  readonly brandVerification: { readonly store: KyselyBrandVerificationStore };
 }
 
 /** Builds every Postgres adapter over ONE shared pool. `db` is injectable for tests (PGlite). */
@@ -187,7 +233,7 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
     ownsPool: db === undefined,
     stores: { persistence: { runner: runnerOf<StoresDb>(), session: () => STORES_SYSTEM_SESSION } },
     catalog: { runner: runnerOf<CatalogDb>(), session: () => CATALOG_SYSTEM_SESSION },
-    wishlists: { repository: new KyselyWishlistRepository(handle as WishlistDb) },
+    wishlists: { repository: new KyselyWishlistRepository(handle as WishlistDb, { uuidV7: () => ids.uuidV7() }) },
     cart: { repository: new KyselyCartRepository(handle as CartDb) },
     sizing: {
       repositories: {
@@ -215,10 +261,17 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
     },
     orders: { repository: new KyselyOrderRepository(handle as OrdersDb, systemClock) },
     returns: { repository: new KyselyReturnRepository(handle as ReturnsDb) },
-    promotions: { repository: new KyselyPromotionRepository(handle as PromotionDb) },
+    promotions: { repository: new KyselyPromotionRepository(handle as PromotionDb), calendar: new KyselyCalendarStore(handle as PromotionDb) },
     fulfillment: { repository: new KyselyFulfillmentRepository(handle as FulfillmentDb) },
     search: { savedSearches: new KyselySavedSearchRepository(handle as SearchDb) },
     priceIntegrity: { runner: runnerOf<PriceIntegrityDb>(), session: () => PRICE_INTEGRITY_SYSTEM_SESSION },
+    privacy: {
+      db: handle as PrivacyDb,
+      consent: new KyselyConsentRepository(handle as PrivacyDb),
+      requests: new KyselyPrivacyRequestRepository(handle as PrivacyDb),
+      breach: new KyselyBreachRepository(handle as PrivacyDb),
+      blockers: new KyselyDeletionBlockers(handle as PrivacyDb),
+    },
     referrals: { store: new KyselyReferralStore(handle as ReferralDb, ids) },
     tax: {
       config: new KyselyTaxConfigRepository(handle as TaxEtaDb),
@@ -227,18 +280,29 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
       delegations: new KyselySigningDelegations(handle as TaxEtaDb),
     },
     sellerAnalytics: { store: new KyselySellerAnalyticsStore(handle as SellerAnalyticsDb) },
+    sellerSettings: { repo: new KyselySettingsRepository(handle as SettingsDb) },
     admin: {
       store: new KyselyAdminStore(handle as AdminDb),
       audit: new KyselyAdminAudit(handle as AdminDb),
       kyc: new KyselySellerKyc(handle as AdminDb),
     },
     reviews: { store: new KyselyReviewStore(handle as ReviewDb, ids) },
+    addresses: { store: new KyselyAddressStore(handle as AddressDb) },
+    sellers: { repository: new KyselyBrandApplicationRepository(handle as SellersDb) },
     retention: { executor: new KyselyPurgeExecutor(handle as RetentionDb, new UnconfiguredBlobDelete()), runs: new KyselyPurgeRunStore(handle as RetentionDb) },
     phase2: {
-      subscriptions: { store: new KyselySubscriptionStore(handle as PlusDb, ids) },
+      subscriptions: {
+        store: new KyselySubscriptionStore(handle as PlusDb, ids),
+        familyStore: new KyselyFamilyStore(handle as PlusDb, ids),
+        studentStore: new KyselyStudentStore(handle as PlusDb, ids),
+      },
       giftCards: { store: new KyselyGiftCardStore(handle as GiftCardDb, ids) },
       budget: { store: new KyselyBudgetStore(handle as BudgetDb, ids) },
-      stylist: { store: new KyselyStylistStore(handle as StylistDb, ids) },
+      stylist: { store: new KyselyStylistStore(handle as StylistDb, ids), chatStore: new KyselyStylistChatStore(handle as ChatDb, ids) },
+      outfitCalendar: { store: new KyselyOutfitCalendarStore(handle as OutfitCalendarDb, ids), eta: new KyselyStoreDeliveryEta(handle as OutfitCalendarDb) },
+      wardrobe: { store: new KyselyWardrobeStore(handle as WardrobeDb, ids) },
+      productMedia: { store: new KyselyProductMediaStore(handle as ProductMediaDb) },
+      homeBanners: { store: new KyselyHomeBannerStore(handle as HomeBannerDb) },
       llmGateway: { audit: new KyselyAuditStore(handle as GatewayDb), usage: new KyselyTokenUsage(handle as GatewayDb) },
       recommendations: { store: new KyselyRecoStore(handle as RecoDb, ids), vectors: new PgVectorIndex(handle as RecoDb) },
       history: { store: new KyselyHistoryStore(handle as HistoryDb, ids) },
@@ -249,7 +313,16 @@ export function createPersistence(config: AppConfig, db?: Kysely<Record<string, 
       hub: { store: new KyselyHubStore(handle as HubDb, ids) },
       resale: { store: new KyselyResaleStore(handle as ResaleDb, ids) },
       ads: { store: new KyselyAdsStore(handle as AdsDb, ids) },
+      autoBuy: { store: new KyselyAutoBuyStore(handle as AutoBuyDb, ids) },
+      forecasting: { store: new KyselyForecastStore(handle as ForecastingDb) },
+      creators: { store: new KyselyCreatorStore(handle as CreatorDb, ids) },
+      channelOdoo: { store: new KyselyOdooStore(handle as OdooDb) },
+      ranking: (() => {
+        const store = new KyselyRankingStore(handle as RankingDb);
+        return { shadowStore: store, evalStore: store };
+      })(),
     },
+    brandVerification: { store: new KyselyBrandVerificationStore(handle as BrandVerificationDb, ids) },
     money: {
       ledger: {
         store: new KyselyLedgerStore<LedgerDbTx>(),

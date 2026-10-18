@@ -74,6 +74,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
         if (r.replayed) {
           res.setHeader("Idempotent-Replayed", "true");
           res.status(r.response.status);
+          // Replays carry the same private response as the original; authenticated bodies must never be cached.
+          if (req.principal !== undefined) res.setHeader("Cache-Control", "private, no-store");
         }
         return r.response.status === 204 ? undefined : r.response.body;
       }),

@@ -99,6 +99,8 @@ export class CartAdapter implements CartPort {
           qty: l.qty,
           unitPrice: l.unitPrice,
           isDrop: loc !== null && loc.dropId !== null,
+          // Checkout demands the matching waiting-room admission per drop; without the id the line is refused.
+          ...(loc !== null && loc.dropId !== null ? { dropId: loc.dropId } : {}),
           available: l.available,
           title: l.title,
           ...(l.sizeLabel === undefined ? {} : { sizeLabel: l.sizeLabel }),

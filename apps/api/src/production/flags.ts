@@ -40,9 +40,12 @@ export interface ProductionFlagPorts {
   readonly hub: { consolidationEnabled(): Promise<boolean> };
   readonly resale: { listingEnabled(): Promise<boolean> };
   readonly crawl: { crawlingEnabled(): Promise<boolean> };
+  /** `kill.odoo_channel` (allowed-when-true, default blocked): the Odoo seller channel's own switch. */
+  readonly odoo: { enabled(): Promise<boolean> };
   readonly ads: { sponsoredEnabled(): Promise<boolean> };
   readonly gift: { salesEnabled(): Promise<boolean>; redemptionEnabled(): Promise<boolean> };
   readonly budget: { suiteEnabled(): Promise<boolean>; capsEnabled(): Promise<boolean> };
+  readonly autoBuy: { rulesEnabled(): Promise<boolean>; chargeEnabled(): Promise<boolean> };
   readonly mlRanking: { mlRankingAllowed(): Promise<boolean> };
   readonly rewards: { gamesEnabled(): Promise<boolean>; coinsEnabled(): Promise<boolean> };
   readonly switches: { allowed(key: string): Promise<boolean> };
@@ -71,9 +74,11 @@ export function createProductionFlags(provider: FlagProvider = new UnconfiguredF
     hub: { consolidationEnabled: on("kill.hub_consolidation") },
     resale: { listingEnabled: on("kill.resale_lane") },
     crawl: { crawlingEnabled: on("kill.crawlers") },
+    odoo: { enabled: on("kill.odoo_channel") },
     ads: { sponsoredEnabled: on("kill.sponsored_products") },
     gift: { salesEnabled: on("kill.gift_card_sales"), redemptionEnabled: on("kill.gift_card_redemption") },
     budget: { suiteEnabled: on("release.budget_suite"), capsEnabled: on("kill.budget_caps") },
+    autoBuy: { rulesEnabled: on("kill.price_drop_auto_buy"), chargeEnabled: on("kill.auto_buy.charge") },
     mlRanking: { mlRankingAllowed: on("kill.ml_ranking") },
     rewards: { gamesEnabled: on("kill.games"), coinsEnabled: on("kill.rewards_coins") },
     switches: { allowed: (k) => isEnabled(switchKey(k)) },

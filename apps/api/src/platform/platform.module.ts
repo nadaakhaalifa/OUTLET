@@ -11,6 +11,7 @@ import { PolicyGuard } from "./policy.guard";
 import { ProblemFilter } from "./problem.filter";
 import { RateLimitGuard } from "./rate-limit.guard";
 import { createIdGenerator, nodeCsprng, systemClock } from "./system-adapters";
+import type { PublicReadGate } from "./public-read";
 import {
   APP_CONFIG,
   AUDIT_SINK,
@@ -19,6 +20,8 @@ import {
   ID_GENERATOR,
   IDEMPOTENCY_SERVICE,
   POLICY_RULES,
+  GUEST_BROWSING_GATE,
+  PUBLIC_READ_GATE,
   RATE_LIMITER,
 } from "./tokens";
 
@@ -39,7 +42,15 @@ export interface PlatformOverrides {
     readonly rateLimiter: RateLimiter;
     readonly auditSink: AuditSink;
     readonly report?: ReadinessReport;
+    /** `kill.public_catalog`. Absent in production means BLOCKED (fail closed). */
+    readonly publicReadGate?: PublicReadGate;
+    /** `flag.guest_browsing`. Absent means BLOCKED (fail closed). */
+    readonly guestBrowsingGate?: PublicReadGate;
   };
+  /** Test override for the anonymous catalog kill switch. Dev and test default to allowed. */
+  readonly publicReadGate?: PublicReadGate;
+  /** Test override for `flag.guest_browsing`. The default is blocked in every environment. */
+  readonly guestBrowsingGate?: PublicReadGate;
 }
 
 /**
@@ -74,6 +85,16 @@ export class PlatformModule {
         },
         { provide: RATE_LIMITER, useValue: prod?.rateLimiter ?? new InMemoryRateLimiter() },
         { provide: AUDIT_SINK, useValue: prod?.auditSink ?? new InMemoryAuditSink() },
+        {
+          provide: PUBLIC_READ_GATE,
+          useValue:
+            overrides.publicReadGate ??
+            (prod === undefined ? { enabled: async () => true } : (prod.publicReadGate ?? { enabled: async () => false })),
+        },
+        {
+          provide: GUEST_BROWSING_GATE,
+          useValue: overrides.guestBrowsingGate ?? prod?.guestBrowsingGate ?? { enabled: async () => false },
+        },
         ...(prod?.report !== undefined ? [{ provide: READINESS_REPORT, useValue: prod.report }] : []),
         {
           provide: POLICY_RULES,
@@ -101,6 +122,8 @@ export class PlatformModule {
         IDEMPOTENCY_SERVICE,
         RATE_LIMITER,
         AUDIT_SINK,
+        PUBLIC_READ_GATE,
+        GUEST_BROWSING_GATE,
         POLICY_RULES,
         ReadinessRegistry,
       ],
