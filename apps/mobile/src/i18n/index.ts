@@ -6,6 +6,7 @@ import { DevSettings, I18nManager } from "react-native";
 import { startupLanguage } from "../features/settings/model";
 import { STORAGE_KEYS } from "../platform/secure-storage";
 import { decideReload, isRtlLanguage, parseReloadGuard, type DirectionLanguage } from "./direction";
+import { installBidiIsolates } from "./bidi-install";
 import { DEFAULT_INTERPOLATION, resolveLocale, resources, type Locale } from "@outlet/i18n";
 
 export function initialLocale(): Locale {
@@ -125,9 +126,10 @@ export function setupI18n(locale: Locale): typeof i18n {
         ar: { translation: resources.ar },
         en: { translation: resources.en },
       },
-      interpolation: { escapeValue: false, defaultVariables: { ...DEFAULT_INTERPOLATION } },
+      interpolation: { escapeValue: false, alwaysFormat: true, defaultVariables: { ...DEFAULT_INTERPOLATION } },
       returnNull: false,
     });
+    installBidiIsolates(i18n);
   } else {
     // Fast Refresh and OTA reloads keep the already-initialised singleton alive, so catalog keys added
     // after first init would render as raw keys. Re-apply the bundles so new namespaces always resolve.

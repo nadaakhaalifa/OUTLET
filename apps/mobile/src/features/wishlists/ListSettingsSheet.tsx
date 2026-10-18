@@ -3,7 +3,7 @@ import { useState } from "react";
 import { spacing } from "@outlet/ui-tokens";
 import { BottomSheet, Button, Icon, SwitchRow, Text } from "../../ui";
 import { useFormat } from "../home/parts";
-import { canShare, type Wishlist } from "./model";
+import { canShare, COOL_OFF_MS, type Wishlist } from "./model";
 
 export interface ListSettingsSheetProps {
   readonly visible: boolean;
@@ -28,7 +28,7 @@ export function ListSettingsSheet(props: ListSettingsSheetProps) {
         {l.intent === "want" ? (
           <View style={{ gap: spacing.xs }}>
             <SwitchRow label={f.t("savedTab.coolOffTitle")} value={l.coolOffEnabled} disabled={props.offline} onValueChange={props.onCoolOff} />
-            <Text variant="caption" secondary>{f.t("savedTab.coolOffHelper")}</Text>
+            <Text variant="caption" secondary>{f.t("savedTab.coolOffHelper", { hours: f.num(COOL_OFF_MS / 3_600_000) })}</Text>
           </View>
         ) : null}
         {canShare(l) ? (

@@ -2,6 +2,7 @@ import { ar } from "./ar";
 import { en, type Messages } from "./en";
 
 export { PRODUCT_NAME, DEFAULT_INTERPOLATION } from "./product";
+export { FSI, PDI, isolateInterpolation } from "./bidi";
 export { localizedName, isEnglishNameMissing, type LocalizedName } from "./localized-name";
 
 export type Locale = "ar" | "en";
