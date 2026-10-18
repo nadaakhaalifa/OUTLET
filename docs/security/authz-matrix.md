@@ -1,15 +1,15 @@
 # Authorization matrix
 
-Status: generated from the Nest router and `docs/api/openapi.yaml` on 2026-10-12 (Phase 3 integration: visual search, seller categories, brand-application provisioning retry, auto-buy terms; earlier Phase 2 integration: subscriptions, gift cards, budget, stylist, recommendations, history, rewards, drops, waiting room, price crawler, hub, resale, ads). The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
+Status: recounted from the matrix rows, `docs/api/openapi.yaml` and `unserved-baseline.json` on 2026-10-18 (includes the seller store balance `GET /v1/seller/stores/:storeId/balance` and the admin payouts summary `GET /v1/admin/finance/payouts/summary`); originally generated 2026-10-12 (Phase 3 integration: visual search, seller categories, brand-application provisioning retry, auto-buy terms; earlier Phase 2 integration: subscriptions, gift cards, budget, stylist, recommendations, history, rewards, drops, waiting room, price crawler, hub, resale, ads). The machine check is `apps/api/test/authz-matrix.test.ts` (run through `apps/api/src/authz-matrix.test.ts`); it fails when a registered route has no matrix row, when a row has no route, when a route has no `@Public`/`@AuthenticatedSelf`/`@Authorize` declaration, or when this document omits an implemented route.
 
 Master prompt A2.10: every endpoint has an integration test including a negative authorization test.
 
 ## Numbers
 
-- OpenAPI operations: 529
-- Implemented in `apps/api`: 487 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 489 registered routes
-- Not yet implemented: 42 (25 gaps, 17 planned)
-- Covered by the matrix: 489 of 489 registered routes (65 with full shared-harness cases, 424 delegated to per-module suites plus central 401/authz-mode/OpenAPI checks, including the Phase 2 and Phase 3 routes)
+- OpenAPI operations: 539
+- Implemented in `apps/api`: 506 product operations + 2 operational probes (`/v1/health`, `/v1/ready`, not in the contract) = 508 registered routes
+- Not yet implemented: 33 (23 gaps in the baseline, 10 planned)
+- Covered by the matrix: 508 of 508 registered routes (one row each, no duplicates; shared-harness versus per-module split not recounted, see the machine check)
 
 ## What each row is checked for
 
@@ -525,10 +525,8 @@ Two kinds. Gaps are listed in `apps/api/src/contract/openapi-drift/unserved-base
 | Operation |
 |---|
 | `DELETE /v1/seller/channels/:channelId` |
-| `GET /v1/admin/audit-log` |
 | `GET /v1/admin/feature-flags` |
 | `GET /v1/products/:productId/price-history` |
-| `GET /v1/seller/analytics/summary` |
 | `GET /v1/seller/balance` |
 | `GET /v1/seller/channels` |
 | `GET /v1/seller/kyc` |
@@ -554,19 +552,15 @@ Two kinds. Gaps are listed in `apps/api/src/contract/openapi-drift/unserved-base
 
 | Operation |
 |---|
-| `GET /v1/admin/attention` |
-| `GET /v1/admin/audit-log/verify` |
-| `GET /v1/admin/me` |
-| `GET /v1/admin/metrics/:metricId` |
+| `GET /v1/admin/audit-log` |
 | `GET /v1/admin/order-groups/:orderGroupId` |
 | `GET /v1/admin/price-integrity/actions` |
 | `GET /v1/admin/price-integrity/config` |
-| `GET /v1/seller/stores/:storeId/analytics/series/:metricId` |
-| `GET /v1/seller/stores/:storeId/analytics/series/:metricId/breakdown` |
-| `GET /v1/seller/stores/:storeId/analytics/summary` |
-| `GET /v1/seller/stores/:storeId/balance` |
-| `GET /v1/seller/stores/:storeId/me` |
+| `GET /v1/seller/analytics/summary` |
 | `POST /v1/admin/disputes/:disputeId/resolve` |
+| `POST /v1/admin/payouts/:payoutId/approval` |
+| `POST /v1/admin/refunds/:refundId/approval` |
+| `POST /v1/admin/sellers/:sellerId/suspend` |
 | `PUT /v1/admin/price-integrity/config` |
 
 Each of these must gain a matrix row in the same change that adds its controller; the suite fails otherwise.
