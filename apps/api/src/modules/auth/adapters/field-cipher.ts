@@ -40,7 +40,7 @@ export class LocalKeyFieldCipher implements FieldCipher {
   async decrypt(ciphertext: Uint8Array, aad: string): Promise<string> {
     const buf = Buffer.from(ciphertext);
     if (buf.length < 1 + 12 + 16 || buf[0] !== 1) throw new Error("unsupported ciphertext");
-    const decipher = createDecipheriv("aes-256-gcm", this.encKey, buf.subarray(1, 13));
+    const decipher = createDecipheriv("aes-256-gcm", this.encKey, buf.subarray(1, 13), { authTagLength: 16 });
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(buf.subarray(13, 29));
     return Buffer.concat([decipher.update(buf.subarray(29)), decipher.final()]).toString("utf8");

@@ -175,7 +175,7 @@ export class DevAesGcmFieldCipher implements FieldCipherPort {
   async decrypt(ciphertext: Uint8Array, aad: string): Promise<Uint8Array> {
     if (this.failing) throw new Error("kms unavailable");
     const buf = Buffer.from(ciphertext);
-    const d = createDecipheriv("aes-256-gcm", this.key, buf.subarray(0, 12));
+    const d = createDecipheriv("aes-256-gcm", this.key, buf.subarray(0, 12), { authTagLength: 16 });
     d.setAAD(Buffer.from(aad, "utf8"));
     d.setAuthTag(buf.subarray(12, 28));
     return new Uint8Array(Buffer.concat([d.update(buf.subarray(28)), d.final()]));

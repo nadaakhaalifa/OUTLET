@@ -27,7 +27,7 @@ export class LocalTestKms implements KmsPort {
     const k = this.keys.get(i.keyVersion);
     if (k === undefined || i.keyId !== this.keyId) throw new Error("unknown key");
     const b = Buffer.from(i.wrapped);
-    const d = createDecipheriv("aes-256-gcm", k, b.subarray(0, 12));
+    const d = createDecipheriv("aes-256-gcm", k, b.subarray(0, 12), { authTagLength: 16 });
     d.setAAD(Buffer.from(i.context, "utf8"));
     d.setAuthTag(b.subarray(12, 28));
     return new Uint8Array(Buffer.concat([d.update(b.subarray(28)), d.final()]));

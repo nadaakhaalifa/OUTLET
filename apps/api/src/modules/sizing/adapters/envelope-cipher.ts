@@ -77,7 +77,7 @@ export class EnvelopeFieldCipher implements FieldCipherPort {
     const dek = Buffer.from(unwrapped);
     try {
       if (dek.length !== 32) throw new Error("bad_ciphertext");
-      const d = createDecipheriv("aes-256-gcm", dek, iv);
+      const d = createDecipheriv("aes-256-gcm", dek, iv, { authTagLength: 16 });
       d.setAAD(Buffer.from(aad, "utf8"));
       d.setAuthTag(tag);
       try {
