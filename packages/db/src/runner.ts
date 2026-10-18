@@ -79,16 +79,14 @@ export const loadMigrations = async (dir: string = defaultMigrationsDir()): Prom
   const reserved = await loadReservedVersions(dir);
   let expected = 1;
   for (const f of files) {
+    if (reserved.has(f.version)) {
+      throw new MigrationError('sequence_gap', `migration ${String(f.version).padStart(4, '0')} is listed in RESERVED but exists: remove it from RESERVED`);
+    }
     while (reserved.has(expected)) expected += 1;
     if (f.version !== expected) {
       throw new MigrationError('sequence_gap', `expected migration ${String(expected).padStart(4, '0')} but found ${f.filename}`);
     }
     expected += 1;
-  }
-  for (const r of reserved) {
-    if (files.some((f) => f.version === r)) {
-      throw new MigrationError('sequence_gap', `migration ${String(r).padStart(4, '0')} is listed in RESERVED but exists: remove it from RESERVED`);
-    }
   }
   return files;
 };
