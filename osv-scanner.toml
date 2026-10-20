@@ -8,3 +8,23 @@ reason = "node-forge: build-time only (expo CLI code signing), no patched releas
 id = "GHSA-vfj7-8cjw-p6xm"
 ignoreUntil = 2026-12-31
 reason = "braces: Metro bundler glob dependency, dev/build only, no patched release on npm yet"
+
+[[IgnoredVulns]]
+id = "GHSA-82fw-gwwq-j7x9"
+ignoreUntil = 2026-12-31
+reason = "vitest and @vitest/mocker 3.2.7: test runner only (devDependencies of every package), mock redirect needs attacker-controlled test code; fix needs vitest 4 major"
+
+[[IgnoredVulns]]
+id = "GHSA-5gmw-xhrv-c9v3"
+ignoreUntil = 2026-12-31
+reason = "tinypool 1.1.1: only via vitest 3 test workers (dev/test only); fix needs tinypool 2 which vitest 3 does not accept"
+
+[[IgnoredVulns]]
+id = "GHSA-85c8-ppgw-ccpr"
+ignoreUntil = 2026-12-31
+reason = "tinypool 1.1.1: only via vitest 3 test workers (dev/test only); fix needs tinypool 2 which vitest 3 does not accept"
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2026-12-31
+reason = "sprintf-js 1.1.3: only via ioredis-mock > fengari (api test double, dev only); no patched release"
