@@ -408,3 +408,23 @@ export const doraReport = z.object({
 });
 export type DoraReport = z.infer<typeof doraReport>;
 export const anyObject = z.looseObject({});
+
+// ---- dashboard foundations (flag-dark: 404 until release.admin.finance_views / release.admin.attention open) ----
+export const payoutSummary = z.object({
+  as_of: ts,
+  by_state: z.record(z.string(), z.object({ count: z.number().int().min(0) })),
+});
+export const attentionResponse = z.object({
+  as_of: ts,
+  items: z.array(z.object({
+    id: z.string(),
+    group: z.enum(["page", "legal_clock", "money", "approvals", "trust", "anomaly"]),
+    severity: z.enum(["info", "warning", "critical"]),
+    count: z.number().int().min(0).max(1000).nullable(),
+    count_capped: z.boolean(),
+    oldest_at: tsOrNull,
+    deadline_at: tsOrNull,
+    href: z.string(),
+    state: z.enum(["ok", "unavailable"]),
+  })).max(16),
+});

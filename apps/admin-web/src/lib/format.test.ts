@@ -19,3 +19,12 @@ describe("format", () => {
     expect(countdown(60_000, 0)).toEqual({ overdue: false, unit: "minutes", amount: 1 });
   });
 });
+
+describe("formatLongDate (Arabic)", () => {
+  it("keeps a space after the Arabic comma", async () => {
+    const { formatLongDate } = await import("./format");
+    const text = formatLongDate(Date.UTC(2026, 9, 20, 9), "ar");
+    expect(text).toMatch(/، /);
+    expect(text).not.toMatch(/،\S/);
+  });
+});

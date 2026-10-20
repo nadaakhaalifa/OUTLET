@@ -35,6 +35,8 @@ const adm = {
   "/v1/admin/privacy/requests": { summary: { open: 1, overdue: 0, due_within_24h: 1, by_kind: { export: 1 } }, items: [{ id: U(50), type: "export", subject_ref: "u-***1", status: "open", received_at: iso(now - 864e5), due_at: iso(now + 864e5), ms_remaining: 864e5, overdue: false, ready_target_at: null, ready_target_missed: false, cooling_ends_at: null, blockers: [] }] },
   "/v1/admin/privacy/breaches": { items: [] },
   "/v1/admin/ledger/balances": { items: [{ account: "psp_clearing:kashier", type: "psp_clearing", owner_type: "psp", owner_id: "kashier", sub_key: null, currency: "EGP", raw: "250000", balance: "250000", posting_count: 3 }] },
+  "/v1/admin/finance/payouts/summary": { as_of: iso(now), next_cycle_at: iso(now + 3 * 864e5), settled_window_days: 30, by_state: { SCHEDULED: { count: 4, amount: m(900000), oldest_updated_at: iso(now - 864e5) }, ON_HOLD: { count: 2, amount: m(250000), oldest_updated_at: iso(now - 2 * 864e5), by_hold_reason: { risk: 2 } }, FAILED: { count: 1, amount: m(80000), oldest_updated_at: iso(now - 864e5), by_failure_code: { unspecified: 1 } } } },
+  "/v1/admin/tax/documents": { items: [{ id: U(70), kind: "seller_einvoice", source_ref: "inv-1", issued_at: iso(now - 864e5), totals: { net: m(100000), vat: m(14000), gross: m(114000) }, submission: { state: "REJECTED", attempts: 1, max_attempts: 5, next_attempt_at: iso(now), last_submitted_at: iso(now - 36e5), last_error: null, eta_uuid: null, rejection_reasons: ["invalid_tax_id"], decided_at: iso(now - 36e5) } }], page: { next_cursor: null, has_more: false } },
   "/v1/admin/finance/reconciliation/tickets": { items: [], page: { next_cursor: null, has_more: false } },
 };
 const sel = {

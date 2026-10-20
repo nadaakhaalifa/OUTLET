@@ -48,3 +48,10 @@ export function countdown(dueAtMs: number, serverNowMs: number): Countdown {
   if (abs >= 3_600_000) return { overdue, unit: "hours", amount: Math.floor(abs / 3_600_000) };
   return { overdue, unit: "minutes", amount: Math.floor(abs / 60_000) };
 }
+
+/** Long date for the dashboard header, Cairo time, from the device clock (display only, never a deadline). */
+export function formatLongDate(ms: number, locale: Locale): string {
+  const text = new Intl.DateTimeFormat(intl(locale), { dateStyle: "full", timeZone: "Africa/Cairo" }).format(new Date(ms));
+  // Arabic: the comma is the Arabic comma and must be followed by a space so it never touches the day digits.
+  return locale === "ar" ? text.replace(/،(?=\S)/g, "، ") : text;
+}

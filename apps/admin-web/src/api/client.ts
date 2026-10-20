@@ -167,6 +167,10 @@ export function createAdminApi(deps: ClientDeps) {
     ledgerBalances: (limit = 200) => call(S.ledgerBalances, { method: "GET", path: "/v1/admin/ledger/balances", query: { limit } }),
     reconciliationBreaks: () => call(S.reconTicketList, { method: "GET", path: "/v1/admin/finance/reconciliation/tickets", query: { limit: 100 } }),
 
+    payoutsSummary: () => call(S.payoutSummary, { method: "GET", path: "/v1/admin/finance/payouts/summary" }),
+    /** Single-source attention counts (404 while release.admin.attention is blocked). Not wired into the home page yet. */
+    attention: () => call(S.attentionResponse, { method: "GET", path: "/v1/admin/attention" }),
+
     // price integrity
     priceActions: () => call(S.priceActionList, { method: "GET", path: "/v1/admin/price-integrity/actions", query: { limit: 100 } }),
 

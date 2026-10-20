@@ -38,9 +38,10 @@ export function Flash({ code, t }: { code: string | undefined; t: Translator }) 
   );
 }
 
-export function PageHeader({ title, intro }: { title: string; intro?: string }) {
+export function PageHeader({ title, intro, eyebrow }: { title: string; intro?: string; eyebrow?: string }) {
   return (
     <header className="page-header">
+      {eyebrow === undefined ? null : <p className="eyebrow"><bdi>{eyebrow}</bdi></p>}
       <h1>{title}</h1>
       {intro === undefined ? null : <p className="muted">{intro}</p>}
     </header>
@@ -70,4 +71,14 @@ export function Badge({ tone, children }: { tone: "ok" | "warn" | "bad" | "neutr
 export function WritesDisabledNote({ c }: { c: ConsoleContext }) {
   if (c.posture.sensitiveWritesEnabled) return null;
   return <p className="muted">{c.t("posture.writesDisabled")}</p>;
+}
+
+/** A calm empty state with a title and an optional explanation. Never carries a number. */
+export function EmptyState({ title, body }: { title: string; body?: string }) {
+  return (
+    <div className="empty-state">
+      <p className="empty-title">{title}</p>
+      {body === undefined ? null : <p className="muted">{body}</p>}
+    </div>
+  );
 }

@@ -37,6 +37,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
   headers.set("x-pathname", request.nextUrl.pathname);
+  headers.set("x-search", request.nextUrl.search);
   headers.set("content-security-policy", csp);
   if (rotated !== null || cleared) {
     const rest = (request.headers.get("cookie") ?? "").split(/;\s*/).filter((c) => c !== "" && !c.startsWith(`${SESSION_COOKIE}=`));

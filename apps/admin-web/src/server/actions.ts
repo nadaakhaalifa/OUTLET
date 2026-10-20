@@ -1,4 +1,6 @@
 "use server";
+import { safeBackPath } from "../lib/back-path";
+import { parseTheme, THEME_COOKIE } from "../lib/theme";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -177,8 +179,13 @@ export async function signOutAction(): Promise<void> {
 export async function setLocaleAction(form: FormData): Promise<void> {
   const v = field(form, "locale") === "en" ? "en" : "ar";
   (await cookies()).set("admin-locale", v, { path: "/", sameSite: "strict", secure: true, maxAge: 31_536_000 });
-  const back = field(form, "back");
-  return redirect(/^\/[a-z-]*$/.test(back) ? back : "/");
+  return redirect(safeBackPath(field(form, "back")));
+}
+
+export async function setThemeAction(form: FormData): Promise<void> {
+  const v = parseTheme(field(form, "theme"));
+  (await cookies()).set(THEME_COOKIE, v, { path: "/", sameSite: "strict", secure: true, maxAge: 31_536_000 });
+  return redirect(safeBackPath(field(form, "back")));
 }
 
 // ---- Phase 2 ------------------------------------------------------------------------------
