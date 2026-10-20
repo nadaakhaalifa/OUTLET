@@ -17,8 +17,12 @@ holds no state, stores nothing and logs no image content.
 
 Post-processing (in `app/processing.py`, pure numpy): speck removal, 1-2 px boundary feather, edge colour
 decontamination (nearest solid interior colour), crop to subject with padding, white-background JPG
-(downscale only), optional soft ground shadow. Pixels are re-encoded from arrays, so no input metadata
-(EXIF, GPS, ICC) survives.
+(downscale only), optional soft ground shadow. Upload hardening (`app/ingest.py`): magic-byte sniff (declared type ignored), header-only size/pixel caps (4096 px per side,
+24 Mpx, `BG_MAX_PIXELS`), animated formats rejected, EXIF orientation applied, then the embedded ICC profile (for example
+Display P3) is converted to sRGB (missing profile = sRGB; malformed profile = 422) before pixels are re-encoded, so no
+EXIF, GPS or ICC metadata survives. The caller keeps the untouched original. Responses add `edit_label`
+(`background_replaced` or `composited`, computed in `app/labels.py`), `icc_source` and `studio_eligible` (long side >= 800 px).
+Colour/structure gate primitives (CIEDE2000, SSIM, placeholder thresholds, VERIFY VR-STUDIO-05) live in `app/colour.py`.
 
 ## Build and run
 

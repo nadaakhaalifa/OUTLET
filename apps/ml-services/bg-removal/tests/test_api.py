@@ -21,7 +21,7 @@ def test_cutout_happy_path(client: TestClient, matter: FakeMatter) -> None:
     assert base64.b64decode(body["white_jpg_b64"])[:3] == b"\xff\xd8\xff"
     assert body["model_id"] == "u2net" and matter.calls == ["u2net"]
     assert 0.29 < body["stats"]["coverage"] < 0.31
-    assert set(body) == {"png_b64", "mask_b64", "white_jpg_b64", "shadow_png_b64", "stats", "model_id", "model_version", "latency_ms"}
+    assert set(body) == {"png_b64", "mask_b64", "white_jpg_b64", "shadow_png_b64", "stats", "model_id", "model_version", "latency_ms", "edit_label", "icc_source", "studio_eligible"}
 
 
 def test_rejects_unknown_and_non_commercial_models(client: TestClient) -> None:

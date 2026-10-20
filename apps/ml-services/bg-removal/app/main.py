@@ -19,12 +19,13 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
 from .config import ALLOWED_MODELS, Settings, load_settings
+from .ingest import Ingested, IngestError, ingest
+from .labels import derive_edit_label
 from .models import Matter, RembgMatter, UnknownModelError
 from .processing import Stroke, apply_strokes, derive, render_background
 from .schemas import CutoutOut, HealthOut, RefineIn, StatsOut
 
 log = logging.getLogger("bg-removal")
-_SUPPORTED = {"JPEG", "PNG", "WEBP"}
 _QUALITY_ORDER = {
     "high": ("birefnet-general-lite", "u2net", "u2netp"),
     "fast": ("u2netp", "u2net", "birefnet-general-lite"),
@@ -51,28 +52,18 @@ async def _read_capped(request: Request, limit: int) -> bytes:
     return b"".join(chunks)
 
 
-def _decode(data: bytes, max_dimension: int) -> Image.Image:
+def _decode(data: bytes, max_dimension: int, max_pixels: int) -> Ingested:
     try:
-        probe = Image.open(io.BytesIO(data))
-        if probe.format not in _SUPPORTED:
-            raise HTTPException(status_code=422, detail="unsupported_type")
-        if probe.width > max_dimension or probe.height > max_dimension:
-            raise HTTPException(status_code=422, detail="too_large_dimensions")
-        probe.verify()
-        img = Image.open(io.BytesIO(data))
-        img.load()
-    except HTTPException:
-        raise
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as e:
-        raise HTTPException(status_code=422, detail="malformed_image") from e
-    return img.convert("RGB")
+        return ingest(data, max_dimension=max_dimension, max_pixels=max_pixels)
+    except IngestError as e:
+        raise HTTPException(status_code=422, detail=e.code) from e
 
 
 def create_app(settings: Settings | None = None, matter: Matter | None = None) -> FastAPI:
     cfg = settings or load_settings()
     engine: Matter = matter or RembgMatter(cfg.models_dir)
     gate = asyncio.Semaphore(cfg.max_concurrency)
-    Image.MAX_IMAGE_PIXELS = cfg.max_dimension * cfg.max_dimension
+    Image.MAX_IMAGE_PIXELS = cfg.max_pixels
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -122,7 +113,8 @@ def create_app(settings: Settings | None = None, matter: Matter | None = None) -
         t0 = time.perf_counter()
         model = resolve_model(model, quality)
         data = await _read_capped(request, cfg.max_request_bytes)
-        image = _decode(data, cfg.max_dimension)
+        ingested = _decode(data, cfg.max_dimension, cfg.max_pixels)
+        image = ingested.image
         if gate.locked():
             raise HTTPException(status_code=429, detail="busy")
 
@@ -152,6 +144,9 @@ def create_app(settings: Settings | None = None, matter: Matter | None = None) -
                 model_id=model,
                 model_version=engine.version(model),
                 latency_ms=int((time.perf_counter() - t0) * 1000),
+                edit_label=derive_edit_label(background_replaced=True, shadow=shadow),
+                icc_source=ingested.icc_source,
+                studio_eligible=ingested.studio_eligible,
             )
 
         async with gate:
@@ -208,7 +203,8 @@ def create_app(settings: Settings | None = None, matter: Matter | None = None) -
             locs = ",".join(".".join(str(x) for x in err["loc"][:3]) for err in e.errors()[:5])
             raise HTTPException(status_code=422, detail=f"invalid_request:{locs}") from e
         img_bytes = _b64(req.image_b64, cfg.max_request_bytes)
-        image = _decode(img_bytes, cfg.max_dimension)
+        ingested = _decode(img_bytes, cfg.max_dimension, cfg.max_pixels)
+        image = ingested.image
         w, h = image.size
         mask_arr: np.ndarray[tuple[int, ...], np.dtype[np.float32]] | None = None
         if req.mask_b64 is not None:
@@ -272,6 +268,13 @@ def create_app(settings: Settings | None = None, matter: Matter | None = None) -
                 latency_ms=int((time.perf_counter() - t0) * 1000),
                 background_render_b64=base64.b64encode(render).decode("ascii"),
                 background_render_mime=mime,
+                edit_label=derive_edit_label(
+                    background_replaced=True,
+                    shadow=shadow,
+                    brand_background=req.background == "studio"
+                ),
+                icc_source=ingested.icc_source,
+                studio_eligible=ingested.studio_eligible,
             )
 
         async with gate:

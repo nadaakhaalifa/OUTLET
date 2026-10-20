@@ -33,6 +33,10 @@ class CutoutOut(BaseModel):
     # Optional extras (only present on /v1/refine responses).
     background_render_b64: str | None = None
     background_render_mime: str | None = None
+    # Computed by code (app/labels.py), never from seller input.
+    edit_label: Literal["none", "background_replaced", "composited"] = "background_replaced"
+    icc_source: Literal["none", "srgb", "display_p3", "other"] = "none"
+    studio_eligible: bool = True
 
 
 class HealthOut(BaseModel):
