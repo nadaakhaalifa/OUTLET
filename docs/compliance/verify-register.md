@@ -34,7 +34,8 @@ Source: master prompt v3 section P2 (rows VR-01 to VR-18, same order as the seed
 | VR-BM | 7 | 0 | 7 |
 | VR-STUDIO | 11 | 0 | 11 |
 | VR-TEAM | 12 | 0 | 12 |
-| **Total** | **206** | 1 | 205 |
+| VR-ADMIN | 3 | 0 | 3 |
+| **Total** | **209** | 1 | 208 |
 
 Note: the appended sections further down say the summary "does not yet include" their series; that is superseded, the table above now includes VR-DB, VR-AI, VR-DASH-05..08, VR-GUEST, VR-RW, VR-REV, VR-REGION and VR-IPAD. VR-P3-BG-01 carries an evidence path (`apps/ml-services/bg-removal/MODEL_LICENSES.md`) but its status is still Open, so it is not counted as Evidence filed.
 
@@ -303,3 +304,12 @@ Added 2026-10-18 from `docs/specs/seller-teams-availability-alerts.md` and `docs
 | VR-TEAM-10 | Scarcity and price statements in reminders ("only N left", "price dropped since you added"): permissibility and required wording under CPL 181/2018 (extends VR-07) | Legal | none yet | Open | Reminder content rules (spec section 5.5) | 2026-10-18 |
 | VR-TEAM-11 | Expo push relay for seller and shopper notifications: payload content leaving the hosting region and transfer basis (extends VR-COMMS-01, VR-02) | DPO / Mobile | none yet | Open | `kill.seller_push`; push text content rules (spec section 3.4) | 2026-10-18 |
 | VR-TEAM-12 | Sharing any aggregate abandoned-bag or waitlist counts (k >= 50) with sellers under PDPL and the seller DPA | DPO | none yet | Open | T-D7; restock list shows waitlist counts (spec section 2.6) | 2026-10-18 |
+
+## Admin home and overview rows (VR-ADMIN, ADR-0060)
+Added 2026-10-20 from `docs/specs/admin-home-summary-and-overview.md` (section 12) and `docs/adr/0060-admin-home-summary-and-overview.md` (Proposed), after the chief-reviewer GO WITH CHANGES. Counted in the summary table above. Related existing rows, not duplicated: VR-01 (DSAR deadline and retention), VR-DASH-03 (lawful basis for analytics facts), VR-DASH-04 (facts retention).
+
+| id | item | owner role | evidence link | status | blocks | date |
+|---|---|---|---|---|---|---|
+| VR-ADMIN-01 | PDPL 151/2020 and Decision 816/2025 treatment of admin-console client telemetry about staff (employees as data subjects): staff notice, lawful basis, retention and RoPA entry | DPO / Legal | none yet | Open | Client console events (spec section 9); owner decision O-7; default sends server aggregate counters only | 2026-10-20 |
+| VR-ADMIN-02 | Retention of admin ID-lookup audit rows (`action: admin.lookup`, ids probed and kinds matched); default follows the `audit_log` retention rule | DPO | none yet | Open | `release.admin.lookup` in production (spec section 4.3) | 2026-10-20 |
+| VR-ADMIN-03 | Whether `order_line.purchased.gross_minor` (`unitPriceMinor x qty - discountAllocMinor`, `apps/api/src/modules/analytics-ingest/domain/producers.ts:88-90`) nets only item-level discounts or also the order-level voucher share allocated to the line, so the overview GMV definition states it exactly | Engineering | none yet | Open | WP-B10 (overview band UI and definitions sheet); owner decision O-3 | 2026-10-20 |
