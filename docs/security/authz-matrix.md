@@ -239,6 +239,7 @@ Same delegation rule as the wave 3 table above: the negative cases live in the n
 | `GET /v1/seller/stores/:storeId/analytics/series/:metricId` | resource | `apps/api/src/modules/seller-analytics/test/series.http.test.ts` |
 | `GET /v1/seller/stores/:storeId/analytics/series/:metricId/breakdown` | resource | `apps/api/src/modules/seller-analytics/test/series.http.test.ts` |
 | `GET /v1/seller/stores/:storeId/analytics/summary` | resource | `apps/api/src/modules/seller-analytics/test/series.http.test.ts` |
+| `GET /v1/seller/stores/:storeId/dashboard/summary` | resource | `apps/api/src/modules/seller-analytics/test/dashboard.http.test.ts` |
 | `PATCH /v1/me/reviews/:reviewId` | resource | `apps/api/src/modules/reviews/reviews.http.test.ts` |
 | `POST /v1/admin/approvals` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
 | `POST /v1/admin/approvals/:id/approve` | self | `apps/api/src/modules/admin/admin.http.test.ts` |
