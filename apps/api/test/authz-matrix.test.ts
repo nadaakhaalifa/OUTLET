@@ -960,6 +960,7 @@ const DELEGATED: Record<string, Delegated> = {
   "GET /v1/seller/stores/:storeId/analytics/series/:metricId": { authz: "resource", suite: "src/modules/seller-analytics/test/series.http.test.ts" },
   "GET /v1/seller/stores/:storeId/analytics/series/:metricId/breakdown": { authz: "resource", suite: "src/modules/seller-analytics/test/series.http.test.ts" },
   "GET /v1/seller/stores/:storeId/analytics/summary": { authz: "resource", suite: "src/modules/seller-analytics/test/series.http.test.ts" },
+  "GET /v1/seller/stores/:storeId/dashboard/summary": { authz: "resource", suite: "src/modules/seller-analytics/test/dashboard.http.test.ts" },
   "DELETE /v1/me/reviews/:reviewId": { authz: "resource", suite: "src/modules/reviews/reviews.http.test.ts" },
   "GET /v1/admin/brand-applications": { authz: "self", suite: "src/modules/admin/brand-review/brand-review.http.test.ts" },
   "GET /v1/admin/brand-applications/:id": { authz: "self", suite: "src/modules/admin/brand-review/brand-review.http.test.ts" },

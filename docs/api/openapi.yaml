@@ -31623,6 +31623,80 @@ paths:
           $ref: "#/components/responses/ServiceUnavailable"
         default:
           $ref: "#/components/responses/Default"
+  /v1/seller/stores/{storeId}/dashboard/summary:
+    get:
+      operationId: getSellerStoreDashboardSummary
+      tags:
+        - Seller Analytics
+      summary: "Store dashboard summary with previous-period comparison"
+      description: "KPIs for the period (today, 7d, 30d; Africa/Cairo days, current period partial) and the previous period of equal length (today compares with the same elapsed span of yesterday): gross sales, net after commission, orders, units, average order value, return rate (units returned / units sold in the period, items sold before returns), repeat-customer rate (null below 50 buyers), funnel (views, bag adds, checkouts, purchases from real events only), top 5 products by units, a daily sales series, growth objects in half-even basis points (null when the previous value is 0) and a data_as_of freshness stamp. Money is bigint-string piastres. KPIs with no event source today (net sales after returns, cancellation rate, COD refusal by governorate, in-transit payouts) are omitted and named in unavailable_metrics; they are never returned as zeros. Rate limit 60 per 60 s per user. Cache-Control: private, no-store with a strong ETag over the stable content; If-None-Match answers 304 after authorization. A foreign, missing or malformed store is 404 with an identical body. 404 while release.seller_analytics.dashboard_summary is blocked (default), before any data is read (ADR-0029)."
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: "Store id of the caller's store. A foreign, missing or malformed store answers 404 with an identical body."
+          schema:
+            $ref: "#/components/schemas/Uuid"
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [today, 7d, 30d]
+            default: 7d
+        - $ref: "#/components/parameters/IfNoneMatch"
+      security:
+        - sellerBearer: []
+      x-scope:
+        - seller:stores.read
+      x-idempotent: false
+      x-rate-limit:
+        - limit: 60
+          window_seconds: 60
+          key: user
+          source: proposed
+      x-pii-class: P1
+      x-phase: 2
+      x-spec-ref: "docs/plan/brand-platform-build-plan.md W1-A; docs/specs/seller-teams-availability-alerts.md section 4"
+      x-etag: true
+      responses:
+        "200":
+          description: "OK."
+          headers:
+            RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              description: "private, no-store"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SellerDashboardSummary"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        default:
+          $ref: "#/components/responses/Default"
   /v1/admin/metrics/{metricId}:
     get:
       operationId: getAdminMetricSeries
@@ -48454,6 +48528,165 @@ components:
                       - type: integer
                       - type: string
                         pattern: ^-?[0-9]{1,19}$
+    SellerDashboardMoney:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency]
+      properties:
+        amount_minor:
+          type: string
+          pattern: "^-?[0-9]{1,18}$"
+          description: "Integer piastres as a string."
+        currency:
+          type: string
+          const: EGP
+    SellerDashboardMoneyGrowth:
+      type: object
+      additionalProperties: false
+      required: [delta, growth_bps]
+      properties:
+        delta:
+          $ref: "#/components/schemas/SellerDashboardMoney"
+        growth_bps:
+          type: [integer, "null"]
+          description: "Half-even basis points of (current - previous) / previous; null when previous is 0."
+    SellerDashboardCountGrowth:
+      type: object
+      additionalProperties: false
+      required: [delta, growth_bps]
+      properties:
+        delta:
+          type: integer
+        growth_bps:
+          type: [integer, "null"]
+    SellerDashboardFunnel:
+      type: object
+      additionalProperties: false
+      required: [views, bag_adds, checkouts, purchases]
+      properties:
+        views: { type: integer, minimum: 0 }
+        bag_adds: { type: integer, minimum: 0 }
+        checkouts: { type: integer, minimum: 0 }
+        purchases: { type: integer, minimum: 0 }
+    SellerDashboardTopProduct:
+      type: object
+      additionalProperties: false
+      required: [product_id, units, gross_sales]
+      properties:
+        product_id:
+          $ref: "#/components/schemas/Uuid"
+        units: { type: integer, minimum: 0 }
+        gross_sales:
+          $ref: "#/components/schemas/SellerDashboardMoney"
+    SellerDashboardPeriod:
+      type: object
+      additionalProperties: false
+      required: [from, to, gross_sales, net_after_commission, orders, units, average_order_value, returned_units, return_rate_bps, repeat_customer_rate_bps, funnel, top_products]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        partial:
+          type: boolean
+          description: "Present and true on the current period, which ends now."
+        gross_sales:
+          $ref: "#/components/schemas/SellerDashboardMoney"
+        net_after_commission:
+          $ref: "#/components/schemas/SellerDashboardMoney"
+        orders: { type: integer, minimum: 0 }
+        units: { type: integer, minimum: 0 }
+        average_order_value:
+          oneOf:
+            - $ref: "#/components/schemas/SellerDashboardMoney"
+            - type: "null"
+        returned_units: { type: integer, minimum: 0 }
+        return_rate_bps:
+          type: [integer, "null"]
+          description: "Returned units / units sold in the period; null when nothing sold."
+        repeat_customer_rate_bps:
+          type: [integer, "null"]
+          description: "Null below 50 distinct buyers (k-anonymity)."
+        funnel:
+          $ref: "#/components/schemas/SellerDashboardFunnel"
+        top_products:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/SellerDashboardTopProduct"
+    SellerDashboardSummary:
+      type: object
+      additionalProperties: false
+      required: [store_id, period, currency, timezone, current, previous, growth, daily_sales, unavailable_metrics, definitions, data_as_of, freshness, k_anonymity_min]
+      properties:
+        store_id:
+          $ref: "#/components/schemas/Uuid"
+        period:
+          type: string
+          enum: [today, 7d, 30d]
+        currency:
+          type: string
+          const: EGP
+        timezone:
+          type: string
+          const: Africa/Cairo
+        current:
+          $ref: "#/components/schemas/SellerDashboardPeriod"
+        previous:
+          $ref: "#/components/schemas/SellerDashboardPeriod"
+        growth:
+          type: object
+          additionalProperties: false
+          required: [gross_sales, net_after_commission, orders, units, average_order_value]
+          properties:
+            gross_sales:
+              $ref: "#/components/schemas/SellerDashboardMoneyGrowth"
+            net_after_commission:
+              $ref: "#/components/schemas/SellerDashboardMoneyGrowth"
+            orders:
+              $ref: "#/components/schemas/SellerDashboardCountGrowth"
+            units:
+              $ref: "#/components/schemas/SellerDashboardCountGrowth"
+            average_order_value:
+              oneOf:
+                - $ref: "#/components/schemas/SellerDashboardMoneyGrowth"
+                - type: "null"
+        daily_sales:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [day, gross_sales, orders, units]
+            properties:
+              day: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", description: "Africa/Cairo calendar day." }
+              gross_sales:
+                $ref: "#/components/schemas/SellerDashboardMoney"
+              orders: { type: integer, minimum: 0 }
+              units: { type: integer, minimum: 0 }
+        unavailable_metrics:
+          type: array
+          items:
+            type: string
+            enum: [net_sales_after_returns, cancellation_rate, cod_refusal_by_governorate, in_transit_payouts]
+          description: "KPIs with no event source yet. Omitted from the body, never zero-filled."
+        definitions:
+          type: object
+          additionalProperties:
+            type: string
+          description: "English definitions of each KPI as computed (clients localise their own labels)."
+        data_as_of:
+          type: [string, "null"]
+          format: date-time
+        freshness:
+          type: object
+          additionalProperties: false
+          required: [as_of, lag_ms, slo_ms, within_slo]
+          properties:
+            as_of: { type: [string, "null"], format: date-time }
+            lag_ms: { type: [integer, "null"] }
+            slo_ms: { type: integer }
+            within_slo: { type: boolean }
+        k_anonymity_min:
+          type: integer
+          const: 50
     SellerStoreAnalyticsSummary:
       type: object
       additionalProperties: false

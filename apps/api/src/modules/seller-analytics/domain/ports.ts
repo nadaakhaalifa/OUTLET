@@ -116,6 +116,20 @@ export interface ReturnReasonRow {
   readonly units: number;
 }
 
+export interface ProductSalesRow {
+  readonly productId: string;
+  readonly units: number;
+  readonly grossMinor: bigint;
+}
+
+/** One Africa/Cairo calendar day of purchases (`day` is YYYY-MM-DD in Cairo time). */
+export interface DailySalesRow {
+  readonly day: string;
+  readonly grossMinor: bigint;
+  readonly orders: number;
+  readonly units: number;
+}
+
 export interface GeoValue {
   readonly orders: number;
   readonly gmvMinor: bigint;
@@ -138,6 +152,10 @@ export interface AnalyticsStore {
   searchTerms(storeId: string, r: Range): Promise<readonly KCell<number>[]>;
   geography(storeId: string, r: Range): Promise<readonly KCell<GeoValue>[]>;
   freshness(storeId: string): Promise<FreshnessRow | null>;
+  /** Units and gross per product from purchase facts (no shopper data). */
+  productSales(storeId: string, r: Range): Promise<readonly ProductSalesRow[]>;
+  /** Purchases bucketed by Africa/Cairo calendar day (ADR-0047). Days without purchases are absent. */
+  dailySales(storeId: string, r: Range): Promise<readonly DailySalesRow[]>;
 }
 
 /** A message from the analytics/outbox transport. `body` is untrusted until parsed. */

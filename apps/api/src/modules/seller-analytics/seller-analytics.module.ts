@@ -18,6 +18,8 @@ import { MetricSourceUnconfiguredError } from "../platform-metrics";
 import type { SellerRollupReader } from "./domain/series-ports";
 import type { InMemoryRollups } from "./adapters/in-memory-rollups";
 import { InMemoryAnalyticsStore, InMemoryAudit, InMemoryEventSource, StaticProductStoreLookup } from "./adapters/in-memory";
+import { SellerDashboardController, type SellerDashboardOptions } from "./adapters/dashboard.controller";
+import { SellerDashboardSummary } from "./application/dashboard";
 import { SellerMeController } from "./adapters/seller-me.controller";
 import { AnalyticsStoreResolver, SellerMeResolver, SellerStoreMeResolver } from "./adapters/resolvers";
 import { StaticStoreStatusLookup, UnconfiguredStoreStatusLookup } from "./adapters/store-status";
@@ -39,6 +41,8 @@ export interface SellerAnalyticsModuleOverrides {
   /** Pseudonym derivation under every live KMS key version (track 6). No default: without it `forgetShopper` fails closed. */
   readonly pseudonyms?: ShopperPseudonymDeriver;
   /** Time-series read side (track 4). Production without a reader answers 503 metric_source_unconfigured, never zeros. */
+  /** Dashboard summary flag (`release.seller_analytics.dashboard_summary`). Default blocked (404). */
+  readonly dashboard?: Partial<SellerDashboardOptions>;
   readonly series?: Partial<SellerSeriesOptions> & { readonly reader?: SellerRollupReader };
 }
 
@@ -115,7 +119,7 @@ export class SellerAnalyticsModule {
     };
     return {
       module: SellerAnalyticsModule,
-      controllers: [SellerAnalyticsController, SellerSeriesController, SellerMeController],
+      controllers: [SellerAnalyticsController, SellerSeriesController, SellerMeController, SellerDashboardController],
       providers: [
         { provide: T.SELLER_ANALYTICS_STORE, useValue: store },
         { provide: T.SELLER_ANALYTICS_AUDIT, useValue: overrides.audit ?? new InMemoryAudit() },
@@ -140,6 +144,12 @@ export class SellerAnalyticsModule {
           inject: [T.SELLER_ANALYTICS_SOURCE, T.SELLER_ANALYTICS_STORE, T.SELLER_ANALYTICS_PRODUCT_STORE, CLOCK],
           useFactory: (src: EventSourcePort, s: AnalyticsStore, l: ProductStoreLookup, clock: Clock) =>
             new ConsumeSellerAnalytics(src, s, l, clock),
+        },
+        { provide: T.SELLER_DASHBOARD_OPTIONS, useValue: { enabled: overrides.dashboard?.enabled ?? (() => false) } satisfies SellerDashboardOptions },
+        {
+          provide: T.SELLER_DASHBOARD_SUMMARY,
+          inject: [T.SELLER_ANALYTICS_STORE, CLOCK],
+          useFactory: (s: AnalyticsStore, clock: Clock) => new SellerDashboardSummary({ store: s, clock }),
         },
         { provide: T.SELLER_SERIES_READER, useValue: seriesReader },
         { provide: T.SELLER_SERIES_OPTIONS, useValue: seriesOptions },

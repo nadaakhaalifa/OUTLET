@@ -4704,6 +4704,24 @@ export const operations = {
     input: z.object({ path: z.object({ storeId: S.Uuid }) }),
     output: S.SellerBalance,
   },
+  getSellerStoreDashboardSummary: {
+    operationId: "getSellerStoreDashboardSummary",
+    method: "GET",
+    path: "/v1/seller/stores/{storeId}/dashboard/summary",
+    tag: "Seller Analytics",
+    security: ["sellerBearer"] as readonly string[],
+    idempotency: "none" as "none" | "optional" | "required",
+    pathParams: ["storeId"] as readonly string[],
+    queryParams: ["period"] as readonly string[],
+    headerParams: ["If-None-Match"] as readonly string[],
+    planned: false,
+    hasBody: false,
+    successStatus: 200,
+    responseKind: "json" as "json" | "empty" | "binary",
+    notModified: true,
+    input: z.object({ path: z.object({ storeId: S.Uuid }), query: z.object({ period: z.enum(["today", "7d", "30d"]).optional() }).optional(), headers: z.object({ "If-None-Match": z.string().optional() }).optional() }),
+    output: S.SellerDashboardSummary,
+  },
   getSellerStoreMe: {
     operationId: "getSellerStoreMe",
     method: "GET",
@@ -9977,6 +9995,7 @@ export interface OutletClient {
   getSellerStore(input?: OperationInput<"getSellerStore">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStore">>>;
   getSellerStoreAnalyticsSummary(input: OperationInput<"getSellerStoreAnalyticsSummary">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStoreAnalyticsSummary">>>;
   getSellerStoreBalance(input: OperationInput<"getSellerStoreBalance">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStoreBalance">>>;
+  getSellerStoreDashboardSummary(input: OperationInput<"getSellerStoreDashboardSummary">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStoreDashboardSummary">>>;
   getSellerStoreMe(input: OperationInput<"getSellerStoreMe">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStoreMe">>>;
   getSellerStoreProfile(input: OperationInput<"getSellerStoreProfile">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStoreProfile">>>;
   getSellerStorefrontPreview(input: OperationInput<"getSellerStorefrontPreview">, options?: CallOptions): Promise<ApiResponse<OperationOutput<"getSellerStorefrontPreview">>>;

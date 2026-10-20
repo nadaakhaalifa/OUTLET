@@ -17,3 +17,5 @@ export const SELLER_ANALYTICS_PSEUDONYMS = Symbol("sellerAnalytics.ShopperPseudo
 export const SELLER_ANALYTICS_ERASER = Symbol("sellerAnalytics.ShopperFactsEraser");
 export const SELLER_SERIES_READER = Symbol("sellerAnalytics.SeriesRollupReader");
 export const SELLER_SERIES_OPTIONS = Symbol("sellerAnalytics.SeriesOptions");
+export const SELLER_DASHBOARD_SUMMARY = Symbol("sellerAnalytics.DashboardSummary");
+export const SELLER_DASHBOARD_OPTIONS = Symbol("sellerAnalytics.DashboardOptions");

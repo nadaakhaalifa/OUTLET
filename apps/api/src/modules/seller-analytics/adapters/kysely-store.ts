@@ -3,8 +3,10 @@ import { z } from "zod";
 import { aggregateDeltas, emptyFunnelCounts, factDeltas, orderDeltas, type FunnelCounts, type KCell, type RollupDelta, type RollupKey, type RollupScope, type SalesTotals } from "../domain/bridge";
 import type {
   AnalyticsStore,
+  DailySalesRow,
   FreshnessRow,
   GeoValue,
+  ProductSalesRow,
   IngestResult,
   Range,
   ReturnReasonRow,
@@ -61,6 +63,8 @@ const StockRowSchema = z.object({
   listed_ms: Ms,
 });
 const GeoRow = z.object({ key: z.string(), shoppers: Num, orders: Num, gmv: Big });
+const ProductSalesDbRow = z.object({ product_id: z.string(), units: Num, gross: Big });
+const DailyDbRow = z.object({ day: z.string(), gross: Big, orders: Num, units: Num });
 const FreshRow = z.object({ ingest_ms: Ms, event_ms: Ms });
 
 const ts = (ms: number) => sql`to_timestamp(${ms}::double precision / 1000.0)`;
@@ -351,6 +355,31 @@ export class KyselySellerAnalyticsStore implements AnalyticsStore, RollupMainten
       if (row === undefined) return null;
       const f = FreshRow.parse(row);
       return { lastIngestMs: f.ingest_ms, lastEventMs: f.event_ms };
+    });
+  }
+
+  async productSales(storeId: string, r: Range): Promise<readonly ProductSalesRow[]> {
+    return this.asStore(storeId, async (trx) => {
+      const res = await sql<unknown>`
+        select product_id::text as product_id, sum(qty) as units, sum(gross_minor)::text as gross
+          from seller_analytics_facts
+         where store_id = ${storeId}::uuid and kind = 'purchase'
+           and occurred_at >= ${ts(r.fromMs)} and occurred_at < ${ts(r.toMs)}
+         group by product_id order by product_id::text`.execute(trx);
+      return res.rows.map((x) => ProductSalesDbRow.parse(x)).map((p) => ({ productId: p.product_id, units: p.units, grossMinor: p.gross }));
+    });
+  }
+
+  async dailySales(storeId: string, r: Range): Promise<readonly DailySalesRow[]> {
+    return this.asStore(storeId, async (trx) => {
+      const res = await sql<unknown>`
+        select to_char(occurred_at at time zone 'Africa/Cairo', 'YYYY-MM-DD') as day,
+               sum(gross_minor)::text as gross, count(distinct seller_order_id) as orders, sum(qty) as units
+          from seller_analytics_facts
+         where store_id = ${storeId}::uuid and kind = 'purchase'
+           and occurred_at >= ${ts(r.fromMs)} and occurred_at < ${ts(r.toMs)}
+         group by 1 order by 1`.execute(trx);
+      return res.rows.map((x) => DailyDbRow.parse(x)).map((d) => ({ day: d.day, grossMinor: d.gross, orders: d.orders, units: d.units }));
     });
   }
 }

@@ -171,6 +171,26 @@ export function describeAnalyticsStoreContract(name: string, make: () => Promise
       expect((await s.salesTotals(STORE_B, RANGE)).gmvMinor).toBe(10_000n);
     });
 
+    it("productSales and dailySales are store-scoped and bucket by Cairo day", async () => {
+      // 22:30 UTC on 1 Jan 2027 is 00:30 on 2 Jan in Cairo (UTC+2): the Cairo day, not the UTC day, decides the bucket.
+      const lateUtc = Date.UTC(2027, 0, 1, 22, 30);
+      const range = { fromMs: lateUtc - DAY, toMs: lateUtc + DAY };
+      await s.ingest(
+        "c",
+        [
+          purchase(1, SKU_M, P1, 2, 3000n, { at: lateUtc }),
+          purchase(2, SKU_M, P1, 1, 500n, { at: lateUtc - 3 * 3_600_000 }),
+          purchase(3, SKU_M, P2, 4, 9000n, { store: STORE_B, at: lateUtc }),
+        ],
+        NOW,
+      );
+      expect(await s.productSales(STORE_A, range)).toEqual([{ productId: P1, units: 3, grossMinor: 3500n }]);
+      expect(await s.dailySales(STORE_A, range)).toEqual([
+        { day: "2027-01-01", grossMinor: 500n, orders: 1, units: 1 },
+        { day: "2027-01-02", grossMinor: 3000n, orders: 1, units: 2 },
+      ]);
+    });
+
     it("tracks freshness per store", async () => {
       await s.ingest("c", [ev({ kind: "view", productId: P1 }, { at: T0 - 5000 })], NOW);
       expect(await s.freshness(STORE_A)).toEqual({ lastEventMs: T0 - 5000, lastIngestMs: NOW });

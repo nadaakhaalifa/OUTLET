@@ -80,7 +80,7 @@ export interface AnalyticsHarness {
   close(): Promise<void>;
 }
 
-export async function createAnalyticsHarness(series: SellerAnalyticsModuleOverrides["series"] = {}): Promise<AnalyticsHarness> {
+export async function createAnalyticsHarness(series: SellerAnalyticsModuleOverrides["series"] = {}, dashboard: SellerAnalyticsModuleOverrides["dashboard"] = {}): Promise<AnalyticsHarness> {
   const config = loadConfig({ NODE_ENV: "test" });
   const clock = new FakeClock();
   const ids = createIdGenerator(clock, nodeCsprng);
@@ -114,7 +114,7 @@ export async function createAnalyticsHarness(series: SellerAnalyticsModuleOverri
     imports: [
       PlatformModule.forRoot(config, { clock, ids }),
       TestAuthModule.register(),
-      SellerAnalyticsModule.forRoot(config, { store, audit, source, productStore: lookup, storeStatus, series }),
+      SellerAnalyticsModule.forRoot(config, { store, audit, source, productStore: lookup, storeStatus, series, dashboard }),
     ],
   }).compile();
   const app = moduleRef.createNestApplication({ logger: false });

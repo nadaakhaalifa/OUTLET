@@ -11,8 +11,10 @@ import type {
   AuditPort,
   EventSourcePort,
   ExportAuditEntry,
+  DailySalesRow,
   FreshnessRow,
   GeoValue,
+  ProductSalesRow,
   IngestResult,
   ProductStoreLookup,
   Range,
@@ -25,6 +27,9 @@ import type {
 
 type Purchase = Extract<SourceEvent, { kind: "purchase" }>;
 type Return = Extract<SourceEvent, { kind: "return" }>;
+
+const CAIRO_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" });
+const cairoDateKey = (ms: number): string => CAIRO_DAY.format(new Date(ms));
 
 const inRange = (e: SourceEvent, r: Range): boolean => e.occurredAtMs >= r.fromMs && e.occurredAtMs < r.toMs;
 const distinct = (keys: readonly (string | null)[]): number => new Set(keys.filter((k): k is string => k !== null)).size;
@@ -255,6 +260,31 @@ export class InMemoryAnalyticsStore implements AnalyticsStore, RollupMaintenance
 
   async freshness(storeId: string): Promise<FreshnessRow | null> {
     return this.fresh.get(storeId) ?? null;
+  }
+
+  async productSales(storeId: string, r: Range): Promise<readonly ProductSalesRow[]> {
+    const by = new Map<string, { units: number; grossMinor: bigint }>();
+    for (const p of this.purchases(storeId, r)) {
+      const cur = by.get(p.productId) ?? { units: 0, grossMinor: 0n };
+      by.set(p.productId, { units: cur.units + p.qty, grossMinor: cur.grossMinor + p.grossMinor });
+    }
+    return [...by].map(([productId, v]) => ({ productId, ...v })).sort((a, b) => (a.productId < b.productId ? -1 : 1));
+  }
+
+  async dailySales(storeId: string, r: Range): Promise<readonly DailySalesRow[]> {
+    const by = new Map<string, Purchase[]>();
+    for (const p of this.purchases(storeId, r)) {
+      const day = cairoDateKey(p.occurredAtMs);
+      by.set(day, [...(by.get(day) ?? []), p]);
+    }
+    return [...by]
+      .map(([day, ps]) => ({
+        day,
+        grossMinor: ps.reduce((n, p) => n + p.grossMinor, 0n),
+        orders: new Set(ps.map((p) => p.sellerOrderId)).size,
+        units: ps.reduce((n, p) => n + p.qty, 0),
+      }))
+      .sort((a, b) => (a.day < b.day ? -1 : 1));
   }
 }
 

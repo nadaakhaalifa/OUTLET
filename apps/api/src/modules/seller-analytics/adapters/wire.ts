@@ -10,6 +10,7 @@ import type {
   WithMeta,
 } from "../application/queries";
 import type { GeoValue } from "../domain/ports";
+import type { DashboardSummary, Growth, PeriodMetrics } from "../application/dashboard";
 
 const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString());
 const money = (v: bigint) => ({ amount_minor: v.toString(), currency: "EGP" as const });
@@ -160,3 +161,57 @@ export const geographyWire = (r: WithMeta<{ governorates: KAnonymized<GeoValue> 
     meta: metaWire(r.meta),
   };
 };
+
+
+const growthMoneyWire = (g: Growth) => ({ delta: money(g.delta), growth_bps: g.growthBps });
+const growthCountWire = (g: Growth) => ({ delta: Number(g.delta), growth_bps: g.growthBps });
+
+const periodMetricsWire = (m: PeriodMetrics) => ({
+  gross_sales: money(m.grossSalesMinor),
+  net_after_commission: money(m.netAfterCommissionMinor),
+  orders: m.orders,
+  units: m.units,
+  average_order_value: m.aovMinor === null ? null : money(m.aovMinor),
+  returned_units: m.returnedUnits,
+  return_rate_bps: m.returnRateBps,
+  repeat_customer_rate_bps: m.repeatRateBps,
+  funnel: { views: m.funnel.views, bag_adds: m.funnel.bagAdds, checkouts: m.funnel.checkouts, purchases: m.funnel.purchases },
+  top_products: m.topProducts.map((p) => ({ product_id: p.productId, units: p.units, gross_sales: money(p.grossMinor) })),
+});
+
+/** KPIs the dashboard cannot source from real events today: listed so a client never renders a zero in their place. */
+export const DASHBOARD_UNAVAILABLE = [
+  "net_sales_after_returns",
+  "cancellation_rate",
+  "cod_refusal_by_governorate",
+  "in_transit_payouts",
+] as const;
+
+export const dashboardSummaryWire = (s: DashboardSummary) => ({
+  store_id: s.storeId,
+  period: s.period,
+  currency: "EGP" as const,
+  timezone: "Africa/Cairo" as const,
+  current: { from: new Date(s.current.fromMs).toISOString(), to: new Date(s.current.toMs).toISOString(), partial: true, ...periodMetricsWire(s.currentMetrics) },
+  previous: { from: new Date(s.previous.fromMs).toISOString(), to: new Date(s.previous.toMs).toISOString(), ...periodMetricsWire(s.previousMetrics) },
+  growth: {
+    gross_sales: growthMoneyWire(s.growth.grossSales),
+    net_after_commission: growthMoneyWire(s.growth.netAfterCommission),
+    orders: growthCountWire(s.growth.orders),
+    units: growthCountWire(s.growth.units),
+    average_order_value: s.growth.aov === null ? null : growthMoneyWire(s.growth.aov),
+  },
+  daily_sales: s.dailySales.map((d) => ({ day: d.day, gross_sales: money(d.grossMinor), orders: d.orders, units: d.units })),
+  unavailable_metrics: DASHBOARD_UNAVAILABLE,
+  definitions: {
+    gross_sales: "Sum of purchase gross value (VAT-inclusive piastres) for orders placed in the period, before returns and commission.",
+    net_after_commission: "Gross sales minus HAUL commission on those sales. Not net of returns (return value is not in analytics events) and not the payout statement.",
+    return_rate: "Units returned in the period divided by units sold in the period (items sold before returns, as in Zalando ZEOS One), in basis points.",
+    repeat_customer_rate: "Buyers with two or more orders in the period divided by distinct buyers in the period; null below 50 buyers.",
+    funnel: "Consent-sampled client events (views, bag adds, checkouts) next to purchase facts; not a complete census.",
+    growth: "(current - previous) / previous in half-even basis points; null when previous is 0.",
+  },
+  data_as_of: s.freshness.asOfMs === null ? null : new Date(s.freshness.asOfMs).toISOString(),
+  freshness: freshnessWire(s.freshness),
+  k_anonymity_min: 50,
+});
