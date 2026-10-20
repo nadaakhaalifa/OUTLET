@@ -19,7 +19,8 @@
     "mutation:payouts": "stryker run stryker.payouts.mjs",
     "mutation:gift-cards": "stryker run stryker.gift-cards.mjs",
     "mutation:store-credit": "stryker run stryker.store-credit.mjs",
-    "mutation:calendar-gap": "stryker run stryker.calendar-gap.mjs"
+    "mutation:calendar-gap": "stryker run stryker.calendar-gap.mjs",
+    "mutation:store-theme": "stryker run stryker.store-theme.mjs"
   },
   "devDependencies": {
     "fast-check": "^4.0.0",

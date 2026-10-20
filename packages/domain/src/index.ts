@@ -55,3 +55,4 @@ export * as outfitCalendar from "./calendar";
 export * as ranking from "./ranking";
 export * as creators from "./creators";
 export * as market from "./market";
+export * as storeTheme from "./store-theme";
