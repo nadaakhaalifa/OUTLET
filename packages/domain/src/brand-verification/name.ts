@@ -63,8 +63,12 @@ export function normaliseBrandName(input: string): string {
   const tokens = spaced.split(" ");
   const stripped = strip(tokens);
   // "and" glue words never discriminate a brand.
-  const cleaned = stripped.filter((t, i) => !(t === "and" && stripped.length > 1 && (i === 0 || i === stripped.length - 1)));
-  return cleaned.join(" ");
+  // Peel repeatedly: "x & &" must reach the same fixed point as "x" or normalisation is not idempotent.
+  let from = 0;
+  let to = stripped.length;
+  while (to - from > 1 && stripped[from] === "and") from += 1;
+  while (to - from > 1 && stripped[to - 1] === "and") to -= 1;
+  return stripped.slice(from, to).join(" ");
 }
 
 export function trigrams(input: string): ReadonlySet<string> {
