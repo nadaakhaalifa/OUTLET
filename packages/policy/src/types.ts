@@ -29,6 +29,8 @@ export type Grant =
   | { readonly kind: "shopper" }
   | { readonly kind: "plus" }
   | { readonly kind: "brand"; readonly storeId: string; readonly role: BrandRole }
+  /** Permission-set grant (ADR-0058): the member's effective keys for one store. Deny by default. */
+  | { readonly kind: "brand_permission"; readonly storeId: string; readonly permissions: readonly string[] }
   /** `expiresAtMs` models just-in-time elevation; absent means no expiry. */
   | { readonly kind: "admin"; readonly role: AdminRole; readonly expiresAtMs?: number }
   | { readonly kind: "courier"; readonly hubId: string }
@@ -70,6 +72,20 @@ export const RESOURCE_TYPES = [
   "store_payout",
   "store_settings",
   "store_staff",
+  // brand tenant, permission-catalogue resources (ADR-0058; no legacy role rule exists for these)
+  "store_listing_status",
+  "store_drop",
+  "store_order_pii",
+  "store_engagement",
+  "store_promotion",
+  "store_ads",
+  "store_ads_billing",
+  "store_branding",
+  "store_analytics",
+  "store_payout_account",
+  "store_billing",
+  "store_price_integrity",
+  "store_closure",
   // platform admin
   "admin_console",
   "refund",
@@ -117,6 +133,7 @@ export type GrantMatcher =
   | { readonly kind: "shopper" }
   | { readonly kind: "plus" }
   | { readonly kind: "brand"; readonly roles: readonly BrandRole[] }
+  | { readonly kind: "brand_permission"; readonly permission: string }
   | { readonly kind: "admin"; readonly roles: readonly AdminRole[] }
   | { readonly kind: "courier" }
   | { readonly kind: "creator" };

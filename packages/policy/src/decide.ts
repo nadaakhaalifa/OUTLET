@@ -46,6 +46,8 @@ function grantMatches(grant: Grant, matcher: GrantMatcher): boolean {
       return grant.kind === "plus";
     case "brand":
       return grant.kind === "brand" && matcher.roles.includes(grant.role);
+    case "brand_permission":
+      return grant.kind === "brand_permission" && grant.permissions.includes(matcher.permission);
     case "admin":
       return grant.kind === "admin" && matcher.roles.includes(grant.role);
     case "courier":
@@ -75,7 +77,9 @@ function inScope(rule: Rule, grants: readonly Grant[], actor: Actor, resource: R
     case "store":
       return (
         resource.storeId !== undefined &&
-        grants.some((g) => g.kind === "brand" && g.storeId === resource.storeId)
+        grants.some(
+          (g) => (g.kind === "brand" || g.kind === "brand_permission") && g.storeId === resource.storeId,
+        )
       );
     case "hub":
       return (
@@ -242,7 +246,7 @@ export function assertValidRuleSet(rules: readonly Rule[]): void {
     if (rule.scope === "owner" && rule.grant.kind !== "shopper" && rule.grant.kind !== "plus") {
       throw new InvalidRuleSetError(`rule ${rule.id}: owner scope applies to shopper grants only`);
     }
-    if (rule.scope === "store" && rule.grant.kind !== "brand") {
+    if (rule.scope === "store" && rule.grant.kind !== "brand" && rule.grant.kind !== "brand_permission") {
       throw new InvalidRuleSetError(`rule ${rule.id}: store scope applies to brand grants only`);
     }
     if (rule.scope === "hub" && rule.grant.kind !== "courier") {

@@ -62,7 +62,7 @@ export function dbSessionContext(actor: Actor, audience: Audience, nowMs: number
         ? { userId: actor.id, role: "customer", storeIds: [] }
         : null;
     case "seller": {
-      const stores = [...new Set(live.flatMap((g) => (g.kind === "brand" ? [g.storeId] : [])))].sort();
+      const stores = [...new Set(live.flatMap((g) => (g.kind === "brand" || g.kind === "brand_permission" ? [g.storeId] : [])))].sort();
       return stores.length > 0 ? { userId: actor.id, role: "seller", storeIds: stores } : null;
     }
     case "admin": {

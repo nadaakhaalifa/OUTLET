@@ -38,13 +38,18 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], what: string
 
 function parseGrant(raw: unknown): Grant {
   const g = rec(raw, "grant");
-  const kind = oneOf(g["kind"], ["shopper", "plus", "brand", "admin", "courier", "creator"] as const, "grant.kind");
+  const kind = oneOf(g["kind"], ["shopper", "plus", "brand", "brand_permission", "admin", "courier", "creator"] as const, "grant.kind");
   switch (kind) {
     case "shopper":
     case "plus":
       return { kind };
     case "brand":
       return { kind, storeId: str(g["storeId"], "grant.storeId"), role: oneOf(g["role"], BRAND_ROLES, "grant.role") };
+    case "brand_permission": {
+      const perms = g["permissions"];
+      if (!Array.isArray(perms) || perms.length > 64) throw new MalformedAuthzInputError("grant.permissions");
+      return { kind, storeId: str(g["storeId"], "grant.storeId"), permissions: perms.map((p) => str(p, "grant.permissions[]")) };
+    }
     case "admin": {
       const role = oneOf(g["role"], ADMIN_ROLES, "grant.role");
       const exp = g["expiresAtMs"];
