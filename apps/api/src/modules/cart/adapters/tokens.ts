@@ -1,0 +1,12 @@
+export const CART_REPOSITORY = Symbol("cart.CartRepository");
+export const CART_CATALOG = Symbol("cart.CatalogPort");
+export const CART_MEMBERSHIP = Symbol("cart.MembershipPort");
+export const CART_PLATFORM_CONFIG = Symbol("cart.PlatformConfigPort");
+export const CART_EVENTS = Symbol("cart.CartEventPublisher");
+export const GET_CART = Symbol("cart.GetCart");
+export const ADD_LINE = Symbol("cart.AddLine");
+export const UPDATE_LINE = Symbol("cart.UpdateLine");
+export const REMOVE_LINE = Symbol("cart.RemoveLine");
+export const GET_SUGGESTIONS = Symbol("cart.GetFreeDeliverySuggestions");
+export const QUOTE_BAG_FOR_CHECKOUT = Symbol("cart.QuoteBagForCheckout");
+export const CART_LINE_RESOLVER = Symbol("cart.CartLineResolver");

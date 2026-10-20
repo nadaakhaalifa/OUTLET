@@ -1,0 +1,11 @@
+{
+  "_provenance": "HAND-AUTHORED shape, NOT recorded from Paymob (Paymob is not contracted). Every field name, status code and value is an assumption: VERIFY BEFORE LAUNCH, see docs/compliance/verify-register.md VR-PAY-01..VR-PAY-12.",
+  "status": 200,
+  "body": {
+    "id": "intn_fixture_0001",
+    "status": "SUCCEEDED",
+    "amount_cents": 125000,
+    "currency": "EGP",
+    "failure_code": null
+  }
+}

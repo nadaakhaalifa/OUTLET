@@ -1,0 +1,1202 @@
+{
+  "consumer": {
+    "name": "outlet-mobile"
+  },
+  "provider": {
+    "name": "outlet-api"
+  },
+  "interactions": [
+    {
+      "description": "request an OTP for a valid Egyptian phone",
+      "providerStates": [
+        {
+          "name": "anonymous device with a passed age gate"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/otp/request",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-App-Attest": "<attest>",
+          "X-Client-Platform": "ios"
+        },
+        "body": {
+          "phone_e164": "+201005550001"
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "challenge_id": "0192f3a4-5b6c-7d8e-9f01-000000000001",
+          "expires_at": "2027-01-15T08:00:00.000Z",
+          "resend_available_at": "2027-01-15T08:00:00.000Z",
+          "attempts_remaining": 5,
+          "channel": "sms"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.challenge_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.body.expires_at": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^\\d{4}-\\d{2}-\\d{2}T"
+              }
+            ]
+          },
+          "$.body.resend_available_at": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^\\d{4}-\\d{2}-\\d{2}T"
+              }
+            ]
+          },
+          "$.body.attempts_remaining": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.channel": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/auth/otp/request",
+        "derivedFrom": "packages/validation phone.ts (E.164) + auth-core OtpChallenge"
+      }
+    },
+    {
+      "description": "OTP request with a malformed phone is a Problem+JSON 400 with pointers",
+      "providerStates": [
+        {
+          "name": "anonymous device with a passed age gate"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/auth/otp/request",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-App-Attest": "<attest>",
+          "X-Client-Platform": "ios"
+        },
+        "body": {
+          "phone_e164": "nope"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/validation_failed",
+          "title": "Problem",
+          "status": 400,
+          "code": "validation_failed",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34",
+          "errors": [
+            {
+              "pointer": "/body/phone_e164",
+              "code": "invalid_format"
+            }
+          ]
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.errors": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type",
+                "min": 1
+              }
+            ]
+          },
+          "$.body.errors[0].pointer": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.errors[0].code": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/auth/otp/request",
+        "derivedFrom": "Problem+JSON handling shared by every mobile port (PortError)"
+      }
+    },
+    {
+      "description": "a protected route without a token is a 401 problem",
+      "providerStates": [
+        {
+          "name": "anonymous device"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/cart",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/unauthenticated",
+          "title": "Problem",
+          "status": 401,
+          "code": "unauthenticated",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/cart",
+        "derivedFrom": "apps/mobile session handling (refresh on 401)"
+      }
+    },
+    {
+      "description": "unknown product is a 404 problem",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/products/0192f3a4-5b6c-7d8e-9f01-0000000000ff",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/not_found",
+          "title": "Problem",
+          "status": 404,
+          "code": "not_found",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/products/{productId}",
+        "derivedFrom": "apps/mobile/src/features/pdp/model.ts PdpPort.load"
+      }
+    },
+    {
+      "description": "search returns a cursor page",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/search",
+        "query": {
+          "q": "dress"
+        },
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "items": [],
+          "page": {
+            "has_more": false
+          },
+          "applied_filters": {}
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.items": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.page.has_more": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.applied_filters": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/search",
+        "derivedFrom": "apps/mobile/src/features/search/model.ts SearchPort"
+      }
+    },
+    {
+      "description": "read my bag, with an ETag for If-Match edits",
+      "providerStates": [
+        {
+          "name": "logged-in shopper with an empty bag"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/cart",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34",
+          "ETag": "\"abc\""
+        },
+        "body": {
+          "id": "0192f3a4-5b6c-7d8e-9f01-000000000001",
+          "groups": [],
+          "line_count": 0,
+          "updated_at": "2027-01-15T08:00:00.000Z"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.header.ETag": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^\"[^\"]+\"$"
+              }
+            ]
+          },
+          "$.body.id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.body.groups": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.line_count": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.updated_at": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/cart",
+        "derivedFrom": "apps/mobile/src/features/bag/model.ts BagPort.load"
+      }
+    },
+    {
+      "description": "quote with an unknown field is rejected as validation_failed (no mass assignment)",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/checkout/quote",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "address_id": "0192f3a4-5b6c-7d8e-9f01-000000000001",
+          "method": "card",
+          "total": "1"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/validation_failed",
+          "title": "Problem",
+          "status": 400,
+          "code": "validation_failed",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34",
+          "errors": [
+            {
+              "pointer": "/body",
+              "code": "unrecognized_keys"
+            }
+          ]
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.errors": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type",
+                "min": 1
+              }
+            ]
+          },
+          "$.body.errors[0].pointer": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.errors[0].code": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/checkout/quote",
+        "derivedFrom": "apps/mobile/src/features/checkout/model.ts CheckoutPort.quote"
+      }
+    },
+    {
+      "description": "quote on an empty bag is a 409 bag_empty",
+      "providerStates": [
+        {
+          "name": "logged-in shopper with an empty bag"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/checkout/quote",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "address_id": "0192f3a4-5b6c-7d8e-9f01-0000000000ff",
+          "method": "card"
+        }
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/bag_empty",
+          "title": "Problem",
+          "status": 409,
+          "code": "bag_empty",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/checkout/quote",
+        "derivedFrom": "apps/mobile/src/features/checkout/model.ts CheckoutPort.quote"
+      }
+    },
+    {
+      "description": "checkout without an Idempotency-Key is refused",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/checkout",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "X-App-Attest": "<attest>",
+          "X-Client-Platform": "ios"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/invalid_idempotency_key",
+          "title": "Problem",
+          "status": 400,
+          "code": "invalid_idempotency_key",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/checkout",
+        "derivedFrom": "A2.5: every money write carries a client UUIDv7 key"
+      }
+    },
+    {
+      "description": "unknown order group is 404 (also for another user's)",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/order-groups/0192f3a4-5b6c-7d8e-9f01-0000000000ff",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "type": "/problems/not_found",
+          "title": "Problem",
+          "status": 404,
+          "code": "not_found",
+          "request_id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/problem\\+json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^/problems/"
+              }
+            ]
+          },
+          "$.body.title": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.request_id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/order-groups/{orderGroupId}",
+        "derivedFrom": "apps/mobile/src/features/orders/model.ts OrdersPort.group"
+      }
+    },
+    {
+      "description": "list my orders (Orders tab)",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/me/orders",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "items": [],
+          "page": {
+            "has_more": false
+          }
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.items": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.page.has_more": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/me/orders",
+        "derivedFrom": "apps/mobile/src/features/orders/model.ts OrdersPort.list"
+      }
+    },
+    {
+      "description": "list my returns",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/me/returns",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "items": [],
+          "page": {
+            "has_more": false
+          }
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.items": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.page.has_more": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/me/returns",
+        "derivedFrom": "apps/mobile/src/features/returns/model.ts ReturnsPort.list"
+      }
+    },
+    {
+      "description": "read my consents",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/v1/me/privacy/consents",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34",
+          "ETag": "\"abc\""
+        },
+        "body": {
+          "consents": []
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.header.ETag": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^\"[^\"]+\"$"
+              }
+            ]
+          },
+          "$.body.consents": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "GET /v1/me/privacy/consents",
+        "derivedFrom": "apps/mobile/src/features/privacy-center/model.ts PrivacyPort"
+      }
+    },
+    {
+      "description": "request a data export (idempotent, async)",
+      "providerStates": [
+        {
+          "name": "logged-in shopper"
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/v1/me/privacy/export",
+        "headers": {
+          "Authorization": "Bearer <access-token>",
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "0192f3a4-5b6c-7d8e-9f01-23456789abc9"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Request-Id": "01a3185c-5000-7dcb-92e4-dba5de6f1b34"
+        },
+        "body": {
+          "id": "0192f3a4-5b6c-7d8e-9f01-000000000001",
+          "status": "queued",
+          "requested_at": "2027-01-15T08:00:00.000Z"
+        },
+        "matchingRules": {
+          "$.header.Content-Type": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^application/json"
+              }
+            ]
+          },
+          "$.header.X-Request-Id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.id": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "regex",
+                "regex": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+            ]
+          },
+          "$.body.status": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          },
+          "$.body.requested_at": {
+            "combine": "AND",
+            "matchers": [
+              {
+                "match": "type"
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "openapi": "POST /v1/me/privacy/export",
+        "derivedFrom": "apps/mobile/src/features/privacy-center/model.ts PrivacyPort.requestExport"
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "3.0.0"
+    },
+    "client": {
+      "name": "outlet-pact-dsl",
+      "version": "0.1.0"
+    }
+  }
+}

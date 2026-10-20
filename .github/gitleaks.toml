@@ -1,0 +1,24 @@
+title = "Z-OUTLET gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders and lockfile hashes"
+paths = [
+  '''pnpm-lock\.yaml''',
+  '''docs/.*\.md''',
+]
+
+# Test fixtures only: UUID idempotency keys, dummy webhook/TOTP/card-token values.
+# Scoped to the generic-api-key rule and to test/pact paths; every other rule still applies there.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Dummy values in test files and pact contracts"
+condition = "AND"
+paths = [
+  '''(^|/)[^/]+\.test\.ts$''',
+  '''(^|/)test/harness\.ts$''',
+  '''^tooling/pact/pacts/.*\.json$''',
+]

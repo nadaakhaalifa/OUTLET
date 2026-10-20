@@ -1,0 +1,20 @@
+# Spec: docs/specs/mobile-ux-round-2.md item 9. Saved tab: compact rows, remove with Undo, filter sheet, list settings.
+appId: ${APP_ID}
+name: Saved tab
+tags: [saved, wishlists]
+---
+- runFlow: ../subflows/guest-start.yaml
+- tapOn:
+    id: "tab-saved"
+- assertVisible:
+    id: "saved-subtitle"
+- assertVisible:
+    id: "saved-add-list"
+- tapOn:
+    id: "saved-filter-button"
+- assertVisible:
+    id: "saved-filter-sheet"
+- tapOn:
+    id: "saved-filter-apply"
+- assertVisible:
+    id: "saved-subtitle"

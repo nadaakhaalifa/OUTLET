@@ -1,0 +1,23 @@
+# Spec: Part C section 6 acceptance. Store A at 1,950 EGP + a 60 EGP item from A => free delivery.
+# Guest start, then quiet sign-in to the seeded account (a guest bag is device-only, so the server bag needs an account).
+# Requires the seed "bag-1950" account state: one line worth 1,950 EGP from the store that sells PRODUCT_60_ID.
+appId: ${APP_ID}
+name: Free delivery threshold 1950 plus 60
+tags: [critical, bag]
+---
+- runFlow: ../subflows/guest-start.yaml
+- runFlow: ../subflows/sign-in-existing.yaml
+- runFlow: ../subflows/open-bag.yaml
+- assertVisible:
+    id: "bag-free-delivery-progress"
+- assertNotVisible:
+    id: "bag-free-delivery-unlocked"
+- runFlow:
+    file: ../subflows/add-product-to-bag.yaml
+    env:
+      PRODUCT: ${PRODUCT_60_ID}
+- runFlow: ../subflows/open-bag.yaml
+- assertVisible:
+    id: "bag-free-delivery-unlocked"
+- assertNotVisible:
+    id: "bag-free-delivery-progress"

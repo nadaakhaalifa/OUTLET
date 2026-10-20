@@ -1,0 +1,36 @@
+/** Single seam to the pure ads domain (@outlet/domain namespace `ads`). Aliases only; no behaviour. */
+import { ads } from "@outlet/domain";
+
+export type AdsConfig = ads.AdsConfig;
+export type AuctionCandidate = ads.AuctionCandidate;
+export type AuctionOutcome = ads.AuctionOutcome;
+export type AuctionWinner = ads.AuctionWinner;
+export type Campaign = ads.Campaign;
+export type CampaignDraft = ads.CampaignDraft;
+export type CampaignEvent = ads.CampaignEvent;
+export type CampaignStatus = ads.CampaignStatus;
+export type ClickSignals = ads.ClickSignals;
+export type InvalidReason = ads.InvalidReason;
+export type TargetingContext = ads.TargetingContext;
+export type AdStatsRow = ads.AdStatsRow;
+export type AdStatsView = ads.AdStatsView;
+export type FieldError = ads.FieldError;
+export type TopUpQuote = ads.TopUpQuote;
+export import ACCOUNTS = ads.ACCOUNTS;
+export import CAMPAIGN_STATUSES = ads.CAMPAIGN_STATUSES;
+export import DEFAULT_ADS_CONFIG = ads.DEFAULT_ADS_CONFIG;
+export import InvalidCampaignTransitionError = ads.InvalidCampaignTransitionError;
+export import cairoDayKey = ads.cairoDayKey;
+export import classifyClick = ads.classifyClick;
+export import clickPostings = ads.clickPostings;
+export import creditBackPostings = ads.creditBackPostings;
+export import inWindow = ads.inWindow;
+export import matchesTargeting = ads.matchesTargeting;
+export import quoteTopUp = ads.quoteTopUp;
+export import runAuction = ads.runAuction;
+export import startOfCairoDayMs = ads.startOfCairoDayMs;
+export import sumStats = ads.sumStats;
+export import topUpPostings = ads.topUpPostings;
+export import transitionCampaign = ads.transitionCampaign;
+export import validateCampaignDraft = ads.validateCampaignDraft;
+export import viewStats = ads.viewStats;

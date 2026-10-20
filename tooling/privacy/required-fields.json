@@ -1,0 +1,26 @@
+{
+  "must_exist": [
+    "users.phone_e164", "users.phone_hash", "users.email", "users.dob", "users.age_band",
+    "users.limited_capacity", "devices.push_token", "devices.install_id", "sessions.refresh_hash",
+    "consent_records.purpose", "consent_records.granted", "consent_records.ip_hash",
+    "size_profiles.measurements", "gift_cards.recipient_contact", "gift_cards.code_hash",
+    "payment_events_raw.body", "payment_intents.provider_ref", "wishlists.share_token_hash",
+    "outfits.request", "budgets.amount", "budget_cycles.spent", "installment_commitments.monthly",
+    "shipments.awb", "risk_assessments.score", "device_ip_graph_edges.device_id",
+    "cod_refusal_history.user_id", "analytics_events.pseudo_id", "seller_kyc_records.national_id_number",
+    "payout_instruments.iban", "notification_log.user_id", "subscriptions.psp_token_ref"
+  ],
+  "constraints": [
+    {"path": "users.phone_e164", "pii_class": "P3", "encryption": "field_envelope", "reason": "spec 1 Data: phone_e164 P3-enc"},
+    {"path": "users.phone_hash", "encryption": "blind_index_hmac", "reason": "spec 1 Data: lookup by blind index, never by plaintext"},
+    {"path": "users.dob", "pii_class": "P3", "encryption": "field_envelope", "reason": "spec 1 Data: dob P3-enc"},
+    {"path": "users.email", "pii_class": "P2", "encryption": "field_envelope", "reason": "spec 1 Data: email P2-enc"},
+    {"path": "size_profiles.measurements", "pii_class": "P3", "encryption": "field_envelope", "reason": "spec 10 Data: measurements P3-enc"},
+    {"path": "size_profiles.measurements", "consent_purpose": "measurements", "lawful_basis": "consent", "reason": "spec B1: measurements consent purpose"},
+    {"path": "gift_cards.recipient_contact", "pii_class": "P2", "encryption": "field_envelope", "reason": "spec 15.1 Data: recipient_contact P2-enc"},
+    {"path": "budgets.amount", "consent_purpose": "budget_insights", "lawful_basis": "consent", "reason": "spec B1 and 12: budget is opt-in"},
+    {"path": "seller_kyc_records.national_id_number", "pii_class": "P3", "encryption": "field_envelope", "residency": "in_country", "reason": "P3 identity document stays in country"},
+    {"path": "payout_instruments.iban", "pii_class": "P3", "encryption": "field_envelope", "reason": "bank account number is sensitive"},
+    {"path": "analytics_events.pseudo_id", "consent_purpose": "analytics", "lawful_basis": "consent", "reason": "spec B1: SDKs initialise only after analytics consent"}
+  ]
+}

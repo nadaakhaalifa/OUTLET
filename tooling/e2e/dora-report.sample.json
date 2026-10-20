@@ -1,0 +1,62 @@
+{
+  "schema": "outlet.dora.report/v1",
+  "generatedAt": "2026-10-11T10:43:53.039Z",
+  "window": {
+    "from": "2026-07-13T10:43:53.039Z",
+    "to": "2026-10-11T10:43:53.039Z",
+    "days": 90
+  },
+  "source": {
+    "mode": "offline",
+    "deploymentProxy": "commit",
+    "repo": null,
+    "ref": "HEAD",
+    "commitsInWindow": 24
+  },
+  "metrics": {
+    "deploymentFrequency": {
+      "count": 24,
+      "perDay": 0.267,
+      "perWeek": 1.87,
+      "band": "high"
+    },
+    "leadTimeForChanges": {
+      "medianHours": 0,
+      "p90Hours": 0,
+      "sampleSize": 24,
+      "basis": "authored-to-committed (proxy: no deploy events)",
+      "band": "elite"
+    },
+    "changeFailureRate": {
+      "ratio": 0,
+      "failures": 0,
+      "deployments": 24,
+      "basis": "revert/hotfix/rollback commits per deployment unit (proxy)",
+      "band": "elite"
+    },
+    "timeToRecover": {
+      "medianHours": 1.67,
+      "sampleSize": 1,
+      "basis": "feat commit to the fix/revert that repaired it (proxy)",
+      "band": "high"
+    },
+    "reworkRate": {
+      "ratio": 0.063,
+      "reworkCommits": 1,
+      "changeCommits": 16,
+      "windowDays": 7,
+      "basis": "fix commits landing within 7 days after a feat (same scope when both have one) / feat+fix+refactor+perf commits"
+    }
+  },
+  "series": [
+    {
+      "weekStart": "2026-10-05",
+      "deployments": 24,
+      "failures": 0,
+      "rework": 1
+    }
+  ],
+  "notes": [
+    "No deployment events or release tags exist: every commit on the ref is counted as one deployment unit (integration frequency, not production deploys)."
+  ]
+}

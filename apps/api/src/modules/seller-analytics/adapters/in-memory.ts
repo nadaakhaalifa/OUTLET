@@ -1,0 +1,327 @@
+/**
+ * DEVELOPMENT AND TEST FIXTURES: per-process store, fakes for ports. The module refuses to boot
+ * with these outside test mode (MissingSellerAnalyticsPortsError).
+ */
+import { aggregateDeltas, emptyFunnelCounts, factDeltas, orderDeltas, type AggregatableFact, type FunnelCounts, type KCell, type RollupDelta, type RollupKey, type RollupScope, type SalesTotals } from "../domain/bridge";
+import type { CasOutcome, DefaultPartitionRows, NewKeyOutcome, PartitionReport, ReconciliationRecord, RollupMaintenance, RollupSnapshot, RollupWindow } from "../domain/rollup-ports";
+import type { ShopperFactsEraser } from "../domain/erasure-ports";
+import { InMemoryRollups } from "./in-memory-rollups";
+import type {
+  AnalyticsStore,
+  AuditPort,
+  EventSourcePort,
+  ExportAuditEntry,
+  DailySalesRow,
+  FreshnessRow,
+  GeoValue,
+  ProductSalesRow,
+  IngestResult,
+  ProductStoreLookup,
+  Range,
+  ReturnReasonRow,
+  SkuSalesRow,
+  SourceEvent,
+  SourceMessage,
+  StockRow,
+} from "../domain/ports";
+
+type Purchase = Extract<SourceEvent, { kind: "purchase" }>;
+type Return = Extract<SourceEvent, { kind: "return" }>;
+
+const CAIRO_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" });
+const cairoDateKey = (ms: number): string => CAIRO_DAY.format(new Date(ms));
+
+const inRange = (e: SourceEvent, r: Range): boolean => e.occurredAtMs >= r.fromMs && e.occurredAtMs < r.toMs;
+const distinct = (keys: readonly (string | null)[]): number => new Set(keys.filter((k): k is string => k !== null)).size;
+
+interface StockEntry extends StockRow {
+  observedAtMs: number;
+}
+
+export class InMemoryAnalyticsStore implements AnalyticsStore, RollupMaintenance, ShopperFactsEraser {
+  private readonly facts: SourceEvent[] = [];
+  readonly rollups = new InMemoryRollups(() => this.facts.map((f): AggregatableFact => ({ ...f, ...(f.kind === "purchase" ? { sellerOrderId: f.sellerOrderId } : {}) }) as AggregatableFact));
+  private readonly processed = new Set<string>();
+  private readonly stock = new Map<string, StockEntry>();
+  private readonly fresh = new Map<string, FreshnessRow>();
+
+  async ingest(consumer: string, events: readonly SourceEvent[], nowMs: number): Promise<IngestResult> {
+    let applied = 0;
+    let duplicates = 0;
+    const deltas: RollupDelta[] = [];
+    for (const e0 of events) {
+      // H3 step 3: a payload written before an erasure may still carry the erased key.
+      const e: SourceEvent = e0.shopperKey !== null && this.rollups.erasedKeys.has(e0.shopperKey) ? { ...e0, shopperKey: null } : e0;
+      const key = `${consumer}:${e.messageId}`;
+      if (this.processed.has(key)) {
+        duplicates += 1;
+        continue;
+      }
+      this.processed.add(key);
+      applied += 1;
+      if (e.kind === "purchase") {
+        const prior = this.facts.filter((f): f is Purchase => f.kind === "purchase" && f.storeId === e.storeId && f.sellerOrderId === e.sellerOrderId);
+        deltas.push(...orderDeltas(e.storeId, prior.length === 0 ? null : Math.min(...prior.map((f) => f.occurredAtMs)), e.occurredAtMs));
+      }
+      deltas.push(...factDeltas(e));
+      if (e.kind === "stock_snapshot") {
+        const k = `${e.storeId}:${e.skuId}`;
+        const cur = this.stock.get(k);
+        if (cur === undefined || e.occurredAtMs >= cur.observedAtMs) {
+          this.stock.set(k, {
+            skuId: e.skuId,
+            productId: e.productId,
+            sizeLabel: e.sizeLabel,
+            onHand: e.onHand,
+            priceMinor: e.priceMinor,
+            listedAtMs: Math.min(e.listedAtMs, cur?.listedAtMs ?? e.listedAtMs),
+            observedAtMs: e.occurredAtMs,
+          });
+        } else {
+          this.stock.set(k, { ...cur, listedAtMs: Math.min(cur.listedAtMs, e.listedAtMs) });
+        }
+      } else {
+        this.facts.push(e);
+      }
+      const f = this.fresh.get(e.storeId);
+      this.fresh.set(e.storeId, {
+        lastEventMs: Math.max(f?.lastEventMs ?? 0, e.occurredAtMs),
+        lastIngestMs: Math.max(f?.lastIngestMs ?? 0, nowMs),
+      });
+    }
+    this.rollups.apply(aggregateDeltas(deltas));
+    return { applied, duplicates };
+  }
+
+  /** Test hook: forget everything (facts, inbox, stock, freshness, rollups). */
+  reset(): void {
+    this.facts.length = 0;
+    this.processed.clear();
+    this.stock.clear();
+    this.fresh.clear();
+    this.rollups.reset();
+  }
+
+  /** H3: remember erased keys (the consumer NULLs them on ingest for 31 days). */
+  async recordErasedKeys(keys: readonly string[], _atMs: number): Promise<void> {
+    for (const k of keys) this.rollups.erasedKeys.add(k);
+  }
+
+  /** H3: NULL `shopper_key` for matching facts (a fact is replaced, never mutated in place). */
+  async nullShopperKeys(keys: readonly string[], limit: number): Promise<number> {
+    const set = new Set(keys);
+    let n = 0;
+    for (let i = 0; i < this.facts.length && n < limit; i += 1) {
+      const f = this.facts[i];
+      if (f !== undefined && f.shopperKey !== null && set.has(f.shopperKey)) {
+        this.facts[i] = { ...f, shopperKey: null };
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  /** Test hook: shopper keys currently stored (never exposed by a read path). */
+  storedShopperKeys(): readonly string[] {
+    return this.facts.flatMap((f) => (f.shopperKey === null ? [] : [f.shopperKey]));
+  }
+
+  snapshot(scope: RollupScope, w: RollupWindow): Promise<RollupSnapshot> {
+    return this.rollups.snapshot(scope, w);
+  }
+  casRepair(key: RollupKey, expected: bigint, readVersion: bigint): Promise<CasOutcome> {
+    return this.rollups.casRepair(key, expected, readVersion);
+  }
+  repairNewKey(key: RollupKey): Promise<NewKeyOutcome> {
+    return this.rollups.repairNewKey(key);
+  }
+  record(rec: ReconciliationRecord): Promise<void> {
+    return this.rollups.record(rec);
+  }
+  firstFactMs(): Promise<number | null> {
+    return this.rollups.firstFactMs();
+  }
+  maintainPartitions(nowMs: number, ahead: number, retainMonths: number): Promise<PartitionReport> {
+    return this.rollups.maintainPartitions(nowMs, ahead, retainMonths);
+  }
+  defaultPartitionRows(): Promise<readonly DefaultPartitionRows[]> {
+    return this.rollups.defaultPartitionRows();
+  }
+
+  private scoped(storeId: string, r: Range): SourceEvent[] {
+    return this.facts.filter((e) => e.storeId === storeId && inRange(e, r));
+  }
+
+  async trafficTotals(storeId: string, r: Range) {
+    const rows = this.scoped(storeId, r).filter((e) => e.kind === "store_view" || e.kind === "view");
+    return {
+      storeViews: rows.filter((e) => e.kind === "store_view").length,
+      productViews: rows.filter((e) => e.kind === "view").length,
+      uniqueVisitors: distinct(rows.map((e) => e.shopperKey)),
+    };
+  }
+
+  async trafficBySource(storeId: string, r: Range): Promise<readonly KCell<number>[]> {
+    const by = new Map<string, SourceEvent[]>();
+    for (const e of this.scoped(storeId, r)) {
+      if (e.kind !== "store_view" && e.kind !== "view") continue;
+      const s = e.source ?? "unknown";
+      by.set(s, [...(by.get(s) ?? []), e]);
+    }
+    return [...by].map(([key, es]) => ({ key, distinctShoppers: distinct(es.map((e) => e.shopperKey)), value: es.length }));
+  }
+
+  async funnelByProduct(storeId: string, r: Range) {
+    const by = new Map<string, { -readonly [K in keyof FunnelCounts]: number }>();
+    for (const e of this.scoped(storeId, r)) {
+      if (!("productId" in e)) continue;
+      if (e.kind === "return" || e.kind === "stock_snapshot") continue;
+      const c = by.get(e.productId) ?? emptyFunnelCounts();
+      c[e.kind] += 1;
+      by.set(e.productId, c);
+    }
+    return [...by].map(([productId, counts]) => ({ productId, counts })).sort((a, b) => (a.productId < b.productId ? -1 : 1));
+  }
+
+  private purchases(storeId: string, r: Range): Purchase[] {
+    return this.scoped(storeId, r).filter((e): e is Purchase => e.kind === "purchase");
+  }
+
+  async salesTotals(storeId: string, r: Range): Promise<SalesTotals> {
+    const ps = this.purchases(storeId, r);
+    const ordersByShopper = new Map<string, Set<string>>();
+    for (const p of ps) {
+      if (p.shopperKey === null) continue;
+      const s = ordersByShopper.get(p.shopperKey) ?? new Set<string>();
+      s.add(p.sellerOrderId);
+      ordersByShopper.set(p.shopperKey, s);
+    }
+    return {
+      gmvMinor: ps.reduce((n, p) => n + p.grossMinor, 0n),
+      commissionMinor: ps.reduce((n, p) => n + p.commissionMinor, 0n),
+      units: ps.reduce((n, p) => n + p.qty, 0),
+      orders: new Set(ps.map((p) => p.sellerOrderId)).size,
+      distinctShoppers: ordersByShopper.size,
+      repeatShoppers: [...ordersByShopper.values()].filter((s) => s.size >= 2).length,
+    };
+  }
+
+  async skuSales(storeId: string, r: Range): Promise<readonly SkuSalesRow[]> {
+    const by = new Map<string, { productId: string; soldUnits: number; returnedUnits: number }>();
+    for (const e of this.scoped(storeId, r)) {
+      if (e.kind !== "purchase" && e.kind !== "return") continue;
+      const cur = by.get(e.skuId) ?? { productId: e.productId, soldUnits: 0, returnedUnits: 0 };
+      if (e.kind === "purchase") cur.soldUnits += e.qty;
+      else cur.returnedUnits += e.qty;
+      by.set(e.skuId, cur);
+    }
+    return [...by].map(([skuId, v]) => ({ skuId, ...v })).sort((a, b) => (a.skuId < b.skuId ? -1 : 1));
+  }
+
+  async returnReasons(storeId: string, r: Range): Promise<readonly ReturnReasonRow[]> {
+    const by = new Map<string, ReturnReasonRow>();
+    for (const e of this.scoped(storeId, r)) {
+      if (e.kind !== "return") continue;
+      const k = `${(e as Return).skuId}|${e.reason}`;
+      const cur = by.get(k);
+      by.set(k, { skuId: e.skuId, productId: e.productId, reason: e.reason, units: (cur?.units ?? 0) + e.qty });
+    }
+    return [...by.values()].sort((a, b) => (a.skuId + a.reason < b.skuId + b.reason ? -1 : 1));
+  }
+
+  async stockLevels(storeId: string): Promise<readonly StockRow[]> {
+    return [...this.stock]
+      .filter(([k]) => k.startsWith(`${storeId}:`))
+      .map(([, v]) => ({ skuId: v.skuId, productId: v.productId, sizeLabel: v.sizeLabel, onHand: v.onHand, priceMinor: v.priceMinor, listedAtMs: v.listedAtMs }))
+      .sort((a, b) => (a.skuId < b.skuId ? -1 : 1));
+  }
+
+  async searchTerms(storeId: string, r: Range): Promise<readonly KCell<number>[]> {
+    const by = new Map<string, SourceEvent[]>();
+    for (const e of this.scoped(storeId, r)) {
+      if (e.kind !== "search_click") continue;
+      by.set(e.term, [...(by.get(e.term) ?? []), e]);
+    }
+    return [...by].map(([key, es]) => ({ key, distinctShoppers: distinct(es.map((e) => e.shopperKey)), value: es.length }));
+  }
+
+  async geography(storeId: string, r: Range): Promise<readonly KCell<GeoValue>[]> {
+    const by = new Map<string, Purchase[]>();
+    for (const p of this.purchases(storeId, r)) {
+      if (p.governorate === undefined) continue;
+      by.set(p.governorate, [...(by.get(p.governorate) ?? []), p]);
+    }
+    return [...by].map(([key, ps]) => ({
+      key,
+      distinctShoppers: distinct(ps.map((p) => p.shopperKey)),
+      value: { orders: new Set(ps.map((p) => p.sellerOrderId)).size, gmvMinor: ps.reduce((n, p) => n + p.grossMinor, 0n) },
+    }));
+  }
+
+  async freshness(storeId: string): Promise<FreshnessRow | null> {
+    return this.fresh.get(storeId) ?? null;
+  }
+
+  async productSales(storeId: string, r: Range): Promise<readonly ProductSalesRow[]> {
+    const by = new Map<string, { units: number; grossMinor: bigint }>();
+    for (const p of this.purchases(storeId, r)) {
+      const cur = by.get(p.productId) ?? { units: 0, grossMinor: 0n };
+      by.set(p.productId, { units: cur.units + p.qty, grossMinor: cur.grossMinor + p.grossMinor });
+    }
+    return [...by].map(([productId, v]) => ({ productId, ...v })).sort((a, b) => (a.productId < b.productId ? -1 : 1));
+  }
+
+  async dailySales(storeId: string, r: Range): Promise<readonly DailySalesRow[]> {
+    const by = new Map<string, Purchase[]>();
+    for (const p of this.purchases(storeId, r)) {
+      const day = cairoDateKey(p.occurredAtMs);
+      by.set(day, [...(by.get(day) ?? []), p]);
+    }
+    return [...by]
+      .map(([day, ps]) => ({
+        day,
+        grossMinor: ps.reduce((n, p) => n + p.grossMinor, 0n),
+        orders: new Set(ps.map((p) => p.sellerOrderId)).size,
+        units: ps.reduce((n, p) => n + p.qty, 0),
+      }))
+      .sort((a, b) => (a.day < b.day ? -1 : 1));
+  }
+}
+
+export class InMemoryEventSource implements EventSourcePort {
+  private readonly queue: SourceMessage[] = [];
+  readonly acked: string[] = [];
+  push(...m: SourceMessage[]): void {
+    this.queue.push(...m);
+  }
+  async poll(max: number): Promise<readonly SourceMessage[]> {
+    return this.queue.slice(0, max);
+  }
+  async ack(ids: readonly string[]): Promise<void> {
+    for (const id of ids) {
+      const i = this.queue.findIndex((m) => m.messageId === id);
+      if (i >= 0) this.queue.splice(i, 1);
+      this.acked.push(id);
+    }
+  }
+}
+
+export class InMemoryAudit implements AuditPort {
+  readonly entries: ExportAuditEntry[] = [];
+  /** Test hook: simulate an unavailable audit trail. */
+  failing = false;
+  async record(entry: ExportAuditEntry): Promise<void> {
+    if (this.failing) throw new Error("audit unavailable");
+    this.entries.push(entry);
+  }
+}
+
+export class StaticProductStoreLookup implements ProductStoreLookup {
+  private readonly map = new Map<string, string>();
+  set(productId: string, storeId: string): void {
+    this.map.set(productId, storeId);
+  }
+  async storeOf(productId: string): Promise<string | null> {
+    return this.map.get(productId) ?? null;
+  }
+}

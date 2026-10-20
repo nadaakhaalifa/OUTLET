@@ -1,0 +1,42 @@
+# Spec: docs/specs/guest-browsing.md F3, ADR-0055 R0. The only place a guest meets sign-up is the Checkout gate.
+appId: ${APP_ID}
+name: Guest checkout gate
+tags: [critical, guest, checkout]
+---
+- runFlow: ../subflows/guest-start.yaml
+- runFlow:
+    file: ../subflows/add-product-to-bag.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
+- runFlow: ../subflows/open-bag.yaml
+- tapOn:
+    id: "bag-checkout"
+# Gate: reason banner and Back to bag.
+- assertVisible:
+    id: "checkout-gate-reason"
+- assertVisible:
+    id: "checkout-gate-back"
+- assertVisible: ${GATE_REASON}
+# Cancel returns to the Bag, unchanged.
+- tapOn:
+    id: "checkout-gate-back"
+- assertVisible: ${BAG_TITLE}
+- assertNotVisible:
+    id: "phone-input"
+# The gate offers sign-in only (no account creation) and can flip back.
+- tapOn:
+    id: "gate-sign-in-toggle"
+- assertVisible:
+    id: "gate-sign-in-toggle"
+- tapOn:
+    id: "gate-sign-in-toggle"
+# Second pass: go through age, terms, OTP and consents with the fixtures; lands on checkout step 1.
+- tapOn:
+    id: "bag-checkout"
+- assertVisible:
+    id: "checkout-gate"
+- runFlow: ../subflows/gate-sign-up.yaml
+- assertVisible:
+    id: "checkout-steps"
+- assertVisible:
+    id: "checkout-continue-delivery"

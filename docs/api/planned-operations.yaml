@@ -1,0 +1,54 @@
+# Allow-list of OpenAPI operations that are declared before a controller exists (ADR-0050, spec dashboard-foundations 7.3).
+#
+# Rules (enforced by apps/api/src/contract/openapi-drift):
+#  - Every operation with `x-status: planned` in docs/api/openapi.yaml is listed here, and every entry here is planned there.
+#  - A planned operation that gains a Nest route fails CI until its marker and its entry are removed in the same PR.
+#  - `planned_until` is a phase label (phase-b, phase-c) or an ISO date; a date in the past fails CI.
+# Owners: Security and the Architect (see .github/CODEOWNERS). Adding or extending an entry needs their review.
+# Sorted by operationId.
+version: 1
+operations:
+  - operation_id: approveAdminPayout
+    method: POST
+    path: "/v1/admin/payouts/{payoutId}/approval"
+    planned_until: phase-b
+    replaced_by: "/v1/admin/finance/payouts/{id}/approve"
+  - operation_id: approveAdminRefund
+    method: POST
+    path: "/v1/admin/refunds/{refundId}/approval"
+    planned_until: phase-b
+    replaced_by: "/v1/admin/approvals"
+  - operation_id: getAdminOrderGroup
+    method: GET
+    path: "/v1/admin/order-groups/{orderGroupId}"
+    planned_until: phase-c
+  - operation_id: getAdminPriceIntegrityConfig
+    method: GET
+    path: "/v1/admin/price-integrity/config"
+    planned_until: phase-c
+  - operation_id: getSellerAnalyticsSummary
+    method: GET
+    path: "/v1/seller/analytics/summary"
+    planned_until: phase-b
+    replaced_by: "/v1/seller/stores/{storeId}/analytics/summary"
+  - operation_id: listAdminAuditLog
+    method: GET
+    path: "/v1/admin/audit-log"
+    planned_until: phase-b
+  - operation_id: listAdminPriceEnforcement
+    method: GET
+    path: "/v1/admin/price-integrity/actions"
+    planned_until: phase-c
+  - operation_id: putAdminPriceIntegrityConfig
+    method: PUT
+    path: "/v1/admin/price-integrity/config"
+    planned_until: phase-c
+  - operation_id: resolveAdminDispute
+    method: POST
+    path: "/v1/admin/disputes/{disputeId}/resolve"
+    planned_until: phase-c
+  - operation_id: suspendAdminSeller
+    method: POST
+    path: "/v1/admin/sellers/{storeId}/suspend"
+    planned_until: phase-b
+    replaced_by: "/v1/admin/kyc/sellers/{sellerId}/suspend"

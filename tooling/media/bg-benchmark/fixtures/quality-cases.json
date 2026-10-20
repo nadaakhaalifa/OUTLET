@@ -1,0 +1,264 @@
+{
+ "_comment": "Parity fixture for quality.ts and quality.py. Regenerate with the python port, then run both suites.",
+ "cases": [
+  {
+   "name": "clean",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 100,
+   "reasons": []
+  },
+  {
+   "name": "empty",
+   "stats": {
+    "coverage": 0.0,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 0,
+   "reasons": [
+    "no_subject_detected"
+   ]
+  },
+  {
+   "name": "tiny",
+   "stats": {
+    "coverage": 0.02,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 50,
+   "reasons": [
+    "subject_too_small"
+   ]
+  },
+  {
+   "name": "small",
+   "stats": {
+    "coverage": 0.1,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 80,
+   "reasons": [
+    "subject_small"
+   ]
+  },
+  {
+   "name": "fills_frame",
+   "stats": {
+    "coverage": 0.99,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 70,
+   "reasons": [
+    "subject_fills_frame"
+   ]
+  },
+  {
+   "name": "touches_border",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.05,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 80,
+   "reasons": [
+    "subject_touches_border"
+   ]
+  },
+  {
+   "name": "cut_by_frame",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.4,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 65,
+   "reasons": [
+    "subject_cut_by_frame"
+   ]
+  },
+  {
+   "name": "two_parts",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 2,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 90,
+   "reasons": [
+    "multiple_components"
+   ]
+  },
+  {
+   "name": "five_parts",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 9,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 70,
+   "reasons": [
+    "multiple_components"
+   ]
+  },
+  {
+   "name": "small_holes",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.05,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 85,
+   "reasons": [
+    "mask_small_holes"
+   ]
+  },
+  {
+   "name": "holes",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.2,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 70,
+   "reasons": [
+    "mask_holes"
+   ]
+  },
+  {
+   "name": "slightly_soft",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.1,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 90,
+   "reasons": [
+    "slightly_soft_edges"
+   ]
+  },
+  {
+   "name": "soft",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.4,
+    "subject_bright_ratio": 0.1,
+    "border_bright_ratio": 0.9
+   },
+   "score": 75,
+   "reasons": [
+    "soft_edges"
+   ]
+  },
+  {
+   "name": "white_on_white",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.95,
+    "border_bright_ratio": 0.97
+   },
+   "score": 75,
+   "reasons": [
+    "white_on_white_risk"
+   ]
+  },
+  {
+   "name": "low_contrast",
+   "stats": {
+    "coverage": 0.4,
+    "border_touch": 0.0,
+    "components": 1,
+    "hole_ratio": 0.0,
+    "soft_edge_ratio": 0.01,
+    "subject_bright_ratio": 0.6,
+    "border_bright_ratio": 0.6
+   },
+   "score": 90,
+   "reasons": [
+    "low_contrast_backdrop"
+   ]
+  },
+  {
+   "name": "everything_wrong",
+   "stats": {
+    "coverage": 0.03,
+    "border_touch": 0.5,
+    "components": 4,
+    "hole_ratio": 0.5,
+    "soft_edge_ratio": 0.9,
+    "subject_bright_ratio": 1.0,
+    "border_bright_ratio": 1.0
+   },
+   "score": 0,
+   "reasons": [
+    "subject_too_small",
+    "subject_cut_by_frame",
+    "multiple_components",
+    "mask_holes",
+    "soft_edges",
+    "white_on_white_risk"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@outlet/pact-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Consumer-driven contracts (Pact v3 JSON) for mobile -> API and external adapter ports. Workspace-independent: not listed in pnpm-workspace.yaml.",
+  "scripts": {
+    "test": "node run.mjs",
+    "test:consumer": "node run.mjs consumer",
+    "test:provider": "node run.mjs provider",
+    "test:adapters": "node run.mjs adapters"
+  },
+  "devDependencies": {
+    "@pact-foundation/pact": "^15.0.0"
+  },
+  "$comment": "@pact-foundation/pact is OPTIONAL. The in-repo harness (src/pact-dsl.ts) emits the same v3 JSON; see docs/engineering/pact.md for the swap. Runtime deps (vitest, yaml, swc, supertest, Nest) are borrowed from apps/api/node_modules and the root node_modules, so nothing needs installing to run offline."
+}

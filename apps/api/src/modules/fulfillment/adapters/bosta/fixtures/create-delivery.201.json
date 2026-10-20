@@ -1,0 +1,14 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE, NOT A LIVE CAPTURE. Shape is an assumption. VERIFY BEFORE LAUNCH (docs/specs/fulfillment.md, register row 1).",
+  "status": 201,
+  "body": {
+    "success": true,
+    "message": "Delivery created",
+    "data": {
+      "_id": "fixture-delivery-id",
+      "trackingNumber": "BST{{TRACKING_NUMBER}}",
+      "businessReference": "{{BUSINESS_REFERENCE}}",
+      "state": { "code": 10, "value": "Created" }
+    }
+  }
+}

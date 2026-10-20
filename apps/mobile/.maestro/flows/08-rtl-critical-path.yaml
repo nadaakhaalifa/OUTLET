@@ -1,0 +1,30 @@
+# Spec: A2.15 Arabic-first. Critical path in Arabic (run with env/ar.env): guest start, search, PDP, bag, Checkout gate, checkout.
+# Also asserts the app is laid out RTL by checking the Arabic tab titles render.
+appId: ${APP_ID}
+name: RTL Arabic critical path
+tags: [critical, rtl, locale-ar]
+---
+- runFlow: ../subflows/guest-start.yaml
+- assertVisible: ${TAB_HOME}
+- openLink: ${SCHEME}://search
+- tapOn: ${SEARCH_QUERY_LABEL}
+- inputText: فستان
+- tapOn: ${SEARCH_SUBMIT}
+- tapOn:
+    text: ${SEARCH_OPEN}
+    index: 0
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn: ${PDP_ADD}
+- assertVisible: ${PDP_ADDED}
+- runFlow: ../subflows/open-bag.yaml
+- takeScreenshot: rtl-bag-${LOCALE}-${DEVICE}
+# Account is created at the Checkout gate (RTL), then checkout steps.
+- tapOn:
+    id: "bag-checkout"
+- takeScreenshot: rtl-gate-${LOCALE}-${DEVICE}
+- runFlow: ../subflows/gate-sign-up.yaml
+# Checkout steps read right to left (ADR-0053): Delivery, then Payment via Continue.
+- runFlow: ../subflows/place-order.yaml
+- takeScreenshot: rtl-checkout-review-${LOCALE}-${DEVICE}

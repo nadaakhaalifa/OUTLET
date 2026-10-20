@@ -1,0 +1,45 @@
+# Spec: docs/specs/mobile-ux-round-2.md item 1, ADR-0053. Three step pages, back keeps choices, resume within the price lock,
+# one summary total on every step. Steps are addressed by testID so the flow runs in AR and EN.
+appId: ${APP_ID}
+name: Checkout steps, back and resume
+tags: [checkout]
+---
+- runFlow: ../subflows/guest-start.yaml
+- runFlow:
+    file: ../subflows/open-checkout-gate.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
+- runFlow: ../subflows/gate-sign-up.yaml
+- openLink: ${SCHEME}://checkout
+- assertVisible:
+    id: "checkout-steps"
+- assertVisible:
+    id: "checkout-continue-delivery"
+# Place order exists only on Review.
+- assertNotVisible:
+    id: "checkout-place-order"
+# Delivery summary: details list the fees from the first step.
+- tapOn:
+    id: "checkout-summary-toggle"
+- assertVisible:
+    id: "checkout-summary-details"
+- tapOn:
+    id: "checkout-continue-delivery"
+- assertVisible:
+    id: "checkout-continue-payment"
+- assertNotVisible:
+    id: "checkout-place-order"
+# Back (edge swipe equivalent) returns to Delivery and keeps the choices.
+- back
+- assertVisible:
+    id: "checkout-continue-delivery"
+- tapOn:
+    id: "checkout-continue-delivery"
+- tapOn:
+    id: "checkout-continue-payment"
+- assertVisible:
+    id: "checkout-place-order"
+# Resume: reopening within the price lock opens on the saved step; typed address text is never restored.
+- openLink: ${SCHEME}://checkout
+- assertVisible:
+    id: "checkout-place-order"

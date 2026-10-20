@@ -1,0 +1,26 @@
+{
+  "_comment": "Assumed Bosta-style state vocabulary: state.value (lower-cased) -> Z-OUTLET tracking kind. NOT confirmed. VERIFY BEFORE LAUNCH (register row 3).",
+  "version": "2026-10-assumed-1",
+  "map": {
+    "created": "label_created",
+    "pickup requested": "label_created",
+    "route assigned": "label_created",
+    "picked up": "picked_up",
+    "received at warehouse": "in_transit",
+    "in transit": "in_transit",
+    "arrived at hub": "in_transit",
+    "out for delivery": "out_for_delivery",
+    "delivered": "delivered",
+    "delivery failed": "delivery_failed",
+    "undelivered": "delivery_failed",
+    "customer refused": "customer_refused",
+    "returning to seller": "rto_initiated",
+    "rto initiated": "rto_initiated",
+    "returned to seller": "rto_delivered",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+    "terminated": "cancelled",
+    "lost": "lost",
+    "damaged": "lost"
+  }
+}

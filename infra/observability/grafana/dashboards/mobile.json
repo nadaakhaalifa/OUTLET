@@ -1,0 +1,266 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+  ],
+  "title": "Z-OUTLET / Mobile",
+  "uid": "outlet-mobile",
+  "tags": [
+    "outlet-nk",
+    "generated",
+    "skeleton"
+  ],
+  "schemaVersion": 39,
+  "timezone": "Africa/Cairo",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Mobile crash-free sessions: SLI over 28d",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - slo:sli_error:ratio_rate28d{slo=\"mobile-crash-free\"}",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.998
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "gauge",
+      "title": "Mobile crash-free sessions: error budget remaining (28d)",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - (slo:sli_error:ratio_rate28d{slo=\"mobile-crash-free\"} / 0.002)",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Mobile crash-free sessions: error ratio against alert thresholds",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "slo:sli_error:ratio_rate1h{slo=\"mobile-crash-free\"}",
+          "legendFormat": "1h error ratio"
+        },
+        {
+          "refId": "B",
+          "expr": "slo:sli_error:ratio_rate6h{slo=\"mobile-crash-free\"}",
+          "legendFormat": "6h error ratio"
+        },
+        {
+          "refId": "C",
+          "expr": "vector(0.02688)",
+          "legendFormat": "fast threshold (burn 13.44x)"
+        },
+        {
+          "refId": "D",
+          "expr": "vector(0.0112)",
+          "legendFormat": "slow threshold (burn 5.6x)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Crash-free sessions by app version",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - (sum by (app_version) (rate(outlet_mobile_sessions_total{crashed=\"true\"}[1h])) / sum by (app_version) (rate(outlet_mobile_sessions_total[1h])))",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Crash-free by platform",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - (sum by (platform) (rate(outlet_mobile_sessions_total{crashed=\"true\"}[1h])) / sum by (platform) (rate(outlet_mobile_sessions_total[1h])))",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Cold start p95",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(outlet_mobile_cold_start_seconds_bucket[1h])))",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "API errors seen by client",
+      "description": "SKELETON: panel layout and thresholds are placeholders until the metric is instrumented.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (error_code) (rate(outlet_mobile_api_errors_total[15m]))",
+          "legendFormat": ""
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

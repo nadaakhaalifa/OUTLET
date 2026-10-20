@@ -1,0 +1,18 @@
+# iPad adaptation (docs/specs/ipad-adaptation.md, ADR-0054). Run on the iPad Pro 13-inch simulator (--device C2256CDB-...).
+# T0 asserts that the app launches and the zoomed shell renders. T1..T6 add the filter panel, checkout summary and Saved two-pane
+# assertions here as their screens land (two-pane from effective 760).
+appId: ${APP_ID}
+name: iPad layout
+tags: [ipad]
+---
+- runFlow: ../subflows/guest-start.yaml
+- assertVisible:
+    id: "tab-home"
+- tapOn:
+    id: "tab-saved"
+- assertVisible:
+    id: "saved-subtitle"
+- tapOn:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-home"

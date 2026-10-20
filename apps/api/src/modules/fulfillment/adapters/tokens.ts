@@ -1,0 +1,12 @@
+export const FULFILLMENT_REPOSITORY = Symbol("fulfillment.FulfillmentRepository");
+export const FULFILLMENT_ORDERS = Symbol("fulfillment.SellerOrderPort");
+export const FULFILLMENT_COURIERS = Symbol("fulfillment.Couriers");
+export const FULFILLMENT_SECRETS = Symbol("fulfillment.CourierSecretsPort");
+export const FULFILLMENT_METRICS = Symbol("fulfillment.FulfillmentMetrics");
+export const CREATE_SHIPMENT = Symbol("fulfillment.CreateShipment");
+export const GET_SHIPMENT = Symbol("fulfillment.GetShipment");
+export const GET_LABEL = Symbol("fulfillment.GetLabel");
+export const INGEST_COURIER_WEBHOOK = Symbol("fulfillment.IngestCourierWebhook");
+export const AWB_WORKER = Symbol("fulfillment.AwbWorker");
+export const SHIPMENT_RESOLVER = Symbol("fulfillment.ShipmentResolver");
+export const DELIVERED_AT_READER = Symbol("fulfillment.DeliveredAtReader");

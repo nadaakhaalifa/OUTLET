@@ -1,0 +1,22 @@
+export const NOTIFICATION_TEMPLATES = Symbol("notifications.TemplateRepository");
+export const NOTIFICATION_REQUESTS = Symbol("notifications.RequestRepository");
+export const NOTIFICATION_LOG = Symbol("notifications.DeliveryLogRepository");
+export const NOTIFICATION_FREQUENCY = Symbol("notifications.FrequencyStore");
+export const NOTIFICATION_PREFERENCES_REPO = Symbol("notifications.PreferenceRepository");
+export const NOTIFICATION_SUPPRESSIONS = Symbol("notifications.SuppressionRepository");
+export const NOTIFICATION_INBOX_REPO = Symbol("notifications.InboxRepository");
+export const NOTIFICATION_PUSH_TOKENS = Symbol("notifications.PushTokenRepository");
+export const NOTIFICATION_CONSENT = Symbol("notifications.ConsentPort");
+export const NOTIFICATION_CONTACTS = Symbol("notifications.ContactPort");
+export const NOTIFICATION_PROVIDERS = Symbol("notifications.ProviderRegistry");
+export const NOTIFICATION_EVENTS = Symbol("notifications.EventPublisher");
+export const NOTIFICATION_ANALYTICS = Symbol("notifications.AnalyticsPort");
+export const NOTIFICATION_INBOX_PROCESSED = Symbol("notifications.InboxProcessedPort");
+
+export const SEND_NOTIFICATION = Symbol("notifications.SendNotification");
+export const PROCESS_DUE_NOTIFICATIONS = Symbol("notifications.ProcessDue");
+export const HANDLE_DOMAIN_EVENT = Symbol("notifications.HandleDomainEvent");
+export const NOTIFICATION_PREFERENCES = Symbol("notifications.NotificationPreferences");
+export const LIST_INBOX = Symbol("notifications.ListInbox");
+export const MARK_INBOX_READ = Symbol("notifications.MarkInboxRead");
+export const REGISTER_PUSH_TOKEN = Symbol("notifications.RegisterPushToken");

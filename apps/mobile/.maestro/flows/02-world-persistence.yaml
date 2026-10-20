@@ -1,0 +1,36 @@
+# Spec: Part C section 3 acceptance. World selection persists across app restarts (guest, device-only).
+appId: ${APP_ID}
+name: World switch persistence
+tags: [smoke, worlds, guest]
+---
+- runFlow: ../subflows/guest-start.yaml
+- tapOn:
+    id: "tab-discover"
+- tapOn:
+    id: "world-global"
+- assertVisible:
+    id: "world-global"
+    selected: true
+- stopApp
+- launchApp:
+    clearState: false
+# Region screen and entrance page appear on first launch only.
+- assertNotVisible:
+    id: "region-continue"
+- assertNotVisible:
+    id: "role-screen"
+- tapOn:
+    id: "tab-discover"
+- assertVisible:
+    id: "world-global"
+    selected: true
+- tapOn:
+    id: "world-local"
+- stopApp
+- launchApp:
+    clearState: false
+- tapOn:
+    id: "tab-discover"
+- assertVisible:
+    id: "world-local"
+    selected: true

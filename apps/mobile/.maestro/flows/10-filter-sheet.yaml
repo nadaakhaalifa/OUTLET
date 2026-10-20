@@ -1,0 +1,64 @@
+# Spec: docs/specs/mobile-ux-round-2.md item 6. Shop all: one filter icon, brand search, apply, chip remove, reset.
+# Uses test ids (language independent); runs in the AR and EN envs.
+appId: ${APP_ID}
+name: Shop all filter sheet
+tags: [critical, shopping, filters]
+env:
+  BRAND_QUERY: denim
+---
+- runFlow: ../subflows/guest-start.yaml
+- openLink: ${SCHEME}://shop-all
+- assertVisible:
+    id: shop-all-filter-button
+# No filter control outside the sheet: the old quick chips and category chips are gone.
+- assertNotVisible:
+    id: shop-all-chip-onsale
+- assertNotVisible:
+    id: shop-all-category-chips
+- tapOn:
+    id: shop-all-filter-button
+# Sort is the first section and is open.
+- assertVisible:
+    id: filter-section-sort
+- tapOn:
+    id: filter-section-brand
+- tapOn:
+    id: filter-brand-search
+- inputText: ${BRAND_QUERY}
+- tapOn:
+    text: "(?i).*${BRAND_QUERY}.*"
+    index: 0
+- tapOn:
+    id: filter-apply
+# The applied chip appears and removes the filter.
+- assertVisible:
+    id: applied-chip-store
+- tapOn:
+    id: applied-chip-store
+- assertNotVisible:
+    id: applied-chip-store
+# Apply again, then Reset from the screen.
+- tapOn:
+    id: shop-all-filter-button
+- tapOn:
+    id: filter-section-brand
+- tapOn:
+    text: "(?i).*${BRAND_QUERY}.*"
+    index: 0
+- tapOn:
+    id: filter-apply
+- assertVisible:
+    id: shop-all-reset
+- tapOn:
+    id: shop-all-reset
+- assertNotVisible:
+    id: applied-chip-store
+# Reset inside the sheet clears the draft.
+- tapOn:
+    id: shop-all-filter-button
+- tapOn:
+    id: filter-reset
+- tapOn:
+    id: filter-apply
+- assertNotVisible:
+    id: applied-chip-store

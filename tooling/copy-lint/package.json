@@ -1,0 +1,10 @@
+{
+  "name": "@outlet/copy-lint",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "lint": "node cli.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

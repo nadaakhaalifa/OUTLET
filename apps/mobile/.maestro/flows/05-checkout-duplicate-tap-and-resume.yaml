@@ -1,0 +1,46 @@
+# Spec: Part C section 7 acceptance. Duplicate taps create one OrderGroup;
+# a network drop after submit can be resumed from Orders without a second charge.
+# Requires the e2e fault-injection link (see needs): ${SCHEME}://__e2e/drop-next-checkout-response
+appId: ${APP_ID}
+name: Checkout duplicate tap and resume
+tags: [critical, checkout]
+---
+- runFlow: ../subflows/guest-start.yaml
+# Account is created only at the Checkout gate; the gate lands on checkout step 1.
+- runFlow:
+    file: ../subflows/open-checkout-gate.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
+- runFlow: ../subflows/gate-sign-up.yaml
+- runFlow: ../subflows/place-order.yaml
+# Duplicate tap protection.
+- tapOn:
+    id: "checkout-place-order"
+- tapOn:
+    id: "checkout-place-order"
+- assertVisible: ${CHECKOUT_DONE}
+- openLink: ${SCHEME}://orders
+- assertVisible: ${ORDERS_TITLE}
+- assertVisible:
+    id: "order-row-.*"
+    index: 0
+- assertNotVisible:
+    id: "order-row-.*"
+    index: 1
+# Network drop after submit, then resume via Orders.
+- runFlow:
+    file: ../subflows/add-product-to-bag.yaml
+    env:
+      PRODUCT: ${PRODUCT_ID}
+- openLink: ${SCHEME}://__e2e/drop-next-checkout-response
+- runFlow: ../subflows/place-order.yaml
+- tapOn:
+    id: "checkout-place-order"
+- assertVisible: ${CHECKOUT_NETWORK_RETRY}
+- openLink: ${SCHEME}://orders
+- assertVisible:
+    id: "order-row-.*"
+    index: 1
+- assertNotVisible:
+    id: "order-row-.*"
+    index: 2

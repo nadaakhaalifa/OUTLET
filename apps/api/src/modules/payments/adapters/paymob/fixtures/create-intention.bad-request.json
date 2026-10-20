@@ -1,0 +1,8 @@
+{
+  "_provenance": "HAND-AUTHORED shape, NOT recorded from Paymob (Paymob is not contracted). Every field name, status code and value is an assumption: VERIFY BEFORE LAUNCH, see docs/compliance/verify-register.md VR-PAY-01..VR-PAY-12.",
+  "status": 400,
+  "body": {
+    "code": "invalid_amount",
+    "detail": "amount below minimum"
+  }
+}

@@ -1,0 +1,20 @@
+# T0 acceptance capture: run once per device/orientation/locale and compare with the iPhone run.
+# Screenshots are named visual-NN-<screen>; the run directory carries device, orientation and locale.
+appId: ${APP_ID}
+name: iPad side by side
+tags: [visual, ipad]
+---
+- runFlow: ../subflows/guest-start.yaml
+- takeScreenshot: visual-01-home
+- tapOn:
+    id: "tab-discover"
+- takeScreenshot: visual-02-explore
+- tapOn:
+    id: "tab-saved"
+- takeScreenshot: visual-03-saved
+- tapOn:
+    id: "tab-bag"
+- takeScreenshot: visual-04-bag
+- tapOn:
+    id: "tab-profile"
+- takeScreenshot: visual-05-me

@@ -1,0 +1,10 @@
+{
+  "_provenance": "HAND-AUTHORED shape, NOT recorded from Paymob (Paymob is not contracted). Every field name, status code and value is an assumption: VERIFY BEFORE LAUNCH, see docs/compliance/verify-register.md VR-PAY-01..VR-PAY-12.",
+  "status": 202,
+  "body": {
+    "id": "rf_fixture_0002",
+    "success": true,
+    "pending": true,
+    "is_refunded": false
+  }
+}

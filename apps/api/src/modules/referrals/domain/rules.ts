@@ -1,0 +1,34 @@
+/** Single seam to the pure referrals domain (@outlet/domain namespace `referrals`). Aliases only; no behaviour. */
+import { referrals } from "@outlet/domain";
+
+export type AttributionDecision = referrals.AttributionDecision;
+export import DEFAULT_REFERRAL_CONFIG = referrals.DEFAULT_REFERRAL_CONFIG;
+export type IdentityEntry = referrals.IdentityEntry;
+export import InvalidReferralTransitionError = referrals.InvalidReferralTransitionError;
+export type OrderClosure = referrals.OrderClosure;
+export type PartyProfile = referrals.PartyProfile;
+export import REFERRAL_CODE_LENGTH = referrals.REFERRAL_CODE_LENGTH;
+export import REFERRAL_STATUSES = referrals.REFERRAL_STATUSES;
+export import REJECT_REASONS = referrals.REJECT_REASONS;
+export type ReferralConfig = referrals.ReferralConfig;
+export import ReferralConfigError = referrals.ReferralConfigError;
+export type ReferralStatus = referrals.ReferralStatus;
+export type ReferrerContext = referrals.ReferrerContext;
+export type RejectReason = referrals.RejectReason;
+export type SelfReferralInput = referrals.SelfReferralInput;
+export type SettlementDecision = referrals.SettlementDecision;
+export import UnionFind = referrals.UnionFind;
+export import clusterSizeOf = referrals.clusterSizeOf;
+export import decideSettlement = referrals.decideSettlement;
+export import detectSelfReferral = referrals.detectSelfReferral;
+export import evaluateAttribution = referrals.evaluateAttribution;
+export import isClusterSuspicious = referrals.isClusterSuspicious;
+export import linkUsersByIdentifiers = referrals.linkUsersByIdentifiers;
+export import normalizeReferralCode = referrals.normalizeReferralCode;
+export import refereeDiscountFor = referrals.refereeDiscountFor;
+export import referralCodeFromBytes = referrals.referralCodeFromBytes;
+export import referralDeepLink = referrals.referralDeepLink;
+export import sharesPaymentFingerprint = referrals.sharesPaymentFingerprint;
+export import suspiciousClusters = referrals.suspiciousClusters;
+export import transitionReferral = referrals.transitionReferral;
+export import validateReferralConfig = referrals.validateReferralConfig;

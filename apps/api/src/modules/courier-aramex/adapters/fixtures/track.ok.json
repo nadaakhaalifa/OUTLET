@@ -1,0 +1,16 @@
+{
+  "_comment": "RECORDED-STYLE FIXTURE. Assumed TrackShipments shape. VERIFY BEFORE LAUNCH.",
+  "status": 200,
+  "body": {
+    "HasErrors": false,
+    "TrackingResults": [
+      {
+        "Key": "{{AWB}}",
+        "Value": [
+          { "WaybillNumber": "{{AWB}}", "UpdateCode": "SH014", "UpdateDescription": "Shipment picked up", "UpdateDateTime": "2026-10-11T08:00:00Z", "UpdateLocation": "Cairo", "Comments": "" },
+          { "WaybillNumber": "{{AWB}}", "UpdateCode": "SH003", "UpdateDescription": "Out for delivery", "UpdateDateTime": "2026-10-12T07:30:00Z", "UpdateLocation": "Giza", "Comments": "" }
+        ]
+      }
+    ]
+  }
+}

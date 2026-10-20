@@ -1,0 +1,43 @@
+# DORA metrics (A2 rule 14). Produces the JSON the Admin engineering dashboard ingests
+# (schema outlet.dora.report/v1, docs/engineering/dora.md). Read-only on contents.
+name: dora
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Window in days
+        default: "90"
+
+permissions:
+  contents: read
+  deployments: read
+  issues: read
+
+jobs:
+  dora:
+    name: compute DORA report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # full history: lead time and rework need every commit
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - run: node --test tooling/dora/test/*.test.mjs
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node tooling/dora/dora.mjs --days "${{ inputs.days || '90' }}" --json dora-report.json --md dora-report.md
+          cat dora-report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dora-report
+          path: |
+            dora-report.json
+            dora-report.md

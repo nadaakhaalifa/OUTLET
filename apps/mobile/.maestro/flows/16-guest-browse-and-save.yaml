@@ -1,0 +1,90 @@
+# Spec: docs/specs/guest-browsing.md R0, section 12 global acceptance. A guest searches, opens a product, saves it,
+# adds to bag, uses Discover and the filter sheet, and never sees account-creation UI (sign-up testIDs absent).
+appId: ${APP_ID}
+name: Guest browse, save and bag
+tags: [critical, guest, shopping]
+env:
+  QUERY: linen dress
+---
+- runFlow: ../subflows/guest-start.yaml
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible:
+    id: "dob-input"
+# Search -> product.
+- openLink: ${SCHEME}://search
+- tapOn: ${SEARCH_QUERY_LABEL}
+- inputText: ${QUERY}
+- tapOn: ${SEARCH_SUBMIT}
+- tapOn:
+    text: ${SEARCH_OPEN}
+    index: 0
+- assertVisible: ${PDP_ADD}
+# Favourite: intent sheet, no account prompt.
+- tapOn:
+    id: "pdp-save"
+- tapOn: ${INTENT_NEED}
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible:
+    id: "dob-input"
+- assertNotVisible:
+    id: "dob-attest"
+# Add to bag as a guest.
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn: ${PDP_ADD}
+- assertVisible: ${PDP_ADDED}
+- assertNotVisible:
+    id: "dob-input"
+- runFlow: ../subflows/open-bag.yaml
+- assertNotVisible: ".*(empty|فارغة).*"
+- assertNotVisible:
+    id: "phone-input"
+# Saved tab: the favourite is there, no sign-up UI.
+- tapOn:
+    id: "tab-saved"
+- assertVisible:
+    id: "saved-subtitle"
+- assertNotVisible:
+    id: "dob-input"
+# Discover: inline search and filters sheet.
+- tapOn:
+    id: "tab-discover"
+- tapOn:
+    id: "discover-search"
+- assertVisible:
+    id: "inline-search"
+- tapOn:
+    id: "inline-search-cancel"
+- tapOn:
+    id: "discover-filter-button"
+- assertVisible:
+    id: "filter-section-sort"
+- tapOn:
+    id: "filter-apply"
+- assertNotVisible:
+    id: "phone-input"
+- assertNotVisible:
+    id: "dob-input"
+- assertNotVisible:
+    id: "dob-attest"
+# Home filter sheet too.
+- tapOn:
+    id: "tab-home"
+- tapOn:
+    id: "home-filter-button"
+- assertVisible:
+    id: "home-filter-sheet"
+- tapOn:
+    id: "filter-apply"
+# Me tab: no create-account UI (quiet sign-in for existing accounts is allowed, never the sign-up fields).
+- tapOn:
+    id: "tab-profile"
+- assertNotVisible:
+    id: "dob-input"
+- assertNotVisible:
+    id: "dob-attest"
+- assertNotVisible:
+    id: "phone-input"

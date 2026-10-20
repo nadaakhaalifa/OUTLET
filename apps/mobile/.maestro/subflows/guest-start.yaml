@@ -1,0 +1,18 @@
+# Fresh install -> region (Egypt preselected) -> entrance -> shopper -> Home as a guest (ADR-0055 F1).
+# No DOB, phone or consents. Uses test ids only.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "region-row-EG"
+- tapOn:
+    id: "region-continue"
+- tapOn:
+    id: "region-skip"
+- assertVisible:
+    id: "role-screen"
+- tapOn:
+    id: "role-shopper"
+- assertVisible:
+    id: "tab-home"

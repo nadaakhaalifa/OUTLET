@@ -1,0 +1,13 @@
+# Guest adds a product, opens the Bag and taps Checkout: the only place sign-up appears (ADR-0055 R0).
+# Inputs: PRODUCT (product id), SIZE_LABEL. Ends with the gate page visible.
+appId: ${APP_ID}
+---
+- runFlow:
+    file: add-product-to-bag.yaml
+    env:
+      PRODUCT: ${PRODUCT}
+- runFlow: open-bag.yaml
+- tapOn:
+    id: "bag-checkout"
+- assertVisible:
+    id: "checkout-gate"

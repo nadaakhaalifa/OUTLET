@@ -1,0 +1,37 @@
+{
+  "_comment": "Allow-listed models. sha256 is null until verified on the build host (scripts/fetch_models.py --print-hashes). No hash here was invented. A null hash fails the Docker build unless ALLOW_UNPINNED_MODELS=1.",
+  "models": {
+    "u2netp": {
+      "file": "u2netp.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx",
+      "sha256": null,
+      "code_licence": "Apache-2.0 (xuebinqin/U-2-Net)",
+      "weights_licence": "Apache-2.0 (same repository)",
+      "role": "default candidate: smallest, fastest"
+    },
+    "u2net": {
+      "file": "u2net.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx",
+      "sha256": null,
+      "code_licence": "Apache-2.0 (xuebinqin/U-2-Net)",
+      "weights_licence": "Apache-2.0 (same repository)",
+      "role": "general quality baseline"
+    },
+    "isnet-general-use": {
+      "file": "isnet-general-use.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx",
+      "sha256": null,
+      "code_licence": "Apache-2.0 (xuebinqin/DIS)",
+      "weights_licence": "NOT EXPLICIT: counsel review required (VR-P3-BG-02)",
+      "role": "sharper edges than u2net; weights licence open"
+    },
+    "birefnet-general-lite": {
+      "file": "BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+      "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
+      "sha256": null,
+      "code_licence": "MIT (ZhengPeng7/BiRefNet)",
+      "weights_licence": "MIT (same repository); training data DIS5K/DUTS terms open (VR-P3-BG-03)",
+      "role": "best expected edge quality, slowest on CPU; file name and URL to VERIFY against the pinned rembg version"
+    }
+  }
+}

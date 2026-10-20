@@ -1,0 +1,27 @@
+{
+  "unserved": [
+    "DELETE /v1/seller/channels/{}",
+    "GET /v1/admin/feature-flags",
+    "GET /v1/products/{}/price-history",
+    "GET /v1/seller/balance",
+    "GET /v1/seller/channels",
+    "GET /v1/seller/kyc",
+    "GET /v1/seller/price-claims",
+    "GET /v1/seller/store",
+    "PATCH /v1/me",
+    "PATCH /v1/seller/kyc",
+    "PATCH /v1/seller/store",
+    "POST /v1/admin/privacy/requests/{}/decision",
+    "POST /v1/me/age-attestation",
+    "POST /v1/onboarding/path",
+    "POST /v1/products/{}/alerts",
+    "POST /v1/products/{}/price-reports",
+    "POST /v1/seller/channels",
+    "POST /v1/seller/kyc/documents",
+    "POST /v1/seller/kyc/submit",
+    "POST /v1/seller/price-claims/{}/appeal",
+    "POST /v1/seller/price-evidence",
+    "PUT /v1/admin/kill-switches/{}",
+    "PUT /v1/seller/skus/{}/price"
+  ]
+}

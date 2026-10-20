@@ -1,0 +1,24 @@
+# Checkov configuration for infra/terraform. Triaged against a real run (checkov 3.x). Rule: delete a skip when the gap is closed, add one only with a reason and an owner.
+# Every skip below is a deliberate deferral recorded in docs/engineering/iac.md (no service exists
+# yet, or the choice depends on ADR-0002 provider and region).
+framework:
+  - terraform
+skip-check:
+  - CKV_AWS_18   # S3 access logging: needs a dedicated log bucket, added with the observability module
+  - CKV2_AWS_62  # S3 event notifications: no consumer exists yet
+  - CKV_AWS_144  # S3 cross-region replication: residency decision (ADR-0002) comes first
+  - CKV_AWS_86   # CloudFront access logging: needs a log bucket (same dependency as CKV_AWS_18)
+  - CKV_AWS_310  # CloudFront origin failover: single origin until the API load balancer exists
+  - CKV_AWS_374  # CloudFront geo restriction: legal decision, not an engineering default
+  - CKV2_AWS_32  # CloudFront response headers policy: added with the web apps
+  - CKV2_AWS_47  # WAF Log4j rule: covered by AWSManagedRulesKnownBadInputsRuleSet, checkov may not detect the pairing
+  - CKV_AWS_118  # RDS enhanced monitoring: needs a monitoring role, Performance Insights is on instead
+  - CKV_AWS_157  # RDS multi-AZ: true in prod, false in dev and staging by design
+  - CKV2_AWS_11  # VPC flow logs: added with the observability module
+  - CKV_AWS_338  # Log retention >= 1 year: dev 14d, staging 30d, prod 90d. Retention is PDPL-driven (ADR-0002)
+  - CKV_AWS_31   # ElastiCache AUTH token: ACL user group is a listed gap
+  - CKV2_AWS_57  # Secrets rotation: secrets are containers only, rotation is added per secret with its provider
+  - CKV_AWS_293  # RDS deletion protection: true in staging and prod, false in dev so the dev stack can be torn down
+  - CKV2_AWS_50  # Redis failover: enabled when num_cache_clusters > 1 (staging, prod), single node in dev
+  - CKV2_AWS_5   # Service security group is unattached until the ECS service exists (compute module has the cluster only)
+  - CKV2_AWS_31  # WAF logging: needs a us-east-1 log group plus its own KMS key; added with the observability module (same dependency as CKV_AWS_86)

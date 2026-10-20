@@ -1,0 +1,64 @@
+# Spec: docs/specs/mobile-ux-round-2.md chrome toggle, ADR-0055. Sun/moon pill (light/dark, never "system") and the
+# language toggle, on the entrance page and on the account (Checkout gate) page. Test ids: role-theme-light/-dark and role-language on the entrance page; chrome-theme-light/-dark and
+# chrome-language on the account (Checkout gate) page. The language label flips EN<->AR, so assertions use the *_OTHER env labels.
+appId: ${APP_ID}
+name: Theme and language toggle
+tags: [guest, chrome, rtl]
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "region-continue"
+- tapOn:
+    id: "region-skip"
+- assertVisible:
+    id: "role-screen"
+# Theme on the entrance page.
+- tapOn:
+    id: "role-theme-dark"
+- assertVisible:
+    id: "role-theme-dark"
+    selected: true
+- takeScreenshot: chrome-entrance-dark-${LOCALE}
+- tapOn:
+    id: "role-theme-light"
+- assertVisible:
+    id: "role-theme-light"
+    selected: true
+- takeScreenshot: chrome-entrance-light-${LOCALE}
+# Language on the entrance page: continue and check the tab bar is in the other language.
+- tapOn:
+    id: "role-language"
+- tapOn:
+    id: "role-shopper"
+- assertVisible: ${OTHER_TAB_HOME}
+# Language back on the account page (Checkout gate), reached from the bag.
+# Language-independent add to bag (the UI is in the other language here, so ids only).
+- openLink: ${SCHEME}://product/${PRODUCT_ID}
+- tapOn:
+    text: ".*${SIZE_LABEL}.*"
+    index: 0
+- tapOn:
+    id: "pdp-add-to-bag"
+- tapOn:
+    id: "tab-bag"
+- tapOn:
+    id: "bag-checkout"
+- assertVisible:
+    id: "checkout-gate"
+- assertVisible:
+    id: "chrome-language"
+- assertVisible: ${GATE_BACK_OTHER}
+- tapOn:
+    id: "chrome-theme-dark"
+- assertVisible:
+    id: "chrome-theme-dark"
+    selected: true
+- tapOn:
+    id: "chrome-language"
+- assertVisible: ${GATE_BACK}
+- tapOn:
+    id: "chrome-theme-light"
+- assertVisible:
+    id: "chrome-theme-light"
+    selected: true

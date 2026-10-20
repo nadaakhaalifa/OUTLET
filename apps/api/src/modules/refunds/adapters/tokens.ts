@@ -1,0 +1,14 @@
+export const REFUND_STORE = Symbol("refunds.RefundStore");
+export const REFUND_FACTS = Symbol("refunds.RefundFactsPort");
+export const REFUND_LEDGER = Symbol("refunds.RefundLedgerPort");
+export const REFUND_CREDIT_RESTORE = Symbol("refunds.CreditRestorePort");
+export const REFUND_EXECUTOR = Symbol("refunds.RefundExecutionPort");
+export const REFUND_PAYOUT_DETAILS = Symbol("refunds.PayoutDetailsPort");
+export const REFUND_JITTER = Symbol("refunds.JitterPort");
+export const INTAKE_REFUND_INTENT = Symbol("refunds.IntakeRefundIntent");
+export const PROCESS_REFUND = Symbol("refunds.ProcessRefund");
+export const SWEEP_REFUNDS = Symbol("refunds.SweepRefunds");
+export const CONFIRM_PROVIDER_OUTCOME = Symbol("refunds.ConfirmProviderOutcome");
+export const RESOLVE_MANUAL_REVIEW = Symbol("refunds.ResolveManualReview");
+export const GET_MY_REFUND = Symbol("refunds.GetMyRefund");
+export const LIST_MY_REFUNDS = Symbol("refunds.ListMyRefunds");

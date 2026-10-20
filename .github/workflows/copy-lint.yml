@@ -1,0 +1,31 @@
+# Copy-lint (A2 rule 13, CPL 181/2018): fails on hard-coded social proof, fake urgency, discount claims,
+# confirm-shaming and pre-ticked consent in UI copy. See docs/engineering/copy-lint.md.
+name: copy-lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copy-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  copy-lint:
+    name: UI copy lint (AR/EN)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test tooling/copy-lint/test/*.test.mjs
+      - run: node tooling/copy-lint/cli.mjs

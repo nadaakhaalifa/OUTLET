@@ -1,0 +1,14 @@
+export const STORE_REPOSITORY = Symbol("stores.StoreRepository");
+export const FAVORITE_REPOSITORY = Symbol("stores.FavoriteRepository");
+export const STORE_ACTIVITY_FEED = Symbol("stores.StoreActivityFeed");
+export const LIST_STORES = Symbol("stores.ListStores");
+export const GET_STORE = Symbol("stores.GetStore");
+export const LIST_FAVORITES = Symbol("stores.ListFavorites");
+export const REPLACE_FAVORITES = Symbol("stores.ReplaceFavoriteStores");
+export const GET_NEW_COUNTS = Symbol("stores.GetNewCounts");
+export const MARK_FAVORITE_SEEN = Symbol("stores.MarkFavoriteSeen");
+export const APPLY_SELLER_KYC_EVENT = Symbol("stores.ApplySellerKycEvent");
+export const CHANGE_STORE_STATUS = Symbol("stores.ChangeStoreStatus");
+export const LIST_PUBLIC_STORES = Symbol("stores.ListPublicStores");
+export const GET_PUBLIC_STORE = Symbol("stores.GetPublicStore");
+export const LIST_PUBLIC_STORE_SITEMAP = Symbol("stores.ListPublicStoreSitemap");

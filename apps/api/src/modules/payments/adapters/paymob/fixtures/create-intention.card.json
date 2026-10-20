@@ -1,0 +1,11 @@
+{
+  "_provenance": "HAND-AUTHORED shape, NOT recorded from Paymob (Paymob is not contracted). Every field name, status code and value is an assumption: VERIFY BEFORE LAUNCH, see docs/compliance/verify-register.md VR-PAY-01..VR-PAY-12.",
+  "status": 201,
+  "body": {
+    "id": "intn_fixture_0001",
+    "intention_order_id": 900001,
+    "client_secret": "cs_fixture_not_a_real_secret_0001",
+    "special_reference": "00000000-0000-4000-8000-000000000001",
+    "status": "intended"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@outlet/ui-native",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@outlet/ui-tokens": "workspace:*",
+    "@outlet/i18n": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "expo-blur": "*",
+    "expo-haptics": "*",
+    "expo-image": "*",
+    "expo-linear-gradient": "*",
+    "react-native-reanimated": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-safe-area-context": "*",
+    "@expo/vector-icons": "*"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.0"
+  }
+}

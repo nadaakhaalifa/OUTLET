@@ -1,0 +1,15 @@
+export const LEDGER_STORE = Symbol("ledger.LedgerStore");
+export const LEDGER_READ_MODEL = Symbol("ledger.LedgerReadModel");
+export const LEDGER_SNAPSHOTS = Symbol("ledger.IntegritySnapshots");
+export const LEDGER_PROJECTION = Symbol("ledger.ProjectionSource");
+export const LEDGER_FLAGS = Symbol("ledger.PostingFlags");
+export const POSTING_SERVICE = Symbol("ledger.PostingService");
+export const INTEGRITY_JOB = Symbol("ledger.IntegrityJob");
+export const LIST_BALANCES = Symbol("ledger.ListBalances");
+export const GET_ENTRY = Symbol("ledger.GetEntry");
+export const INTEGRITY_RECORDER = Symbol("ledger.RecordIntegrityRun");
+export const INTEGRITY_RUN_STORE = Symbol("ledger.IntegrityRunStore");
+export const INTEGRITY_RUN_READER = Symbol("ledger.IntegrityRunReader");
+export const INTEGRITY_ROUTES_ENABLED = Symbol("ledger.IntegrityRoutesEnabled");
+export const INTEGRITY_MODE = Symbol("ledger.IntegrityMode");
+export const INTEGRITY_GAUGES = Symbol("ledger.IntegrityGauges");

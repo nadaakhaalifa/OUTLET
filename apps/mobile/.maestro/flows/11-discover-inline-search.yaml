@@ -1,0 +1,31 @@
+# Spec: docs/specs/mobile-ux-round-2.md items 5, 7, 8. Discover search expands in place; categories are a 3-up grid.
+appId: ${APP_ID}
+name: Discover inline search
+tags: [smoke, discover, search]
+---
+- runFlow: ../subflows/guest-start.yaml
+- tapOn:
+    id: "tab-discover"
+- assertVisible:
+    id: "discover-category-grid"
+- tapOn:
+    id: "discover-search"
+# Same screen: the tab bar is still there and no search page was pushed.
+- assertVisible:
+    id: "inline-search"
+- assertVisible:
+    id: "tab-discover"
+- inputText: "dress"
+- assertVisible:
+    id: "inline-suggestion-0"
+- pressKey: Enter
+- assertVisible:
+    id: "inline-search-results"
+- assertVisible:
+    id: "inline-search-filter"
+- tapOn:
+    id: "inline-search-cancel"
+- assertVisible:
+    id: "discover-search"
+- assertVisible:
+    id: "discover-category-grid"
