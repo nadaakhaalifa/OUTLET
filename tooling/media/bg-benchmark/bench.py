@@ -56,7 +56,7 @@ def cutout(
         headers={"content-type": "application/octet-stream"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310  (operator-supplied internal URL)
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- operator-supplied internal benchmark URL, never end-user input
             return r.status, json.loads(r.read().decode("utf-8")), ""
     except urllib.error.HTTPError as e:
         return e.code, None, e.read(500).decode("utf-8", "replace")
