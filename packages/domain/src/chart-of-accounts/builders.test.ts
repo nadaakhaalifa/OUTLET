@@ -53,64 +53,81 @@ describe("orderRecognised properties", () => {
 });
 
 describe("refundIssued properties", () => {
-  it("any split of a full refund reproduces the original commission and VAT exactly", () => {
+  const NUM_RUNS = Number(process.env["FC_RUNS"] ?? 2_000);
+  const SEED = process.env["FC_SEED"] === undefined ? undefined : Number(process.env["FC_SEED"]);
+  const accounts = [
+    chart.sellerPayable("s"),
+    chart.platformCommission,
+    chart.platformVatOutput,
+    chart.pspClearing("p"),
+  ];
+  const refund = (goods: bigint, before: bigint, commissionBps: bigint, vatBps: bigint) =>
+    refundIssued(
+      {
+        storeId: "s",
+        commissionBps,
+        vatBps,
+        goodsRefunded: money(goods),
+        goodsRefundedBefore: money(before),
+        destinations: [{ kind: "psp", psp: "p", amount: money(goods) }],
+      },
+      meta(),
+    );
+
+  it("any partition of a full refund reproduces the order and equals one whole refund", () => {
     fc.assert(
       fc.property(
-        fc.bigInt({ min: 1_000n, max: 10_000_000n }),
-        fc.bigInt({ min: 1n, max: 3_000n }),
+        fc.bigInt({ min: 1n, max: 10_000_000n }),
+        fc.bigInt({ min: 0n, max: 10_000n }),
+        fc.constantFrom(0n, 1_400n, 10_000n, 100_000n),
         fc.array(fc.integer({ min: 1, max: 100 }), { minLength: 1, maxLength: 7 }),
-        (goods, commissionBps, weights) => {
-          const vatBps = 1_400n;
-          const order = orderRecognised(
-            {
-              sellerOrders: [{ storeId: "s", merchandise: money(goods), commissionBps }],
-              shippingGross: money(0n),
-              vatBps,
-              tenders: [{ kind: "psp", psp: "p", amount: money(goods) }],
-            },
-            meta(),
-          );
+        (goods, commissionBps, vatBps, weights) => {
+          let order;
+          try {
+            order = orderRecognised(
+              {
+                sellerOrders: [{ storeId: "s", merchandise: money(goods), commissionBps }],
+                shippingGross: money(0n),
+                vatBps,
+                tenders: [{ kind: "psp", psp: "p", amount: money(goods) }],
+              },
+              meta(),
+            );
+          } catch (e) {
+            if (e instanceof InvalidChartInputError) return fc.pre(false);
+            throw e;
+          }
           const wsum = weights.reduce((a, w) => a + w, 0);
           const parts: bigint[] = [];
           let assigned = 0n;
           weights.forEach((w, i) => {
-            const part =
-              i === weights.length - 1 ? goods - assigned : (goods * BigInt(w)) / BigInt(wsum);
-            parts.push(part);
-            assigned += part;
+            parts.push(i === weights.length - 1 ? goods - assigned : (goods * BigInt(w)) / BigInt(wsum));
+            assigned += parts[i] ?? 0n;
           });
           let before = 0n;
-          const entries = [order];
+          const slices = [];
           for (const part of parts) {
             if (part === 0n) continue;
-            entries.push(
-              refundIssued(
-                {
-                  storeId: "s",
-                  commissionBps,
-                  vatBps,
-                  goodsRefunded: money(part),
-                  goodsRefundedBefore: money(before),
-                  destinations: [{ kind: "psp", psp: "p", amount: money(part) }],
-                },
-                meta(),
-              ),
-            );
+            slices.push(refund(part, before, commissionBps, vatBps));
             before += part;
           }
+          for (const e of slices) {
+            for (const a of [chart.platformCommission, chart.platformVatOutput]) {
+              expect(e.postings.filter((p) => p.account === a).every((p) => p.amount.amount >= 0n)).toBe(true);
+            }
+          }
+          const entries = [order, ...slices];
           expect(trialBalance(entries).get("EGP") ?? 0n).toBe(0n);
-          for (const acct of [
-            chart.sellerPayable("s"),
-            chart.platformCommission,
-            chart.platformVatOutput,
-            chart.pspClearing("p"),
-          ]) {
-            expect(derivedBalance(acct, entries).amount).toBe(0n);
+          for (const acct of accounts) expect(derivedBalance(acct, entries).amount).toBe(0n);
+          const whole = [refund(goods, 0n, commissionBps, vatBps)];
+          for (const acct of accounts) {
+            expect(derivedBalance(acct, slices).amount).toBe(derivedBalance(acct, whole).amount);
           }
         },
       ),
+      { numRuns: NUM_RUNS, ...(SEED === undefined ? {} : { seed: SEED }) },
     );
-  });
+  }, 600_000);
 });
 
 describe("input validation", () => {

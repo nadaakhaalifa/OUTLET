@@ -135,9 +135,10 @@ function sellerOrderComponents(
   commissionVat: Money,
   platformDiscount: Money,
   sellerDiscount: Money,
+  allowRoundingDeficit = false,
 ): Component[] {
   const sellerNet = money(merchandise.amount - commission.amount - commissionVat.amount);
-  if (sellerNet.amount < 0n) {
+  if (!allowRoundingDeficit && sellerNet.amount < 0n) {
     throw new InvalidChartInputError("commission and VAT exceed the merchandise value");
   }
   return [
@@ -237,6 +238,10 @@ export function refundIssued(input: RefundInput, meta: EntryMeta): JournalEntry 
   const vatBefore = commissionVatOf(commBefore, input.vatBps);
   const commissionVat = money(vatAfter.amount - vatBefore.amount);
 
+  if (commission.amount < 0n || commissionVat.amount < 0n) {
+    throw new InvalidChartInputError("refund slice is not monotone");
+  }
+
   const components = sellerOrderComponents(
     { storeId: input.storeId, merchandise: input.goodsRefunded, commissionBps: input.commissionBps },
     input.goodsRefunded,
@@ -244,6 +249,12 @@ export function refundIssued(input: RefundInput, meta: EntryMeta): JournalEntry 
     commissionVat,
     pd,
     sd,
+    // Refund slices are differences of cumulative half-even roundings. True invariants only: every
+    // slice commission and VAT is non-negative (checked above), and the slices telescope exactly to the
+    // order-level commission, VAT and seller net. A single slice's seller net can be negative by a few
+    // piastres, and the cumulative seller net is NOT guaranteed non-negative at every step. Per-line and
+    // per-tender caps are enforced upstream in planRefund, so this builder opts out of the net check.
+    true,
   );
   if (shipping.amount > 0n) components.push(...shippingComponents(shipping, input.vatBps));
   for (const d of input.destinations) {

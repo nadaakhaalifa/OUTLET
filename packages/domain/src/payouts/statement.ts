@@ -107,6 +107,7 @@ function lineOf(f: StatementFact): Unbalanced {
         throw new InvalidPayoutInputError("refund amounts out of range");
       }
       // Same differencing as the ledger's refundIssued: any sequence of partial refunds adds up.
+      // A rounding-slice refund line can show a positive net by design (consistent with the ledger).
       const cumulative = f.goodsRefundedBefore + f.goodsRefunded;
       const cAfter = commissionOf(money(cumulative), f.commissionBps).amount;
       const cBefore = commissionOf(money(f.goodsRefundedBefore), f.commissionBps).amount;

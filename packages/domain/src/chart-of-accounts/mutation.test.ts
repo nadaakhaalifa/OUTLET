@@ -926,26 +926,103 @@ describe("refundIssued", () => {
     expect(commission).toBe(commissionOf(m(1_000n), 1_000n).amount);
   });
 
+  const NUM_RUNS = Number(process.env["FC_RUNS"] ?? 2_000);
+  const SEED = process.env["FC_SEED"] === undefined ? undefined : Number(process.env["FC_SEED"]);
+  const four = (es: JournalEntry[]): bigint[] =>
+    ["seller_payable:A", "platform_commission", "platform_vat_output", "psp_clearing:kashier"].map(
+      (a) => derivedBalance(a, es).amount,
+    );
+  const orderFor = (goods: bigint, bps: bigint, vatBps: bigint): JournalEntry | undefined => {
+    try {
+      return orderRecognised(
+        {
+          sellerOrders: [{ storeId: "A", merchandise: m(goods), commissionBps: bps }],
+          shippingGross: m(0n),
+          vatBps,
+          tenders: [psp(goods)],
+        },
+        META,
+      );
+    } catch (e) {
+      if (e instanceof InvalidChartInputError) return undefined;
+      throw e;
+    }
+  };
+  const refundSlices = (parts: bigint[], bps: bigint, vatBps: bigint): JournalEntry[] => {
+    let before = 0n;
+    return parts.map((g) => {
+      const e = refundIssued(
+        { ...base, commissionBps: bps, vatBps, goodsRefunded: m(g), goodsRefundedBefore: m(before), destinations: [psp(g)] },
+        META,
+      );
+      before += g;
+      return e;
+    });
+  };
+
   it("holds for arbitrary splits", () => {
     fc.assert(
-      fc.property(fc.array(fc.bigInt({ min: 1n, max: 90_000n }), { minLength: 1, maxLength: 5 }), fc.bigInt({ min: 0n, max: 3_000n }), (goods, bps) => {
-        let before = 0n;
-        let commission = 0n;
-        let vat = 0n;
-        for (const g of goods) {
-          const e = refundIssued(
-            { ...base, commissionBps: bps, goodsRefunded: m(g), goodsRefundedBefore: m(before), destinations: [psp(g)] },
-            META,
-          );
-          commission += e.postings.find((p) => p.account === "platform_commission")?.amount.amount ?? 0n;
-          vat += e.postings.find((p) => p.account === "platform_vat_output")?.amount.amount ?? 0n;
-          before += g;
-        }
-        const total = commissionOf(m(before), bps);
-        expect(commission).toBe(total.amount);
-        expect(vat).toBe(commissionVatOf(total, 1_400n).amount);
-      }),
+      fc.property(
+        fc.array(fc.bigInt({ min: 1n, max: 90_000n }), { minLength: 1, maxLength: 6 }),
+        fc.bigInt({ min: 0n, max: 10_000n }),
+        fc.constantFrom(0n, 1_400n, 10_000n, 100_000n),
+        (parts, bps, vatBps) => {
+          const total = parts.reduce((x, y) => x + y, 0n);
+          const order = orderFor(total, bps, vatBps);
+          fc.pre(order !== undefined);
+          const slices = refundSlices(parts, bps, vatBps);
+          for (const e of slices) {
+            for (const a of ["platform_commission", "platform_vat_output"]) {
+              expect(e.postings.filter((p) => p.account === a).every((p) => p.amount.amount >= 0n)).toBe(true);
+            }
+          }
+          expect(four([order as JournalEntry, ...slices])).toEqual([0n, 0n, 0n, 0n]);
+          const whole = refundSlices([total], bps, vatBps);
+          expect(four(slices)).toEqual(four(whole));
+        },
+      ),
+      { numRuns: NUM_RUNS, ...(SEED === undefined ? {} : { seed: SEED }) },
     );
+  }, 600_000);
+
+  it("refunds the reviewer counterexample (500 bps commission, 100000 bps VAT, 11 goods, slices [10, 1])", () => {
+    const order = orderFor(11n, 500n, 100_000n);
+    expect(order).toBeDefined();
+    const slices = refundSlices([10n, 1n], 500n, 100_000n);
+    const last = slices[1] as JournalEntry;
+    expect(last.postings.find((p) => p.account === "seller_payable:A")?.amount.amount).toBe(-10n);
+    expect(four([order as JournalEntry, ...slices])).toEqual([0n, 0n, 0n, 0n]);
+  });
+
+  it("is pure: the same input twice gives equal entries", () => {
+    const input = { ...base, commissionBps: 2_976n, goodsRefunded: m(1n), goodsRefundedBefore: m(103_240n), destinations: [psp(1n)] };
+    expect(refundIssued(input, META)).toEqual(refundIssued(input, META));
+  });
+
+  it("refunds a final 1-piastre slice whose rounded commission and VAT exceed it (seed 1 counterexample)", () => {
+    // Found by fast-check seed 1, path 4272:41:23:21:19: goods [89998, 13242, 1] at 2976 bps commission.
+    // The cumulative half-even difference gives the last piastre 1 commission + 1 VAT, so the slice's
+    // seller net is -1. Rejecting it would make the order impossible to refund in full; the sum telescopes.
+    const bps = 2_976n;
+    let before = 0n;
+    let commission = 0n;
+    let vat = 0n;
+    let payable = 0n;
+    for (const g of [89_998n, 13_242n, 1n]) {
+      const e = refundIssued(
+        { ...base, commissionBps: bps, goodsRefunded: m(g), goodsRefundedBefore: m(before), destinations: [psp(g)] },
+        META,
+      );
+      const amt = (a: string): bigint => e.postings.filter((p) => p.account === a).reduce((x, p) => x + p.amount.amount, 0n);
+      commission += amt("platform_commission");
+      vat += amt("platform_vat_output");
+      payable += amt("seller_payable:A");
+      before += g;
+    }
+    const total = commissionOf(m(before), bps);
+    expect(commission).toBe(total.amount);
+    expect(vat).toBe(commissionVatOf(total, 1_400n).amount);
+    expect(payable).toBe(before - total.amount - commissionVatOf(total, 1_400n).amount);
   });
 
   it("rejects invalid input with the documented messages", () => {
