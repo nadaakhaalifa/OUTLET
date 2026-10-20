@@ -24,7 +24,7 @@ const lookup = (cat: unknown, key: string): unknown => key.split(".").reduce<unk
 const FAMILIES: readonly (readonly [string, string])[] = [
   ["tabsBagCount", "n"], ["home.bagLabelCount", "count"], ["orders.sellersCount", "count"], ["bag.itemsCaption", "count"],
   ["shopAll.productCount", "n"], ["shopFilter.count", "n"], ["shopFilter.categoryLimit", "max"], ["storesDir.count", "n"], ["storesDir.shopSelected", "n"],
-  ["shopFilter.applied", "n"], ["storesDir.filter.applied", "n"], ["storesDir.filter.show", "n"], ["storesDir.filter.govA11y", "n"],
+  ["shopFilter.applied", "n"], ["brandMode.dashboard.moreWaiting", "n"], ["storesDir.filter.applied", "n"], ["storesDir.filter.show", "n"], ["storesDir.filter.govA11y", "n"],
 ];
 
 describe("plural keys exist in both languages for every form", () => {

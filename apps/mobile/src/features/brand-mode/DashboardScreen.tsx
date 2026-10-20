@@ -8,6 +8,7 @@ import { Avatar, Banner, Button, Card, Icon, PressScale, Reveal, Screen, Segment
 import { OverviewSection } from "./OverviewSection";
 import { SUMMARY_PERIODS } from "./summaryModel";
 import { formatAmount, localizeDigits } from "../money-display";
+import { pluralKey } from "../../i18n/plural";
 import { FailureView, ProgressRule, StaleBanner, useBrand, useLoad, useMoney } from "./kit";
 import { countdownLabel, countdownTone, kpiTiles, sectionOrder, trendBars, type KpiTile, type SectionKey } from "./dashboardModel";
 import { buildDashboard, orderActions, queueOf, serverNow, slaCountdown, type BrandOrder, type DashboardData, type DashboardView } from "./model";
@@ -45,6 +46,7 @@ export function DashboardScreen() {
   const name = locale === "ar" ? account.name.ar : account.name.en;
   const view: DashboardView | null = data === null ? null : buildDashboard(data, clock, now);
   const num = (n: number) => localizeDigits(String(n), locale);
+  const moreWaiting = (n: number): string => t(pluralKey("brandMode.dashboard.moreWaiting", n), { n: num(n) });
   const pct = (bp: number | null) => (bp === null ? null : `${localizeDigits((bp / 100).toFixed(1), locale)}${locale === "ar" ? "٪" : "%"}`);
   const toOrders = () => router.navigate("/brand-mode/orders");
 
@@ -126,8 +128,8 @@ export function DashboardScreen() {
                         />
                       ))}
                       {view.awaiting.length > 1 ? (
-                        <PressScale onPress={toOrders} accessibilityRole="button" accessibilityLabel={t("brandMode.dashboard.moreWaiting", { count: num(view.awaiting.length - 1) })} innerStyle={{ minHeight: spacing.xxxl, justifyContent: "center" }} testID="dashboard-more-waiting">
-                          <Card variant="outlined"><Text variant="callout" weight="500">{t("brandMode.dashboard.moreWaiting", { count: num(view.awaiting.length - 1) })}</Text></Card>
+                        <PressScale onPress={toOrders} accessibilityRole="button" accessibilityLabel={moreWaiting(view.awaiting.length - 1)} innerStyle={{ minHeight: spacing.xxxl, justifyContent: "center" }} testID="dashboard-more-waiting">
+                          <Card variant="outlined"><Text variant="callout" weight="500">{moreWaiting(view.awaiting.length - 1)}</Text></Card>
                         </PressScale>
                       ) : null}
                     </Section>

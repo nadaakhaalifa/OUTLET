@@ -13,7 +13,7 @@ const D = 24 * H;
 
 export const DEMO_ACCOUNT: BrandAccount = {
   storeId: "00000000-0000-4000-8000-00000000d3a0",
-  name: { ar: "نايل أوتلت", en: "Nile Outlet" },
+  name: { ar: "نايل ستور", en: "Nile Outlet" },
   role: "owner",
   kind: "local",
 };

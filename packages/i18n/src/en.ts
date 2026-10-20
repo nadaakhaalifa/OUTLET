@@ -2184,7 +2184,11 @@ export const en = {
       trendTitle: "Sales, last 7 days",
       trendA11y: "Sales over the last {{days}} days: {{total}}",
       trendCaption: "Gross sales per day, today highlighted.",
-      moreWaiting: "{{count}} more waiting. See all orders",
+      moreWaitingOne: "1 more order waiting",
+      moreWaitingTwo: "2 more orders waiting",
+      moreWaitingFew: "{{n}} more orders waiting",
+      moreWaitingMany: "{{n}} more orders waiting",
+      moreWaitingOther: "{{n}} more orders waiting",
       payoutHeldReason: "Held: {{reasons}}",
     },
     overview: {

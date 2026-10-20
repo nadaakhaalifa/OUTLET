@@ -2188,7 +2188,11 @@ export const ar: Messages = {
       trendTitle: "المبيعات في آخر أسبوع",
       trendA11y: "المبيعات خلال آخر {{days}} أيام: {{total}}",
       trendCaption: "إجمالي المبيعات يوميًا، واليوم مميّز.",
-      moreWaiting: "طلبات أخرى بانتظارك: {{count}}. عرض الكل",
+      moreWaitingOne: "طلب آخر بانتظارك",
+      moreWaitingTwo: "طلبان آخران بانتظارك",
+      moreWaitingFew: "{{n}} طلبات أخرى بانتظارك",
+      moreWaitingMany: "{{n}} طلبًا آخر بانتظارك",
+      moreWaitingOther: "{{n}} طلب آخر بانتظارك",
       payoutHeldReason: "محتجز: {{reasons}}",
     },
     overview: {
