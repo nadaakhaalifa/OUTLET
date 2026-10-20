@@ -5,3 +5,8 @@ allowBuilds:
   esbuild: true
   "@swc/core": true
   protobufjs: false
+auditConfig:
+  # Accepted until 2026-12-31, see docs/security/dependency-audit-exceptions.md
+  ignoreGhsas:
+    - GHSA-86w9-cpqp-85rv
+    - GHSA-vfj7-8cjw-p6xm

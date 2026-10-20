@@ -1,0 +1,10 @@
+# Accepted advisories, see docs/security/dependency-audit-exceptions.md (revisit by 2026-12-31).
+[[IgnoredVulns]]
+id = "GHSA-86w9-cpqp-85rv"
+ignoreUntil = 2026-12-31
+reason = "node-forge: build-time only (expo CLI code signing), no patched release on npm yet"
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-12-31
+reason = "braces: Metro bundler glob dependency, dev/build only, no patched release on npm yet"
