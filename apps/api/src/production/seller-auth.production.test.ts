@@ -143,9 +143,11 @@ describe("seller auth in production composition", () => {
     const en = await b.http().post("/v1/seller/auth/totp/enrol").set(bearer(token)).send({});
     expect(en.status).toBe(200);
     const secret = /secret=([A-Z2-7]+)/.exec(en.body.otpauth_uri as string)?.[1] ?? "";
-    const conf = await b.http().post("/v1/seller/auth/totp/confirm").set(bearer(token)).send({ code: totpCode(secret, totpStep(Date.now())) });
+    // Capture the step once: recomputing it later flakes when a 30 s boundary falls between two reads.
+    const step = totpStep(Date.now());
+    const conf = await b.http().post("/v1/seller/auth/totp/confirm").set(bearer(token)).send({ code: totpCode(secret, step) });
     expect(conf.status).toBe(200);
-    return { phone, secret, recovery: en.body.recovery_codes as string[], session: conf.body as { access_token: string; refresh_token: string; seller_user_id: string } };
+    return { phone, secret, step, recovery: en.body.recovery_codes as string[], session: conf.body as { access_token: string; refresh_token: string; seller_user_id: string } };
   }
 
   it("OTP verify gives an ENROL token (scope seller:enrol, 30 min, no refresh) and no session", async () => {
@@ -241,7 +243,7 @@ describe("seller auth in production composition", () => {
     const t = await enrolTotp();
     expect(t.recovery).toHaveLength(8);
     const sid = t.session.seller_user_id;
-    const now = totpStep(Date.now());
+    const now = t.step; // the step the confirm call consumed
     const same = await b.http().post("/v1/seller/auth/totp/assert").send({ otp_proof: await proofFor(sid), code: totpCode(t.secret, now) });
     expect(same.status).toBe(401); // confirm already consumed this step
     const next = await b.http().post("/v1/seller/auth/totp/assert").send({ otp_proof: await proofFor(sid), code: totpCode(t.secret, now + 1) });
