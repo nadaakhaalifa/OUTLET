@@ -1,6 +1,4 @@
-# Checkov configuration for infra/terraform. NOT YET EXECUTED: checkov was not installed where this
-# was written, so the skip list is drawn from knowledge of the rule set, not from a run. Triage the
-# first real CI run: delete a skip when the gap is closed, add one only with a reason and an owner.
+# Checkov configuration for infra/terraform. Triaged against a real run (checkov 3.x). Rule: delete a skip when the gap is closed, add one only with a reason and an owner.
 # Every skip below is a deliberate deferral recorded in docs/engineering/iac.md (no service exists
 # yet, or the choice depends on ADR-0002 provider and region).
 framework:
@@ -20,3 +18,7 @@ skip-check:
   - CKV_AWS_338  # Log retention >= 1 year: dev 14d, staging 30d, prod 90d. Retention is PDPL-driven (ADR-0002)
   - CKV_AWS_31   # ElastiCache AUTH token: ACL user group is a listed gap
   - CKV2_AWS_57  # Secrets rotation: secrets are containers only, rotation is added per secret with its provider
+  - CKV_AWS_293  # RDS deletion protection: true in staging and prod, false in dev so the dev stack can be torn down
+  - CKV2_AWS_50  # Redis failover: enabled when num_cache_clusters > 1 (staging, prod), single node in dev
+  - CKV2_AWS_5   # Service security group is unattached until the ECS service exists (compute module has the cluster only)
+  - CKV2_AWS_31  # WAF logging: needs a us-east-1 log group plus its own KMS key; added with the observability module (same dependency as CKV_AWS_86)
