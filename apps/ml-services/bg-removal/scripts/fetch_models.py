@@ -50,6 +50,9 @@ def fetch(url: str, dest: Path) -> None:
     tmp = dest.with_suffix(dest.suffix + ".part")
     for _ in range(MAX_REDIRECTS + 1):
         host, target = _https_target(url)
+        # Reason: TLS verification on via ssl.create_default_context(); host allow-list + https-only per hop;
+        # URLs come from the checked-in models.lock.json.
+        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
         conn = http.client.HTTPSConnection(host, timeout=120, context=ssl.create_default_context())
         try:
             conn.request("GET", target, headers={"User-Agent": "outlet-fetch-models"})
