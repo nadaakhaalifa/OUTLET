@@ -5,6 +5,7 @@
  */
 import { isDemoBrandAllowed, type BackendConfig } from "../../services/release-guard";
 import { InMemoryBrandPort, type BrandSeed } from "./fake";
+import type { DashboardSummary, PeriodTotals, SummaryPeriod } from "./summaryModel";
 import type { BrandAccount, BrandOrder, BrandOrderLine, BrandPort, BrandProduct, DashboardData, OrderStatus, StoreSettings } from "./model";
 
 const H = 3_600_000;
@@ -64,11 +65,75 @@ function dashboard(all: readonly BrandOrder[], t: number): DashboardData {
     ],
     payout: { available: 412_500n, pendingRelease: 129_000n, held: 0n, heldReasons: [], nextPayoutAtMs: t + 3 * D },
     trust: { score: 82, ladder: "good_standing", violations: 0, windowDays: 90, fixes: [] },
-    health: { score: 91, dispatchOnTimeBp: 9600, cancellationBp: 120, returnBp: 640 },
+    health: { score: 91, dispatchOnTimeBp: 9600, cancellationBp: null, returnBp: 640 },
     salesTrend: [96_000n, 184_000n, 142_000n, 301_000n, 228_000n, 175_000n, 258_000n],
     recentOrders: all.filter((o) => o.status === "PACKED" || o.status === "SHIPPED" || o.status === "DELIVERED" || o.status === "ACCEPTED"),
-    inTransit: 226_000n,
     plan: { code: "growth", name: { ar: "النمو", en: "Growth" } },
+  };
+}
+
+/** Invented daily gross sales (EGP, oldest first) for the 60 days before today: a weekly rhythm plus a gentle upward drift. */
+const DAILY_EGP: readonly number[] = Array.from({ length: 60 }, (_, i) => {
+  const weekly = [0.82, 0.9, 1.0, 0.95, 1.25, 1.45, 1.1][i % 7] ?? 1;
+  const wobble = [1.0, 1.08, 0.93, 1.04, 0.97, 1.12, 0.9][(i * 3) % 7] ?? 1;
+  return Math.round(2_900 * weekly * wobble * (0.8 + i / 150));
+});
+const AVG_ORDER_EGP = 1_150;
+const DEMO_TOP: readonly (readonly [string, number])[] = [["d-p01", 31], ["d-p03", 24], ["d-p11", 19], ["d-p09", 14], ["d-p07", 11]];
+
+const cairoDay = (ms: number): string => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(ms));
+const bpsOf = (cur: bigint, prev: bigint): number | null => (prev === 0n ? null : Number(((cur - prev) * 10_000n * 2n + (cur - prev >= 0n ? prev : -prev)) / (prev * 2n)));
+
+function totalsFor(grossEgp: number, days: number, withRepeat: boolean): PeriodTotals {
+  const gross = BigInt(grossEgp) * 100n;
+  const orders = Math.max(1, Math.round(grossEgp / AVG_ORDER_EGP));
+  const units = Math.round(orders * 1.35);
+  const returned = Math.round(units * 0.062);
+  const views = orders * 44;
+  const share = (pct: number) => Math.round((units * pct) / 100);
+  return {
+    grossSales: gross, netAfterCommission: (gross * 8_700n) / 10_000n, orders, units, averageOrderValue: gross / BigInt(orders),
+    returnRateBp: Math.round((returned * 10_000) / units), repeatRateBp: withRepeat ? 1_840 : null,
+    funnel: { views, bagAdds: Math.round(views * 0.092), checkouts: Math.round(views * 0.041), purchases: orders },
+    topProducts: DEMO_TOP.map(([id, pct]) => {
+      const u = Math.max(1, share(pct * (days > 1 ? 1 : 0.6)));
+      const p = PRODUCTS.find((x) => x.id === id);
+      return { productId: id, title: p === undefined ? null : { ar: p.titleAr, en: p.titleEn ?? p.titleAr }, units: u, grossSales: BigInt(u) * (p?.priceFrom ?? 0n) };
+    }),
+  };
+}
+
+/** Realistic period overview in the same shape the API returns (7d/30d/today, previous period, funnel, top products). */
+export function demoSummary(period: SummaryPeriod, now: number): DashboardSummary {
+  const span = period === "today" ? 1 : period === "7d" ? 7 : 30;
+  // Series ends with today: the last entry is the partial current day.
+  const series = [...DAILY_EGP.slice(0, 59), Math.round((DAILY_EGP[59] ?? 0) * 0.55)];
+  const sum = (a: readonly number[]) => a.reduce((n, v) => n + v, 0);
+  const cur = series.slice(60 - span);
+  const prevAll = series.slice(60 - 2 * span, 60 - span);
+  const c = totalsFor(sum(cur), span, period === "30d");
+  const p = totalsFor(sum(prevAll), span, period === "30d");
+  const growth = (a: bigint, b: bigint) => bpsOf(a, b);
+  const days = cur.map((v, i) => ({ day: cairoDay(now - (span - 1 - i) * 24 * H), grossSales: BigInt(v) * 100n }));
+  return {
+    period, current: c, previous: p,
+    growth: {
+      grossSales: growth(c.grossSales, p.grossSales), netAfterCommission: growth(c.netAfterCommission, p.netAfterCommission),
+      orders: growth(BigInt(c.orders), BigInt(p.orders)), units: growth(BigInt(c.units), BigInt(p.units)),
+      averageOrderValue: c.averageOrderValue === null || p.averageOrderValue === null ? null : growth(c.averageOrderValue, p.averageOrderValue),
+    },
+    dailySales: days,
+    // Same honesty as the real API today: these four have no event source yet.
+    unavailable: ["net_sales_after_returns", "cancellation_rate", "cod_refusal_by_governorate", "in_transit_payouts"],
+    definitions: {
+      gross_sales: "Sum of purchase gross value (VAT-inclusive) for orders placed in the period, before returns and commission.",
+      net_after_commission: "Gross sales minus commission on those sales. Not net of returns and not the payout statement.",
+      return_rate: "Units returned in the period divided by units sold in the period.",
+      repeat_customer_rate: "Buyers with two or more orders in the period divided by distinct buyers; shown from 50 buyers.",
+      funnel: "Consent-sampled client events (views, bag adds, checkouts) next to purchase facts; not a complete census.",
+      growth: "(current - previous) / previous; shown as New when the previous period had none.",
+    },
+    asOfMs: now - 3 * 60_000, withinSlo: true, kMin: 50,
   };
 }
 
@@ -94,7 +159,7 @@ export function demoSeed(t: number): BrandSeed {
     referencePrice: p.claim === "verified_discount" ? (p.ref ?? null) : null,
     updatedAtMs: t - p.ageH * H,
   }));
-  return { account: DEMO_ACCOUNT, orders: orders(t), products: list, settings: settings(), dashboard };
+  return { account: DEMO_ACCOUNT, orders: orders(t), products: list, settings: settings(), dashboard, summary: demoSummary };
 }
 
 export function createDemoBrandPort(now: () => number = Date.now): BrandPort {

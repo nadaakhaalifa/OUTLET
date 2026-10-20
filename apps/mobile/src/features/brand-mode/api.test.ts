@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createClient, type FetchLike } from "../../services/api-client";
 import type { AdapterContext } from "../../services/wire";
-import { ApiBrandPort } from "./api";
+import { ApiBrandPort, mapSummary } from "./api";
 import { BrandPortError, EMPTY_DRAFT, type ProductDraft } from "./model";
 
 const U = (n: number) => `0192f3a4-5b6c-7d8e-9f01-23456789ab${String(n).padStart(2, "0")}`;
@@ -313,5 +313,61 @@ describe("brand adapter: orders and returns", () => {
     expect(await failure(port.markReady())).toBe("unsupported");
     expect(await failure(port.verifyStrongFactor())).toBe("unsupported");
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("brand adapter: dashboard summary", () => {
+  const money = (n: number) => ({ amount_minor: String(n), currency: "EGP" as const });
+  const periodWire = (over: Record<string, unknown> = {}) => ({
+    from: "2026-10-04T21:00:00Z", to: "2026-10-11T10:00:00Z", gross_sales: money(500_000), net_after_commission: money(435_000), orders: 4, units: 6,
+    average_order_value: money(125_000), returned_units: 1, return_rate_bps: 1667, repeat_customer_rate_bps: null,
+    funnel: { views: 300, bag_adds: 30, checkouts: 9, purchases: 4 }, top_products: [{ product_id: PROD, units: 3, gross_sales: money(300_000) }], ...over,
+  });
+  const wire = (over: Record<string, unknown> = {}) => ({
+    store_id: STORE, period: "7d", currency: "EGP", timezone: "Africa/Cairo", current: periodWire({ partial: true }), previous: periodWire({ gross_sales: money(0), orders: 0, average_order_value: null }),
+    growth: { gross_sales: { delta: money(500_000), growth_bps: null }, net_after_commission: { delta: money(435_000), growth_bps: null }, orders: { delta: 4, growth_bps: 2500 }, units: { delta: 1, growth_bps: -500 }, average_order_value: null },
+    daily_sales: [{ day: "2026-10-10", gross_sales: money(200_000), orders: 2, units: 3 }, { day: "2026-10-11", gross_sales: money(300_000), orders: 2, units: 3 }],
+    unavailable_metrics: ["net_sales_after_returns", "in_transit_payouts"], definitions: { gross_sales: "Sum of ..." },
+    data_as_of: "2026-10-11T09:57:00Z", freshness: { as_of: "2026-10-11T09:57:00Z", lag_ms: 180_000, slo_ms: 900_000, within_slo: true }, k_anonymity_min: 50, ...over,
+  });
+
+  it("maps bigint money, null growth, null repeat rate, unavailable list and product titles; sends the period", async () => {
+    const { ctx, calls } = harness({
+      [`GET /v1/seller/stores/${STORE}/dashboard/summary`]: () => ({ body: wire() }),
+      "GET /v1/seller/products": () => ({ body: { items: [product()], page: { next_cursor: null, has_more: false } } }),
+    });
+    const s = await new ApiBrandPort(ctx).dashboardSummary("30d");
+    expect(calls.find((c) => c.path.endsWith("/summary"))).toBeDefined();
+    expect(s).not.toBeNull();
+    expect(s?.current.grossSales).toBe(500_000n);
+    expect(s?.current.averageOrderValue).toBe(125_000n);
+    expect(s?.previous.averageOrderValue).toBeNull();
+    expect(s?.current.repeatRateBp).toBeNull();
+    expect(s?.growth).toEqual({ grossSales: null, netAfterCommission: null, orders: 2500, units: -500, averageOrderValue: null });
+    expect(s?.current.topProducts[0]).toMatchObject({ productId: PROD, title: { ar: "فستان كتان", en: "فستان كتان" }, units: 3, grossSales: 300_000n });
+    expect(s?.unavailable).toEqual(["net_sales_after_returns", "in_transit_payouts"]);
+    expect(s?.asOfMs).toBe(Date.parse("2026-10-11T09:57:00Z"));
+    expect(s?.dailySales.map((d) => d.grossSales)).toEqual([200_000n, 300_000n]);
+  });
+
+  it("a missing product list only loses the names", async () => {
+    const { ctx } = harness({ [`GET /v1/seller/stores/${STORE}/dashboard/summary`]: () => ({ body: wire() }), "GET /v1/seller/products": () => problem(500) });
+    expect((await new ApiBrandPort(ctx).dashboardSummary("7d"))?.current.topProducts[0]?.title).toBeNull();
+  });
+
+  it("404 (flag off) is null, not an error; 401 is a session failure", async () => {
+    const off = harness({ [`GET /v1/seller/stores/${STORE}/dashboard/summary`]: () => problem(404) });
+    expect(await new ApiBrandPort(off.ctx).dashboardSummary("7d")).toBeNull();
+    const out = harness({ [`GET /v1/seller/stores/${STORE}/dashboard/summary`]: () => problem(401) });
+    expect(await failure(new ApiBrandPort(out.ctx).dashboardSummary("7d"))).toBe("session_expired");
+  });
+
+  it("rejects a drifting body (strict parse at the boundary)", async () => {
+    const { ctx } = harness({ [`GET /v1/seller/stores/${STORE}/dashboard/summary`]: () => ({ body: wire({ surprise: 1 }) }) });
+    expect(await failure(new ApiBrandPort(ctx).dashboardSummary("7d"))).not.toBe("none");
+  });
+
+  it("mapSummary keeps definitions verbatim", () => {
+    expect(mapSummary(wire() as never).definitions).toEqual({ gross_sales: "Sum of ..." });
   });
 });

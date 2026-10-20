@@ -5,6 +5,7 @@ import {
   type InviteRole, type PayoutAccountResult, type ProductDraft, type ProductStatus, type RejectReason, type ReturnInspection,
   type SizeChartOption, type StoreSettings, type TeamMember,
 } from "./model";
+import type { DashboardSummary, SummaryPeriod } from "./summaryModel";
 
 const H = 3_600_000;
 
@@ -29,6 +30,8 @@ export interface BrandSeed {
   readonly products: readonly BrandProduct[];
   readonly settings: StoreSettings;
   readonly dashboard: (orders: readonly BrandOrder[], now: number) => DashboardData;
+  /** Optional period overview (the dev demo brand only). Absent: the summary reads as flagged off (null). */
+  readonly summary?: ((period: SummaryPeriod, now: number) => DashboardSummary) | undefined;
 }
 
 export class InMemoryBrandPort implements BrandPort {
@@ -80,6 +83,11 @@ export class InMemoryBrandPort implements BrandPort {
   private guardRole(ok: boolean): void { if (!ok) throw new BrandPortError("forbidden"); }
 
   async account(): Promise<BrandAccount> { return { ...(this.seed?.account ?? FAKE_ACCOUNT), role: this.role }; }
+
+  async dashboardSummary(period: SummaryPeriod): Promise<DashboardSummary | null> {
+    await this.lag();
+    return this.seed?.summary?.(period, this.now()) ?? null;
+  }
 
   async dashboard(): Promise<DashboardData> {
     await this.lag();

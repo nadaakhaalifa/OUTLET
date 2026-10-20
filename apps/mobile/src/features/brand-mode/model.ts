@@ -3,6 +3,7 @@
  * view-model logic the screens use. No React, no router. Money is bigint piastres everywhere.
  */
 import { PortError } from "../worlds/model";
+import type { DashboardSummary, SummaryPeriod } from "./summaryModel";
 
 export { PortError };
 
@@ -533,6 +534,8 @@ export class BrandPortError extends Error {
 export interface BrandPort {
   account(): Promise<BrandAccount>;
   dashboard(): Promise<DashboardData>;
+  /** Period overview with previous-period comparison. null = the summary endpoint is flagged off (404): the screen shows the simple fallback. */
+  dashboardSummary(period: SummaryPeriod): Promise<DashboardSummary | null>;
   categories(): Promise<readonly Category[]>;
   sizeCharts(): Promise<readonly SizeChartOption[]>;
   listProducts(): Promise<readonly BrandProduct[]>;

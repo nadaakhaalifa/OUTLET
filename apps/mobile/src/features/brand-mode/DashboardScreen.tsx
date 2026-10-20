@@ -4,10 +4,12 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { radius } from "@outlet/ui-tokens";
 import { Illustration } from "../../art";
-import { Avatar, Banner, Button, Card, Icon, PressScale, Reveal, Screen, Skeleton, Text, useTheme, useToast } from "../../ui";
+import { Avatar, Banner, Button, Card, Icon, PressScale, Reveal, Screen, SegmentedControl, Skeleton, Text, useTheme, useToast } from "../../ui";
+import { OverviewSection } from "./OverviewSection";
+import { SUMMARY_PERIODS } from "./summaryModel";
 import { formatAmount, localizeDigits } from "../money-display";
 import { FailureView, ProgressRule, StaleBanner, useBrand, useLoad, useMoney } from "./kit";
-import { countdownLabel, countdownTone, kpiTiles, sectionOrder, trendBars, type KpiTile } from "./dashboardModel";
+import { countdownLabel, countdownTone, kpiTiles, sectionOrder, trendBars, type KpiTile, type SectionKey } from "./dashboardModel";
 import { buildDashboard, orderActions, queueOf, serverNow, slaCountdown, type BrandOrder, type DashboardData, type DashboardView } from "./model";
 
 const GAP = 24;
@@ -33,6 +35,11 @@ export function DashboardScreen() {
   const { state, reload, reloading } = useLoad<DashboardData>("dashboard", () => port.dashboard());
   const now = useTick(60_000);
   const [busy, setBusy] = useState<string | null>(null);
+  const [periodIdx, setPeriodIdx] = useState(1);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const period = SUMMARY_PERIODS[periodIdx] ?? "7d";
+  const periodLabels = [t("brandMode.overview.period.today"), t("brandMode.overview.period.d7"), t("brandMode.overview.period.d30")];
+  const refreshAll = () => { reload(); setRefreshTick((n) => n + 1); };
   const data = state.status === "ready" ? state.data : null;
   useEffect(() => { if (data !== null && !(state.status === "ready" && state.stale)) syncClock(data.serverNowMs); }, [data, state, syncClock]);
   const name = locale === "ar" ? account.name.ar : account.name.en;
@@ -58,8 +65,24 @@ export function DashboardScreen() {
   const recent = (data?.recentOrders ?? []).filter((o) => queueOf(o.status) !== "awaiting");
   const ladderGood = data !== null && data.trust.ladder === "good_standing";
 
+  const fallbackSimple = (hint: string): ReactNode => view === null || data === null ? null : (
+    <View style={{ gap: spacing.lg }} testID="dashboard-fallback">
+      <Banner tone="info" message={hint} />
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          {kpiTiles(view).map((k) => <KpiCell key={k.key} tile={k} />)}
+        </View>
+        <Text variant="caption" secondary>
+          {view.freshnessMin === null ? t("brandMode.dashboard.freshnessUnknown") : view.freshnessMin === 0 ? t("brandMode.dashboard.freshnessNow") : t("brandMode.dashboard.freshness", { minutes: num(view.freshnessMin) })}
+        </Text>
+        {view.sales.kind === "unavailable" || view.orders.kind === "unavailable" ? <Text variant="caption" secondary>{t("brandMode.common.notEnoughDataHint")}</Text> : null}
+      </View>
+      {bars !== null ? <TrendCard bars={bars} values={data.salesTrend ?? []} /> : null}
+    </View>
+  );
+
   return (
-    <Screen title={t("brandMode.dashboard.title")} onRefresh={reload} refreshing={reloading} contentStyle={{ gap: GAP }}>
+    <Screen title={t("brandMode.dashboard.title")} onRefresh={refreshAll} refreshing={reloading} contentStyle={{ gap: GAP }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: -8 }}>
         <View style={{ flex: 1, gap: 8 }}>
           <Text variant="callout" secondary numberOfLines={1} accessibilityRole="none">{name}</Text>
@@ -82,26 +105,15 @@ export function DashboardScreen() {
         <>
           <StaleBanner visible={state.status === "ready" && state.stale} />
 
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              {kpiTiles(view).map((k) => <KpiCell key={k.key} tile={k} />)}
-            </View>
-            <Text variant="caption" secondary>
-              {view.freshnessMin === null ? t("brandMode.dashboard.freshnessUnknown") : view.freshnessMin === 0 ? t("brandMode.dashboard.freshnessNow") : t("brandMode.dashboard.freshness", { minutes: num(view.freshnessMin) })}
-            </Text>
-            {view.sales.kind === "unavailable" || view.orders.kind === "unavailable" ? <Text variant="caption" secondary>{t("brandMode.common.notEnoughDataHint")}</Text> : null}
-          </View>
-
-          {bars !== null ? <TrendCard bars={bars} values={data.salesTrend ?? []} /> : null}
-
-          {sectionOrder(view).map((key, i) => {
+          {(() => {
+            const renderSection = (key: SectionKey, i: number): ReactNode => {
             switch (key) {
               case "actions":
                 return (
                   <Reveal key={key} index={i}>
                     <Section title={t("brandMode.dashboard.needsAction")} actionLabel={t("brandMode.dashboard.seeAll")} onAction={toOrders}>
                       {view.awaitingBreached > 0 ? <Banner tone="error" message={t("brandMode.dashboard.awaitingBreached", { count: num(view.awaitingBreached) })} /> : null}
-                      {view.awaiting.map(({ order, sla }) => (
+                      {view.awaiting.slice(0, 1).map(({ order, sla }) => (
                         <ActionCard
                           key={order.id}
                           order={order}
@@ -113,6 +125,11 @@ export function DashboardScreen() {
                           onReview={toOrders}
                         />
                       ))}
+                      {view.awaiting.length > 1 ? (
+                        <PressScale onPress={toOrders} accessibilityRole="button" accessibilityLabel={t("brandMode.dashboard.moreWaiting", { count: num(view.awaiting.length - 1) })} innerStyle={{ minHeight: spacing.xxxl, justifyContent: "center" }} testID="dashboard-more-waiting">
+                          <Card variant="outlined"><Text variant="callout" weight="500">{t("brandMode.dashboard.moreWaiting", { count: num(view.awaiting.length - 1) })}</Text></Card>
+                        </PressScale>
+                      ) : null}
                     </Section>
                   </Reveal>
                 );
@@ -201,7 +218,21 @@ export function DashboardScreen() {
                   </Reveal>
                 );
             }
-          })}
+            };
+            const secs = sectionOrder(view);
+            const top = secs.filter((k) => k === "actions" || k === "caughtUp");
+            const rest = secs.filter((k) => k !== "actions" && k !== "caughtUp");
+            return (
+              <>
+                {top.map(renderSection)}
+                <View style={{ gap: spacing.md }}>
+                  <SegmentedControl options={periodLabels} index={periodIdx} onChange={setPeriodIdx} testID="overview-period" />
+                  <OverviewSection key={`${period}:${refreshTick}`} period={period} nowMs={Date.now()} fallback={(hint) => fallbackSimple(hint)} />
+                </View>
+                {rest.map((k, i) => renderSection(k, i + top.length))}
+              </>
+            );
+          })()}
 
           {recent.length > 0 ? (
             <Section title={t("brandMode.dashboard.recentTitle")} actionLabel={t("brandMode.dashboard.seeAll")} onAction={toOrders}>

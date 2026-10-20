@@ -46,7 +46,7 @@ describe("demo brand data", () => {
     const d = await createDemoBrandPort(() => NOW).dashboard();
     expect(d.awaiting.length).toBe(2);
     expect(d.payout.available).toBe(412_500n);
-    expect(d.inTransit).toBe(226_000n);
+    expect(d.inTransit).toBeUndefined(); // not tracked yet: the summary lists it as unavailable
     expect(d.trust.score).toBe(82);
     expect(d.plan?.name.en).toBe("Growth");
     expect(d.salesTrend).toHaveLength(7);
@@ -67,5 +67,24 @@ describe("dashboard helpers", () => {
     expect(verifiedOffPct("verified_discount", 98_000n, 100_000n)).toBeNull();
     expect(verifiedOffPct("launch_price", 1n, 100n)).toBeNull();
     expect(verifiedOffPct("verified_discount", 100n, null)).toBeNull();
+  });
+});
+
+describe("demo summary", () => {
+  it("is shaped like the API for all three periods, with a previous period and honest unavailable metrics", async () => {
+    const port = createDemoBrandPort(() => NOW);
+    for (const p of ["today", "7d", "30d"] as const) {
+      const s = await port.dashboardSummary(p);
+      expect(s).not.toBeNull();
+      expect(s?.period).toBe(p);
+      expect(s?.dailySales.length).toBe(p === "today" ? 1 : p === "7d" ? 7 : 30);
+      expect(s?.current.grossSales).toBeGreaterThan(0n);
+      expect(s?.previous.grossSales).toBeGreaterThan(0n);
+      expect(s?.current.topProducts.length).toBe(5);
+      expect(s?.unavailable).toContain("in_transit_payouts");
+      expect(s?.current.funnel.purchases).toBe(s?.current.orders);
+    }
+    expect((await port.dashboardSummary("7d"))?.current.repeatRateBp).toBeNull(); // below 50 buyers
+    expect((await port.dashboardSummary("30d"))?.current.repeatRateBp).not.toBeNull();
   });
 });

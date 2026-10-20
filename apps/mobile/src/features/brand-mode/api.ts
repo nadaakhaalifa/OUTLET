@@ -10,6 +10,7 @@ import {
   type InviteRole, type NotificationEvent, type OrderStatus, type PayoutAccountResult, type PhotoItem, type ProductDraft, type ProductStatus,
   type RejectReason, type ReturnInspection, type SizeChartOption, type StoreSettings, type TeamMember,
 } from "./model";
+import type { DashboardSummary, PeriodTotals, SummaryPeriod } from "./summaryModel";
 import type { z } from "zod";
 import { imageEntries } from "./cutout-link";
 import { BankWire, BulkUploadWire, InviteWire, TeamWire, NOTIFICATION_WIRE, PrefsWire, ProfileWire, ShippingWire, UploadWire, type ProfileWire as ProfileShape, type ShippingWire as ShippingShape } from "./wire-shapes";
@@ -54,6 +55,36 @@ function mapOrder(o: schemas.SellerOrderView, lang: "ar" | "en"): BrandOrder {
 export interface BrandApiDeps {
   readonly fetch?: (input: string, init?: RequestInit) => Promise<Response>;
   readonly sleep?: (ms: number) => Promise<void>;
+}
+
+const bigMoney = (m: { readonly amount_minor: string }): bigint => BigInt(m.amount_minor);
+function mapPeriod(p: schemas.SellerDashboardSummary["current"], titles: ReadonlyMap<string, { readonly ar: string; readonly en: string }>): PeriodTotals {
+  return {
+    grossSales: bigMoney(p.gross_sales), netAfterCommission: bigMoney(p.net_after_commission), orders: p.orders, units: p.units,
+    averageOrderValue: p.average_order_value === null ? null : bigMoney(p.average_order_value),
+    returnRateBp: p.return_rate_bps, repeatRateBp: p.repeat_customer_rate_bps,
+    funnel: { views: p.funnel.views, bagAdds: p.funnel.bag_adds, checkouts: p.funnel.checkouts, purchases: p.funnel.purchases },
+    topProducts: p.top_products.map((t) => ({ productId: t.product_id, title: titles.get(t.product_id) ?? null, units: t.units, grossSales: bigMoney(t.gross_sales) })),
+  };
+}
+/** Wire summary (already strict-parsed by the generated client) to the view-model shape. Money stays bigint piastres. */
+export function mapSummary(s: schemas.SellerDashboardSummary, titles: ReadonlyMap<string, { readonly ar: string; readonly en: string }> = new Map()): DashboardSummary {
+  return {
+    period: s.period,
+    current: mapPeriod(s.current, titles),
+    previous: mapPeriod(s.previous, titles),
+    growth: {
+      grossSales: s.growth.gross_sales.growth_bps, netAfterCommission: s.growth.net_after_commission.growth_bps,
+      orders: s.growth.orders.growth_bps, units: s.growth.units.growth_bps,
+      averageOrderValue: s.growth.average_order_value === null ? null : s.growth.average_order_value.growth_bps,
+    },
+    dailySales: s.daily_sales.map((d) => ({ day: d.day, grossSales: bigMoney(d.gross_sales) })),
+    unavailable: s.unavailable_metrics,
+    definitions: s.definitions,
+    asOfMs: msOrNull(s.data_as_of),
+    withinSlo: s.freshness.within_slo,
+    kMin: s.k_anonymity_min,
+  };
 }
 
 const piastresText = (p: bigint): string => `${p / 100n}.${(p % 100n).toString().padStart(2, "0")}`;
@@ -139,6 +170,25 @@ export class ApiBrandPort implements BrandPort {
         },
         health: { score: null, dispatchOnTimeBp: null, cancellationBp: null, returnBp: summary.return_rate_bp ?? null },
       };
+    });
+  }
+
+  dashboardSummary(period: SummaryPeriod): Promise<DashboardSummary | null> {
+    return call(async () => {
+      const acct = await this.account();
+      let raw: schemas.SellerDashboardSummary;
+      try {
+        raw = dataOf(await this.ctx.client.getSellerStoreDashboardSummary({ path: { storeId: acct.storeId }, query: { period } }));
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null; // release.seller_analytics.dashboard_summary is blocked: the screen shows the simple dashboard
+        throw e;
+      }
+      // Titles for the top products; a failed lookup only loses the names, never the numbers.
+      const titles = new Map<string, { ar: string; en: string }>();
+      try {
+        for (const p of dataOf(await this.ctx.client.listSellerProducts({ query: { limit: 50 } })).items) titles.set(p.id, { ar: p.title.ar, en: p.title.en ?? p.title.ar });
+      } catch { /* names are optional */ }
+      return mapSummary(raw, titles);
     });
   }
 
