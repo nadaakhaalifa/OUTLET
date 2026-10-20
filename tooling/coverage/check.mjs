@@ -4,7 +4,8 @@
 //  - packages/domain: lines >= 90% (master prompt A2.10), hard fail.
 //  - others: report-only, but may not drop below tooling/coverage/baseline.json (ratchet).
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, openSync, closeSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,26 +23,40 @@ for (const group of ["packages", "apps"]) {
   }
 }
 
+const MAX_WORKERS = Number(process.env.COVERAGE_MAX_WORKERS ?? 2);
+const logDir = mkdtempSync(join(tmpdir(), "coverage-"));
 const results = {};
 for (const dir of dirs.sort()) {
   const abs = join(root, dir);
   const summary = join(abs, "coverage", "coverage-summary.json");
   if (!args.has("--no-run")) {
+    // Packages run strictly one after another. Inside a package, vitest workers are capped (every PGlite
+    // file boots its own WASM Postgres and v8 coverage adds per-worker memory); uncapped, the CI runner
+    // was killed (exit 143, "shutdown signal") mid-run. Child output goes to a file, not an in-memory
+    // pipe, so a chatty suite can neither hit spawnSync's maxBuffer nor bloat this process.
+    const started = Date.now();
+    const logPath = join(logDir, `${dir.replace("/", "__")}.log`);
+    const fd = openSync(logPath, "w");
     const r = spawnSync(
       "pnpm",
-      ["exec", "vitest", "run", "--passWithNoTests", "--coverage.enabled=true",
+      ["exec", "vitest", "run", "--passWithNoTests", `--maxWorkers=${MAX_WORKERS}`, "--coverage.enabled=true",
         "--coverage.provider=v8", "--coverage.reporter=text-summary",
         "--coverage.reporter=json-summary", "--coverage.reporter=json",
         "--coverage.all=true", "--coverage.include=src/**/*.{ts,tsx}",
         "--coverage.exclude=**/*.test.*", "--coverage.exclude=**/*.d.ts",
         "--coverage.reportsDirectory=coverage"],
-      { cwd: abs, encoding: "utf8" },
+      {
+        cwd: abs, encoding: "utf8", stdio: ["ignore", fd, fd],
+        env: { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=3072`.trim() },
+      },
     );
-    results[dir] = { testsExit: r.status };
+    closeSync(fd);
+    console.log(`[coverage] ${dir}: exit ${r.status ?? r.signal} in ${Math.round((Date.now() - started) / 1000)}s`);
+    results[dir] = { testsExit: r.status ?? 1 };
     if (r.status !== 0) {
       console.error(`[coverage] ${dir}: vitest exited ${r.status}`);
       // Surface the real failure (the output is otherwise swallowed), without ANSI colour codes.
-      const out = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.replace(/\x1b\[[0-9;]*m/g, "");
+      const out = readFileSync(logPath, "utf8").replace(/\x1b\[[0-9;]*m/g, "");
       console.error(out.split("\n").filter((l) => /FAIL|Error|×|✗|timed out|Timeout/.test(l)).slice(0, 40).join("\n"));
     }
   } else results[dir] = { testsExit: null };
