@@ -135,7 +135,8 @@ describe("publish validator", () => {
       { numRuns: 300 },
     );
     expect(passed).toBeGreaterThanOrEqual(0);
-  });
+    // 300 generated themes, each contrast-checked in two schemes: about 6 s on a loaded CI runner.
+  }, 30_000);
   it("applying every suggestion to a failing pair fixes that pair (property)", () => {
     fc.assert(
       fc.property(paletteArb, (light) => {
