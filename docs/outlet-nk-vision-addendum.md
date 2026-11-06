@@ -22,6 +22,8 @@ Hard rules that apply to everything below:
 | C5 | **Daily rhythm.** A fixed Drop Hour every day plus themed Outlet Parties replaces ad-hoc flash sales. | Extends §16 |
 | C6 | **B2B lot channel** for resellers and shops. | New module `lots` |
 
+| C7 | **Approved UI look** = `docs/design/ui-reference-spec.md` (Outlet District screens). Multi-category (fashion, electronics, home, kitchen, toys, beauty, pantry). Working name "Outlet District" pending owner and trademark check. | §25 UI, scope |
+
 ## 2. The concept: one village, eight places
 
 1. **Brand Streets**: each brand has its own storefront on a village map.
