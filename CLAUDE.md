@@ -6,6 +6,10 @@ The single source of truth is the master prompt. Read it before every task and f
 
 @docs/haul-master-prompt-v3.md
 
+The owner-approved vision addendum adds to it (web first, SaaS seller plans, defect grading, the Outlet Village features and marketing). It wins on product scope and platform order:
+
+@docs/outlet-nk-vision-addendum.md
+
 ## How to work
 - Start every new session by stating which phase and feature we are on, and what the next step is.
 - Spec first: flow, business rules, edge cases, data model, API contract and threat notes before any code.
