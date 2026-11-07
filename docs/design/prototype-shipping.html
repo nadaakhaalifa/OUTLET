@@ -1,0 +1,267 @@
+<title>Outlet District Shipping</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@500&display=swap">
+<style>
+/* Layout: the Outlet District village look — cream ground, lit shelves, dark-green chrome, lime focus — three prototype screens behind tabs */
+:root{
+  --bg:#F6F2EA; --panel:#FFFFFF; --shelf:#EFE6D6; --ink:#1E2A22; --muted:#6B7368;
+  --green:#1F4A33; --green-ink:#FFFFFF; --lime:#C6E86A; --line:#E3DCCD; --warn:#9A5B00; --warn-bg:#FFF3DC;
+  --display:"Fraunces", Georgia, serif; --body:"Plus Jakarta Sans", system-ui, sans-serif; --ar:"IBM Plex Sans Arabic", sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141A16; --panel:#1C2420; --shelf:#24302A; --ink:#ECEFE8; --muted:#A3AD9F; --green:#7FC79A; --green-ink:#0F1A13; --lime:#B9DD5C; --line:#2E3A33; --warn:#F2BD6B; --warn-bg:#33291A; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141A16; --panel:#1C2420; --shelf:#24302A; --ink:#ECEFE8; --muted:#A3AD9F; --green:#7FC79A; --green-ink:#0F1A13; --lime:#B9DD5C; --line:#2E3A33; --warn:#F2BD6B; --warn-bg:#33291A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{font-family:var(--body);font-weight:700;letter-spacing:.02em;font-size:18px}
+.logo b{color:var(--green)}
+.search{flex:1;min-width:180px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:9px 16px;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:999px;font:600 13px var(--body);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.tab:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+.note{font-size:12px;color:var(--muted)}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(26px,4vw,38px);margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-weight:500;font-size:20px;margin:0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font:500 13px var(--body);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.group-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-inline-end:4px}
+/* shelf */
+.shelf{background:linear-gradient(var(--shelf),var(--shelf)) ;border:1px solid var(--line);border-radius:18px;padding:18px 0 22px;position:relative}
+.shelf-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 18px 10px;gap:12px;flex-wrap:wrap}
+.row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 18px 10px;scrollbar-width:thin}
+.tile{scroll-snap-align:start;flex:0 0 180px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;transition:box-shadow .15s}
+.tile:hover{box-shadow:0 0 0 3px var(--lime)}
+.ph{height:110px;border-radius:10px;background:var(--shelf);display:grid;place-items:center;position:relative}
+.ph svg{width:62px;height:62px;fill:none;stroke:var(--green);stroke-width:1.6}
+.pill{position:absolute;top:6px;inset-inline-start:6px;background:var(--green);color:var(--green-ink);font:700 11px var(--body);padding:2px 7px;border-radius:999px}
+.tag{font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;align-self:flex-start}
+.tname{font-weight:600}
+.tmeta{font-size:12px;color:var(--muted)}
+.price{font-weight:700;font-variant-numeric:tabular-nums}
+.was{color:var(--muted);text-decoration:line-through;font-weight:400;font-size:12px;margin-inline-start:6px}
+.ship{font-size:12px;color:var(--green);font-weight:600}
+.ship.no{color:var(--muted);font-weight:500}
+.empty{padding:20px 18px;color:var(--muted)}
+/* forms */
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px}
+@media (max-width:820px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.steps{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.steps span{padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.steps .on{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
+input,select{font:500 14px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
+.check{flex-direction:row;align-items:center;gap:8px;font-weight:500;font-size:13px}
+.check input{width:auto}
+.radio-row{display:flex;gap:10px;flex-wrap:wrap}
+.radio{flex:1;min-width:200px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;font-weight:500;font-size:13px;cursor:pointer}
+.radio input{width:auto;margin-top:3px}
+.radio:has(input:checked){border-color:var(--green);box-shadow:0 0 0 2px var(--lime)}
+.calc{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-variant-numeric:tabular-nums;font-size:13px}
+.calc .k{color:var(--muted)}
+.calc .total{font-weight:700;font-size:15px;border-top:1px solid var(--line);padding-top:8px}
+.calc .total+.total{border:0;padding-top:0}
+.alert{background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 12px;font-size:13px}
+.ok{color:var(--green);font-weight:600;font-size:13px}
+.list{display:flex;flex-direction:column;gap:4px;font-size:13px;margin:0;padding-inline-start:18px}
+.parcel{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.parcel-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:600}
+.btn{background:var(--green);color:var(--green-ink);border:0;border-radius:10px;padding:11px 16px;font:700 14px var(--body);cursor:pointer}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.ar{font-family:var(--ar);direction:rtl}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="logo">OUTLET <b>DISTRICT</b></div>
+    <div class="search" aria-hidden="true">Search for products, brands or stores…</div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="t-shop" aria-selected="true" data-view="shop">Shopper · Filters</button>
+      <button class="tab" role="tab" id="t-seller" aria-selected="false" data-view="seller">Seller · Shipping step</button>
+      <button class="tab" role="tab" id="t-checkout" aria-selected="false" data-view="checkout">Checkout · Shipping</button>
+    </div>
+  </header>
+  <p class="note">Clickable prototype. Prices, brands and courier rates are examples, not real quotes. Final rates come from courier contracts.</p>
+
+  <!-- SHOPPER -->
+  <section id="v-shop" class="wrap" style="gap:14px">
+    <h1>Big discounts. Unexpected finds.</h1>
+    <div class="chips" role="group" aria-label="Brand origin">
+      <span class="group-label">Brands</span>
+      <button class="chip" data-f="brand" data-v="local" aria-pressed="false">Local 🇪🇬</button>
+      <button class="chip" data-f="brand" data-v="global" aria-pressed="false">Global 🌍</button>
+      <button class="chip" data-f="brand" data-v="both" aria-pressed="true">Both</button>
+    </div>
+    <div class="chips" role="group" aria-label="Delivery">
+      <span class="group-label">Deliver to</span>
+      <button class="chip" data-f="dest" data-v="eg" aria-pressed="true">Within Egypt</button>
+      <button class="chip" data-f="dest" data-v="intl" aria-pressed="false">Abroad</button>
+      <select id="country" aria-label="Destination country" hidden>
+        <option value="AE">United Arab Emirates</option><option value="SA">Saudi Arabia</option><option value="GB">United Kingdom</option>
+      </select>
+    </div>
+    <div class="shelf">
+      <div class="shelf-head"><h2 id="shelf-title">Verified deals</h2><span class="note">Swipe or drag ↔ · % shown only when verified</span></div>
+      <div class="row" id="row"></div>
+    </div>
+  </section>
+
+  <!-- SELLER -->
+  <section id="v-seller" hidden>
+    <div class="grid2">
+      <div class="card">
+        <div class="steps"><span>1 Photos & condition</span><span>2 Product details</span><span>3 Price & stock</span><span class="on">4 Shipping</span><span>5 Review & publish</span></div>
+        <h2>Shipping for “Linen Shirt · Studio Wear”</h2>
+        <div class="fields">
+          <label for="s-from">Ships from<select id="s-from"><option>Cairo – Nasr City warehouse</option><option>Outlet hub – 6th of October</option></select></label>
+          <label for="s-w">Packed weight (g)<input id="s-w" type="number" min="1" value="450"></label>
+          <label for="s-l">Length (cm)<input id="s-l" type="number" min="1" value="35"></label>
+          <label for="s-wd">Width (cm)<input id="s-wd" type="number" min="1" value="25"></label>
+          <label for="s-h">Height (cm)<input id="s-h" type="number" min="1" value="5"></label>
+        </div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap">
+          <label class="check" for="s-dom"><input id="s-dom" type="checkbox" checked> Ship inside Egypt</label>
+          <label class="check" for="s-int"><input id="s-int" type="checkbox" checked> Ship internationally</label>
+        </div>
+        <div id="intl-fields" class="fields">
+          <label for="s-hs">HS code (AI suggested)<input id="s-hs" value="6205.90 – shirt, flax"></label>
+          <label for="s-origin">Country of origin<select id="s-origin"><option>Egypt</option><option>Türkiye</option></select></label>
+          <label for="s-mat">Material<input id="s-mat" value="100% linen"></label>
+        </div>
+        <div id="duty-mode">
+          <p class="group-label" style="margin:0 0 6px">Who pays customs duties & clearance fees?</p>
+          <div class="radio-row">
+            <label class="radio" for="d-dap"><input type="radio" name="duty" id="d-dap" checked><span><b>Buyer pays on arrival (DAP)</b><br><span class="note">An estimate is shown at checkout. Available at launch.</span></span></label>
+            <label class="radio" for="d-ddp"><input type="radio" name="duty" id="d-ddp"><span><b>Paid at checkout (DDP)</b><br><span class="note">Buyer pays nothing at the door. Coming later.</span></span></label>
+          </div>
+        </div>
+        <div id="restrict" class="ok">✓ No restricted items detected (no batteries, liquids or perfume)</div>
+      </div>
+      <div class="card">
+        <h2>Live shipping preview</h2>
+        <div class="calc" id="seller-calc"></div>
+        <div id="seller-check"></div>
+        <button class="btn" id="s-continue">Continue to review →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHECKOUT -->
+  <section id="v-checkout" hidden>
+    <div class="grid2">
+      <div class="card">
+        <h2>Delivery</h2>
+        <label for="c-dest">Deliver to<select id="c-dest">
+          <option value="EG-C">Egypt – Cairo</option><option value="EG-A">Egypt – Alexandria</option><option value="EG-U">Egypt – Assiut</option>
+          <option value="AE">United Arab Emirates – Dubai</option><option value="SA">Saudi Arabia – Riyadh</option><option value="GB">United Kingdom – London</option>
+        </select></label>
+        <div id="parcels" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div id="duty-box"></div>
+      </div>
+      <div class="card">
+        <h2>Order summary</h2>
+        <div class="calc" id="summary"></div>
+        <button class="btn" id="pay">Place order</button>
+        <p class="note">All fees appear here before you pay. No surprise charges.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const icons={shirt:'<path d="M20 12l12-6 12 6 8 10-8 6v26H20V28l-8-6z"/>',bag:'<path d="M16 24h32l-3 30H19z M24 24v-6a8 8 0 0116 0v6"/>',shoe:'<path d="M8 40c10 0 18-6 22-14l10 8c4 3 10 4 16 4v8H8z"/>',fryer:'<rect x="16" y="12" width="32" height="40" rx="6"/><circle cx="32" cy="34" r="8"/>',lamp:'<path d="M22 30l10-18 10 18z M32 30v20 M24 52h16"/>'};
+const products=[
+ {n:'Linen Shirt',s:'Studio Wear',o:'local',p:650,was:1300,v:true,ic:'shirt',intl:['AE','SA','GB'],tag:'Previous season'},
+ {n:'Leather Handbag',s:'Thread',o:'local',p:980,was:null,v:false,ic:'bag',intl:['AE','SA'],tag:'Cosmetic mark'},
+ {n:'Running Sneakers',s:'Move',o:'global',p:1450,was:2900,v:true,ic:'shoe',intl:[],tag:'Open box'},
+ {n:'Air Fryer 6L',s:'El Basha',o:'global',p:2450,was:3600,v:true,ic:'fryer',intl:[],tag:'Open box'},
+ {n:'Table Lamp',s:'Casa',o:'local',p:450,was:1000,v:true,ic:'lamp',intl:['AE'],tag:'New clearance'},
+ {n:'Cotton Hoodie',s:'Studio Wear',o:'local',p:420,was:null,v:false,ic:'shirt',intl:['AE','SA','GB'],tag:'Sample'}
+];
+const st={brand:'both',dest:'eg'};
+const egp=n=>'EGP '+Math.round(n).toLocaleString('en-US');
+function renderShop(){
+  const c=document.getElementById('country').value;
+  const list=products.filter(p=>st.brand==='both'||p.o===st.brand);
+  document.getElementById('shelf-title').textContent=st.dest==='eg'?'Verified deals · delivered within Egypt':'Verified deals · shipping to '+document.getElementById('country').selectedOptions[0].text;
+  document.getElementById('row').innerHTML=list.length?list.map(p=>{
+    const can=st.dest==='eg'||p.intl.includes(c);
+    const pct=p.v&&p.was?Math.floor((p.was-p.p)*100/p.was):0;
+    return `<article class="tile" style="${can?'':'opacity:.5'}">
+      <div class="ph">${pct?`<span class="pill">-${pct}%</span>`:''}<svg viewBox="0 0 64 64" aria-hidden="true">${icons[p.ic]}</svg></div>
+      <span class="tag">${p.tag}</span>
+      <div class="tname">${p.n}</div><div class="tmeta">${p.s} · ${p.o==='local'?'Local 🇪🇬':'Global 🌍'}</div>
+      <div class="price">${egp(p.p)}${pct?`<span class="was">${egp(p.was)}</span>`:''}</div>
+      ${pct?'':'<div class="tmeta">Great price · no verified reference yet</div>'}
+      <div class="ship ${can?'':'no'}">${can?(st.dest==='eg'?'Delivers in Egypt · 1–3 days':'Ships abroad · 4–7 days'):'Does not ship to this country'}</div>
+    </article>`}).join(''):'<div class="empty">No items match these filters.</div>';
+}
+document.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{
+  st[b.dataset.f]=b.dataset.v;
+  document.querySelectorAll(`.chip[data-f="${b.dataset.f}"]`).forEach(x=>x.setAttribute('aria-pressed',x===b));
+  document.getElementById('country').hidden=st.dest!=='intl';renderShop();}));
+document.getElementById('country').addEventListener('change',renderShop);
+
+/* Example rate cards (illustrative only) */
+const dom={'EG-C':{base:60,kg:10,days:'1–2 days'},'EG-A':{base:75,kg:12,days:'2–3 days'},'EG-U':{base:95,kg:15,days:'3–5 days'}};
+const intl={AE:{first:900,half:180,days:'4–6 days',duty:.05,vat:.05,clear:150,name:'UAE'},SA:{first:950,half:190,days:'4–7 days',duty:.12,vat:.15,clear:180,name:'Saudi Arabia'},GB:{first:1600,half:300,days:'5–8 days',duty:.12,vat:.20,clear:400,name:'UK'}};
+function chargeable(g,l,w,h){const a=g/1000,v=l*w*h/5000;return {a,v,c:Math.ceil(Math.max(a,v)*2)/2};}
+function intlFee(z,kg){return z.first+Math.max(0,(kg-0.5)/0.5)*z.half;}
+
+function renderSeller(){
+  const g=+document.getElementById('s-w').value,l=+document.getElementById('s-l').value,w=+document.getElementById('s-wd').value,h=+document.getElementById('s-h').value;
+  const intlOn=document.getElementById('s-int').checked;
+  document.getElementById('intl-fields').hidden=!intlOn;document.getElementById('duty-mode').hidden=!intlOn;
+  const valid=g>0&&g<=30000&&l>0&&w>0&&h>0;
+  const k=chargeable(g,l,w,h);
+  let rows=`<span class="k">Actual weight</span><span>${k.a.toFixed(2)} kg</span><span class="k">Volumetric (L×W×H / 5000)</span><span>${k.v.toFixed(2)} kg</span><span class="k">Chargeable weight</span><span><b>${k.c.toFixed(1)} kg</b></span>`;
+  rows+=`<span class="k">Cairo delivery</span><span>${egp(dom['EG-C'].base+Math.max(0,k.c-1)*dom['EG-C'].kg)}</span>`;
+  if(intlOn)for(const c of ['AE','SA','GB'])rows+=`<span class="k">To ${intl[c].name}</span><span>${egp(intlFee(intl[c],k.c))}</span>`;
+  document.getElementById('seller-calc').innerHTML=valid?rows:'';
+  const missing=intlOn&&(!document.getElementById('s-hs').value.trim());
+  document.getElementById('seller-check').innerHTML=!valid?'<div class="alert">Enter a weight between 1 g and 30 kg and all three box sizes. International shipping needs them to price the parcel.</div>':missing?'<div class="alert">Add an HS code to ship internationally.</div>':'<div class="ok">✓ Ready: buyers will see live shipping prices at checkout</div>';
+  document.getElementById('s-continue').disabled=!valid||missing;
+}
+['s-w','s-l','s-wd','s-h','s-int','s-dom','s-hs'].forEach(id=>document.getElementById(id).addEventListener('input',renderSeller));
+
+const cart=[{seller:'Studio Wear · Cairo',items:[{n:'Linen Shirt',p:650,g:450,d:[35,25,5]},{n:'Cotton Hoodie',p:420,g:600,d:[35,28,8]}],free:2000},
+            {seller:'Casa · Giza',items:[{n:'Table Lamp',p:450,g:1800,d:[40,30,30]}],free:2000}];
+function renderCheckout(){
+  const d=document.getElementById('c-dest').value,isEg=d.startsWith('EG');
+  let goods=0,ship=0,duty=0,clear=0;
+  document.getElementById('parcels').innerHTML=cart.map(pc=>{
+    const sub=pc.items.reduce((s,i)=>s+i.p,0);goods+=sub;
+    const kg=pc.items.reduce((s,i)=>s+chargeable(i.g,...i.d).c,0);
+    let fee,days;
+    if(isEg){const z=dom[d];fee=sub>=pc.free?0:z.base+Math.max(0,kg-1)*z.kg;days=z.days;}
+    else{const z=intl[d];fee=intlFee(z,kg);days=z.days;const base=sub+fee;duty+=base*z.duty+ (base*(1+z.duty))*z.vat;clear+=z.clear;}
+    ship+=fee;
+    return `<div class="parcel"><div class="parcel-head"><span>${pc.seller}</span><span>${fee===0?'Free delivery':egp(fee)}</span></div>
+      <div class="tmeta">${pc.items.map(i=>i.n).join(' · ')} · chargeable ${kg.toFixed(1)} kg · ${days}</div>
+      ${isEg&&fee>0?`<div class="tmeta">Add ${egp(pc.free-sub)} from this store for free delivery</div>`:''}</div>`;}).join('');
+  const box=document.getElementById('duty-box');
+  if(isEg){box.innerHTML='';}else{box.innerHTML=`<div class="alert"><b>International order: who pays what</b><ul class="list">
+    <li>Shipping (paid now): ${egp(ship)}</li><li>Customs duties & import VAT in ${intl[d].name}: about ${egp(duty)}, <b>paid by you to the courier on arrival</b></li>
+    <li>Courier clearance fee: about ${egp(clear)}, paid on arrival</li><li>If you refuse to pay on arrival, the parcel is returned and return costs are deducted.</li></ul>
+    <label class="check" for="c-accept" style="margin-top:8px"><input id="c-accept" type="checkbox"> I understand and accept the duties paid on arrival</label></div>`;
+    document.getElementById('c-accept').addEventListener('change',updatePay);}
+  let s=`<span class="k">Items</span><span>${egp(goods)}</span><span class="k">Shipping</span><span>${egp(ship)}</span>`;
+  s+=`<span class="total">Pay now</span><span class="total">${egp(goods+ship)}</span>`;
+  if(!isEg)s+=`<span class="k">Estimated on arrival</span><span>${egp(duty+clear)}</span>`;
+  document.getElementById('summary').innerHTML=s;updatePay();
+}
+function updatePay(){const a=document.getElementById('c-accept');document.getElementById('pay').disabled=a?!a.checked:false;}
+document.getElementById('c-dest').addEventListener('change',renderCheckout);
+
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x===t));
+  for(const v of ['shop','seller','checkout'])document.getElementById('v-'+v).hidden=v!==t.dataset.view;}));
+renderShop();renderSeller();renderCheckout();
+</script>
