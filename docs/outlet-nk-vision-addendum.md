@@ -23,6 +23,7 @@ Hard rules that apply to everything below:
 | C6 | **B2B lot channel** for resellers and shops. | New module `lots` |
 
 | C7 | **Approved UI look** = `docs/design/ui-reference-spec.md` (Outlet District screens). Multi-category (fashion, electronics, home, kitchen, toys, beauty, pantry). Working name "Outlet District" pending owner and trademark check. | §25 UI, scope |
+| C8 | **Price Watch**: sellers connect their own website or store; fake discounts are blocked before publish and auto-corrected while live. Spec: `docs/specs/price-watch.md`. | Extends §9 |
 
 ## 2. The concept: one village, eight places
 
