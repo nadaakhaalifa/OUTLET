@@ -6,7 +6,7 @@ import { z } from "zod";
 import { InventoryError, notFound, validation } from "../domain/errors.js";
 import { makeEnv } from "./env.js";
 import type { Env, InventoryDeps } from "./env.js";
-import { replenishIn } from "./pool.js";
+import { SKU_LOCK_SQL, replenishIn } from "./pool.js";
 
 export const ADJUSTMENT_REASONS = ["seller_edit", "channel_sync", "return_restock", "claim", "write_off", "count", "donation"] as const;
 
@@ -86,7 +86,7 @@ export class InventoryService {
     uuid.parse(input.defectCardId);
     const unitId = this.env.newId();
     const out = await this.store(i.storeId, async (tx) => {
-      const r = await this.core(tx, actor, i, 1);
+      const r = await this.core(tx, actor, i, 1, "serialised");
       if (r.replayed) {
         const u = await tx.query<{ id: string }>("SELECT id FROM inventory_units WHERE sku_id = $1 AND location_id = $2 AND defect_card_id = $3 ORDER BY id LIMIT 1", [i.skuId, i.locationId, input.defectCardId]);
         return { unitId: u.rows[0]?.id ?? unitId, replayed: true, free: null };
@@ -159,9 +159,11 @@ export class InventoryService {
     else await this.env.soldOut.clear(skuId, locationId);
   }
 
-  /** Locks the level, enforces idempotency and version order, applies the delta, flags oversell. No pool work. */
-  private async core(tx: Queryable, actor: Principal, i: z.output<typeof adjustSchema>, delta: number): Promise<AdjustResult> {
+  /** Takes the SKU advisory lock, then locks the level, enforces idempotency and version order, applies the delta, flags oversell. No pool work. */
+  private async core(tx: Queryable, actor: Principal, i: z.output<typeof adjustSchema>, delta: number, kind: "fungible" | "serialised" = "fungible"): Promise<AdjustResult> {
     const env = this.env;
+    // Lock order: advisory SKU lock first, then the level row (the reserve path and the replenisher take them in this order too).
+    await tx.query(SKU_LOCK_SQL, [i.skuId]);
     const select = (): Promise<{ rows: LevelRow[] }> =>
       tx.query<LevelRow>("SELECT on_hand, committed, last_channel_version, version FROM inventory_levels WHERE sku_id = $1 AND location_id = $2 FOR UPDATE", [i.skuId, i.locationId]);
     let lvl = (await select()).rows[0];
@@ -190,6 +192,13 @@ export class InventoryService {
       const prev = (await tx.query<{ sku_id: string; location_id: string; delta: number }>("SELECT sku_id, location_id, delta FROM inventory_adjustments WHERE idempotency_key = $1", [i.idempotencyKey])).rows[0];
       if (prev?.sku_id !== i.skuId || prev.location_id !== i.locationId || prev.delta !== delta) throw new InventoryError("conflict", "idempotency key reused with a different adjustment");
       return view(false, true, false, lvl.on_hand);
+    }
+    // A SKU is either fungible (pool rows) or serialised (graded one-off units), never both (also enforced by trigger in 0013).
+    if (delta > 0 && kind === "fungible" && (await tx.query("SELECT 1 FROM inventory_units WHERE sku_id = $1 AND defect_card_id IS NOT NULL LIMIT 1", [i.skuId])).rows.length > 0) {
+      throw new InventoryError("conflict", "sku holds serialised units: fungible stock cannot be added");
+    }
+    if (kind === "serialised" && (await tx.query("SELECT 1 FROM inventory_units WHERE sku_id = $1 AND defect_card_id IS NULL LIMIT 1", [i.skuId])).rows.length > 0) {
+      throw new InventoryError("conflict", "sku holds fungible units: a serialised unit cannot be added");
     }
     const onHand = lvl.on_hand + delta;
     if (onHand < 0) throw new InventoryError("insufficient_stock", "on_hand cannot go below zero");

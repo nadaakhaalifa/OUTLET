@@ -9,6 +9,26 @@ const at = (daysAgo: number): Date => new Date(NOW.getTime() - daysAgo * DAY_MS)
 const ev = (daysAgo: number, price: number): PriceEventInput => ({ priceMinor: BigInt(price), validFrom: at(daysAgo) });
 const RUNS = { numRuns: 1000 };
 
+describe("held price and isLowest30d", () => {
+  it("a price held 30 days becomes regular: the next cut references it, not the older higher price", () => {
+    // 1000 (day 80) -> 900 (day 70) held 40 days -> 800 (day 5): fresh run, reference 900
+    const w = computeWindow([ev(80, 1000), ev(70, 900), ev(5, 800)], NOW);
+    expect(w.reference).toBe(900n);
+    expect(w.referenceRunStart).toEqual(at(5));
+  });
+  it("a price held under 30 days keeps the successive-discount reference", () => {
+    const w = computeWindow([ev(80, 1000), ev(25, 900), ev(5, 800)], NOW);
+    expect(w.reference).toBe(1000n);
+  });
+  it("isLowest30d needs a strictly higher price in the window", () => {
+    expect(computeWindow([ev(60, 500)], NOW).isLowest30d).toBe(false);
+    expect(computeWindow([ev(60, 500), ev(10, 500)], NOW).isLowest30d).toBe(false);
+    expect(computeWindow([ev(60, 900), ev(10, 500)], NOW).isLowest30d).toBe(true);
+    expect(computeWindow([ev(60, 500), ev(10, 900)], NOW).isLowest30d).toBe(false);
+    expect(computeWindow([ev(60, 900), ev(20, 500), ev(5, 700)], NOW).isLowest30d).toBe(false);
+  });
+});
+
 describe("computeWindow", () => {
   it("is empty and launch with no events", () => {
     const w = computeWindow([], NOW);
@@ -168,24 +188,60 @@ const oracleMin = (events: readonly PriceEventInput[], from: number, to: number)
   return m;
 };
 
+/** Independent oracle for the start of the current discount run: derived here from the raw events, not from the implementation. */
+const oracleRunStart = (events: readonly PriceEventInput[]): number | undefined => {
+  const sorted = [...events].sort((a, b) => a.validFrom.getTime() - b.validFrom.getTime());
+  const ps: { p: bigint; t: number }[] = [];
+  for (const e of sorted) if (ps[ps.length - 1]?.p !== e.priceMinor) ps.push({ p: e.priceMinor, t: e.validFrom.getTime() });
+  let i = ps.length - 1;
+  for (;;) {
+    const cur = ps[i];
+    const prev = ps[i - 1];
+    if (cur === undefined || prev === undefined || cur.p >= prev.p) break;
+    i--;
+    if (cur.t - prev.t >= 30 * DAY_MS) break; // prev was held 30 days or more: regular price
+  }
+  return ps[i + 1]?.t;
+};
+
 describe("properties (1000 runs)", () => {
-  it("a claim is never above the true minimum of the 30 days before the discount started", () => {
+  it("a claim is never above the true minimum of the 30 days before the discount started (independent oracle)", () => {
     fc.assert(
       fc.property(historyArb, (events) => {
         const w = computeWindow(events, NOW);
         const vrp = vrpFromInternal(w, NOW);
-        if (vrp === null || w.currentPrice === null || w.referenceRunStart === null) return true;
-        const runStart = w.referenceRunStart.getTime();
-        const truth = oracleMin(events, runStart - 30 * DAY_MS, runStart);
-        expect(truth).toBeDefined();
-        expect(vrp).toBe(truth);
-        expect(runStart).toBeGreaterThanOrEqual(NOW.getTime() - 30 * DAY_MS);
-        expect(w.firstSeenAt?.getTime() ?? Infinity).toBeLessThanOrEqual(runStart - 30 * DAY_MS);
+        const runStart = oracleRunStart(events);
+        const firstSeen = Math.min(...events.map((e) => e.validFrom.getTime()));
+        const eligible = runStart !== undefined && runStart >= NOW.getTime() - 30 * DAY_MS && firstSeen <= runStart - 30 * DAY_MS;
+        const truth = eligible ? oracleMin(events, runStart - 30 * DAY_MS, runStart) : undefined;
+        expect(vrp).toBe(truth ?? null);
+        if (vrp === null || w.currentPrice === null || runStart === undefined) return true;
+        expect(w.referenceRunStart?.getTime()).toBe(runStart);
+        // never above the cheapest price in effect in [now-30d, runStart): the part of the window before the current run
+        const priorLow = oracleMin(events, NOW.getTime() - 30 * DAY_MS, runStart);
+        if (priorLow !== undefined) expect(vrp).toBeLessThanOrEqual(priorLow);
         if (claimAllowed(vrp, w.currentPrice)) {
-          // claimed percentage computed against the true minimum is at least as large: the claim never overstates it
           expect(w.currentPrice).toBeLessThan(truth ?? 0n);
           expect(discountPct(vrp, w.currentPrice)).toBeLessThanOrEqual(discountPct(truth ?? 0n, w.currentPrice));
         }
+        return true;
+      }),
+      RUNS,
+    );
+  });
+
+  it("the 61 day load slice gives the same window as the full history", () => {
+    fc.assert(
+      fc.property(historyArb, (events) => {
+        // the ingestor never stores two consecutive rows with the same price, so the slice is compared on such histories
+        const sorted = [...events].sort((a, b) => a.validFrom.getTime() - b.validFrom.getTime()).filter((e, i, arr) => arr[i - 1]?.priceMinor !== e.priceMinor);
+        const full = computeWindow(sorted, NOW);
+        const since = NOW.getTime() - 61 * DAY_MS;
+        const slice = sorted.filter((_e, i) => (sorted[i + 1]?.validFrom.getTime() ?? Infinity) >= since);
+        const cut = computeWindow(slice, NOW, { firstSeenAt: sorted[0]?.validFrom ?? NOW });
+        // lastIncreaseAt is only tracked inside the slice (nothing uses an increase older than 30 days)
+        const fullInSlice = full.lastIncreaseAt !== null && full.lastIncreaseAt.getTime() < since ? { ...full, lastIncreaseAt: null } : full;
+        expect(cut).toEqual(fullInSlice);
         return true;
       }),
       RUNS,

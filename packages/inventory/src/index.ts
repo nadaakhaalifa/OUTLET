@@ -6,7 +6,7 @@ export { DEFAULT_POOL_CAP, poolTarget } from "./domain/pool.js";
 export type { SoldOutFlagPort } from "./application/ports.js";
 export { noopSoldOutFlags } from "./application/ports.js";
 export type { InventoryDeps } from "./application/env.js";
-export { RESERVE_PICK_SQL } from "./application/pool.js";
+export { RESERVE_PICK_SQL, SKU_LOCK_SQL } from "./application/pool.js";
 export { ADJUSTMENT_REASONS, InventoryService, requireAccess } from "./application/inventory-service.js";
 export type { AdjustInput, AdjustResult, LevelView } from "./application/inventory-service.js";
 export { ReservationService } from "./application/reservation-service.js";

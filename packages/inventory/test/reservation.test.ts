@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InventoryError } from "../src/index.js";
+import { brandClient } from "@outlet/db";
+import type { Queryable } from "@outlet/db";
+import { InventoryError, ReservationService } from "../src/index.js";
 import { buildWorld, counts } from "./fixtures.js";
 import type { World } from "./fixtures.js";
 
@@ -132,6 +134,51 @@ describe("expiry, release and sweep", () => {
     const s = await w.res.sweepExpired(new Date(w.clock.t + 60_000));
     expect(s.skipped).toBeGreaterThanOrEqual(1);
     expect(s.expired).not.toContain(r.reservationId);
+  });
+
+  it("one failing reservation does not roll back the rest of the sweep batch", async () => {
+    const a = await w.sku("A", 6);
+    const u1 = randomUUID();
+    const u2 = randomUUID();
+    const bad = await w.res.reserve({ orderGroupRef: "sw-bad-" + a, userId: u1, items: [item(w, "A", a, 1)], ttlSec: 30 });
+    const good = await w.res.reserve({ orderGroupRef: "sw-good-" + a, userId: u2, items: [item(w, "A", a, 2)], ttlSec: 30 });
+    if (!bad.ok || !good.ok) throw new Error("reserve failed");
+    const failing = brandClient<"outlet_app">({
+      query: (sql, params) => w.app.query(sql, params),
+      transaction: (fn) =>
+        w.app.transaction((tx: Queryable) =>
+          fn({
+            query: (sql, params) => {
+              if (sql.includes("SET state = 'available'") && params?.[0] === bad.reservationId) return Promise.reject(new Error("injected failure"));
+              return tx.query(sql, params);
+            },
+          }),
+        ),
+    });
+    const svc = new ReservationService({ ...w.deps, client: failing });
+    const out = await svc.sweepExpired(new Date(w.clock.t + 60_000));
+    expect(out.failed).toEqual([bad.reservationId]);
+    expect(out.expired).toContain(good.reservationId);
+    expect(out.expired).not.toContain(bad.reservationId);
+    const st = async (id: string) => (await w.raw.query<{ state: string }>("SELECT state FROM reservations WHERE id = $1", [id])).rows[0]?.state;
+    expect(await st(good.reservationId)).toBe("EXPIRED");
+    expect(await st(bad.reservationId)).toBe("ACTIVE");
+    expect((await w.raw.query("SELECT 1 FROM inventory_expiry_index WHERE reservation_id = $1", [bad.reservationId])).rows).toHaveLength(1);
+    expect(await counts(w.raw, a)).toMatchObject({ reserved: 1, available: 5 });
+    // the next sweep (healthy) releases it
+    expect((await w.res.sweepExpired(new Date(w.clock.t + 60_000))).expired).toContain(bad.reservationId);
+  });
+
+  it("replay with different items is a typed conflict; identical items replay", async () => {
+    const a = await w.sku("A", 6);
+    const user = randomUUID();
+    const first = await w.res.reserve({ orderGroupRef: "rp-" + a, userId: user, items: [item(w, "A", a, 2)] });
+    expect(first.ok).toBe(true);
+    await expect(w.res.reserve({ orderGroupRef: "rp-" + a, userId: user, items: [item(w, "A", a, 3)] })).rejects.toMatchObject({ code: "conflict" });
+    const b = await w.sku("A", 2);
+    await expect(w.res.reserve({ orderGroupRef: "rp-" + a, userId: user, items: [item(w, "A", a, 2), item(w, "A", b, 1)] })).rejects.toMatchObject({ code: "conflict" });
+    expect(await w.res.reserve({ orderGroupRef: "rp-" + a, userId: user, items: [item(w, "A", a, 1), item(w, "A", a, 1)] })).toMatchObject({ ok: true, replayed: true });
+    expect((await counts(w.raw, a)).reserved).toBe(2);
   });
 
   it("release frees units, is idempotent, and cannot release a claimed reservation", async () => {

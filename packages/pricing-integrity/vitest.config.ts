@@ -8,6 +8,7 @@ export default defineConfig({
     alias: [
       { find: "@outlet/db/testing", replacement: src("../db/src/testing.ts") },
       { find: "@outlet/db", replacement: src("../db/src/index.ts") },
+      { find: "@outlet/flags", replacement: src("../flags/src/index.ts") },
       { find: "@outlet/ids", replacement: src("../ids/src/index.ts") },
       { find: "@outlet/money", replacement: src("../money/src/index.ts") },
       { find: "@outlet/outbox", replacement: src("../outbox/src/index.ts") },

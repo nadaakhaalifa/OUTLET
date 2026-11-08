@@ -33,7 +33,12 @@ export type ClaimResult =
   /** Late payment and the stock is gone: the caller refunds automatically and apologises (ADR-0005). */
   | { readonly outcome: "unavailable"; readonly reservationId: string; readonly shortfalls: readonly Shortfall[] };
 
-export interface SweepResult { readonly expired: readonly string[]; readonly skipped: number }
+export interface SweepResult {
+  readonly expired: readonly string[];
+  readonly skipped: number;
+  /** Reservations whose release threw: rolled back to their savepoint, left ACTIVE and in the index for the next sweep. */
+  readonly failed: readonly string[];
+}
 
 interface ReservationRow { id: string; state: ReservationState; expires_at: string | Date; store_ids: string[]; order_group_ref: string; user_id: string }
 interface LineRow { sku_id: string; location_id: string; qty: number }
@@ -76,6 +81,7 @@ export class ReservationService {
     const prior = (await tx.query<ReservationRow>("SELECT id, state, expires_at, store_ids, order_group_ref, user_id FROM reservations WHERE market_id = $1 AND order_group_ref = $2", [env.marketId, i.orderGroupRef])).rows[0];
     if (prior) {
       if (prior.state !== "ACTIVE") throw new InventoryError("conflict", `order group already has a ${prior.state} reservation`);
+      if (prior.user_id !== i.userId || !(await this.sameItems(tx, prior, items))) throw new InventoryError("conflict", "order group already has a reservation with different items");
       return { ok: true, reservationId: prior.id, expiresAt: new Date(prior.expires_at).toISOString(), replayed: true };
     }
     const id = i.reservationId ?? env.newId();
@@ -108,6 +114,17 @@ export class ReservationService {
     await tx.query("INSERT INTO inventory_expiry_index (reservation_id, market_id, store_refs, owner_ref, expires_at) VALUES ($1,$2,$3,$4,$5)", [id, env.marketId, stores, i.userId, expiresAt]);
     await tx.query("RELEASE SAVEPOINT inv_reserve");
     return { ok: true, reservationId: id, expiresAt, replayed: false };
+  }
+
+  /** Does the stored reservation hold exactly these (merged) items? Lines are store-owned, so read per store context. */
+  private async sameItems(tx: Queryable, prior: ReservationRow, items: readonly ReserveItem[]): Promise<boolean> {
+    const have = new Map<string, number>();
+    for (const storeId of prior.store_ids) {
+      await inStoreContext(this.env, tx, storeId, async () => {
+        for (const l of (await tx.query<LineRow>("SELECT sku_id, location_id, qty FROM reservation_lines WHERE reservation_id = $1", [prior.id])).rows) have.set(`${l.sku_id}|${l.location_id}`, l.qty);
+      });
+    }
+    return have.size === items.length && items.every((x) => have.get(`${x.skuId}|${x.locationId}`) === x.qty);
   }
 
   /** Own transaction (user context of the order owner). */
@@ -209,19 +226,29 @@ export class ReservationService {
         )
       ).rows;
       const expired: string[] = [];
+      const failed: string[] = [];
       let skipped = 0;
       for (const d of due) {
-        await narrowContext(tx, { userId: d.owner_ref });
-        const res = (await tx.query<ReservationRow>("SELECT id, state, expires_at, store_ids, order_group_ref, user_id FROM reservations WHERE id = $1 FOR UPDATE SKIP LOCKED", [d.reservation_id])).rows[0];
-        if (res?.state !== "ACTIVE") {
-          // claimed / released concurrently (or locked by a claim in flight): that path deletes the index row itself
-          skipped += 1;
-          continue;
+        // One savepoint per reservation: a failure rolls back only that reservation, never the batch.
+        await tx.query("SAVEPOINT inv_sweep");
+        try {
+          await narrowContext(tx, { userId: d.owner_ref });
+          const res = (await tx.query<ReservationRow>("SELECT id, state, expires_at, store_ids, order_group_ref, user_id FROM reservations WHERE id = $1 FOR UPDATE SKIP LOCKED", [d.reservation_id])).rows[0];
+          if (res?.state !== "ACTIVE") {
+            // claimed / released concurrently (or locked by a claim in flight): that path deletes the index row itself
+            skipped += 1;
+          } else {
+            await this.freeUnits(tx, res, reservationTransition("ACTIVE", "expire"));
+            expired.push(res.id);
+          }
+          await tx.query("RELEASE SAVEPOINT inv_sweep");
+        } catch {
+          await tx.query("ROLLBACK TO SAVEPOINT inv_sweep");
+          await tx.query("RELEASE SAVEPOINT inv_sweep");
+          failed.push(d.reservation_id);
         }
-        await this.freeUnits(tx, res, reservationTransition("ACTIVE", "expire"));
-        expired.push(res.id);
       }
-      return { expired, skipped };
+      return { expired, skipped, failed };
     });
   }
 

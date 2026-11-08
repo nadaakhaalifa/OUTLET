@@ -1,13 +1,14 @@
 import type { Queryable, SqlClient } from "@outlet/db";
+import type { KillSwitchName } from "@outlet/flags";
 import { uuidv7 } from "@outlet/ids";
 import { computeWindow, WINDOW_MS } from "../domain/window.js";
 import type { PriceEventInput, PriceWindow } from "../domain/window.js";
 
-/** Kill switch name to register in @outlet/flags KILL_SWITCHES as a money-class (fail closed) switch. */
-export const PRICE_WATCH_KILL_SWITCH = "pricing.price_watch";
+/** The money-class (fail closed) switch registered in @outlet/flags KILL_SWITCHES. */
+export const PRICE_WATCH_KILL_SWITCH = "pricing.price_watch.enabled" as const satisfies KillSwitchName;
 
 /**
- * Port over FlagService.isKilled("pricing.price_watch", { marketId }). True = killed. A throwing port is treated as killed:
+ * Port over FlagService.isKilled(PRICE_WATCH_KILL_SWITCH, { marketId }). True = killed. A throwing port is treated as killed:
  * with no readable flag state every shopper surface shows the plain price (fail closed).
  */
 export interface PriceWatchKillSwitch {
@@ -55,7 +56,11 @@ export interface LoadedHistory {
   readonly rows: readonly { id: string; priceMinor: bigint; validFrom: Date; validTo: Date | null }[];
 }
 
-/** Events in effect at any time in the last 61 days (enough for a 30 day run plus its 30 day prior window) and the first observation. */
+/**
+ * Events in effect at any time in the last 61 days (enough for a 30 day run plus its 30 day prior window) and the first observation.
+ * The slice is exact because a price held >= 30 days ends any run (see domain/window.ts), so older rows cannot alter the reference, the 30 day low or the label (lastIncreaseAt older than the slice reads as null).
+ * Rows may overlap when a late event was inserted; the effective end of a row is the next row's start.
+ */
 export const loadHistory = async (db: Queryable, skuId: string, marketId: string, now: Date): Promise<LoadedHistory> => {
   const since = new Date(now.getTime() - 2 * WINDOW_MS - 86_400_000);
   const r = await db.query<EventRow>(
@@ -68,7 +73,8 @@ export const loadHistory = async (db: Queryable, skuId: string, marketId: string
     "SELECT min(valid_from) AS first_seen FROM price_events WHERE sku_id = $1 AND market_id = $2 AND source = 'internal'",
     [skuId, marketId],
   );
-  const rows = r.rows.map((x) => ({ id: x.id, priceMinor: BigInt(x.price_minor), validFrom: new Date(x.valid_from), validTo: x.valid_to === null ? null : new Date(x.valid_to) }));
+  const base = r.rows.map((x) => ({ id: x.id, priceMinor: BigInt(x.price_minor), validFrom: new Date(x.valid_from) }));
+  const rows = base.map((x, i) => ({ ...x, validTo: base[i + 1]?.validFrom ?? null }));
   const fs = first.rows[0]?.first_seen;
   return {
     events: rows.map((x) => ({ id: x.id, priceMinor: x.priceMinor, validFrom: x.validFrom })),

@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@outlet/db": "workspace:*",
+    "@outlet/flags": "workspace:*",
     "@outlet/ids": "workspace:*",
     "@outlet/money": "workspace:*",
     "@outlet/outbox": "workspace:*",

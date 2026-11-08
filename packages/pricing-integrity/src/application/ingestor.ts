@@ -16,6 +16,7 @@ export const priceChangedPayload = z.object({
   changed_at: z.iso.datetime({ offset: true }),
 });
 
+/** "stale" now only means two different prices at the exact same instant; out-of-order events are applied. */
 export type IngestOutcome = "applied" | "duplicate" | "unchanged" | "stale" | "ignored";
 
 export class PriceEventIngestor {
@@ -44,16 +45,30 @@ export class PriceEventIngestor {
       [p.sku_id, event.marketId],
     );
     const cur = open.rows[0];
-    if (cur !== undefined) {
-      if (cur.currency !== p.currency) throw new Error("price.changed currency differs from the open price row");
-      if (changedAt.getTime() <= new Date(cur.valid_from).getTime()) return "stale";
-      if (BigInt(cur.price_minor) === price) return "unchanged";
-      await tx.query("UPDATE price_events SET valid_to = $2 WHERE id = $1", [cur.id, changedAt]);
+    if (cur !== undefined && cur.currency !== p.currency) throw new Error("price.changed currency differs from the open price row");
+    // Row in effect at changedAt (latest valid_from <= changedAt) and the first row after it, by start time (rows are append-only).
+    const before = await tx.query<{ price_minor: string; valid_from: Date | string }>(
+      "SELECT price_minor::text AS price_minor, valid_from FROM price_events WHERE sku_id = $1 AND market_id = $2 AND source = 'internal' AND valid_from <= $3 ORDER BY valid_from DESC LIMIT 1",
+      [p.sku_id, event.marketId, changedAt],
+    );
+    const after = await tx.query<{ valid_from: Date | string }>(
+      "SELECT valid_from FROM price_events WHERE sku_id = $1 AND market_id = $2 AND source = 'internal' AND valid_from > $3 ORDER BY valid_from ASC LIMIT 1",
+      [p.sku_id, event.marketId, changedAt],
+    );
+    const prev = before.rows[0];
+    const next = after.rows[0];
+    if (prev !== undefined) {
+      // Two different prices at the same instant cannot be ordered: keep the first, drop the second.
+      if (new Date(prev.valid_from).getTime() === changedAt.getTime() && BigInt(prev.price_minor) !== price) return "stale";
+      if (BigInt(prev.price_minor) === price) return "unchanged";
     }
+    // A late (out of order) event becomes a closed row [changedAt, next.valid_from): redelivery must never lose a low price.
+    const validTo = next === undefined ? null : new Date(next.valid_from);
+    if (validTo === null && cur !== undefined) await tx.query("UPDATE price_events SET valid_to = $2 WHERE id = $1", [cur.id, changedAt]);
     await tx.query(
-      `INSERT INTO price_events (id, sku_id, store_ref, market_id, currency, price_minor, valid_from, source, actor_type, source_event_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'internal', 'system', $8)`,
-      [env.newId(), p.sku_id, p.store_id ?? null, event.marketId, p.currency, price.toString(), changedAt, event.id],
+      `INSERT INTO price_events (id, sku_id, store_ref, market_id, currency, price_minor, valid_from, valid_to, source, actor_type, source_event_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'internal', 'system', $9)`,
+      [env.newId(), p.sku_id, p.store_id ?? null, event.marketId, p.currency, price.toString(), changedAt, validTo, event.id],
     );
     await this.refreshWindow(tx, p.sku_id, event.marketId, p.currency);
     return "applied";

@@ -35,7 +35,7 @@ export class PriceEvidencePublic {
       return { ...base, label: "plain", discountPct: null, referencePrice: null, lowest30d: null, launchPrice: false, history: [] };
     }
     const vrp = vrpFromInternal(w, now);
-    const d = displayDecision({ vrp, price: w.currentPrice, launch: w.launchPrice, brandMode: opts.brandMode ?? "public", viewer: opts.viewer ?? "anonymous", isLowest30d: w.low30d === w.currentPrice });
+    const d = displayDecision({ vrp, price: w.currentPrice, launch: w.launchPrice, brandMode: opts.brandMode ?? "public", viewer: opts.viewer ?? "anonymous", isLowest30d: w.isLowest30d });
     return {
       ...base,
       label: d.label,

@@ -41,7 +41,7 @@ const storage = new InMemoryStorage();
 const signer = new HmacSigner("k");
 const now = new Date("2030-01-01T00:00:00Z");
 const mk = (scanner: AvScanPort = new FakeAvScanner(), st = storage): MediaService =>
-  new MediaService({ app: roleClient(raw, "outlet_app"), privileged: raw, storage: st, scanner, signer, marketId: "EG", now: () => now });
+  new MediaService({ app: roleClient(raw, "outlet_app"), worker: roleClient(raw, "outlet_worker"), storage: st, scanner, signer, marketId: "EG", now: () => now });
 
 beforeAll(async () => {
   ({ client: raw, close } = await createTestClient());
@@ -138,7 +138,7 @@ describe("ingest + scan + outbox", () => {
   });
   it("outbox write is in the same tx as the status change (rollback leaves it pending)", async () => {
     // sabotage: an invalid market makes the envelope parse fail inside the tx after the UPDATE ran
-    const svc = new MediaService({ app: roleClient(raw, "outlet_app"), privileged: raw, storage, scanner: new FakeAvScanner(), signer, marketId: "EG", now: () => new Date("not-a-date") });
+    const svc = new MediaService({ app: roleClient(raw, "outlet_app"), worker: roleClient(raw, "outlet_worker"), storage, scanner: new FakeAvScanner(), signer, marketId: "EG", now: () => new Date("not-a-date") });
     await expect(svc.ingest({ bytes: await small(300), declaredMime: "image/png", kind: "product", actor: staff([storeA]), storeId: storeA })).rejects.toBeDefined();
     const orphan = await raw.query<{ n: string }>(
       "SELECT count(*)::text n FROM media_assets m WHERE m.status = 'ready' AND NOT EXISTS (SELECT 1 FROM outbox_events e WHERE e.aggregate_id = m.id)");
@@ -187,8 +187,8 @@ describe("signed URLs", () => {
     await expect(mk().signedUrl(doc.id, shopper, 60)).rejects.toBeInstanceOf(MediaError);
   });
   it("admin needs a reason code for documents", async () => {
-    await expect(mk().signedUrl(doc.id, admin(), 60)).rejects.toMatchObject({ code: "reason_required" });
-    const r = await mk().signedUrl(doc.id, admin(), 60, "kyc_review");
+    await expect(mk().signedUrl(doc.id, admin(), 60, { storeId: storeA })).rejects.toMatchObject({ code: "reason_required" });
+    const r = await mk().signedUrl(doc.id, admin(), 60, { storeId: storeA, reasonCode: "kyc_review" });
     expect(r.url).toContain("sig=");
   });
   it("platform assets are signable only by the system scope", async () => {
@@ -214,5 +214,97 @@ describe("srcset / public URLs", () => {
     const d = await mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: staff([storeA]), storeId: storeA });
     expect(() => publicVariantUrl(d, a.variants[0]!, "https://cdn")).toThrow(MediaError);
     expect(() => publicVariantUrl(a, { ...a.variants[0]!, key: "other" }, "https://cdn")).toThrow(MediaError);
+  });
+});
+
+describe("platform assets under the named worker policy (ADR-0011)", () => {
+  it("only the media.platform worker context reaches store_id NULL rows; other roles, jobs and stores do not", async () => {
+    const pa = await mk().ingest({ bytes: await small(400), declaredMime: "image/png", kind: "brand_logo", actor: platform });
+    const { contextClient } = await import("@outlet/db");
+    const count = async (c: SqlClient) => Number((await c.query<{ n: string }>("SELECT count(*)::text n FROM media_assets WHERE id = $1", [pa.id])).rows[0]?.n);
+    const w = roleClient(raw, "outlet_worker");
+    expect(await count(contextClient(w, { kind: "worker", marketId: "EG", job: "media.platform" }))).toBe(1);
+    expect(await count(contextClient(w, { kind: "worker", marketId: "EG", job: "auth.purge" }))).toBe(0);
+    expect(await count(contextClient(w, { kind: "worker", marketId: "FR", job: "media.platform" }))).toBe(0);
+    expect(await count(contextClient(roleClient(raw, "outlet_app"), { kind: "store", marketId: "EG", storeId: storeA }))).toBe(0);
+    // the worker policy never matches a store-owned row
+    const own = await mk().ingest({ bytes: await small(400), declaredMime: "image/png", kind: "product", actor: staff([storeA]), storeId: storeA });
+    const other = await contextClient(w, { kind: "worker", marketId: "EG", job: "media.platform" }).query("SELECT 1 FROM media_assets WHERE id = $1", [own.id]);
+    expect(other.rows).toHaveLength(0);
+    await expect(contextClient(w, { kind: "worker", marketId: "EG", job: "media.platform" }).query("UPDATE media_assets SET rejected_reason = 'x' WHERE id = $1 RETURNING id", [own.id]).then((r) => r.rows)).resolves.toHaveLength(0);
+  });
+  it("signedUrl looks up through the caller's store context (an admin without a store gets not_found)", async () => {
+    const doc = await mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: staff([storeA]), storeId: storeA });
+    await expect(mk().signedUrl(doc.id, admin(), 60, { reasonCode: "kyc_review" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(mk().signedUrl(doc.id, admin(), 60, { storeId: storeB, reasonCode: "kyc_review" })).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("quarantine and promotion", () => {
+  it("renditions are written under quarantine/ and only public/ keys remain once ready", async () => {
+    const seen: string[] = [];
+    const st = new InMemoryStorage();
+    const put = st.put.bind(st);
+    st.put = (k, b, c) => (seen.push(k), put(k, b, c));
+    const a = await mk(new FakeAvScanner(), st).ingest({ bytes: await small(700), declaredMime: "image/png", kind: "product", actor: staff([storeA]), storeId: storeA });
+    expect(seen.some((k) => k.startsWith("quarantine/"))).toBe(true);
+    expect(a.variants.every((v) => st.objects.has(v.key) && v.key.startsWith("public/"))).toBe(true);
+    expect([...st.objects.keys()].some((k) => k.startsWith("quarantine/"))).toBe(false);
+  });
+  it("an infected upload is scanned before decode: nothing is stored, nothing is public", async () => {
+    const st = new InMemoryStorage();
+    let decodedBeforeScan = false;
+    const scanner: AvScanPort = { scan: () => { decodedBeforeScan = st.objects.size > 0; return Promise.resolve({ clean: false, signature: "EICAR" }); } };
+    const a = await mk(scanner, st).ingest({ bytes: photo, declaredMime: "image/jpeg", kind: "product", actor: staff([storeA]), storeId: storeA });
+    expect(a.status).toBe("rejected");
+    expect(decodedBeforeScan).toBe(false);
+    expect(st.objects.size).toBe(0);
+  });
+  it("a failure after the objects were written deletes every written key", async () => {
+    const st = new InMemoryStorage();
+    const svc = new MediaService({ app: roleClient(raw, "outlet_app"), worker: roleClient(raw, "outlet_worker"), storage: st, scanner: new FakeAvScanner(), signer, marketId: "EG", now: () => (st.objects.size > 0 ? new Date("not-a-date") : now) });
+    await expect(svc.ingest({ bytes: await small(700), declaredMime: "image/png", kind: "product", actor: staff([storeA]), storeId: storeA })).rejects.toBeDefined();
+    expect(st.objects.size).toBe(0);
+  });
+});
+
+describe("document views are audited", () => {
+  it("emits media.document_viewed with actor, asset and reason code but no content", async () => {
+    const doc = await mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: staff([storeA]), storeId: storeA });
+    const adm = admin();
+    await mk().signedUrl(doc.id, adm, 60, { storeId: storeA, reasonCode: "kyc_review" });
+    await expect(mk().signedUrl(doc.id, admin(), 60, { storeId: storeA })).rejects.toMatchObject({ code: "reason_required" });
+    const ev = await raw.query<{ payload: Record<string, unknown> }>("SELECT payload FROM outbox_events WHERE aggregate_id = $1 AND event_type = 'media.document_viewed'", [doc.id]);
+    expect(ev.rows).toHaveLength(1); // the denied attempt left nothing behind
+    expect(ev.rows[0]?.payload).toMatchObject({ assetId: doc.id, actorId: adm.userId, actorKind: "admin", reasonCode: "kyc_review" });
+    expect(JSON.stringify(ev.rows[0]?.payload)).not.toMatch(/%PDF|sig=|exp=/);
+  });
+  it("platform document views are recorded under the worker context", async () => {
+    const pa = await mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: platform });
+    await mk().signedUrl(pa.id, platform, 60);
+    const ev = await raw.query("SELECT 1 FROM outbox_events WHERE aggregate_id = $1 AND event_type = 'media.document_viewed'", [pa.id]);
+    expect(ev.rows).toHaveLength(1);
+  });
+});
+
+describe("purgeStalePending", () => {
+  it("deletes storage objects of stale pending rows (store and platform) and marks them rejected; fresh ones stay", async () => {
+    const st = new InMemoryStorage();
+    const stuck = new NoopAvScanner({});
+    const a = mk(stuck, st);
+    await expect(a.ingest({ bytes: await small(400), declaredMime: "image/png", kind: "product", actor: staff([storeA]), storeId: storeA })).rejects.toMatchObject({ code: "av_unavailable" });
+    await expect(a.ingest({ bytes: await small(400), declaredMime: "image/png", kind: "brand_logo", actor: platform })).rejects.toMatchObject({ code: "av_unavailable" });
+    // simulate a crash that left objects behind for a stale row
+    const row = await raw.query<{ id: string; storage_key: string }>("SELECT id, storage_key FROM media_assets WHERE status = 'pending_scan' ORDER BY created_at DESC LIMIT 1");
+    await st.put(row.rows[0]?.storage_key ?? "", new Uint8Array([1]), "image/jpeg");
+    await raw.query("INSERT INTO catalog_public_stores (id, market_id, slug, display_name_ar, kind, status, verified_badge, ships_from_country, followers_count, discount_display_mode, legal_identity, updated_at) VALUES ($1,'EG',$2,'أ','local','ACTIVE',false,'EG',0,'verified_only','{}'::jsonb, now()) ON CONFLICT DO NOTHING", [storeA, `s-${storeA}`]);
+    const later = new Date(now.getTime() + 3_600_000);
+    expect(await a.purgeStalePending(later, 60_000)).toBeGreaterThanOrEqual(1);
+    expect(st.objects.size).toBe(0);
+    const left = await raw.query<{ n: string }>("SELECT count(*)::text n FROM media_assets WHERE status = 'pending_scan' AND created_at <= $1", [new Date(later.getTime() - 60_000)]);
+    expect(left.rows[0]?.n).toBe("0");
+    const rej = await raw.query<{ rejected_reason: string }>("SELECT rejected_reason FROM media_assets WHERE id = $1", [row.rows[0]?.id]);
+    expect(rej.rows[0]?.rejected_reason).toBe("stale_pending");
+    expect(await a.purgeStalePending(now, 1_000_000_000)).toBe(0);
   });
 });

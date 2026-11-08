@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SqlClient } from "@outlet/db";
+import { FlagService, InMemoryFlagStore } from "@outlet/flags";
 import { createTestClient, roleClient } from "@outlet/db/testing";
 import { uuidv7 } from "@outlet/ids";
 import type { OutboxEvent } from "@outlet/outbox";
@@ -74,12 +75,33 @@ describe("PriceEventIngestor", () => {
     expect(await change(sku, 1000, 1)).toBe("unchanged");
     expect(await change(sku, 800, 2)).toBe("applied");
     clock = day(3);
-    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 700, day(1)))).toBe("stale");
+    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 700, day(2)))).toBe("stale"); // a different price at the same instant
     expect(await new PriceEventIngestor(env()).ingest({ ...priceChanged(sku, 1, day(3)), type: "listing.updated" })).toBe("ignored");
     const rows = await raw.query<{ price_minor: string; valid_to: Date | null }>("SELECT price_minor::text, valid_to FROM price_events WHERE sku_id = $1 ORDER BY valid_from", [sku]);
     expect(rows.rows.map((r) => r.price_minor)).toEqual(["1000", "800"]);
     expect(rows.rows[0]?.valid_to).toEqual(day(2));
     expect(rows.rows[1]?.valid_to).toBeNull();
+  });
+
+  it("applies out-of-order events as closed rows and recomputes the window (redelivery cannot lose a low price)", async () => {
+    const sku = randomUUID();
+    await change(sku, 1000, 0);
+    await change(sku, 900, 40);
+    clock = day(41);
+    // the day-20 event (a 600 low) arrives after the day-40 one
+    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 600, day(20)))).toBe("applied");
+    const rows = await raw.query<{ price_minor: string; valid_from: Date; valid_to: Date | null }>("SELECT price_minor::text, valid_from, valid_to FROM price_events WHERE sku_id = $1 ORDER BY valid_from", [sku]);
+    expect(rows.rows.map((r) => r.price_minor)).toEqual(["1000", "600", "900"]);
+    expect(rows.rows[1]?.valid_to).toEqual(day(40));
+    expect(rows.rows[2]?.valid_to).toBeNull();
+    const w = await raw.query<{ low_30d_minor: string }>("SELECT low_30d_minor::text FROM sku_price_windows WHERE sku_id = $1", [sku]);
+    expect(w.rows[0]?.low_30d_minor).toBe("600");
+    const ev = await new PriceEvidencePublic(env()).get(sku);
+    // effective history is not overlapping: each row ends where the next begins
+    expect(ev?.history.map((h) => h.validTo)).toEqual([day(20).toISOString(), day(40).toISOString(), null]);
+    // a late event before the very first row, and an equal-to-prior late event
+    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 600, day(30)))).toBe("unchanged");
+    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 1200, day(-5)))).toBe("applied");
   });
 
   it("rejects a malformed payload and a currency change on the open row", async () => {
@@ -211,7 +233,23 @@ describe("PriceSnapshotService and PriceEvidencePublic", () => {
     killed = false;
   });
 
-  it("names the kill switch", () => {
-    expect(PRICE_WATCH_KILL_SWITCH).toBe("pricing.price_watch");
+  it("names the registered kill switch", () => {
+    expect(PRICE_WATCH_KILL_SWITCH).toBe("pricing.price_watch.enabled");
+  });
+
+  it("engaging the registered switch in the real FlagService hides discounts; releasing restores them", async () => {
+    const flags = new FlagService({ store: new InMemoryFlagStore(), audit: { record: () => Promise.resolve() }, ttlMs: 0, maxStaleMs: 0 });
+    const wired = () =>
+      makeEnv({ client: roleClient(raw, "outlet_app"), marketId: MARKET, now: () => clock, killSwitch: { isKilled: () => flags.isKilled(PRICE_WATCH_KILL_SWITCH, { marketId: MARKET }) } });
+    const sku = randomUUID();
+    killed = false;
+    await change(sku, 1000, 0);
+    await change(sku, 700, 31);
+    expect((await new PriceSnapshotService(wired()).snapshotForOrderLine(sku)).claimType).toBe("verified_discount");
+    await flags.engageKillSwitch(PRICE_WATCH_KILL_SWITCH, "test");
+    expect(await new PriceSnapshotService(wired()).snapshotForOrderLine(sku)).toEqual({ vrp: null, evidenceIds: [], claimType: "plain" });
+    expect(await new PriceEvidencePublic(wired()).get(sku)).toMatchObject({ label: "plain", discountPct: null, referencePrice: null });
+    await flags.releaseKillSwitch(PRICE_WATCH_KILL_SWITCH, "test");
+    expect((await new PriceSnapshotService(wired()).snapshotForOrderLine(sku)).claimType).toBe("verified_discount");
   });
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InventoryError } from "../src/index.js";
+import { InventoryError, RESERVE_PICK_SQL } from "../src/index.js";
 import { buildWorld, counts, defectCard, staff } from "./fixtures.js";
 import type { World } from "./fixtures.js";
 
@@ -10,6 +10,18 @@ afterAll(async () => { await w.close(); });
 
 const adj = (sku: string, delta: number, key: string, extra: Record<string, unknown> = {}) =>
   w.inv.adjustOnHand(staff([w.storeA]), { skuId: sku, locationId: w.locA, storeId: w.storeA, delta, idempotencyKey: key, source: "seller_edit", ...extra });
+
+describe("lock order", () => {
+  it("adjustOnHand takes the SKU advisory lock before locking the level row", async () => {
+    const s = await w.sku("A", 5);
+    w.statements.length = 0;
+    await adj(s, 1, "lo-" + s);
+    const adv = w.statements.findIndex((q) => q.includes("pg_advisory_xact_lock"));
+    const lvl = w.statements.findIndex((q) => q.includes("FROM inventory_levels") && q.includes("FOR UPDATE"));
+    expect(adv).toBeGreaterThanOrEqual(0);
+    expect(lvl).toBeGreaterThan(adv);
+  });
+});
 
 describe("adjustOnHand", () => {
   it("creates the level and a pool of min(on_hand, 1000) rows; caps at 1000", async () => {
@@ -89,10 +101,23 @@ describe("serialised units and the replenisher", () => {
     expect(await counts(w.raw, s)).toMatchObject({ onHand: 1, available: 1 });
     const u = await w.raw.query<{ defect_card_id: string }>("SELECT defect_card_id FROM inventory_units WHERE sku_id = $1", [s]);
     expect(u.rows).toEqual([{ defect_card_id: card }]);
-    await adj(s, 3, "plus-" + s); // fungible stock next to the one-off
-    expect(await counts(w.raw, s)).toMatchObject({ onHand: 4, available: 4 });
-    await adj(s, -3, "minus-" + s);
+    await expect(adj(s, 3, "plus-" + s)).rejects.toMatchObject({ code: "conflict" }); // a SKU is never fungible and serialised at once
+    await expect(w.raw.query("INSERT INTO inventory_units (sku_id, location_id, id, store_id, market_id) SELECT $1, $2, $3, $4, 'EG'", [s, w.locA, randomUUID(), w.storeA])).rejects.toThrow(/serialised/);
+    expect(await counts(w.raw, s)).toMatchObject({ onHand: 1, available: 1 });
     expect((await w.raw.query("SELECT 1 FROM inventory_units WHERE sku_id = $1 AND defect_card_id IS NOT NULL", [s])).rows).toHaveLength(1);
+  });
+  it("a fungible SKU refuses a serialised unit (service and trigger), and reserve never takes graded units", async () => {
+    const s = await w.sku("A", 3);
+    const card = await defectCard(w.raw, s);
+    await expect(w.inv.addSerializedUnit(staff([w.storeA]), { skuId: s, locationId: w.locA, storeId: w.storeA, defectCardId: card, idempotencyKey: "mix-" + s })).rejects.toMatchObject({ code: "conflict" });
+    await expect(w.raw.query("INSERT INTO inventory_units (sku_id, location_id, id, store_id, market_id, defect_card_id) SELECT $1, $2, $3, $4, 'EG', $5", [s, w.locA, randomUUID(), w.storeA, card])).rejects.toThrow(/fungible/);
+    // the pick statement itself filters graded units even if one were present
+    expect(RESERVE_PICK_SQL).toContain("defect_card_id IS NULL");
+    const t = await w.sku("A", 0);
+    const c2 = await defectCard(w.raw, t);
+    await w.inv.addSerializedUnit(staff([w.storeA]), { skuId: t, locationId: w.locA, storeId: w.storeA, defectCardId: c2, idempotencyKey: "ser2-" + t });
+    const r = await w.res.reserve({ orderGroupRef: "og-ser-" + t, userId: randomUUID(), items: [{ skuId: t, locationId: w.locA, storeId: w.storeA, qty: 1 }] });
+    expect(r.ok).toBe(false); // graded units are not fungible stock
   });
   it("replenish tops up after claims drained the pool, and replenishStore / replenishAll cover levels", async () => {
     const small = await buildWorld({ poolCap: 3 });

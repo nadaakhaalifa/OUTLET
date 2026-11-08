@@ -48,6 +48,30 @@
     "cmd": "all"
   },
   {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "kyc_decisions",
+    "policy": "kyc_decisions__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "kyc_documents",
+    "policy": "kyc_documents__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "media_assets",
+    "policy": "media_assets__worker_platform",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "otp_challenges",
     "policy": "otp_challenges__auth_phone",
     "role": "outlet_auth",
@@ -92,6 +116,12 @@
   {
     "table": "outbox_events",
     "policy": "outbox_events__worker_emit",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_media_platform",
     "role": "outlet_worker",
     "cmd": "insert"
   },
@@ -174,6 +204,24 @@
     "cmd": "delete"
   },
   {
+    "table": "seller_bank_accounts",
+    "policy": "seller_bank_accounts__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "seller_plan_assignments",
+    "policy": "seller_plan_assignments__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "session_families",
     "policy": "session_families__auth_by_token",
     "role": "outlet_auth",
@@ -196,6 +244,18 @@
     "policy": "session_families__auth_revoke_by_token",
     "role": "outlet_auth",
     "cmd": "update"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__auth_my_memberships",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "users",

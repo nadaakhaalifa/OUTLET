@@ -27,7 +27,7 @@ export class PriceSnapshotService {
     const w = windowFor(h, now);
     if (w.currentPrice === null || h.currency === undefined) return PLAIN;
     const vrp = vrpFromInternal(w, now);
-    const claimType = claimTypeOf({ vrp, price: w.currentPrice, launch: w.launchPrice, isLowest30d: w.low30d === w.currentPrice });
+    const claimType = claimTypeOf({ vrp, price: w.currentPrice, launch: w.launchPrice, isLowest30d: w.isLowest30d });
     if (claimType !== "verified_discount" || vrp === null) return { ...PLAIN, claimType };
     return { vrp: money(vrp, h.currency as Currency), evidenceIds: w.referenceEvidenceIds, claimType };
   }

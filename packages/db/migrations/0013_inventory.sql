@@ -103,7 +103,22 @@ CREATE TABLE inventory_units (
   CHECK ((state = 'reserved') = (expires_at IS NOT NULL))
 ) WITH (fillfactor = 70);
 -- reserve scan: ORDER BY id LIMIT qty FOR UPDATE SKIP LOCKED
-CREATE INDEX inventory_units_available_idx ON inventory_units (sku_id, location_id, id) WHERE state = 'available';
+-- Serves the fungible reserve statement (graded one-off units are never taken by it).
+CREATE INDEX inventory_units_available_idx ON inventory_units (sku_id, location_id, id) WHERE state = 'available' AND defect_card_id IS NULL;
+-- A SKU is fungible (pool rows) or serialised (graded one-off units), never both: the two pickers would otherwise disagree on stock.
+CREATE FUNCTION inventory_units_no_mix() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.defect_card_id IS NULL THEN
+    IF EXISTS (SELECT 1 FROM inventory_units WHERE sku_id = NEW.sku_id AND defect_card_id IS NOT NULL) THEN
+      RAISE EXCEPTION 'sku % holds serialised units: a fungible unit cannot be added', NEW.sku_id USING ERRCODE = '23514';
+    END IF;
+  ELSIF EXISTS (SELECT 1 FROM inventory_units WHERE sku_id = NEW.sku_id AND defect_card_id IS NULL) THEN
+    RAISE EXCEPTION 'sku % holds fungible units: a serialised unit cannot be added', NEW.sku_id USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$fn$;
+CREATE TRIGGER inventory_units_no_mix BEFORE INSERT ON inventory_units FOR EACH ROW EXECUTE FUNCTION inventory_units_no_mix();
 CREATE INDEX inventory_units_reserved_expiry_idx ON inventory_units (expires_at) WHERE state = 'reserved';
 CREATE INDEX inventory_units_reservation_idx ON inventory_units (reservation_id) WHERE reservation_id IS NOT NULL;
 SELECT app.enable_store_rls('inventory_units');
