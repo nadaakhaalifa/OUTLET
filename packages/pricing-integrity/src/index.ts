@@ -1,0 +1,13 @@
+export { DAY_MS, WINDOW_DAYS, WINDOW_MS, computeWindow } from "./domain/window.js";
+export type { PriceEventInput, PriceWindow, WindowOptions } from "./domain/window.js";
+export { MIN_CLAIM_PCT, claimAllowed, discountPct, vrpFromInternal } from "./domain/vrp.js";
+export { claimTypeOf, displayDecision } from "./domain/display.js";
+export type { BrandMode, ClaimType, DisplayDecision, DisplayInput, PriceLabel, Viewer } from "./domain/display.js";
+export { PRICE_WATCH_KILL_SWITCH, makeEnv } from "./application/env.js";
+export type { Env, PriceWatchKillSwitch, PricingDeps } from "./application/env.js";
+export { PRICE_CHANGED_CONSUMER, PriceEventIngestor, priceChangedPayload } from "./application/ingestor.js";
+export type { IngestOutcome } from "./application/ingestor.js";
+export { PriceSnapshotService } from "./application/snapshot.js";
+export type { PriceSnapshot } from "./application/snapshot.js";
+export { PriceEvidencePublic } from "./application/evidence.js";
+export type { PublicPriceEvidence } from "./application/evidence.js";

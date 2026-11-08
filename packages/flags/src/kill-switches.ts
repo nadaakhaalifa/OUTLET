@@ -27,6 +27,7 @@ export const KILL_SWITCHES = {
   "payments.store_credit.enabled": money("Store credit tender"),
   "referrals.payouts.enabled": money("Referral and creator payouts"),
   "gift_cards.sales.enabled": money("Gift-card sales"),
+  "pricing.price_watch.enabled": money("Price Watch verified-discount display (off = plain prices everywhere)"),
   "drops.enabled": ui("Drops and the waiting room"),
   "games.enabled": ui("Light games (spin, scratch)"),
   "stylist.llm.enabled": ui("Stylist LLM features"),
