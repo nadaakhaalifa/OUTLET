@@ -1,3 +1,5 @@
 "use client";
-// @outlet/ui-web has no "use client" boundary of its own; this file is the client entry the server components import.
-export { PriceBlock } from "@outlet/ui-web";
+// Client entry the server components import (a "use client" file may be imported from the server tree).
+export {
+  Breadcrumb, CategoryChips, DiscountBandShelf, PriceBlock, QuickViewPanel, ShelfWall, StoreCarousel, StoreHeader, StorefrontCard3D, StorefrontGrid, TabsExploreDeals, TopNav,
+} from "@outlet/ui-web";

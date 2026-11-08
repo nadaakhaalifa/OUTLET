@@ -4,11 +4,11 @@ const { revalidateTag } = vi.hoisted(() => ({ revalidateTag: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidateTag }));
 
 import { UnconfiguredApiClient, getApiClient, setApiClient, type ApiClient } from "../src/server/api-client";
-import { loadDealBands, loadProduct, loadStore, loadStores } from "../src/server/loaders";
+import { loadDealBands, loadProduct, loadStore, loadStoreDirectory, loadStoreProducts } from "../src/server/loaders";
 import { revalidateTags, tags } from "../src/server/cache-tags";
 
 afterEach(() => {
-  setApiClient(new UnconfiguredApiClient());
+  setApiClient(null);
   revalidateTag.mockClear();
 });
 
@@ -17,18 +17,20 @@ describe("loaders with the Unconfigured client never fabricate", () => {
     expect(getApiClient()).toBeInstanceOf(UnconfiguredApiClient);
     expect(await loadProduct("eg", "p1")).toBeNull();
     expect(await loadStore("eg", "s")).toBeNull();
-    expect(await loadStores("eg")).toEqual([]);
+    expect(await loadStoreDirectory("eg")).toEqual({ stores: [], reason: "UNCONFIGURED" });
+    expect(await loadStoreProducts("eg", "s")).toEqual({ items: [], nextCursor: null });
     expect(await loadDealBands("eg")).toEqual([]);
   });
   it("delegates to an injected client", async () => {
     const fake: ApiClient = {
-      listStores: () => Promise.resolve([{ slug: "a", name: "A", category: "fashion" }]),
+      listStores: () => Promise.resolve({ stores: [{ slug: "a", nameAr: "أ", nameEn: "A", kind: "local" as const }], reason: "OK" as const }),
       getStore: () => Promise.resolve(null),
+      listStoreProducts: () => Promise.resolve({ items: [], nextCursor: null }),
       getProduct: () => Promise.resolve(null),
       listDealBands: () => Promise.resolve([{ highPercent: 70, lowPercent: 60 }]),
     };
     setApiClient(fake);
-    expect(await loadStores("eg")).toHaveLength(1);
+    expect((await loadStoreDirectory("eg")).stores).toHaveLength(1);
     expect(await loadDealBands("eg")).toEqual([{ highPercent: 70, lowPercent: 60 }]);
   });
 });

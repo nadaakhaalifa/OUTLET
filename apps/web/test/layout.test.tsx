@@ -5,6 +5,7 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
+  usePathname: () => "/eg-ar",
 }));
 vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(new Headers({ "x-nonce": "n0nce" })),

@@ -29,7 +29,7 @@ export default async function SegmentLayout({ children, params }: { children: Re
       {...(themeParse.success ? { "data-theme": themeParse.data } : {})}
     >
       <body>
-        <SiteHeader resolved={resolved} active="none" />
+        <SiteHeader resolved={resolved} />
         <main className="page">{children}</main>
         <JsonLd nonce={nonce} data={{ "@context": "https://schema.org", "@type": "Organization", name: t("brand.name"), url: origin }} />
         <JsonLd
