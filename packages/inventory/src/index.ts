@@ -11,3 +11,5 @@ export { ADJUSTMENT_REASONS, InventoryService, requireAccess } from "./applicati
 export type { AdjustInput, AdjustResult, LevelView } from "./application/inventory-service.js";
 export { ReservationService } from "./application/reservation-service.js";
 export type { ClaimResult, ReserveInput, ReserveItem, ReserveResult, Shortfall, SweepResult } from "./application/reservation-service.js";
+export { COMMITTED_RELEASED_EVENT, RELEASE_REQUIRED_CONSUMER, RELEASE_REQUIRED_EVENT, RELEASE_REQUIRED_ORDER_CONSUMER, ReleaseRequiredConsumer } from "./application/release-required.js";
+export type { ReleaseRequiredDeps, ReleaseRequiredOutcome } from "./application/release-required.js";
