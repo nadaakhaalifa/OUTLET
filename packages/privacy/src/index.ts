@@ -22,3 +22,8 @@ export {
 } from "./errors.js";
 export type { DeletionBlocker, DeletionBlockerKind } from "./errors.js";
 export type { PrivacyDeps } from "./deps.js";
+export {
+  BREACH_SEVERITIES, BREACH_TRANSITIONS, BreachRegister, OpenBreachSchema, PDPC_DEADLINE_HOURS, SUBJECTS_DEADLINE_DAYS, UpdateBreachSchema, breachDeadlines,
+} from "./breach.js";
+export type { BreachSeverity, BreachStatus, BreachView, OpenBreachInput, UpdateBreachInput } from "./breach.js";
+export { BreachCloseBlockedError, BreachNotFoundError, BreachSummaryPiiError } from "./errors.js";

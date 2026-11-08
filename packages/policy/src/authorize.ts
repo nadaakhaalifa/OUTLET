@@ -1,4 +1,4 @@
-import { ADMIN_POLICY, ALWAYS_DUAL_APPROVAL, AMOUNT_DUAL_APPROVAL, PUBLIC_ACTIONS, SELLER_POLICY, SHOPPER_ACTIONS, SUPER_ADMIN_ACTIONS } from "./policies.js";
+import { ADMIN_POLICY, ALWAYS_DUAL_APPROVAL, AMOUNT_DUAL_APPROVAL, MONEY_SWITCH_DUAL_APPROVAL, PUBLIC_ACTIONS, SELLER_POLICY, SHOPPER_ACTIONS, SUPER_ADMIN_ACTIONS } from "./policies.js";
 import type { Action, Decision, Principal, Resource } from "./types.js";
 
 const ALLOW: Decision = { effect: "allow" };
@@ -62,6 +62,7 @@ export interface DualApprovalConfig {
 
 /**
  * Missing or negative amount on an amount-gated action fails safe (dual approval required).
+ * Money kill switches fail safe the same way (an unspecified switch is treated as money).
  * When the acting principal holds super_admin, every super_admin action needs dual approval regardless of amount.
  */
 export const dualApprovalRequired = (
@@ -69,8 +70,11 @@ export const dualApprovalRequired = (
   config: DualApprovalConfig,
   amountMinor?: bigint,
   principal?: Pick<Principal, "roles">,
+  /** kill_switch.engage only: pass moneySwitch=false to opt a non-money switch out; omitted or true means dual approval. */
+  context?: { readonly moneySwitch?: boolean },
 ): boolean => {
   if (ALWAYS_DUAL_APPROVAL.includes(action)) return true;
+  if (MONEY_SWITCH_DUAL_APPROVAL.includes(action) && context?.moneySwitch !== false) return true;
   if (principal?.roles.includes("super_admin") === true && SUPER_ADMIN_ACTIONS.includes(action)) return true;
   if (AMOUNT_DUAL_APPROVAL.includes(action)) return amountMinor === undefined || amountMinor < 0n || amountMinor >= config.thresholdMinor;
   return false;

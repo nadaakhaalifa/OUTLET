@@ -72,7 +72,7 @@ describe("explicit role matrix (spec, not derived from the tables)", () => {
 
 describe("reason codes", () => {
   it("lists exactly the sensitive reads and exports", () => {
-    expect([...REQUIRES_REASON_CODE]).toEqual(["user.read", "privacy.export", "data.export", "ledger.read"]);
+    expect([...REQUIRES_REASON_CODE]).toEqual(["user.read", "privacy.export", "data.export", "ledger.read", "reconciliation.read"]);
     for (const a of REQUIRES_REASON_CODE) expect(requiresReasonCode(a)).toBe(true);
     expect(requiresReasonCode("order.read")).toBe(false);
   });
@@ -184,5 +184,65 @@ describe("properties", () => {
         expect(authorize(p, action, res({ marketId: "AE", ownerUserId: "u1" })).effect).toBe("deny");
       }),
     );
+  });
+});
+
+describe("admin console actions (matrix)", () => {
+  const matrix: Record<string, readonly (typeof ADMIN_ROLES)[number][]> = {
+    "kill_switch.read": ["finance", "security", "super_admin"],
+    "kill_switch.engage": ["finance", "security", "super_admin"],
+    "reconciliation.read": ["finance"],
+    "reconciliation.resolve": ["finance"],
+    "elevation.request": ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"],
+    "elevation.approve": ["security", "super_admin"],
+    "store.suspend": ["ops", "trust_safety"],
+    "store.reinstate": ["ops", "trust_safety"],
+    "privacy.breach.open": ["dpo", "security"],
+    "price_integrity.read": ["ops", "trust_safety", "finance"],
+    "tax.read": ["finance"],
+  };
+  for (const [action, allowed] of Object.entries(matrix)) {
+    for (const role of ADMIN_ROLES) {
+      const expected = allowed.includes(role) ? "allow" : "forbidden";
+      it(`${role} ${action} -> ${expected}`, () => {
+        expect(reason(authorize(admin(role, true), action, res()))).toBe(expected);
+      });
+    }
+    it(`${action}: seller, shopper and anonymous never`, () => {
+      expect(reason(authorize({ kind: "shopper", userId: "u", marketId: "EG", roles: [], scopes: [] }, action, res()))).not.toBe("allow");
+      expect(reason(authorize({ kind: "anonymous", marketId: "EG", roles: [], scopes: [] }, action, res()))).not.toBe("allow");
+    });
+  }
+  it("elevation.approve is exactly the roles that hold role.grant", () => {
+    const grant = ADMIN_ROLES.filter((r) => ADMIN_POLICY[r].includes("role.grant"));
+    expect(grant).toEqual(ADMIN_ROLES.filter((r) => ADMIN_POLICY[r].includes("elevation.approve")));
+  });
+  it("super_admin needs break-glass for the new actions too", () => {
+    expect(reason(authorize(admin("super_admin", false), "kill_switch.engage", res()))).toBe("forbidden");
+  });
+});
+
+describe("dual approval for admin console actions", () => {
+  const cfg = { thresholdMinor: 1_000_000n };
+  it("engaging a kill switch needs dual approval unless the switch is explicitly non-money", () => {
+    expect(dualApprovalRequired("kill_switch.engage", cfg)).toBe(true);
+    expect(dualApprovalRequired("kill_switch.engage", cfg, undefined, undefined, { moneySwitch: true })).toBe(true);
+    expect(dualApprovalRequired("kill_switch.engage", cfg, undefined, undefined, { moneySwitch: false })).toBe(false);
+    expect(dualApprovalRequired("kill_switch.engage", cfg, undefined, { roles: ["super_admin"] }, { moneySwitch: false })).toBe(true);
+    expect(dualApprovalRequired("kill_switch.read", cfg)).toBe(false);
+  });
+  it("reconciliation.resolve is amount gated and fails safe", () => {
+    expect(dualApprovalRequired("reconciliation.resolve", cfg, 999_999n)).toBe(false);
+    expect(dualApprovalRequired("reconciliation.resolve", cfg, 1_000_000n)).toBe(true);
+    expect(dualApprovalRequired("reconciliation.resolve", cfg)).toBe(true);
+    expect(dualApprovalRequired("reconciliation.resolve", cfg, -1n)).toBe(true);
+  });
+  it("store suspend and reinstate always need a second approver", () => {
+    for (const a of ["store.suspend", "store.reinstate"]) expect(dualApprovalRequired(a, cfg, 0n)).toBe(true);
+  });
+  it("elevation, breach and read actions are not dual gated", () => {
+    for (const a of ["elevation.request", "elevation.approve", "privacy.breach.open", "price_integrity.read", "tax.read", "reconciliation.read"]) {
+      expect(dualApprovalRequired(a, cfg, 0n)).toBe(false);
+    }
   });
 });

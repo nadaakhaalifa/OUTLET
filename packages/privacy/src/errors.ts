@@ -48,3 +48,21 @@ export class DeletionBlockedError extends PrivacyError {
     super("deletion_blocked", `deletion blocked by: ${blockers.map((b) => `${b.kind}(${String(b.count)})`).join(", ")}`);
   }
 }
+
+export class BreachNotFoundError extends PrivacyError {
+  constructor(id: string) {
+    super("breach_not_found", `breach ${id} not found`);
+  }
+}
+
+export class BreachSummaryPiiError extends PrivacyError {
+  constructor() {
+    super("breach_summary_pii", "breach summary must not contain personal data (email, phone or ID numbers)");
+  }
+}
+
+export class BreachCloseBlockedError extends PrivacyError {
+  constructor(readonly missing: readonly string[]) {
+    super("breach_close_blocked", `breach cannot be closed yet: ${missing.join(", ")}`);
+  }
+}
