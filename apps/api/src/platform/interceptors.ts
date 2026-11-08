@@ -76,10 +76,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const req = ctx.switchToHttp().getRequest<ApiRequest>();
     if (!MUTATING_METHODS.includes(req.method)) return next.handle();
     if (this.reflector.get<string | undefined>(META.noIdempotency, ctx.getHandler()) !== undefined) return next.handle();
-    return from(this.run(req, ctx.switchToHttp().getResponse<ApiReply>(), next));
+    const sensitive = this.reflector.get<ContractDef | undefined>(META.contract, ctx.getHandler())?.sensitiveResponse === true;
+    return from(this.run(req, ctx.switchToHttp().getResponse<ApiReply>(), next, sensitive));
   }
 
-  private async run(req: ApiRequest, reply: ApiReply, next: CallHandler): Promise<unknown> {
+  private async run(req: ApiRequest, reply: ApiReply, next: CallHandler, sensitive: boolean): Promise<unknown> {
     const key = this.validKey(headerValue(req, "idempotency-key"));
     const actorId = req.ctx.user?.userId ?? this.deviceActor(req);
     const id = { key, actorId, route: `${req.method} ${routeTemplate(req)}` };
@@ -91,6 +92,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       case "in_progress":
         throw Problems.idempotencyInFlight();
       case "replay":
+        if (begun.response.redacted === true) throw Problems.idempotentReplayUnavailable();
         void reply.header("idempotent-replayed", "true").header("cache-control", "private, no-store").status(begun.response.status);
         return begun.response.body;
       case "fresh":
@@ -106,7 +108,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       throw e;
     }
     try {
-      await this.deps.idempotency.complete(id, { status: reply.statusCode, body: (body ?? null) as never });
+      await this.deps.idempotency.complete(id, sensitive ? { status: reply.statusCode, body: null, redacted: true } : { status: reply.statusCode, body: (body ?? null) as never });
     } catch {
       // The side effect happened: answer it. The key stays in progress until it expires (retries get 409).
       req.ctx.log.error("idempotency complete failed", { route: id.route });

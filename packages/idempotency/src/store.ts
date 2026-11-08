@@ -8,6 +8,8 @@ export const IDEMPOTENCY_LEASE_MS = 60 * 1000;
 export const storedResponseSchema = z.strictObject({
   status: z.number().int().min(100).max(599),
   body: z.json(),
+  /** Sensitive responses (tokens): no body is persisted, only the status; a replay cannot be served (fail closed). */
+  redacted: z.boolean().optional(),
 });
 export type StoredResponse = z.infer<typeof storedResponseSchema>;
 
@@ -35,6 +37,10 @@ interface Row {
   response_status: number | null;
   response_body: unknown;
 }
+
+/** What is persisted instead of a sensitive body. */
+const REDACTED_MARKER = { response_redacted: true } as const;
+const isRedacted = (body: unknown): boolean => typeof body === "object" && body !== null && (body as { response_redacted?: unknown }).response_redacted === true;
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
 
@@ -79,6 +85,7 @@ export class IdempotencyStore {
     if (!row) return { kind: "in_progress" }; // purged between the two statements; caller retries
     if (!sameBytes(new Uint8Array(row.request_hash), requestHash)) return { kind: "conflict" };
     if (row.status !== "completed" || row.response_status === null) return { kind: "in_progress" };
+    if (isRedacted(row.response_body)) return { kind: "replay", response: { status: row.response_status, body: null, redacted: true } };
     return { kind: "replay", response: storedResponseSchema.parse({ status: row.response_status, body: row.response_body }) };
   }
 
@@ -89,7 +96,7 @@ export class IdempotencyStore {
     const r = await this.db.query(
       `UPDATE idempotency_keys SET status='completed', response_status=$4, response_body=$5::jsonb, locked_until=NULL
         WHERE key=$1 AND actor_id=$2 AND route=$3 AND status='in_progress' RETURNING key`,
-      [key, actorId, route, res.status, JSON.stringify(res.body)],
+      [key, actorId, route, res.status, JSON.stringify(res.redacted === true ? REDACTED_MARKER : res.body)],
     );
     if (r.rows.length === 0) throw new Error("idempotency: no in-progress record to complete");
   }

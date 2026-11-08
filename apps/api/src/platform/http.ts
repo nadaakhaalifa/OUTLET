@@ -29,6 +29,8 @@ export interface RequestState {
   /** Database context every transaction of this request binds with SET LOCAL (ADR-0011). */
   db: UserContext | StoreContext | undefined;
   reasonCode: string | undefined;
+  /** Exact request bytes, kept only for webhook routes (signature verification runs over the raw body, before any parsing). */
+  rawBody: Uint8Array | undefined;
 }
 
 declare module "fastify" {

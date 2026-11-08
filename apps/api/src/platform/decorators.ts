@@ -32,6 +32,11 @@ export interface ContractDef {
   readonly cacheControl?: string;
   /** Upper bound on app-pool statements per request (BUILD-PROMPT §2 query-count assertion). */
   readonly maxQueries: number;
+  /**
+   * The response carries credentials (access/refresh tokens). The idempotency interceptor then persists NO body (only the status,
+   * marked redacted) and a same-key replay answers 409 `idempotent-replay-unavailable`: fail closed, no token is ever stored.
+   */
+  readonly sensitiveResponse?: boolean;
 }
 
 export interface ResolveContext {

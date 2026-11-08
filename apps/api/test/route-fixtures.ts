@@ -1,6 +1,9 @@
 import type { InjectOptions } from "fastify";
-import { DEVICE, bearer, idemKey } from "./harness.js";
+import { randomUUID } from "node:crypto";
+import { DEVICE, RP_ID, RP_ORIGIN, bearer, idemKey } from "./harness.js";
+import { ADDRESS, addToBag, assertVerifyRequest, authedHeaders, checkoutRequest, enrollPasskey, phone, placeOrder, quote, signIn } from "./flows.js";
 import { makePng, multipartBody } from "./png.js";
+import { VirtualAuthenticator } from "./webauthn.js";
 import type { TestApp } from "./harness.js";
 
 export interface HappyRequest {
@@ -24,6 +27,23 @@ export interface RouteFixture {
 }
 
 const device = { "x-device-id": DEVICE };
+
+/** A signed provider callback for a freshly placed card order (amount = the order total). */
+export const webhookRequest = async (t: TestApp, type: "payment.succeeded" | "payment.failed", o: { badSignature?: boolean; eventId?: string } = {}): Promise<InjectOptions> => {
+  const placed = await placeOrder(t, "card");
+  return webhookFor(t, placed.groupId, type, o);
+};
+
+export const webhookFor = async (t: TestApp, groupId: string, type: "payment.succeeded" | "payment.failed", o: { badSignature?: boolean; eventId?: string } = {}): Promise<InjectOptions> => {
+  const r = await t.raw.query<{ id: string; provider_ref: string; amount_minor: string }>("SELECT id, provider_ref, amount_minor FROM payment_intents WHERE order_group_id = $1", [groupId]);
+  const intent = r.rows[0];
+  if (intent === undefined) throw new Error("no intent");
+  const w = t.fakes.provider.webhook(
+    { id: o.eventId ?? `evt_${randomUUID()}`, type, merchantReference: intent.id, providerRef: intent.provider_ref, amountMinor: BigInt(intent.amount_minor) },
+    { badSignature: o.badSignature === true },
+  );
+  return { method: "POST", url: "/v1/eg/webhooks/psp/paymob", headers: { "content-type": "application/json", ...w.headers }, payload: Buffer.from(w.rawBody) };
+};
 
 const WRITE_ROLES = ["catalog"] as const;
 const sellerHeaders = (t: TestApp, token: string, store: string): Record<string, string> => ({ ...bearer(token), "x-store-id": store, "idempotency-key": idemKey(t) });
@@ -64,7 +84,168 @@ export const foreignProduct = async (t: TestApp): Promise<string> => {
   return d.id;
 };
 
+/** An OTP challenge ready to verify (new account). */
+const otpChallenge = async (t: TestApp): Promise<{ device: string; phone: string; challenge: string; code: string }> => {
+  const device = await t.device();
+  const p = phone();
+  const r = await t.inject({ method: "POST", url: "/v1/eg/auth/otp/request", headers: { "x-device-id": device, "idempotency-key": idemKey(t) }, payload: { phone_e164: p, channel: "sms", purpose: "sign_in" } });
+  return { device, phone: p, challenge: (JSON.parse(r.body) as { challenge_id: string }).challenge_id, code: t.sms.last() };
+};
+
+const FED = { id_token: "x.y.z", nonce: "n" };
+
 export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
+  "POST /v1/{market}/auth/devices": {
+    happy: () => Promise.resolve({ req: { method: "POST", url: "/v1/eg/auth/devices", payload: { install_id: randomUUID(), platform: "web" } }, status: 201 }),
+  },
+  "POST /v1/{market}/auth/otp/request": {
+    happy: async (t) => ({ req: { method: "POST", url: "/v1/eg/auth/otp/request", headers: { "x-device-id": await t.device(), "idempotency-key": idemKey(t) }, payload: { phone_e164: phone(), channel: "sms", purpose: "sign_in" } }, status: 201 }),
+  },
+  "POST /v1/{market}/auth/otp/verify": {
+    happy: async (t) => {
+      const c = await otpChallenge(t);
+      return { req: { method: "POST", url: "/v1/eg/auth/otp/verify", headers: { "x-device-id": c.device, "idempotency-key": idemKey(t) }, payload: { challenge_id: c.challenge, phone_e164: c.phone, code: c.code, dob: "1990-01-01" } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/auth/refresh": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      return { req: { method: "POST", url: "/v1/eg/auth/refresh", headers: { "x-device-id": s.deviceId, "idempotency-key": idemKey(t) }, payload: { refresh_token: s.refresh } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/auth/logout": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      return { req: { method: "POST", url: "/v1/eg/auth/logout", headers: authedHeaders(t, s.token), payload: {} }, status: 204 };
+    },
+  },
+  "GET /v1/{market}/me/sessions": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      return { req: { method: "GET", url: "/v1/eg/me/sessions?limit=10", headers: bearer(s.token) }, status: 200 };
+    },
+  },
+  "DELETE /v1/{market}/me/sessions/{session_family_id}": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      return { req: { method: "DELETE", url: `/v1/eg/me/sessions/${s.sessionId}`, headers: authedHeaders(t, s.token) }, status: 204 };
+    },
+    otherTenant: async (t) => {
+      const owner = await signIn(t);
+      const intruder = await t.shopper();
+      return { method: "DELETE", url: `/v1/eg/me/sessions/${owner.sessionId}`, headers: authedHeaders(t, intruder.token) };
+    },
+  },
+  "POST /v1/{market}/auth/apple": { happy: async (t) => ({ req: { method: "POST", url: "/v1/eg/auth/apple", headers: { "x-device-id": await t.device(), "idempotency-key": idemKey(t) }, payload: FED }, status: 503 }) },
+  "POST /v1/{market}/auth/google": { happy: async (t) => ({ req: { method: "POST", url: "/v1/eg/auth/google", headers: { "x-device-id": await t.device(), "idempotency-key": idemKey(t) }, payload: FED }, status: 503 }) },
+  "POST /v1/{market}/auth/passkeys/register/options": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      return { req: { method: "POST", url: "/v1/eg/auth/passkeys/register/options", headers: authedHeaders(t, s.token), payload: { purpose: "register" } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/auth/passkeys/register/verify": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      const o = await t.inject({ method: "POST", url: "/v1/eg/auth/passkeys/register/options", headers: authedHeaders(t, s.token), payload: { purpose: "register" } });
+      const body = JSON.parse(o.body) as { challenge_id: string; public_key: { challenge: string } };
+      const authn = new VirtualAuthenticator(RP_ID, RP_ORIGIN);
+      return { req: { method: "POST", url: "/v1/eg/auth/passkeys/register/verify", headers: authedHeaders(t, s.token), payload: { challenge_id: body.challenge_id, credential: authn.create(body.public_key.challenge) } }, status: 201 };
+    },
+  },
+  "POST /v1/{market}/auth/passkeys/assert/options": {
+    happy: async (t) => ({ req: { method: "POST", url: "/v1/eg/auth/passkeys/assert/options", headers: { "x-device-id": await t.device(), "idempotency-key": idemKey(t) }, payload: { purpose: "sign_in" } }, status: 200 }),
+  },
+  "POST /v1/{market}/auth/passkeys/assert/verify": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      const authn = await enrollPasskey(t, s);
+      return { req: await assertVerifyRequest(t, authn, s.deviceId), status: 200 };
+    },
+  },
+  "GET /v1/{market}/cart": {
+    happy: async (t) => ({ req: { method: "GET", url: "/v1/eg/cart", headers: bearer((await t.shopper()).token) }, status: 200 }),
+  },
+  "POST /v1/{market}/cart/lines": {
+    happy: async (t) => ({ req: { method: "POST", url: "/v1/eg/cart/lines", headers: authedHeaders(t, (await t.shopper()).token), payload: { sku_id: t.seed.skuA, qty: 1 } }, status: 201 }),
+  },
+  "PATCH /v1/{market}/cart/lines/{cart_line_id}": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      const { lineId } = await addToBag(t, s.token);
+      return { req: { method: "PATCH", url: `/v1/eg/cart/lines/${lineId}`, headers: authedHeaders(t, s.token), payload: { qty: 2 } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const owner = await t.shopper();
+      const { lineId } = await addToBag(t, owner.token);
+      return { method: "PATCH", url: `/v1/eg/cart/lines/${lineId}`, headers: authedHeaders(t, (await t.shopper()).token), payload: { qty: 2 } };
+    },
+  },
+  "DELETE /v1/{market}/cart/lines/{cart_line_id}": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      const { lineId } = await addToBag(t, s.token);
+      return { req: { method: "DELETE", url: `/v1/eg/cart/lines/${lineId}`, headers: authedHeaders(t, s.token) }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const owner = await t.shopper();
+      const { lineId } = await addToBag(t, owner.token);
+      return { method: "DELETE", url: `/v1/eg/cart/lines/${lineId}`, headers: authedHeaders(t, (await t.shopper()).token) };
+    },
+  },
+  "GET /v1/{market}/cart/free-delivery-suggestions": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      await addToBag(t, s.token);
+      return { req: { method: "GET", url: `/v1/eg/cart/free-delivery-suggestions?store_id=${t.seed.storeA}&limit=10`, headers: bearer(s.token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/checkout/quote": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      await addToBag(t, s.token);
+      return { req: { method: "POST", url: "/v1/eg/checkout/quote", headers: bearer(s.token), payload: { address_id: ADDRESS, payment_method: "card" } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/checkout": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      await addToBag(t, s.token);
+      return { req: checkoutRequest(t, s.token, await quote(t, s.token)), status: 201 };
+    },
+  },
+  "GET /v1/{market}/order-groups": {
+    happy: async (t) => ({ req: { method: "GET", url: "/v1/eg/order-groups?limit=10", headers: bearer((await t.shopper()).token) }, status: 200 }),
+  },
+  "GET /v1/{market}/order-groups/{order_group_id}": {
+    happy: async (t) => {
+      const o = await placeOrder(t);
+      return { req: { method: "GET", url: `/v1/eg/order-groups/${o.groupId}`, headers: bearer(o.token) }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const o = await placeOrder(t);
+      return { method: "GET", url: `/v1/eg/order-groups/${o.groupId}`, headers: bearer((await t.shopper()).token) };
+    },
+  },
+  "POST /v1/{market}/order-groups/{order_group_id}/cod-confirmation": {
+    happy: async (t) => {
+      t.fakes.risk.decision = "require_confirmation";
+      const o = await placeOrder(t, "cod");
+      t.fakes.risk.decision = "allow";
+      return { req: { method: "POST", url: `/v1/eg/order-groups/${o.groupId}/cod-confirmation`, headers: authedHeaders(t, o.token), payload: { code: "123456" } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      t.fakes.risk.decision = "require_confirmation";
+      const o = await placeOrder(t, "cod");
+      t.fakes.risk.decision = "allow";
+      return { method: "POST", url: `/v1/eg/order-groups/${o.groupId}/cod-confirmation`, headers: authedHeaders(t, (await t.shopper()).token), payload: { code: "123456" } };
+    },
+  },
+  "POST /v1/{market}/webhooks/psp/{provider}": {
+    happy: async (t) => ({ req: await webhookRequest(t, "payment.succeeded"), status: 200 }),
+    // The market's PSP is paymob: a callback addressed to another provider is not routable.
+    missing: () => ({ method: "POST", url: "/v1/eg/webhooks/psp/kashier", headers: { "content-type": "application/json" }, payload: "{}" }),
+  },
   "GET /v1/health/live": {
     happy: () => Promise.resolve({ req: { method: "GET", url: "/v1/health/live" }, status: 200 }),
   },

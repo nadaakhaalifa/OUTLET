@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import { uuidv7 } from "@outlet/ids";
 import type { Logger } from "@outlet/logger";
 import { listMarkets } from "@outlet/markets-config";
@@ -9,6 +10,9 @@ import type { ApiReply, ApiRequest, RequestState } from "./http.js";
 import { ProblemError, Problems, problemBody } from "./problem.js";
 
 const REQUEST_ID = /^[A-Za-z0-9-]{8,64}$/;
+const WEBHOOK_PATH = /^\/v1\/[^/]+\/webhooks\//;
+/** Contract: provider webhook bodies are at most 256 KB. */
+export const WEBHOOK_BODY_MAX_BYTES = 256 * 1024;
 const MARKET_SEGMENT = /^[a-z]{2}(-[a-z0-9]{2,3})?$/;
 
 /** API responses are JSON only: nothing here may be framed, sniffed, scripted or leak a referrer. */
@@ -68,6 +72,7 @@ export const registerHooks = (fastify: FastifyInstance, log: Logger, now: () => 
       storeId: undefined,
       db: undefined,
       reasonCode: undefined,
+      rawBody: undefined,
     };
     void reply.headers(SECURITY_HEADERS).header("x-request-id", requestId);
     try {
@@ -82,6 +87,42 @@ export const registerHooks = (fastify: FastifyInstance, log: Logger, now: () => 
       return;
     }
     done();
+  });
+
+  // Webhook routes keep the exact request bytes (the PSP signs them): the stream is buffered once (hard cap 256 KB, as the
+  // contract says), stored on the request state and replayed to Fastify's own JSON parser, which stays the only parser.
+  fastify.addHook("preParsing", (req: ApiRequest, _reply: ApiReply, payload: Readable, done: (err?: Error | null, payload?: Readable) => void) => {
+    if (!WEBHOOK_PATH.test(req.url)) {
+      done(null, payload);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let failed = false;
+    payload.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > WEBHOOK_BODY_MAX_BYTES) {
+        if (!failed) {
+          failed = true;
+          done(Object.assign(new Error("webhook body too large"), { statusCode: 413, code: "FST_ERR_CTP_BODY_TOO_LARGE" }));
+        }
+        payload.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    payload.on("error", (e: Error) => {
+      if (!failed) {
+        failed = true;
+        done(e);
+      }
+    });
+    payload.on("end", () => {
+      if (failed) return;
+      const raw = Buffer.concat(chunks);
+      req.ctx.rawBody = raw;
+      done(null, Readable.from([raw], { objectMode: false }));
+    });
   });
 
   // Weak ETag on every successful GET; If-None-Match → 304 with no body.

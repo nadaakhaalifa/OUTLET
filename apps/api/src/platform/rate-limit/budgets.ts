@@ -45,4 +45,20 @@ export const RATE_BUDGETS = {
   shopperWrite: b("shopper_write", 30, MINUTE, ["user"], "closed", "default"),
   sellerRead: b("seller_read", 300, MINUTE, ["store"], "open", "default"),
   sellerWrite: b("seller_write", 120, MINUTE, ["store"], "closed", "default"),
+  // Auth (docs/api/openapi.yaml x-rate-limit). Device keys are mandatory (X-Device-Id); the phone budget (3 / 15 min) and the
+  // per-challenge attempt cap (5) live in @outlet/auth-core, which sees the phone blind index.
+  /** Pre-device: the caller has no id yet, so a fail-open budget lets the guard fall back to the IP bucket (CGNAT-aware). */
+  deviceRegister: b("device_register", 20, HOUR, ["device", "ip"], "open", "default"),
+  otpVerify: b("otp_verify", 20, HOUR, ["device"], "closed", "default"),
+  authRefresh: b("auth_refresh", 30, MINUTE, ["device"], "closed", "default"),
+  federatedSignIn: b("federated_sign_in", 10, MINUTE, ["device"], "closed", "default"),
+  passkeyAssertOptions: b("passkey_assert_options", 20, MINUTE, ["device"], "closed", "default"),
+  passkeyAssertVerify: b("passkey_assert_verify", 10, MINUTE, ["device"], "closed", "default"),
+  passkeyRegister: b("passkey_register", 10, HOUR, ["user"], "closed", "default"),
+  // Cart and orders.
+  cartWrite: b("cart_write", 60, MINUTE, ["user"], "closed", "default"),
+  orderGroupRead: b("order_group_read", 60, MINUTE, ["user"], "open", "default"),
+  codConfirm: b("cod_confirm", 5, HOUR, ["user"], "closed", "default"),
+  /** PSP callbacks carry no device id: authenticity is the IP allow-list + HMAC, this is only flood control (IP fallback). */
+  pspWebhook: b("psp_webhook", 600, MINUTE, ["device", "ip"], "open", "default"),
 } as const satisfies Record<string, RateBudget>;

@@ -5,6 +5,2699 @@ info:
   version: 0.1.0
   summary: Generated from apps/api route metadata. Do not edit; run pnpm --filter api openapi.
 paths:
+  /v1/{market}/auth/apple:
+    post:
+      operationId: signInWithApple
+      summary: Sign in with Apple (503 until the OIDC verifier and identity linking are configured)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    maxLength: 4096
+                  access_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  refresh_token:
+                    type: string
+                    maxLength: 500
+                  refresh_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  token_type:
+                    type: string
+                    const: Bearer
+                  amr:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  user_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_new_user:
+                    type: boolean
+                required:
+                  - access_token
+                  - access_expires_at
+                  - refresh_token
+                  - refresh_expires_at
+                  - token_type
+                  - amr
+                  - user_id
+                  - is_new_user
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: federated_sign_in
+          key: device
+          limit: 10
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id_token:
+                  type: string
+                  minLength: 1
+                  maxLength: 8192
+                nonce:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              required:
+                - id_token
+                - nonce
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/devices:
+    post:
+      operationId: registerDevice
+      summary: Register an install and get its device id (pre-auth; the id goes in X-Device-Id)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                required:
+                  - device_id
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: device_register
+          key: device
+          limit: 20
+          window_s: 3600
+          layer: app
+          source: default
+        - budget: device_register
+          key: ip
+          limit: 200
+          window_s: 3600
+          layer: app
+          source: default
+      x-max-queries: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                install_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                platform:
+                  type: string
+                  enum:
+                    - web
+                    - ios
+                    - android
+              required:
+                - install_id
+                - platform
+              additionalProperties: false
+      x-idempotency:
+        header: none
+        reason: registering a device is idempotent on the install id (the same install returns the same device id)
+  /v1/{market}/auth/google:
+    post:
+      operationId: signInWithGoogle
+      summary: Sign in with Google (503 until the OIDC verifier and identity linking are configured)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    maxLength: 4096
+                  access_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  refresh_token:
+                    type: string
+                    maxLength: 500
+                  refresh_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  token_type:
+                    type: string
+                    const: Bearer
+                  amr:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  user_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_new_user:
+                    type: boolean
+                required:
+                  - access_token
+                  - access_expires_at
+                  - refresh_token
+                  - refresh_expires_at
+                  - token_type
+                  - amr
+                  - user_id
+                  - is_new_user
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: federated_sign_in
+          key: device
+          limit: 10
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id_token:
+                  type: string
+                  minLength: 1
+                  maxLength: 8192
+                nonce:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              required:
+                - id_token
+                - nonce
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current session family (idempotent) and clear the refresh cookie
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: OK
+          content:
+            application/json:
+              schema: {}
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: session.revoke
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/otp/request:
+    post:
+      operationId: requestOtp
+      summary: Send a one-time code (Egypt numbers only; 3 per 15 min per phone, 10 per day per device)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  resend_after_s:
+                    type: integer
+                    minimum: 1
+                    maximum: 9007199254740991
+                  channel:
+                    type: string
+                    const: sms
+                required:
+                  - challenge_id
+                  - expires_at
+                  - resend_after_s
+                  - channel
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: otp_request_device
+          key: device
+          limit: 10
+          window_s: 86400
+          layer: app
+          source: build-prompt
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone_e164:
+                  type: string
+                  pattern: ^\+[1-9][0-9]{7,14}$
+                channel:
+                  type: string
+                  enum:
+                    - sms
+                    - whatsapp
+                purpose:
+                  type: string
+                  enum:
+                    - sign_in
+                    - register
+                    - step_up
+              required:
+                - phone_e164
+                - channel
+                - purpose
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/otp/verify:
+    post:
+      operationId: verifyOtp
+      summary: Verify the code (5 attempts per code); returns the token pair and sets the HttpOnly refresh cookie
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    maxLength: 4096
+                  access_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  refresh_token:
+                    type: string
+                    maxLength: 500
+                  refresh_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  token_type:
+                    type: string
+                    const: Bearer
+                  amr:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  user_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_new_user:
+                    type: boolean
+                required:
+                  - access_token
+                  - access_expires_at
+                  - refresh_token
+                  - refresh_expires_at
+                  - token_type
+                  - amr
+                  - user_id
+                  - is_new_user
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: otp_verify
+          key: device
+          limit: 20
+          window_s: 3600
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                challenge_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                phone_e164:
+                  type: string
+                  pattern: ^\+[1-9][0-9]{7,14}$
+                code:
+                  type: string
+                  pattern: ^[0-9]{6}$
+                dob:
+                  type: string
+                  pattern: ^\d{4}-\d{2}-\d{2}$
+              required:
+                - challenge_id
+                - phone_e164
+                - code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/passkeys/assert/options:
+    post:
+      operationId: passkeyAssertOptions
+      summary: WebAuthn request options (usernameless sign-in)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  public_key:
+                    type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - challenge_id
+                  - public_key
+                  - expires_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: passkey_assert_options
+          key: device
+          limit: 20
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                  enum:
+                    - sign_in
+                    - step_up
+                    - register
+              required:
+                - purpose
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/passkeys/assert/verify:
+    post:
+      operationId: passkeyAssertVerify
+      summary: Verify the assertion and sign in with amr passkey (sets the HttpOnly refresh cookie)
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    maxLength: 4096
+                  access_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  refresh_token:
+                    type: string
+                    maxLength: 500
+                  refresh_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  token_type:
+                    type: string
+                    const: Bearer
+                  amr:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  user_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_new_user:
+                    type: boolean
+                required:
+                  - access_token
+                  - access_expires_at
+                  - refresh_token
+                  - refresh_expires_at
+                  - token_type
+                  - amr
+                  - user_id
+                  - is_new_user
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: passkey_assert_verify
+          key: device
+          limit: 10
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                challenge_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                credential:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      minLength: 1
+                      maxLength: 8192
+                      pattern: ^[A-Za-z0-9_-]+$
+                    type:
+                      type: string
+                      const: public-key
+                    response:
+                      type: object
+                      properties:
+                        clientDataJSON:
+                          type: string
+                          minLength: 1
+                          maxLength: 8192
+                          pattern: ^[A-Za-z0-9_-]+$
+                        authenticatorData:
+                          type: string
+                          minLength: 1
+                          maxLength: 8192
+                          pattern: ^[A-Za-z0-9_-]+$
+                        signature:
+                          type: string
+                          minLength: 1
+                          maxLength: 8192
+                          pattern: ^[A-Za-z0-9_-]+$
+                      required:
+                        - clientDataJSON
+                        - authenticatorData
+                        - signature
+                      additionalProperties: {}
+                  required:
+                    - id
+                    - type
+                    - response
+                  additionalProperties: {}
+              required:
+                - challenge_id
+                - credential
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/passkeys/register/options:
+    post:
+      operationId: passkeyRegisterOptions
+      summary: WebAuthn creation options for the signed-in user (discoverable credential, user verification required)
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  public_key:
+                    type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - challenge_id
+                  - public_key
+                  - expires_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: passkey.manage
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: passkey_register
+          key: user
+          limit: 10
+          window_s: 3600
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                  enum:
+                    - sign_in
+                    - step_up
+                    - register
+              required:
+                - purpose
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/passkeys/register/verify:
+    post:
+      operationId: passkeyRegisterVerify
+      summary: "Finish enrolment: verifies the attestation and stores the credential (the strong-auth gate for seller and admin accounts)"
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  aaguid:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  transports:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  backup_eligible:
+                    type: boolean
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  last_used_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                required:
+                  - id
+                  - aaguid
+                  - transports
+                  - backup_eligible
+                  - created_at
+                  - last_used_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: passkey.manage
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: passkey_register
+          key: user
+          limit: 10
+          window_s: 3600
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                challenge_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                credential:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      minLength: 1
+                      maxLength: 8192
+                      pattern: ^[A-Za-z0-9_-]+$
+                    rawId:
+                      type: string
+                      minLength: 1
+                      maxLength: 8192
+                      pattern: ^[A-Za-z0-9_-]+$
+                    type:
+                      type: string
+                      const: public-key
+                    response:
+                      type: object
+                      properties:
+                        clientDataJSON:
+                          type: string
+                          minLength: 1
+                          maxLength: 8192
+                          pattern: ^[A-Za-z0-9_-]+$
+                        attestationObject:
+                          type: string
+                          minLength: 1
+                          maxLength: 8192
+                          pattern: ^[A-Za-z0-9_-]+$
+                      required:
+                        - clientDataJSON
+                        - attestationObject
+                      additionalProperties: {}
+                    clientExtensionResults:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                  required:
+                    - id
+                    - rawId
+                    - type
+                    - response
+                    - clientExtensionResults
+                  additionalProperties: {}
+              required:
+                - challenge_id
+                - credential
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/auth/refresh:
+    post:
+      operationId: refreshSession
+      summary: Rotate the refresh token (body or cookie). Reuse revokes the whole family and answers 401
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    maxLength: 4096
+                  access_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  refresh_token:
+                    type: string
+                    maxLength: 500
+                  refresh_expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  token_type:
+                    type: string
+                    const: Bearer
+                  amr:
+                    maxItems: 10
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 50
+                  user_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_new_user:
+                    type: boolean
+                required:
+                  - access_token
+                  - access_expires_at
+                  - refresh_token
+                  - refresh_expires_at
+                  - token_type
+                  - amr
+                  - user_id
+                  - is_new_user
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: auth_refresh
+          key: device
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/cart:
+    get:
+      operationId: getCart
+      summary: My bag grouped by store, live prices, free-delivery progress
+      tags:
+        - Cart
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  groups:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_slug:
+                          type: string
+                          maxLength: 500
+                        display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        free_delivery_threshold:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        remaining_for_free_delivery:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              product_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              store_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              price_at_add:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                              current_price:
+                                type: object
+                                properties:
+                                  current_price:
+                                    type: object
+                                    properties:
+                                      amount_minor:
+                                        type: string
+                                        pattern: ^-?[0-9]{1,19}$
+                                      currency:
+                                        type: string
+                                        pattern: ^[A-Z]{3}$
+                                    required:
+                                      - amount_minor
+                                      - currency
+                                    additionalProperties: false
+                                  claim_type:
+                                    type: string
+                                    const: plain
+                                  price_proof_path:
+                                    type: string
+                                    maxLength: 500
+                                required:
+                                  - current_price
+                                  - claim_type
+                                  - price_proof_path
+                                additionalProperties: false
+                              defect_ack_required:
+                                type: boolean
+                              saved_for_later:
+                                type: boolean
+                              available:
+                                type: boolean
+                              source:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 500
+                                  - type: "null"
+                              added_at:
+                                type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            required:
+                              - id
+                              - sku_id
+                              - product_id
+                              - store_id
+                              - qty
+                              - price_at_add
+                              - current_price
+                              - defect_ack_required
+                              - saved_for_later
+                              - available
+                              - source
+                              - added_at
+                            additionalProperties: false
+                      required:
+                        - store_id
+                        - store_slug
+                        - display_name_ar
+                        - subtotal
+                        - free_delivery_threshold
+                        - remaining_for_free_delivery
+                        - lines
+                      additionalProperties: false
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  notices:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          enum:
+                            - price_dropped
+                            - price_rose
+                            - unavailable
+                            - store_suspended
+                        line_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                      required:
+                        - code
+                        - line_id
+                      additionalProperties: false
+                required:
+                  - id
+                  - currency
+                  - version
+                  - groups
+                  - items_subtotal
+                  - notices
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: cart.read
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+  /v1/{market}/cart/free-delivery-suggestions:
+    get:
+      operationId: listFreeDeliverySuggestions
+      summary: Items from one store that would unlock free delivery (empty until the suggestion engine exists)
+      tags:
+        - Cart
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: store_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      required:
+                        - product_id
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: cart.read
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+      x-paginated: keyset
+  /v1/{market}/cart/lines:
+    post:
+      operationId: addCartLine
+      summary: Add a SKU to the bag (merges quantities; max 50 lines, 10 units per SKU)
+      tags:
+        - Cart
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  groups:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_slug:
+                          type: string
+                          maxLength: 500
+                        display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        free_delivery_threshold:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        remaining_for_free_delivery:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              product_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              store_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              price_at_add:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                              current_price:
+                                type: object
+                                properties:
+                                  current_price:
+                                    type: object
+                                    properties:
+                                      amount_minor:
+                                        type: string
+                                        pattern: ^-?[0-9]{1,19}$
+                                      currency:
+                                        type: string
+                                        pattern: ^[A-Z]{3}$
+                                    required:
+                                      - amount_minor
+                                      - currency
+                                    additionalProperties: false
+                                  claim_type:
+                                    type: string
+                                    const: plain
+                                  price_proof_path:
+                                    type: string
+                                    maxLength: 500
+                                required:
+                                  - current_price
+                                  - claim_type
+                                  - price_proof_path
+                                additionalProperties: false
+                              defect_ack_required:
+                                type: boolean
+                              saved_for_later:
+                                type: boolean
+                              available:
+                                type: boolean
+                              source:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 500
+                                  - type: "null"
+                              added_at:
+                                type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            required:
+                              - id
+                              - sku_id
+                              - product_id
+                              - store_id
+                              - qty
+                              - price_at_add
+                              - current_price
+                              - defect_ack_required
+                              - saved_for_later
+                              - available
+                              - source
+                              - added_at
+                            additionalProperties: false
+                      required:
+                        - store_id
+                        - store_slug
+                        - display_name_ar
+                        - subtotal
+                        - free_delivery_threshold
+                        - remaining_for_free_delivery
+                        - lines
+                      additionalProperties: false
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  notices:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          enum:
+                            - price_dropped
+                            - price_rose
+                            - unavailable
+                            - store_suspended
+                        line_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                      required:
+                        - code
+                        - line_id
+                      additionalProperties: false
+                required:
+                  - id
+                  - currency
+                  - version
+                  - groups
+                  - items_subtotal
+                  - notices
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: cart.write
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: cart_write
+          key: user
+          limit: 60
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sku_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                qty:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                source:
+                  type: string
+                  enum:
+                    - pdp
+                    - quick_add
+                    - shelf
+                    - wishlist
+                    - drop
+                    - stylist
+              required:
+                - sku_id
+                - qty
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/cart/lines/{cart_line_id}:
+    delete:
+      operationId: deleteCartLine
+      summary: Remove a line
+      tags:
+        - Cart
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: cart_line_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  groups:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_slug:
+                          type: string
+                          maxLength: 500
+                        display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        free_delivery_threshold:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        remaining_for_free_delivery:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              product_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              store_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              price_at_add:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                              current_price:
+                                type: object
+                                properties:
+                                  current_price:
+                                    type: object
+                                    properties:
+                                      amount_minor:
+                                        type: string
+                                        pattern: ^-?[0-9]{1,19}$
+                                      currency:
+                                        type: string
+                                        pattern: ^[A-Z]{3}$
+                                    required:
+                                      - amount_minor
+                                      - currency
+                                    additionalProperties: false
+                                  claim_type:
+                                    type: string
+                                    const: plain
+                                  price_proof_path:
+                                    type: string
+                                    maxLength: 500
+                                required:
+                                  - current_price
+                                  - claim_type
+                                  - price_proof_path
+                                additionalProperties: false
+                              defect_ack_required:
+                                type: boolean
+                              saved_for_later:
+                                type: boolean
+                              available:
+                                type: boolean
+                              source:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 500
+                                  - type: "null"
+                              added_at:
+                                type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            required:
+                              - id
+                              - sku_id
+                              - product_id
+                              - store_id
+                              - qty
+                              - price_at_add
+                              - current_price
+                              - defect_ack_required
+                              - saved_for_later
+                              - available
+                              - source
+                              - added_at
+                            additionalProperties: false
+                      required:
+                        - store_id
+                        - store_slug
+                        - display_name_ar
+                        - subtotal
+                        - free_delivery_threshold
+                        - remaining_for_free_delivery
+                        - lines
+                      additionalProperties: false
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  notices:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          enum:
+                            - price_dropped
+                            - price_rose
+                            - unavailable
+                            - store_suspended
+                        line_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                      required:
+                        - code
+                        - line_id
+                      additionalProperties: false
+                required:
+                  - id
+                  - currency
+                  - version
+                  - groups
+                  - items_subtotal
+                  - notices
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: cart.write
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: cart_write
+          key: user
+          limit: 60
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 12
+      x-idempotency:
+        header: required
+        mode: store
+    patch:
+      operationId: updateCartLine
+      summary: Change a line's quantity
+      tags:
+        - Cart
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: cart_line_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  groups:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_slug:
+                          type: string
+                          maxLength: 500
+                        display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        free_delivery_threshold:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        remaining_for_free_delivery:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              product_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              store_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              price_at_add:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                              current_price:
+                                type: object
+                                properties:
+                                  current_price:
+                                    type: object
+                                    properties:
+                                      amount_minor:
+                                        type: string
+                                        pattern: ^-?[0-9]{1,19}$
+                                      currency:
+                                        type: string
+                                        pattern: ^[A-Z]{3}$
+                                    required:
+                                      - amount_minor
+                                      - currency
+                                    additionalProperties: false
+                                  claim_type:
+                                    type: string
+                                    const: plain
+                                  price_proof_path:
+                                    type: string
+                                    maxLength: 500
+                                required:
+                                  - current_price
+                                  - claim_type
+                                  - price_proof_path
+                                additionalProperties: false
+                              defect_ack_required:
+                                type: boolean
+                              saved_for_later:
+                                type: boolean
+                              available:
+                                type: boolean
+                              source:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 500
+                                  - type: "null"
+                              added_at:
+                                type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            required:
+                              - id
+                              - sku_id
+                              - product_id
+                              - store_id
+                              - qty
+                              - price_at_add
+                              - current_price
+                              - defect_ack_required
+                              - saved_for_later
+                              - available
+                              - source
+                              - added_at
+                            additionalProperties: false
+                      required:
+                        - store_id
+                        - store_slug
+                        - display_name_ar
+                        - subtotal
+                        - free_delivery_threshold
+                        - remaining_for_free_delivery
+                        - lines
+                      additionalProperties: false
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  notices:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          enum:
+                            - price_dropped
+                            - price_rose
+                            - unavailable
+                            - store_suspended
+                        line_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                      required:
+                        - code
+                        - line_id
+                      additionalProperties: false
+                required:
+                  - id
+                  - currency
+                  - version
+                  - groups
+                  - items_subtotal
+                  - notices
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: cart.write
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: cart_write
+          key: user
+          limit: 60
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 12
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qty:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                saved_for_later:
+                  type: boolean
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/categories:
     get:
       operationId: listCategories
@@ -132,6 +2825,639 @@ paths:
       x-max-queries: 1
       x-paginated: keyset
       x-cache-control: public, max-age=60, stale-while-revalidate=300
+  /v1/{market}/checkout:
+    post:
+      operationId: placeOrder
+      summary: "Place the order: re-quote, price-lock check, reserve stock, one payment intent; returns the client action"
+      tags:
+        - Checkout
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_group_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    maxLength: 50
+                  client_action:
+                    type: object
+                    properties:
+                      kind:
+                        type: string
+                        enum:
+                          - redirect
+                          - iframe
+                          - sdk
+                          - fawry_reference
+                          - instapay_qr
+                          - cod_confirmation
+                          - none
+                      url:
+                        anyOf:
+                          - type: string
+                            maxLength: 2048
+                          - type: "null"
+                      reference:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      expires_at:
+                        anyOf:
+                          - type: string
+                            format: date-time
+                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                          - type: "null"
+                    required:
+                      - kind
+                      - url
+                      - reference
+                      - expires_at
+                    additionalProperties: false
+                  reservation_expires_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                required:
+                  - order_group_id
+                  - status
+                  - client_action
+                  - reservation_expires_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: checkout.place
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: checkout
+          key: user
+          limit: 5
+          window_s: 60
+          layer: app
+          source: build-prompt
+        - budget: checkout
+          key: device
+          limit: 5
+          window_s: 60
+          layer: app
+          source: build-prompt
+      x-max-queries: 60
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                payment_method:
+                  type: string
+                  enum:
+                    - card
+                    - apple_pay
+                    - meeza
+                    - mobile_wallet
+                    - instapay
+                    - fawry
+                    - bnpl
+                    - cod
+                bnpl_provider:
+                  type: string
+                  maxLength: 500
+                voucher_codes:
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 500
+                store_credit:
+                  type: object
+                  properties:
+                    amount_minor:
+                      type: string
+                      pattern: ^-?[0-9]{1,19}$
+                    currency:
+                      type: string
+                      pattern: ^[A-Z]{3}$
+                  required:
+                    - amount_minor
+                    - currency
+                  additionalProperties: false
+                quote_token:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                quote_echo:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                client_total:
+                  type: object
+                  properties:
+                    amount_minor:
+                      type: string
+                      pattern: ^-?[0-9]{1,19}$
+                    currency:
+                      type: string
+                      pattern: ^[A-Z]{3}$
+                  required:
+                    - amount_minor
+                    - currency
+                  additionalProperties: false
+                accept_price_change:
+                  type: boolean
+              required:
+                - address_id
+                - payment_method
+                - quote_token
+                - quote_echo
+                - client_total
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/checkout/quote:
+    post:
+      operationId: quoteCheckout
+      summary: "Price the bag (pure): every fee on the first render, signed 10-minute price lock"
+      tags:
+        - Checkout
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quote_token:
+                    type: string
+                    maxLength: 2000
+                  expires_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  stores:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        items_subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        shipping:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        parcels:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              store_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              quote_ref:
+                                type: string
+                                maxLength: 500
+                              fee:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                              days_min:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              days_max:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                            required:
+                              - store_id
+                              - quote_ref
+                              - fee
+                              - days_min
+                              - days_max
+                            additionalProperties: false
+                      required:
+                        - store_id
+                        - items_subtotal
+                        - shipping
+                        - parcels
+                      additionalProperties: false
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat_included:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  store_credit:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  verified_savings:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  fees:
+                    maxItems: 200
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          maxLength: 500
+                        amount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                      required:
+                        - code
+                        - amount
+                      additionalProperties: false
+                  payment_options:
+                    maxItems: 20
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        method:
+                          type: string
+                          maxLength: 50
+                        available:
+                          type: boolean
+                        payable:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                      required:
+                        - method
+                        - available
+                        - payable
+                      additionalProperties: false
+                  cod_allowed:
+                    type: boolean
+                  notices:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          const: unavailable
+                        line_id:
+                          type: "null"
+                      required:
+                        - code
+                        - line_id
+                      additionalProperties: false
+                  quote_echo:
+                    $ref: "#/$defs/__schema0"
+                required:
+                  - quote_token
+                  - expires_at
+                  - currency
+                  - stores
+                  - items_subtotal
+                  - discount
+                  - shipping
+                  - vat_included
+                  - store_credit
+                  - total
+                  - verified_savings
+                  - fees
+                  - payment_options
+                  - cod_allowed
+                  - notices
+                  - quote_echo
+                additionalProperties: false
+                $defs:
+                  __schema0:
+                    anyOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                      - type: "null"
+                      - type: array
+                        items:
+                          $ref: "#/$defs/__schema0"
+                      - type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          $ref: "#/$defs/__schema0"
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: checkout.place
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                payment_method:
+                  type: string
+                  enum:
+                    - card
+                    - apple_pay
+                    - meeza
+                    - mobile_wallet
+                    - instapay
+                    - fawry
+                    - bnpl
+                    - cod
+                bnpl_provider:
+                  type: string
+                  maxLength: 500
+                voucher_codes:
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 500
+                store_credit:
+                  type: object
+                  properties:
+                    amount_minor:
+                      type: string
+                      pattern: ^-?[0-9]{1,19}$
+                    currency:
+                      type: string
+                      pattern: ^[A-Z]{3}$
+                  required:
+                    - amount_minor
+                    - currency
+                  additionalProperties: false
+                cart_line_ids:
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - address_id
+                - payment_method
+              additionalProperties: false
+      x-idempotency:
+        header: none
+        reason: "pure quote: reads the bag and signs a token, writes nothing"
   /v1/{market}/deals:
     get:
       operationId: listDeals
@@ -361,6 +3687,1115 @@ paths:
       x-max-queries: 3
       x-paginated: keyset
       x-cache-control: no-store
+  /v1/{market}/me/sessions:
+    get:
+      operationId: listMySessions
+      summary: My signed-in devices (no IP, no raw user agent)
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        device_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        platform:
+                          type: string
+                          maxLength: 50
+                        ua_family:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        amr:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            maxLength: 50
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        last_seen_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        current:
+                          type: boolean
+                      required:
+                        - id
+                        - device_id
+                        - platform
+                        - ua_family
+                        - amr
+                        - created_at
+                        - last_seen_at
+                        - current
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: session.read
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
+  /v1/{market}/me/sessions/{session_family_id}:
+    delete:
+      operationId: revokeMySession
+      summary: Sign out one of my devices (another user's session is 404)
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: session_family_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: OK
+          content:
+            application/json:
+              schema: {}
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: session.revoke
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/order-groups:
+    get:
+      operationId: listMyOrderGroups
+      summary: My orders, newest first (keyset)
+      tags:
+        - Orders
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          maxLength: 50
+                        total:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        store_count:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        placed_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - id
+                        - status
+                        - total
+                        - store_count
+                        - placed_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.read
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
+  /v1/{market}/order-groups/{order_group_id}:
+    get:
+      operationId: getOrderGroup
+      summary: "One of my orders (poll after payment: the server is the source of truth)"
+      tags:
+        - Orders
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: order_group_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    maxLength: 50
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  store_credit:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_method:
+                    type: string
+                    maxLength: 50
+                  payment_status:
+                    type: string
+                    maxLength: 50
+                  client_action:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - redirect
+                              - iframe
+                              - sdk
+                              - fawry_reference
+                              - instapay_qr
+                              - cod_confirmation
+                              - none
+                          url:
+                            anyOf:
+                              - type: string
+                                maxLength: 2048
+                              - type: "null"
+                          reference:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          expires_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - kind
+                          - url
+                          - reference
+                          - expires_at
+                        additionalProperties: false
+                      - type: "null"
+                  placed_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  paid_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  seller_orders:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 50
+                        items_subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        shipping:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        total:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              title_ar:
+                                type: string
+                                maxLength: 500
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              unit_price:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                            required:
+                              - id
+                              - sku_id
+                              - title_ar
+                              - qty
+                              - unit_price
+                            additionalProperties: false
+                        cancellable:
+                          type: boolean
+                          const: false
+                        returnable:
+                          type: boolean
+                          const: false
+                        tax_documents:
+                          maxItems: 0
+                          type: array
+                          items:
+                            not: {}
+                      required:
+                        - id
+                        - store_id
+                        - store_display_name_ar
+                        - status
+                        - items_subtotal
+                        - shipping
+                        - vat
+                        - total
+                        - lines
+                        - cancellable
+                        - returnable
+                        - tax_documents
+                      additionalProperties: false
+                required:
+                  - id
+                  - status
+                  - currency
+                  - items_subtotal
+                  - discount
+                  - shipping
+                  - vat
+                  - store_credit
+                  - total
+                  - payment_method
+                  - payment_status
+                  - client_action
+                  - placed_at
+                  - paid_at
+                  - seller_orders
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.read
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: order_group_read
+          key: user
+          limit: 60
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+  /v1/{market}/order-groups/{order_group_id}/cod-confirmation:
+    post:
+      operationId: confirmCodOrder
+      summary: Confirm a cash-on-delivery order with the code sent to the shopper (claims the reserved stock)
+      tags:
+        - Orders
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: order_group_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    maxLength: 50
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  store_credit:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_method:
+                    type: string
+                    maxLength: 50
+                  payment_status:
+                    type: string
+                    maxLength: 50
+                  client_action:
+                    anyOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            enum:
+                              - redirect
+                              - iframe
+                              - sdk
+                              - fawry_reference
+                              - instapay_qr
+                              - cod_confirmation
+                              - none
+                          url:
+                            anyOf:
+                              - type: string
+                                maxLength: 2048
+                              - type: "null"
+                          reference:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          expires_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - kind
+                          - url
+                          - reference
+                          - expires_at
+                        additionalProperties: false
+                      - type: "null"
+                  placed_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  paid_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  seller_orders:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 50
+                        items_subtotal:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        shipping:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        total:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        lines:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sku_id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              title_ar:
+                                type: string
+                                maxLength: 500
+                              qty:
+                                type: integer
+                                minimum: -9007199254740991
+                                maximum: 9007199254740991
+                              unit_price:
+                                type: object
+                                properties:
+                                  amount_minor:
+                                    type: string
+                                    pattern: ^-?[0-9]{1,19}$
+                                  currency:
+                                    type: string
+                                    pattern: ^[A-Z]{3}$
+                                required:
+                                  - amount_minor
+                                  - currency
+                                additionalProperties: false
+                            required:
+                              - id
+                              - sku_id
+                              - title_ar
+                              - qty
+                              - unit_price
+                            additionalProperties: false
+                        cancellable:
+                          type: boolean
+                          const: false
+                        returnable:
+                          type: boolean
+                          const: false
+                        tax_documents:
+                          maxItems: 0
+                          type: array
+                          items:
+                            not: {}
+                      required:
+                        - id
+                        - store_id
+                        - store_display_name_ar
+                        - status
+                        - items_subtotal
+                        - shipping
+                        - vat
+                        - total
+                        - lines
+                        - cancellable
+                        - returnable
+                        - tax_documents
+                      additionalProperties: false
+                required:
+                  - id
+                  - status
+                  - currency
+                  - items_subtotal
+                  - discount
+                  - shipping
+                  - vat
+                  - store_credit
+                  - total
+                  - payment_method
+                  - payment_status
+                  - client_action
+                  - placed_at
+                  - paid_at
+                  - seller_orders
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: checkout.place
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: cod_confirm
+          key: user
+          limit: 5
+          window_s: 3600
+          layer: app
+          source: default
+      x-max-queries: 40
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  pattern: ^[0-9]{6}$
+              required:
+                - code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/passports/{passport_code}:
     get:
       operationId: getDefectPassport
@@ -4644,6 +9079,94 @@ paths:
       x-max-queries: 2
       x-paginated: keyset
       x-cache-control: no-store
+  /v1/{market}/webhooks/psp/{provider}:
+    post:
+      operationId: receivePspWebhook
+      summary: Payment provider webhook (IP allow-list, HMAC over raw bytes, dedup by event id)
+      tags:
+        - Webhooks
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - paymob
+              - kashier
+              - fawry
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  duplicate:
+                    type: boolean
+                required:
+                  - received
+                  - duplicate
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: psp_webhook
+          key: device
+          limit: 600
+          window_s: 60
+          layer: app
+          source: default
+        - budget: psp_webhook
+          key: ip
+          limit: 6000
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+      x-idempotency:
+        header: none
+        reason: provider events are de-duplicated by (market, provider, provider_event_id) in payment_events_raw, not by a client key
   /v1/health/live:
     get:
       operationId: getLiveness

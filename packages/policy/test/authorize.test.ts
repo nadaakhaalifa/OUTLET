@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  ADMIN_POLICY, ADMIN_ROLES, authorize, dualApprovalRequired, Principal, requiresReasonCode, REQUIRES_REASON_CODE, Resource, SELLER_POLICY, SELLER_ROLES,
+  ADMIN_POLICY, ADMIN_ROLES, authorize, dualApprovalRequired, Principal, requiresReasonCode, REQUIRES_REASON_CODE, Resource, SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS,
   type Principal as P,
 } from "../src/index.js";
 
@@ -113,6 +113,16 @@ describe("negative cases", () => {
     expect(reason(authorize(s, "payout.approve", res({ ownerUserId: "u1" })))).toBe("forbidden");
     expect(reason(authorize({ kind: "shopper", marketId: "EG", roles: [], scopes: [] }, "order.read", res()))).toBe("not_found");
     expect(reason(authorize(s, "catalog.read", res({ type: "listing" })))).toBe("allow");
+  });
+  it("shopper-own actions (session, passkey, checkout, cart): own -> allow, other's -> not_found, seller and anonymous never", () => {
+    const s: P = { ...base, kind: "shopper", userId: "u1" };
+    for (const action of ["session.read", "session.revoke", "passkey.manage", "checkout.place", "cart.write"]) {
+      expect(SHOPPER_ACTIONS).toContain(action);
+      expect(reason(authorize(s, action, res({ ownerUserId: "u1" })))).toBe("allow");
+      expect(reason(authorize(s, action, res({ ownerUserId: "u2" })))).toBe("not_found");
+      expect(reason(authorize(seller("owner"), action, res({ ownerUserId: "u1" })))).not.toBe("allow");
+      expect(reason(authorize({ ...base, kind: "anonymous" }, action, res({ ownerUserId: "u1" })))).toBe("not_found");
+    }
   });
   it("seller cannot use admin-only actions", () => {
     expect(reason(authorize(seller("owner"), "payout.approve", res()))).toBe("forbidden");

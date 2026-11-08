@@ -20,6 +20,18 @@ describe("IdempotencyStore", () => {
     });
   });
 
+  it("a redacted response persists no body and replays as redacted", async () => {
+    await withTestDb(async (db) => {
+      const s = new IdempotencyStore(db);
+      const req = mk();
+      await s.begin(req);
+      await s.complete(req, { status: 200, body: { access_token: "secret" }, redacted: true });
+      const row = await db.query<{ response_body: unknown }>("SELECT response_body FROM idempotency_keys WHERE key = $1", [req.key]);
+      expect(JSON.stringify(row.rows)).not.toContain("secret");
+      expect(await s.begin(req)).toEqual({ kind: "replay", response: { status: 200, body: null, redacted: true } });
+    });
+  });
+
   it("same key with a different hash is a conflict (in progress or completed)", async () => {
     await withTestDb(async (db) => {
       const s = new IdempotencyStore(db);

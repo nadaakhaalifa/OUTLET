@@ -6,8 +6,11 @@ import type { Logger } from "@outlet/logger";
 import type { MediaService } from "@outlet/media";
 import type { AccessTokenVerifier, StoreMembershipPort } from "./auth-ports.js";
 import type { DealsPort } from "../modules/catalog-public/deals-reader.js";
-import type { AttributeSetPort } from "../modules/seller-catalog/index.js";
+import type { AttributeSetPort } from "../modules/seller-catalog/attribute-set-reader.js";
 import type { DiscoveryPort } from "../modules/catalog-public/discovery-reader.js";
+import type { AuthServices } from "../modules/auth/ports.js";
+import type { CartServices } from "../modules/cart/ports.js";
+import type { CheckoutServices, WebhookIpPolicy } from "../modules/checkout/ports.js";
 import type { Clock } from "./http.js";
 import type { RateLimiterPort } from "./rate-limit/port.js";
 
@@ -72,6 +75,12 @@ export interface ApiDeps {
   readonly killSwitches: KillSwitchPort;
   /** Catalog services for one market (DB market id); built once per market by the composition root. */
   readonly catalog: (marketId: string) => CatalogServices;
+  /** Auth services for one market (outlet_auth pool, ADR-0011). */
+  readonly auth: (marketId: string) => AuthServices;
+  readonly cart: (marketId: string) => CartServices;
+  readonly checkout: (marketId: string) => CheckoutServices;
+  /** PSP source-address allow-list (first gate of the webhook route, before the HMAC). Deny-all until configured. */
+  readonly webhookIps: WebhookIpPolicy;
   /** Set while the process drains (SIGTERM): readiness answers 503 so the balancer stops sending traffic. */
   readonly lifecycle: { draining: boolean };
 }

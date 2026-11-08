@@ -13,6 +13,7 @@ export const PUBLIC_ACTIONS: readonly Action[] = ["catalog.read", "store.read"];
 export const SHOPPER_ACTIONS: readonly Action[] = [
   "catalog.read", "store.read", "cart.read", "cart.write", "order.read", "order.cancel", "return.create",
   "return.read", "wishlist.read", "wishlist.write", "address.read", "address.write", "privacy.export", "privacy.delete",
+  "session.read", "session.revoke", "passkey.manage", "checkout.place",
 ];
 
 /** Seller role -> actions, scoped to the principal's stores. */

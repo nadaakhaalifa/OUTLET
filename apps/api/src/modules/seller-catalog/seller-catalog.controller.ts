@@ -3,7 +3,7 @@ import { Controller, Get, HttpCode, Inject, Patch, Post, Req } from "@nestjs/com
 import { PublishResult, SellerProduct, SellerProductSummaryPage } from "@outlet/catalog";
 import type { z } from "zod";
 import type { Principal } from "@outlet/policy";
-import { CategoriesQuery, CategoryEntryPage } from "../catalog-public/dto.js";
+import { CategoriesQuery, CategoryEntryPage } from "../catalog-public/index.js";
 import { Authorize, Contract, Paginated, RateLimit } from "../../platform/decorators.js";
 import { API_DEPS } from "../../platform/deps.js";
 import type { ApiDeps, CatalogServices } from "../../platform/deps.js";

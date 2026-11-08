@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { SessionService } from "@outlet/auth-core";
+import { AesGcmFieldCipher, InMemoryRateLimiter, OtpService, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
+import type { SmsSender } from "@outlet/auth-core";
+import { CartService, pgInventoryAvailability } from "@outlet/cart";
+import { CheckoutService, PgStoreCredit, WebhookProcessor } from "@outlet/checkout";
+import type { PaymentProviderPort } from "@outlet/checkout";
+import {
+  FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories, HmacQuoteTokens,
+  RecordingRefunds, defaultConfig,
+} from "@outlet/checkout/testing";
+import { ReservationService } from "@outlet/inventory";
+import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { DefectService, ListingService, PublicCatalogService, StoreService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
 import { brandClient } from "@outlet/db";
@@ -15,6 +25,9 @@ import type { Principal } from "@outlet/policy";
 import { SignJWT, generateKeyPair } from "jose";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import { createApp } from "../src/app.js";
+import { InMemoryChallengeStore, InMemoryPasskeyStore, SessionReader, WebAuthnPasskeys, UnconfiguredOidc } from "../src/modules/auth/index.js";
+import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/index.js";
+import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "../src/modules/catalog-public/discovery-reader.js";
@@ -25,6 +38,9 @@ import { DEFAULT_HTTP_CONFIG } from "../src/platform/deps.js";
 import type { ApiDeps, CatalogServices, HttpConfig, IdempotencyPort, KillSwitchPort } from "../src/platform/deps.js";
 import { MemoryRateLimiter } from "../src/platform/rate-limit/memory.js";
 import type { RateLimiterPort } from "../src/platform/rate-limit/port.js";
+
+// auth-core refuses its local AES cipher unless this is set (no KMS cipher exists); tests only.
+process.env.OUTLET_LOCAL_CIPHER = "1";
 
 export const MARKET = "eg";
 export const DB_MARKET = "EG";
@@ -68,6 +84,8 @@ export interface Seed {
   readonly productA: string;
   readonly passportA: string;
   readonly categoryId: string;
+  /** The one sku of the seeded listing (store A), with 5 units in stock. */
+  readonly skuA: string;
 }
 
 export interface TestApp extends ApiApp {
@@ -77,6 +95,13 @@ export interface TestApp extends ApiApp {
   readonly flags: InMemoryFlagStore;
   readonly logs: string[];
   readonly seed: Seed;
+  readonly sms: FakeSms;
+  readonly passkeyStore: InMemoryPasskeyStore;
+  readonly fakes: { provider: FakePaymentProvider; shipping: FakeShipping; risk: FakeRisk; kill: FakeKillSwitches; cod: { valid: Set<string> } };
+  /** A real user row (carts and orders reference users) plus a token for it. */
+  shopper(): Promise<{ userId: string; token: string }>;
+  /** A registered device id (what X-Device-Id carries). */
+  device(): Promise<string>;
   /** Moves the shared clock (tokens, idempotency, rate limits). */
   readonly clock: { now: number };
   mint(o?: MintOptions): Promise<string>;
@@ -151,8 +176,26 @@ const seedCatalog = async (raw: SqlClient, deps: CatalogDeps): Promise<Seed> => 
   const cur = await listings.get(a, storeA, p.id);
   const live = await listings.activate(a, storeA, p.id, cur.version);
   const passport = await defects.issuePassport(a, storeA, { productId: p.id, skuId: live.skus[0]?.id ?? "" });
-  return { storeA, storeB, slugA: "store-a", slugB: "store-b", productA: p.id, passportA: passport.passportCode, categoryId: CATEGORY };
+  const sku = live.skus[0]?.id ?? "";
+  await raw.query("INSERT INTO inventory_locations (id, market_id, store_id) VALUES ($1,'EG',$2)", [randomUUID(), storeA]);
+  await raw.query("INSERT INTO inventory_levels (sku_id, location_id, store_id, market_id, on_hand) SELECT $1, id, $2, 'EG', 50 FROM inventory_locations WHERE store_id = $2", [sku, storeA]);
+  return { storeA, storeB, slugA: "store-a", slugB: "store-b", productA: p.id, passportA: passport.passportCode, categoryId: CATEGORY, skuA: live.skus[0]?.id ?? "" };
 };
+
+export class FakeSms implements SmsSender {
+  readonly provider = "fake";
+  readonly sent: { phoneE164: string; code: string }[] = [];
+  send(m: { phoneE164: string; code: string }): Promise<void> {
+    this.sent.push({ phoneE164: m.phoneE164, code: m.code });
+    return Promise.resolve();
+  }
+  last(): string {
+    return this.sent[this.sent.length - 1]?.code ?? "";
+  }
+}
+
+export const RP_ID = "outlet.test";
+export const RP_ORIGIN = "https://outlet.test";
 
 export interface TestAppOptions extends CreateAppOptions {
   readonly http?: Partial<HttpConfig>;
@@ -173,7 +216,8 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const seed = await seedCatalog(raw, { ...catalogDeps, client: roleClient(raw, "outlet_app") });
 
   const { privateKey, publicKey } = await generateKeyPair("ES256", { extractable: true });
-  const sessions = new SessionService(raw, { marketId: DB_MARKET, issuer: ISSUER, audience: AUDIENCE, kid: KID, privateKey, publicKey });
+  const authClient = roleClient(raw, "outlet_auth");
+  const sessions = new SessionService(authClient, { marketId: DB_MARKET, issuer: ISSUER, audience: AUDIENCE, kid: KID, privateKey, publicKey });
   const tokens = new SessionTokenVerifier(new Map([[DB_MARKET, { audience: AUDIENCE, verifyAccessToken: (jwt: string, now?: Date) => sessions.verifyAccessToken(jwt, now) }]]));
   const memberships = new InMemoryStoreMemberships();
   const flags = new InMemoryFlagStore();
@@ -194,7 +238,46 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
       priceWatchKilled: () => (opts.killSwitches ?? flagService).isKilled(PRICE_WATCH_KILL_SWITCH, { marketId: DB_MARKET }).catch(() => true),
     }),
   };
+  const now = (): Date => new Date(clock.now);
+  const authDeps = createAuthDeps({ hmacKey: new Uint8Array(32).fill(7), cipherKey: new Uint8Array(32).fill(9), cipher: new AesGcmFieldCipher(new Uint8Array(32).fill(9)) });
+  const sms = new FakeSms();
+  const passkeyStore = new InMemoryPasskeyStore();
+  const auth = {
+    otp: new OtpService(authClient, authDeps, new InMemoryRateLimiter(), sms),
+    sessions,
+    sessionReader: new SessionReader(appClient, DB_MARKET),
+    devices: { register: (i: { platform: "web" | "ios" | "android"; installId: string; now: Date }) => registerDevice(authClient, authDeps.hasher, { marketId: DB_MARKET, ...i }) },
+    oidc: new UnconfiguredOidc(),
+    passkeys: new WebAuthnPasskeys({ marketId: DB_MARKET, rpName: "Outlex", rpId: RP_ID, origins: [RP_ORIGIN], challengeTtlMs: 5 * 60_000, now }, passkeyStore, new InMemoryChallengeStore()),
+  };
+  const fake = new FakePaymentProvider();
+  const paymobShaped: PaymentProviderPort = {
+    provider: "paymob",
+    supports: (m) => fake.supports(m),
+    createIntent: (r, k) => fake.createIntent(r, k),
+    voidIntent: (r, k) => fake.voidIntent(r, k),
+    verifyWebhook: (i) => fake.verifyWebhook(i),
+  };
+  const fakes = { provider: fake, shipping: new FakeShipping(), risk: new FakeRisk(), kill: new FakeKillSwitches(), cod: { valid: new Set(["123456"]) } };
+  const common = {
+    marketId: DB_MARKET, now, config: defaultConfig({ provider: "paymob" }), reservations: new ReservationService({ client: appClient, marketId: DB_MARKET, now }), provider: paymobShaped,
+    shipping: fakes.shipping, address: new FakeAddress(), risk: fakes.risk, commission: new FakeCommission(), taxCategories: new FakeTaxCategories(),
+    taxRates: InMemoryTaxRateProvider.withMarketDefaults(["eg"]), credit: new PgStoreCredit("EGP"), tokens: new HmacQuoteTokens(), prices: new FakePrices(), killSwitches: fakes.kill,
+    subMerchants: new FakeSubMerchants(), billing: new FakeBilling(), refunds: new RecordingRefunds(),
+  };
+  const checkoutServices = {
+    checkout: new CheckoutService({ ...common, client: appClient }),
+    webhooks: new WebhookProcessor({ ...common, client: roleClient(raw, "outlet_worker"), cipher: new FakeCipher() }),
+    orders: new OrderGroupReader(appClient, DB_MARKET),
+    cod: { verify: (i: { code: string }) => Promise.resolve(fakes.cod.valid.has(i.code)) },
+    provider: "paymob" as const,
+  };
+  const cartServices = { cart: new CartService({ client: appClient, marketId: DB_MARKET, now, availability: pgInventoryAvailability(appClient, DB_MARKET) }), suggestions: noSuggestions };
   const deps: ApiDeps = {
+    auth: () => auth,
+    cart: () => cartServices,
+    checkout: () => checkoutServices,
+    webhookIps: staticWebhookIps({ paymob: ["127.0.0.1"] }),
     http: { ...DEFAULT_HTTP_CONFIG, rateLimitKeySecret: "test-secret", ...opts.http },
     clock: { now: () => new Date(clock.now) },
     logger: createLogger({ level: "debug", write: (l) => logs.push(l), now: () => new Date(clock.now) }),
@@ -228,9 +311,21 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     memberships.grant(DB_MARKET, userId, storeId, roles);
     return { userId, token: await mint({ userId, amr }) };
   };
+  const shopper = async (): Promise<{ userId: string; token: string }> => {
+    const userId = randomUUID();
+    const ts = new Date(clock.now).toISOString();
+    await raw.query("INSERT INTO users (id, market_id, created_at, updated_at) VALUES ($1,'EG',$2,$2)", [userId, ts]);
+    return { userId, token: await mint({ userId }) };
+  };
+  const device = (): Promise<string> => registerDevice(authClient, authDeps.hasher, { marketId: DB_MARKET, platform: "web", installId: randomUUID(), now: new Date(clock.now) });
   return {
     app,
     routes,
+    sms,
+    passkeyStore,
+    fakes,
+    shopper,
+    device,
     raw,
     counter,
     memberships,

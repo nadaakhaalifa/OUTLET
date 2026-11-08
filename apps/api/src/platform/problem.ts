@@ -60,6 +60,8 @@ export const Problems = {
   idempotencyKeyReuse: () => new ProblemError(422, "idempotency-key-reuse", "Idempotency-Key was used with a different request"),
   idempotencyInFlight: () =>
     new ProblemError(409, "idempotency-in-flight", "A request with this Idempotency-Key is still in progress", { retryAfterS: 1, headers: { "Retry-After": "1" } }),
+  idempotentReplayUnavailable: () =>
+    new ProblemError(409, "idempotent-replay-unavailable", "The original response carried credentials and is not stored: retry with a new Idempotency-Key"),
   rateLimited: (retryAfterS: number) => {
     const s = Math.max(1, Math.ceil(retryAfterS));
     return new ProblemError(429, "rate-limited", "Too many requests", { retryAfterS: s, headers: { "Retry-After": String(s) } });

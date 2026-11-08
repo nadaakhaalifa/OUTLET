@@ -18,6 +18,21 @@ export const EnvSchema = z
     /** ES256 keys (SPKI / PKCS#8 PEM). The API issues tokens on /auth routes, so it holds both. */
     JWT_PUBLIC_KEY_PEM: z.string().includes("BEGIN PUBLIC KEY"),
     JWT_PRIVATE_KEY_PEM: z.string().includes("BEGIN PRIVATE KEY"),
+    /** outlet_worker (alias outlet_worker, job payments.webhook): PSP webhook processing. Absent: webhooks answer 503. */
+    DATABASE_URL_WORKER: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
+    /** 32+ bytes, base64. HMAC blind-index key of auth-core (phone, device, OTP codes). Required in production; random per process otherwise. */
+    AUTH_HMAC_KEY_B64: z.string().min(43).optional(),
+    /** 32 bytes, base64. Local field cipher key; only used with OUTLET_LOCAL_CIPHER=1 (no KMS cipher exists yet). */
+    AUTH_CIPHER_KEY_B64: z.string().min(43).optional(),
+    /** HMAC secret of the 10-minute checkout quote token. Required in production. */
+    QUOTE_TOKEN_SECRET: z.string().min(32).optional(),
+    /** 32 bytes, base64: encrypts raw webhook bodies at rest. */
+    PAYMENT_RAW_KEY_B64: z.string().min(43).optional(),
+    /** `provider=ip;ip,provider=ip`: PSP source addresses. Empty: every webhook is refused (403). */
+    PSP_WEBHOOK_IPS: z.string().default(""),
+    /** WebAuthn relying party. Both absent: passkey ceremonies answer 503 (no credential table exists yet either). */
+    PASSKEY_RP_ID: z.string().min(1).optional(),
+    PASSKEY_ORIGINS: z.string().default(""),
     REDIS_URL: z.url({ protocol: /^rediss?$/ }).optional(),
     RATE_LIMIT_KEY_SECRET: z.string().min(32),
     /** Comma-separated edge addresses/CIDRs for X-Forwarded-For; empty = trust nobody. */
@@ -43,6 +58,15 @@ export const parseEnv = (env: Readonly<Record<string, string | undefined>>): Env
   if (!r.success) throw new Error(`invalid environment: ${r.error.issues.map((i) => `${i.path.join(".")} (${i.code})`).join(", ")}`);
   return r.data;
 };
+
+/** `paymob=1.2.3.4;5.6.7.8,fawry=9.9.9.9` → { paymob: [...], fawry: [...] }. */
+export const parseWebhookIps = (raw: string): Record<string, string[]> =>
+  Object.fromEntries(
+    raw.split(",").map((p) => p.trim()).filter((p) => p.includes("=")).map((p) => {
+      const [k, v] = p.split("=");
+      return [k?.trim() ?? "", (v ?? "").split(";").map((x) => x.trim()).filter((x) => x.length > 0)] as const;
+    }),
+  );
 
 export const trustProxyList = (raw: string): string[] | false => {
   const list = raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);

@@ -61,7 +61,9 @@ describe("coverage against the contract docs/api/openapi.yaml", async () => {
   const contractOps = new Map(ops(contract));
   const todo = Todo.parse(JSON.parse(await readFile(file("../openapi.todo.json"), "utf8"))).operations;
   const served = new Map(ops(buildOpenApi(ROUTES) as unknown as Doc));
-  const global = new Set(["GET /v1/health/live", "GET /v1/health/ready"]);
+  // Infrastructure probes, plus implementation-only operations the contract does not describe yet (it models the device inline in each auth body;
+// the API registers it once and carries the id in X-Device-Id). Listed here so they cannot grow silently.
+const global = new Set(["GET /v1/health/live", "GET /v1/health/ready", "POST /v1/{market}/auth/devices"]);
 
   it("every contract operation is served or listed in openapi.todo.json", () => {
     expect([...contractOps.keys()].filter((k) => !served.has(k) && !todo.includes(k))).toEqual([]);
@@ -85,7 +87,10 @@ describe("coverage against the contract docs/api/openapi.yaml", async () => {
       // A contract security list that includes the empty requirement ({}) means "anonymous, or signed in for extras". We serve
       // such routes as public (credentials are ignored, so nothing member-only can leak) until optional auth exists.
       const optionalAuth = theirs.security?.some((s) => typeof s === "object" && s !== null && Object.keys(s).length === 0) === true;
-      expect(ours.security?.length === 0, `${k} public`).toBe(theirs.security?.length === 0 || optionalAuth);
+      // Provider webhooks declare the `webhookHmac` scheme: no user token exists, so they are served as @Public and authenticated by IP allow-list + HMAC in the handler.
+      const sec = theirs.security ?? [];
+      const hmacOnly = sec.length > 0 && sec.every((s) => typeof s === "object" && s !== null && Object.keys(s).every((n) => n === "webhookHmac"));
+      expect(ours.security?.length === 0, `${k} public`).toBe(theirs.security?.length === 0 || optionalAuth || hmacOnly);
       for (const ref of ["#/components/parameters/IdempotencyKey", "#/components/parameters/StoreScope", "#/components/parameters/Cursor", "#/components/parameters/Limit"]) {
         expect(refs(ours).includes(ref), `${k} ${ref}`).toBe(refs(theirs).includes(ref));
       }

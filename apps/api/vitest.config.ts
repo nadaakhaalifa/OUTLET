@@ -11,7 +11,8 @@ export default defineConfig({
     alias: [
       { find: "@outlet/media/testing", replacement: src("../../packages/media/src/testing.ts") },
       { find: "@outlet/db/testing", replacement: src("../../packages/db/src/testing.ts") },
-      ...["db", "ids", "money", "outbox", "policy", "catalog", "auth-core", "flags", "idempotency", "logger", "markets-config", "media", "observability", "pricing-integrity"].map(pkg),
+      { find: "@outlet/checkout/testing", replacement: src("../../packages/checkout/src/testing.ts") },
+      ...["db", "cart", "checkout", "inventory", "tax", "seller-accounts", "ledger", "ids", "money", "outbox", "policy", "catalog", "auth-core", "flags", "idempotency", "logger", "markets-config", "media", "observability", "pricing-integrity"].map(pkg),
     ],
   },
   // PGlite boots a WASM Postgres and applies every migration per app: same limits as the other PGlite suites.

@@ -41,6 +41,11 @@
 - **DoS:** body 1 MiB, 10 s timeouts, GCRA per user/device/store, CGNAT-aware IP keys, breaker on Redis.
 - **Elevation:** deny by default (audit + runtime 403 `no-policy-declared`), per-store principal (H6), passkey for seller routes, RLS context per transaction.
 
+## Known limits
+
+- **Access tokens are not revocation-checked for up to 10 minutes (decision 4).** Verification is stateless (signature, `exp`, audience), so a revoked session family or a signed-out device keeps a valid access token until it expires. Mitigations: the 10-minute access TTL; revoking the family kills the refresh token at once (the next refresh fails and reuse detection fires); money and credential routes re-check the principal against the database. Accepted over a per-request session lookup (a database read on every request) until a risk case needs it; a deny-list keyed on `sid` is the upgrade path.
+- **Token-issuing responses are never replayable.** Routes with `sensitiveResponse: true` (otp/verify, refresh, passkeys/assert/verify, Apple, Google) store no body under their Idempotency-Key; a same-key replay answers 409 `idempotent-replay-unavailable` and the client retries with a new key.
+
 ## Not done here (tracked)
 
 `store_members` migration + Pg adapter; admin principal (`adminPasskeySession`; admin and system denials are tested at the policy level until HTTP can mint them); audit-log write of authz decisions and reason codes; failure-only counting for the gift-card budget; ESLint rules for the four route rules (runtime audit enforces them today); request cancellation: the 10 s handler timeout stops waiting but does not abort handler DB work (statement_timeout bounds it; AbortSignal plumbing through `req.ctx` is a TODO in `TelemetryInterceptor`); a real boot smoke test of `cli.ts` (it needs Postgres and Redis; `test/boot.test.ts` covers config, Node 24 `toCryptoKey` and pool tags only).
