@@ -1,5 +1,7 @@
 -- migration: 0016_orders_checkout
 -- phase: expand (new tables, new policies, new grants; nothing dropped or rewritten)
+-- Edited while UNAPPLIED (no environment has run it; 2026-11-08, OrderCancellation, chief review L1): order_groups.cancelled_at / cancel_reason,
+--   seller_orders.cancelled_at / cancel_refund_choice and their CHECKs and grants. Once applied anywhere, changes go in a new migration.
 -- Source: docs/haul-master-prompt-v3.md section 7, 20.1, 15.6; docs/data-model.md 7.14 / 7.15 / 7.16 (ledger_holds);
 --         docs/api/openapi.yaml checkout, order-groups and webhooks/psp paths; ADR-0011; packages/checkout/README.md (design).
 --
@@ -84,10 +86,16 @@ CREATE TABLE order_groups (
   payment_expires_at     timestamptz,
   placed_at              timestamptz NOT NULL,
   paid_at                timestamptz,
+  cancelled_at           timestamptz,                                       -- whole group cancelled before shipping (OrderCancellation)
+  cancel_reason          text CHECK (cancel_reason IS NULL OR cancel_reason ~ '^[a-z_]{1,64}$'),
   version                int NOT NULL DEFAULT 1 CHECK (version >= 1),
   created_at             timestamptz NOT NULL DEFAULT now(),
   updated_at             timestamptz NOT NULL DEFAULT now(),
   CHECK (total_minor = items_subtotal_minor - discount_minor + shipping_minor),
+  CHECK ((cancelled_at IS NULL) = (cancel_reason IS NULL)),
+  -- a cancelled unpaid group whose PSP captured anyway moves on to REFUND_PENDING / REFUNDED (late refund) and keeps its cancel facts
+  -- (written as NOT IN so the machine-parity test keeps finding the single status = ANY list)
+  CHECK (cancelled_at IS NULL OR status NOT IN ('PENDING_PAYMENT', 'AWAITING_COD_CONFIRMATION', 'PAID', 'CONFIRMED_COD', 'PAYMENT_FAILED', 'EXPIRED', 'PARTIALLY_FULFILLED', 'COMPLETED')),
   CHECK (store_credit_minor <= total_minor),
   UNIQUE (user_id, idempotency_key)
 );
@@ -126,11 +134,15 @@ CREATE TABLE seller_orders (
   delivered_at             timestamptz,
   return_window_ends_at    timestamptz,
   closed_at                timestamptz,
-  cancel_reason            text,
+  cancel_reason            text CHECK (cancel_reason IS NULL OR cancel_reason ~ '^[a-z_]{1,64}$'),
+  cancelled_at             timestamptz,                                     -- set with status CANCELLED (shopper, seller or accept timeout)
+  cancel_refund_choice     text CHECK (cancel_refund_choice IN ('original', 'store_credit')),   -- shopper's refund choice at cancel (15.6); NULL = router default
   version                  int NOT NULL DEFAULT 1 CHECK (version >= 1),
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now(),
   CHECK (total_minor = items_subtotal_minor - platform_discount_minor - seller_discount_minor + shipping_minor),
+  CHECK (cancelled_at IS NULL OR status = 'CANCELLED'),
+  CHECK (cancel_refund_choice IS NULL OR status = 'CANCELLED'),
   UNIQUE (order_group_id, store_id)
 );
 CREATE INDEX seller_orders_store_idx ON seller_orders (store_id, status, created_at DESC, id DESC);
@@ -271,8 +283,8 @@ REVOKE ALL ON payment_events_raw FROM outlet_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON checkout_sessions, order_groups, seller_orders, order_lines, payment_intents, ledger_holds FROM outlet_app;
 GRANT SELECT, INSERT ON checkout_sessions, order_groups, seller_orders, order_lines, payment_intents, ledger_holds TO outlet_app;
 GRANT UPDATE (status, order_group_id, reservation_id, updated_at) ON checkout_sessions TO outlet_app;
-GRANT UPDATE (status, risk_decision, reservation_id, payment_expires_at, paid_at, version, updated_at) ON order_groups TO outlet_app;
-GRANT UPDATE (status, accept_by, dispatch_by, delivered_at, return_window_ends_at, closed_at, cancel_reason, version, updated_at) ON seller_orders TO outlet_app;
+GRANT UPDATE (status, risk_decision, reservation_id, payment_expires_at, paid_at, cancelled_at, cancel_reason, version, updated_at) ON order_groups TO outlet_app;
+GRANT UPDATE (status, accept_by, dispatch_by, delivered_at, return_window_ends_at, closed_at, cancel_reason, cancelled_at, cancel_refund_choice, version, updated_at) ON seller_orders TO outlet_app;
 GRANT UPDATE (status) ON order_lines TO outlet_app;
 GRANT UPDATE (status, provider, provider_ref, client_action, three_ds, failure_code, expires_at, version, updated_at) ON payment_intents TO outlet_app;
 GRANT UPDATE (status, captured_entry_id, settled_at) ON ledger_holds TO outlet_app;
@@ -283,7 +295,7 @@ GRANT UPDATE (processing_status, failure_reason, payment_intent_id, processed_at
 GRANT SELECT ON checkout_sessions, order_groups, seller_orders, order_lines, payment_intents TO outlet_worker;
 GRANT UPDATE (status, updated_at) ON checkout_sessions TO outlet_worker;
 GRANT UPDATE (status, paid_at, version, updated_at) ON order_groups TO outlet_worker;
-GRANT UPDATE (status, accept_by, cancel_reason, delivered_at, return_window_ends_at, closed_at, version, updated_at) ON seller_orders TO outlet_worker;
+GRANT UPDATE (status, accept_by, cancel_reason, cancelled_at, cancel_refund_choice, delivered_at, return_window_ends_at, closed_at, version, updated_at) ON seller_orders TO outlet_worker;
 GRANT UPDATE (status) ON order_lines TO outlet_worker;
 GRANT UPDATE (status, provider_ref, failure_code, three_ds, version, updated_at) ON payment_intents TO outlet_worker;
 GRANT SELECT, INSERT ON ledger_holds TO outlet_worker;

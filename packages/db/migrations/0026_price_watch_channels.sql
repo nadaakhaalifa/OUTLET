@@ -24,6 +24,7 @@ CREATE TABLE channel_connections (
   status                text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'failed', 'revoked', 'disconnected')),
   risk_tier             text NOT NULL DEFAULT 'normal' CHECK (risk_tier IN ('trusted', 'normal', 'watched')),
   next_check_at         timestamptz,
+  consecutive_failures  smallint NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0),
   last_sync_at          timestamptz,
   last_webhook_at       timestamptz,
   consent_acceptance_id uuid,
@@ -32,7 +33,7 @@ CREATE TABLE channel_connections (
   UNIQUE (store_id, domain),
   CHECK (status <> 'active' OR verified_at IS NOT NULL)
 );
-CREATE INDEX channel_connections_due_idx ON channel_connections (market_id, next_check_at) WHERE status = 'active';
+CREATE INDEX channel_connections_due_idx ON channel_connections (market_id, next_check_at) WHERE status IN ('active', 'failed');
 
 CREATE TABLE external_products (
   id                   uuid PRIMARY KEY,
@@ -154,9 +155,23 @@ CREATE TABLE price_appeals (
   claimed_reference_minor bigint CHECK (claimed_reference_minor IS NULL OR claimed_reference_minor > 0),
   connection_id     uuid REFERENCES channel_connections (id),
   status            text NOT NULL DEFAULT 'pending_rescore' CHECK (status IN ('pending_rescore', 'upheld', 'rejected', 'ops_queue')),
-  idempotency_key   uuid NOT NULL UNIQUE,
+  idempotency_key   uuid NOT NULL,
+  decided_by        uuid,
   resolved_at       timestamptz,
-  created_at        timestamptz NOT NULL DEFAULT now()
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (store_id, idempotency_key)
+);
+
+-- Seller-entered "was" price per SKU (A1): persisted so a re-score that was not handed the claim cannot silently resolve a fake_reference finding.
+-- claimed_minor is in the SKU's own price currency (one currency per SKU history). Never shown to shoppers; the scorer only compares it with the VRP.
+CREATE TABLE sku_claimed_reference (
+  sku_id        uuid NOT NULL,
+  store_id      uuid NOT NULL REFERENCES stores (id),
+  market_id     text NOT NULL CHECK (length(market_id) > 0),
+  claimed_minor bigint NOT NULL CHECK (claimed_minor > 0),
+  set_by        uuid,
+  set_at        timestamptz NOT NULL,
+  PRIMARY KEY (sku_id, market_id)
 );
 
 -- Append-only enforcement log: no DELETE/TRUNCATE; the only UPDATE allowed changes status / review columns / expiry.
@@ -176,7 +191,7 @@ ALTER TABLE enforcement_actions ENABLE ALWAYS TRIGGER enforcement_actions_no_tru
 DO $do$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['channel_connections', 'external_products', 'channel_snapshots', 'product_matches', 'price_claims', 'price_findings', 'enforcement_actions', 'price_appeals'] LOOP
+  FOREACH t IN ARRAY ARRAY['channel_connections', 'external_products', 'channel_snapshots', 'product_matches', 'price_claims', 'price_findings', 'enforcement_actions', 'price_appeals', 'sku_claimed_reference'] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format('CREATE POLICY %I ON %I USING (store_id = app.current_store_id() AND market_id = app.current_market_id()) WITH CHECK (store_id = app.current_store_id() AND market_id = app.current_market_id())', t || '_store_isolation', t);
@@ -188,14 +203,34 @@ CREATE POLICY outbox_events__worker_pricing_channels ON outbox_events FOR INSERT
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'pricing.channels' AND market_id = app.current_market_id());
 
 -- Grants: seller side (outlet_app) manages connections, reads evidence and appeals; the worker writes snapshots, matches, claims, findings.
-REVOKE ALL ON channel_connections, external_products, channel_snapshots, product_matches, price_claims, price_findings, enforcement_actions, price_appeals FROM outlet_app;
-GRANT SELECT, INSERT, UPDATE ON channel_connections TO outlet_app;
+REVOKE ALL ON channel_connections, external_products, channel_snapshots, product_matches, price_claims, price_findings, enforcement_actions, price_appeals, sku_claimed_reference FROM outlet_app;
+-- A6: the seller may create a PENDING connection and change only verification/OAuth/schedule state; risk_tier, domain, base_url, failure counters are not seller-writable.
+GRANT SELECT ON channel_connections TO outlet_app;
+GRANT INSERT (id, store_id, market_id, type, domain, base_url, verify_method, verify_token_hash, status, consent_acceptance_id, created_at, updated_at) ON channel_connections TO outlet_app;
+GRANT UPDATE (status, verified_at, oauth_token_ref, scopes, next_check_at, updated_at) ON channel_connections TO outlet_app;
 GRANT SELECT ON external_products, channel_snapshots, price_claims, price_findings, enforcement_actions TO outlet_app;
 GRANT SELECT ON product_matches TO outlet_app;
-GRANT UPDATE (status, confirmed_by, confirmed_at, method) ON product_matches TO outlet_app;
+GRANT UPDATE (status, confirmed_by, confirmed_at) ON product_matches TO outlet_app;
 GRANT SELECT, INSERT ON price_appeals TO outlet_app;
+GRANT SELECT, INSERT, DELETE ON sku_claimed_reference TO outlet_app;
+GRANT UPDATE (claimed_minor, set_by, set_at) ON sku_claimed_reference TO outlet_app;
 GRANT SELECT, UPDATE ON channel_connections TO outlet_worker;
 GRANT SELECT, INSERT, UPDATE ON external_products, product_matches, price_claims, price_findings, price_appeals TO outlet_worker;
+GRANT SELECT, INSERT, UPDATE, DELETE ON sku_claimed_reference TO outlet_worker;
 GRANT SELECT, INSERT ON channel_snapshots TO outlet_worker;
 GRANT SELECT, INSERT ON enforcement_actions TO outlet_worker;
 GRANT UPDATE (status, reviewed_by, reviewed_at, expires_at) ON enforcement_actions TO outlet_worker;
+
+-- A4: a seller (outlet_app) may only decide an UNCERTAIN match (needs_confirmation -> seller_confirmed | rejected). An auto match at or above tau can be
+-- changed only by the worker (matching) or Ops, so a seller cannot reject their way out of a cheaper-site finding at the database layer.
+CREATE FUNCTION product_matches_status_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF current_user = 'outlet_app' AND NEW.status IS DISTINCT FROM OLD.status
+     AND (OLD.status <> 'needs_confirmation' OR NEW.status NOT IN ('seller_confirmed', 'rejected')) THEN
+    RAISE EXCEPTION 'product_matches: a seller may only confirm or reject a match that needs confirmation' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$fn$;
+CREATE TRIGGER product_matches_status_guard BEFORE UPDATE ON product_matches FOR EACH ROW EXECUTE FUNCTION product_matches_status_guard();
+ALTER TABLE product_matches ENABLE ALWAYS TRIGGER product_matches_status_guard;

@@ -1,5 +1,7 @@
 -- migration: 0019_returns_refunds
 -- phase: expand (new tables only)
+-- Edited while UNAPPLIED (no environment has run it; 2026-11-08, OrderCancellation): refunds.reason admits 'cancellation'.
+--   Once applied anywhere, changes go in a new migration.
 -- Source: master prompt section 22 (returns), 15.6 (RefundRouter), B5 (CPL 181/2018); docs/data-model.md 7.19;
 --         docs/specs/ledger-chart-of-accounts.md 4.5, 4.6, I7-I13; docs/compliance/verify-register.md V7, V19.
 --
@@ -120,7 +122,7 @@ CREATE TABLE refunds (
   user_id                 uuid NOT NULL REFERENCES users (id),
   store_id                uuid NOT NULL REFERENCES stores (id),
   market_id               text NOT NULL CHECK (length(market_id) > 0),
-  reason                  text NOT NULL CHECK (reason IN ('return', 'seller_rejected', 'goodwill')),
+  reason                  text NOT NULL CHECK (reason IN ('return', 'seller_rejected', 'goodwill', 'cancellation')),   -- cancellation: OrderCancellation (20.1)
   route                   text NOT NULL CHECK (route IN ('psp_original', 'bnpl_provider', 'store_credit', 'bank_transfer', 'fawry_voucher', 'mixed')),
   shopper_choice          text CHECK (shopper_choice IN ('original', 'store_credit')),
   currency                char(3) NOT NULL,

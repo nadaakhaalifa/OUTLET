@@ -12,6 +12,15 @@
 --     shipment_seller_orders join (Phase 1 is one parcel per order; the array is the hub-consolidation hook); label_object_key instead of
 --     label_media_id; last_event_at / stale_notified_at for the 48 h tracking-gap poller.
 --   * courier_events_raw: unpartitioned in Phase 1; UNIQUE (courier_code, courier_event_id) is the dedup key.
+-- Review fixes (chief-reviewer REJECT):
+--   * C2 delivery_snapshots keeps TWO phones: phone_masked_ct (seller display, readable by outlet_app) and phone_ct (the real number,
+--     column-granted ONLY to outlet_worker and decrypted only inside the courier adapter call under job shipping.tracking).
+--   * C3 seller_access_until is set at insert (created_at + 60 days) and shortened to terminal event + 30 days; the ciphertext columns are
+--     nullable because a retention job nulls them and stamps pseudonymised_at once the window has passed.
+--   * C5 courier_events_raw: a rejected (bad signature) webhook stores only body_sha256 + body_bytes, never the body (body_ct NULL).
+--   * C6 AAD CONTRACT: every *_ct column is sealed with aad = '<table>.<column>:<row id>' (addresses: id; delivery_snapshots: seller_order_id;
+--     courier_events_raw: id) so a ciphertext copied to another row fails to decrypt. The key/AAD scheme is part of the column contract.
+--   * C8 only outbound shipments may carry COD.
 -- RLS: addresses user-owned; delivery_snapshots and shipments "both" (store branch + owning shopper, same shape as seller_orders);
 --      courier_events_raw has no tenant column and is reachable only by outlet_worker in job shipping.tracking.
 
@@ -48,9 +57,10 @@ CREATE TABLE delivery_snapshots (
   market_id           text NOT NULL CHECK (length(market_id) > 0),
   country_code        char(2) NOT NULL DEFAULT 'EG',
   geo_area_id         uuid NOT NULL REFERENCES geo_areas (id),
-  recipient_name_ct   bytea NOT NULL,
-  phone_ct            bytea NOT NULL,
-  address_ct          bytea NOT NULL,
+  recipient_name_ct   bytea,
+  phone_ct            bytea,
+  phone_masked_ct     bytea,
+  address_ct          bytea,
   pin_ct              bytea,
   seller_access_until timestamptz,
   pseudonymised_at    timestamptz,
@@ -64,7 +74,12 @@ CREATE POLICY delivery_snapshots_store_isolation ON delivery_snapshots
          OR (app.ctx() IN ('user', 'worker') AND user_id = app.current_user_id())))
   WITH CHECK (market_id = app.current_market_id() AND (store_id = app.current_store_id()
          OR (app.ctx() IN ('user', 'worker') AND user_id = app.current_user_id())));
+CREATE INDEX delivery_snapshots_purge_idx ON delivery_snapshots (seller_access_until) WHERE pseudonymised_at IS NULL;
 REVOKE UPDATE, DELETE, TRUNCATE ON delivery_snapshots FROM outlet_app;
+-- C2: outlet_app (shopper insert at checkout, seller read) can never select the real phone.
+REVOKE SELECT ON delivery_snapshots FROM outlet_app;
+GRANT SELECT (seller_order_id, order_group_id, store_id, user_id, market_id, country_code, geo_area_id, recipient_name_ct, phone_masked_ct, address_ct, pin_ct, seller_access_until, pseudonymised_at, created_at)
+  ON delivery_snapshots TO outlet_app;
 
 CREATE TABLE shipments (
   id                uuid PRIMARY KEY,
@@ -88,7 +103,8 @@ CREATE TABLE shipments (
   idempotency_key   text NOT NULL UNIQUE,
   version           int NOT NULL DEFAULT 1,
   created_at        timestamptz NOT NULL DEFAULT now(),
-  updated_at        timestamptz NOT NULL DEFAULT now()
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT shipments_cod_outbound_only CHECK (direction = 'outbound' OR cod_amount_minor = 0)
 );
 CREATE UNIQUE INDEX shipments_awb_idx ON shipments (courier, awb) WHERE awb IS NOT NULL;
 CREATE INDEX shipments_store_idx ON shipments (store_id, status, created_at DESC, id DESC);
@@ -109,13 +125,16 @@ CREATE TABLE courier_events_raw (
   courier_code     text NOT NULL,
   courier_event_id text NOT NULL,
   signature_ok     boolean NOT NULL,
-  body_ct          bytea NOT NULL,
+  body_ct          bytea,
+  body_sha256      text,
+  body_bytes       int,
   processing_status text NOT NULL DEFAULT 'received' CHECK (processing_status IN ('received', 'processed', 'ignored', 'rejected', 'failed')),
   failure_reason   text,
   shipment_id      uuid,
   received_at      timestamptz NOT NULL DEFAULT now(),
   processed_at     timestamptz,
-  UNIQUE (courier_code, courier_event_id)
+  UNIQUE (courier_code, courier_event_id),
+  CONSTRAINT courier_events_raw_body_shape CHECK ((processing_status = 'rejected' AND body_ct IS NULL AND body_sha256 IS NOT NULL AND body_bytes IS NOT NULL) OR (processing_status <> 'rejected' AND body_ct IS NOT NULL))
 );
 CREATE INDEX courier_events_raw_failed_idx ON courier_events_raw (processing_status, id) WHERE processing_status = 'failed';
 ALTER TABLE courier_events_raw ENABLE ROW LEVEL SECURITY;
@@ -131,7 +150,7 @@ GRANT SELECT, INSERT ON courier_events_raw TO outlet_worker;
 GRANT UPDATE (processing_status, failure_reason, shipment_id, processed_at) ON courier_events_raw TO outlet_worker;
 GRANT SELECT ON shipments, delivery_snapshots TO outlet_worker;
 GRANT UPDATE (status, attempts, delivered_at, last_event_at, stale_notified_at, version, updated_at) ON shipments TO outlet_worker;
-GRANT UPDATE (seller_access_until) ON delivery_snapshots TO outlet_worker;
+GRANT UPDATE (seller_access_until, recipient_name_ct, phone_ct, phone_masked_ct, address_ct, pin_ct, pseudonymised_at) ON delivery_snapshots TO outlet_worker;
 CREATE POLICY shipments__worker_shipping_tracking_select ON shipments FOR SELECT TO outlet_worker
   USING (app.ctx() = 'worker' AND app.job() = 'shipping.tracking' AND market_id = app.current_market_id());
 CREATE POLICY shipments__worker_shipping_tracking_update ON shipments FOR UPDATE TO outlet_worker
@@ -144,5 +163,7 @@ CREATE POLICY delivery_snapshots__worker_shipping_tracking_update ON delivery_sn
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'shipping.tracking' AND market_id = app.current_market_id());
 CREATE POLICY outbox_events__worker_shipping_tracking ON outbox_events FOR INSERT TO outlet_worker
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'shipping.tracking' AND market_id = app.current_market_id());
--- The rejected-order inventory consumer runs in the same job context narrowed to the order owner: it reads the owner's order rows and
--- the reservation through the existing user branches, so it needs no further policy.
+-- The rejected-order inventory consumer (checkout RejectedOrderInventoryRelease) runs in the same job context narrowed to the order owner: it reads the
+-- owner's order rows and the reservation through the existing user branches, so it needs no further policy. The consumer of its
+-- inventory.release_required event (@outlet/inventory ReleaseRequiredConsumer) runs as outlet_app in the event's STORE context, like
+-- ReservationService, so inventory needs no worker policy (the ADR-0011 tenant audit for inventory stays empty).

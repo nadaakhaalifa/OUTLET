@@ -13,8 +13,8 @@
 --   * promotion_targets is not built: targeting lives in the Zod-validated rules jsonb (one document, versioned).
 --   * promotion_budget_shards is replaced by one row per promotion in promotion_usage (atomic conditional UPDATE enforces budget and
 --     total_limit); shards stay a Drop Hour optimisation (ADR to follow when a hot promotion is measured).
---   * vouchers gains store_id (seller-issued codes, store RLS). vouchers.uses is bumped by an atomic conditional UPDATE (max_uses) in the same
---     transaction as the redemption row (a shopper cannot see other shoppers' redemptions, so the cap cannot be counted from them).
+--   * vouchers gains store_id (seller-issued codes, store RLS). vouchers.uses and promotion_usage are bumped only by the SECURITY DEFINER functions at the end of this file (outlet_app has no
+--     direct UPDATE), in the same transaction as the redemption row (a shopper cannot see other shoppers' redemptions, so the cap cannot be counted from them).
 --   * voucher_redemptions is an event log: kind reserved | confirmed | released | reinstated (ref_id points at the reserved row).
 --     UNIQUE (order_group_id, promotion_id, kind) makes a replay a no-op. order_group_id / seller_order_id are logical references (no FK):
 --     the reservation is taken at place time, before the order rows exist.
@@ -81,7 +81,7 @@ CREATE TABLE vouchers (
   promotion_id      uuid NOT NULL REFERENCES promotions (id),
   store_id          uuid REFERENCES stores (id),
   kind              text NOT NULL CHECK (kind IN ('public_code', 'unique_code', 'auto')),
-  code_display      text CHECK (code_display IS NULL OR code_display ~ '^[A-Z0-9]{3,32}$'),
+  code_display      text CHECK (code_display IS NULL OR code_display ~ '^[A-Z0-9]{8,32}$'),
   code_hash         bytea,
   last4             text CHECK (last4 IS NULL OR length(last4) = 4),
   assigned_user_id  uuid REFERENCES users (id),
@@ -167,5 +167,71 @@ REVOKE ALL ON promotions, promotion_versions, promotion_usage, vouchers, voucher
 GRANT SELECT, INSERT ON promotions, promotion_versions, vouchers, voucher_redemptions TO outlet_app;
 GRANT UPDATE (name_ar, name_en, rules, stacking_class, funding_platform_bp, funding_seller_bp, per_user_limit, total_limit, min_order_minor,
               max_discount_minor, budget_minor, starts_at, ends_at, status, version, updated_at, type) ON promotions TO outlet_app;
-GRANT SELECT, INSERT, UPDATE (used_minor, used_count) ON promotion_usage TO outlet_app;
-GRANT UPDATE (status, uses) ON vouchers TO outlet_app;
+GRANT SELECT, INSERT ON promotion_usage TO outlet_app;
+GRANT UPDATE (status) ON vouchers TO outlet_app;
+-- No direct UPDATE of promotion_usage (used_minor/used_count) or vouchers.uses for outlet_app: counters move only through the two SECURITY
+-- DEFINER functions below, which enforce the caps. (Voucher status stays updatable for void/expire by the issuing side.)
+
+-- Both functions are owned by the migrator (migrations run as the owner, see 0002); the owner must be able to bypass FORCE RLS on the
+-- tables it writes (superuser or BYPASSRLS), otherwise the promotions status write for a store promotion under ctx 'user' is refused.
+-- They still require the caller's context: ctx 'user' and the caller's market.
+-- Public voucher codes are >= 8 chars (guessing surface); the API layer must also rate-limit code attempts (CodeResolutionBudget).
+
+-- Reserve: atomically adds (amount, 1) to the promotion counters if the promotion is ACTIVE, the amount is within max_discount, and
+-- budget_minor and total_limit still allow it; bumps vouchers.uses (max_uses) in the same call; flips the promotion to EXHAUSTED when a cap is
+-- reached. Returns 'ok' | 'inactive' | 'max_discount' | 'cap' | 'voucher_cap' | 'voucher_mismatch'. The caller rolls back on anything but 'ok'.
+CREATE FUNCTION promotion_usage_bump(p_promotion_id uuid, p_amount bigint, p_voucher_id uuid) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS
+$$
+DECLARE
+  prom promotions%ROWTYPE;
+  got  bigint;
+BEGIN
+  IF app.ctx() IS DISTINCT FROM 'user' THEN RAISE EXCEPTION 'promotion_usage_bump requires ctx user'; END IF;
+  IF p_amount IS NULL OR p_amount < 0 THEN RAISE EXCEPTION 'invalid amount'; END IF;
+  SELECT * INTO prom FROM promotions WHERE id = p_promotion_id AND market_id = app.current_market_id();
+  IF NOT FOUND OR prom.status <> 'ACTIVE' THEN RETURN 'inactive'; END IF;
+  IF prom.max_discount_minor IS NOT NULL AND p_amount > prom.max_discount_minor THEN RETURN 'max_discount'; END IF;
+  -- check (and lock) the voucher first, then move the counters, so a refusal never leaves a partial write behind
+  IF p_voucher_id IS NOT NULL THEN
+    PERFORM 1 FROM vouchers v
+     WHERE v.id = p_voucher_id AND v.promotion_id = p_promotion_id AND v.status = 'active' AND (v.max_uses IS NULL OR v.uses < v.max_uses)
+       FOR UPDATE;
+    IF NOT FOUND THEN RETURN 'voucher_cap'; END IF;
+  END IF;
+  UPDATE promotion_usage u SET used_minor = u.used_minor + p_amount, used_count = u.used_count + 1
+   WHERE u.promotion_id = p_promotion_id
+     AND (prom.budget_minor IS NULL OR u.used_minor + p_amount <= prom.budget_minor)
+     AND (prom.total_limit IS NULL OR u.used_count < prom.total_limit);
+  GET DIAGNOSTICS got = ROW_COUNT;
+  IF got = 0 THEN RETURN 'cap'; END IF;
+  IF p_voucher_id IS NOT NULL THEN UPDATE vouchers v SET uses = v.uses + 1 WHERE v.id = p_voucher_id; END IF;
+  UPDATE promotions p SET status = 'EXHAUSTED', updated_at = now()
+   FROM promotion_usage u
+   WHERE p.id = p_promotion_id AND u.promotion_id = p.id AND p.status = 'ACTIVE'
+     AND ((p.total_limit IS NOT NULL AND u.used_count >= p.total_limit) OR (p.budget_minor IS NOT NULL AND u.used_minor >= p.budget_minor));
+  RETURN 'ok';
+END
+$$;
+
+-- Give back (release / reinstate): subtracts (amount, 1) without going below zero and re-opens an EXHAUSTED promotion whose caps are no longer
+-- reached (an abandoned checkout must not kill a promotion) while it is still inside its window.
+CREATE FUNCTION promotion_usage_giveback(p_promotion_id uuid, p_amount bigint, p_voucher_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS
+$$
+BEGIN
+  IF app.ctx() IS DISTINCT FROM 'user' THEN RAISE EXCEPTION 'promotion_usage_giveback requires ctx user'; END IF;
+  IF p_amount IS NULL OR p_amount < 0 THEN RAISE EXCEPTION 'invalid amount'; END IF;
+  UPDATE promotion_usage u SET used_minor = GREATEST(u.used_minor - p_amount, 0), used_count = GREATEST(u.used_count - 1, 0)
+   WHERE u.promotion_id = p_promotion_id AND u.market_id = app.current_market_id();
+  IF p_voucher_id IS NOT NULL THEN
+    UPDATE vouchers v SET uses = v.uses - 1 WHERE v.id = p_voucher_id AND v.promotion_id = p_promotion_id AND v.uses > 0;
+  END IF;
+  UPDATE promotions p SET status = 'ACTIVE', updated_at = now()
+   FROM promotion_usage u
+   WHERE p.id = p_promotion_id AND u.promotion_id = p.id AND p.status = 'EXHAUSTED' AND now() < p.ends_at
+     AND (p.total_limit IS NULL OR u.used_count < p.total_limit) AND (p.budget_minor IS NULL OR u.used_minor < p.budget_minor);
+END
+$$;
+REVOKE ALL ON FUNCTION promotion_usage_bump(uuid, bigint, uuid), promotion_usage_giveback(uuid, bigint, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION promotion_usage_bump(uuid, bigint, uuid), promotion_usage_giveback(uuid, bigint, uuid) TO outlet_app;

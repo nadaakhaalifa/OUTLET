@@ -18,6 +18,12 @@
     "cmd": "delete"
   },
   {
+    "table": "audit_log",
+    "policy": "audit_log__app_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
     "table": "channel_connections",
     "policy": "channel_connections__worker_pricing_channels",
     "role": "outlet_worker",
@@ -390,6 +396,12 @@
     "cmd": "select"
   },
   {
+    "table": "pii_access_log",
+    "policy": "pii_access_log__app_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
     "table": "price_appeals",
     "policy": "price_appeals__worker_pricing_channels",
     "role": "outlet_worker",
@@ -622,6 +634,12 @@
     "policy": "shipments__worker_shipping_tracking_update",
     "role": "outlet_worker",
     "cmd": "update"
+  },
+  {
+    "table": "sku_claimed_reference",
+    "policy": "sku_claimed_reference__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "store_members",
