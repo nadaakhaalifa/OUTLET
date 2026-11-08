@@ -8,7 +8,7 @@ import { Ledger, accountCode } from "@outlet/ledger";
 import { money } from "@outlet/money";
 import type { Money } from "@outlet/money";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
-import { CheckoutService, ExpirySweeper, PgStoreCredit, WebhookProcessor } from "../src/index.js";
+import { CheckoutService, ExpirySweeper, OrderCloseJob, PgStoreCredit, WebhookProcessor } from "../src/index.js";
 import type { CheckoutConfig, PaymentMethod, PlaceInput } from "../src/index.js";
 import {
   FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories,
@@ -35,6 +35,7 @@ export interface World {
   readonly makeSvc: (config: Partial<CheckoutConfig>) => CheckoutService;
   readonly webhooks: WebhookProcessor;
   readonly sweeper: ExpirySweeper;
+  readonly closer: OrderCloseJob;
   readonly stores: readonly [string, string, string];
   readonly newUser: () => Promise<string>;
   readonly seedSku: (storeId: string, priceMinor: bigint, stock?: number) => Promise<Sku>;
@@ -138,7 +139,7 @@ export const buildWorld = async (): Promise<World> => {
   const svc = new CheckoutService({ ...common, client: app });
   const worker = { ...common, client: workerClient, cipher: new FakeCipher() };
   return {
-    raw, app, workerClient, statements, clock, fakes, reservations, svc, makeSvc: (c) => new CheckoutService({ ...common, config: defaultConfig(c), client: app }), webhooks: new WebhookProcessor(worker), sweeper: new ExpirySweeper(worker), stores, newUser, seedSku, fillBag, grantCredit,
+    raw, app, workerClient, statements, clock, fakes, reservations, svc, makeSvc: (c) => new CheckoutService({ ...common, config: defaultConfig(c), client: app }), webhooks: new WebhookProcessor(worker), sweeper: new ExpirySweeper(worker), closer: new OrderCloseJob(worker), stores, newUser, seedSku, fillBag, grantCredit,
     outboxTypes: async () => (await raw.query<{ t: string }>("SELECT event_type AS t FROM outbox_events ORDER BY occurred_at, id")).rows.map((r) => r.t),
     free: async (sku) => Number((await raw.query<{ f: string }>("SELECT (on_hand - committed)::text AS f FROM inventory_levels WHERE sku_id = $1", [sku.skuId])).rows[0]?.f ?? "0"),
     close,

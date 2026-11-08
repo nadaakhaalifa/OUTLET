@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertTenantTablesProtected } from "@outlet/db";
 import { Ledger } from "@outlet/ledger";
 import { money } from "@outlet/money";
+import { DISPUTE_OPENED_EVENT, DISPUTE_RESOLVED_EVENT, DisputeEventPayload } from "@outlet/payouts";
 import type { RefundView, ReturnView } from "../src/index.js";
 import { DAY, buildWorld, errCode } from "./fixtures.js";
 import type { Order, World } from "./fixtures.js";
@@ -365,6 +366,28 @@ describe("inspection, auto-approve, disputes", () => {
     expect(await errCode(w.returns.resolveDispute(w.admin(["trust_safety"]), d2.disputeId, "seller", "again"))).toBe("invalid_state");
     const sla = (await w.raw.query<{ d: string }>("SELECT sla_due_at::text AS d FROM disputes WHERE id = $1", [d1.disputeId])).rows[0]?.d ?? "";
     expect(new Date(sla).getTime()).toBeGreaterThan(w.clock.t);
+  });
+  it("dispute.opened and dispute.resolved carry the payouts DisputeEventPayload, in the same transaction as the state change", async () => {
+    const [a] = w.stores;
+    const u = await w.newUser();
+    const o = await w.order({ userId: u, storeId: a, lines: [{ price: 10_000n }], deliveredDaysAgo: 1 });
+    const r = await req(u, o, "changed_mind");
+    const s = w.seller(a);
+    await w.returns.receive(s, a, r.id);
+    await w.returns.inspect(s, a, r.id, { result: "rejected", reasonCode: "used_item", notes: "worn" });
+    const d = await w.returns.openDispute(u, r.id, { reasonCode: "rejection_unjustified" });
+    const events = async (type: string) => (await w.raw.query<{ payload: unknown }>("SELECT payload FROM outbox_events WHERE event_type = $1 AND aggregate_id = $2", [type, d.disputeId])).rows;
+    const [opened] = await events(DISPUTE_OPENED_EVENT);
+    const row = (await w.raw.query<{ seller_order_id: string; store_id: string }>("SELECT seller_order_id, store_id FROM return_requests WHERE id = $1", [r.id])).rows[0];
+    expect(DisputeEventPayload.parse(opened?.payload)).toMatchObject({ dispute_id: d.disputeId, seller_order_id: row?.seller_order_id, store_id: a, market_id: "EG" });
+    expect(await events(DISPUTE_RESOLVED_EVENT)).toHaveLength(0);
+    await w.returns.resolveDispute(w.admin(["trust_safety"]), d.disputeId, "seller", "worn");
+    const resolved = await events(DISPUTE_RESOLVED_EVENT);
+    expect(resolved).toHaveLength(1);
+    expect(DisputeEventPayload.parse(resolved[0]?.payload).dispute_id).toBe(d.disputeId);
+    // a failed resolve (already resolved) emits nothing more
+    expect(await errCode(w.returns.resolveDispute(w.admin(["trust_safety"]), d.disputeId, "seller", "again"))).toBe("invalid_state");
+    expect(await events(DISPUTE_RESOLVED_EVENT)).toHaveLength(1);
   });
   it("restock puts the unit back on the shelf (idempotent); write-off does not", async () => {
     const [a] = w.stores;

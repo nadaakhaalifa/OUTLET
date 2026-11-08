@@ -283,7 +283,7 @@ GRANT UPDATE (processing_status, failure_reason, payment_intent_id, processed_at
 GRANT SELECT ON checkout_sessions, order_groups, seller_orders, order_lines, payment_intents TO outlet_worker;
 GRANT UPDATE (status, updated_at) ON checkout_sessions TO outlet_worker;
 GRANT UPDATE (status, paid_at, version, updated_at) ON order_groups TO outlet_worker;
-GRANT UPDATE (status, accept_by, cancel_reason, version, updated_at) ON seller_orders TO outlet_worker;
+GRANT UPDATE (status, accept_by, cancel_reason, delivered_at, return_window_ends_at, closed_at, version, updated_at) ON seller_orders TO outlet_worker;
 GRANT UPDATE (status) ON order_lines TO outlet_worker;
 GRANT UPDATE (status, provider_ref, failure_code, three_ds, version, updated_at) ON payment_intents TO outlet_worker;
 GRANT SELECT, INSERT ON ledger_holds TO outlet_worker;
@@ -323,6 +323,18 @@ CREATE POLICY outbox_events__worker_payments_webhook ON outbox_events FOR INSERT
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'payments.webhook' AND market_id = app.current_market_id());
 CREATE POLICY outbox_events__worker_checkout_expiry ON outbox_events FOR INSERT TO outlet_worker
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'checkout.expiry' AND market_id = app.current_market_id());
+-- orders.close: close DELIVERED orders after the return window (and markDelivered). Limited to the delivery/close lifecycle rows;
+-- the checks on returns, disputes and refunds are in migration 0023 (those tables do not exist yet here).
+-- (CLOSED is readable too: an UPDATE's new row must also pass the SELECT policy.)
+CREATE POLICY seller_orders__worker_orders_close_select ON seller_orders FOR SELECT TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'orders.close' AND market_id = app.current_market_id()
+         AND status IN ('SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CLOSED'));
+CREATE POLICY seller_orders__worker_orders_close_update ON seller_orders FOR UPDATE TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'orders.close' AND market_id = app.current_market_id()
+         AND status IN ('SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'))
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'orders.close' AND market_id = app.current_market_id() AND status IN ('DELIVERED', 'CLOSED'));
+CREATE POLICY outbox_events__worker_orders_close ON outbox_events FOR INSERT TO outlet_worker
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'orders.close' AND market_id = app.current_market_id());
 
 -- 11. Retention: raw_webhooks_financial (0004) now has its table; generate its worker policy.
 SELECT app.enable_retention_policy('raw_webhooks_financial');

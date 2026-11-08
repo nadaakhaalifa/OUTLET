@@ -782,3 +782,94 @@ describe("C12: eachStoreContext leaves no store access behind", () => {
     expect(seen.after).toBe(0);
   });
 });
+
+describe("quote honesty: cod availability mirrors placement", () => {
+  it("reports COD available within the cap with the risk port allowing", async () => {
+    const sku = await w.seedSku(w.stores[0], 20_000n, 2);
+    const u = await w.newUser();
+    await w.fillBag(u, [{ sku, qty: 1 }]);
+    w.fakes.risk.decision = "allow";
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: true, reasonCode: null });
+  });
+
+  it("above the first-order cap: unavailable with a reason code, and the risk port is not consulted", async () => {
+    const sku = await w.seedSku(w.stores[0], 160_000n, 2);
+    const u = await w.newUser();
+    await w.fillBag(u, [{ sku, qty: 1 }]);
+    w.fakes.risk.decision = "allow";
+    const calls = w.fakes.risk.calls;
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_above_first_order_cap" });
+    expect(w.fakes.risk.calls).toBe(calls);
+  });
+
+  it("kill switch engaged: unavailable with cod_disabled", async () => {
+    const sku = await w.seedSku(w.stores[0], 20_000n, 2);
+    const u = await w.newUser();
+    await w.fillBag(u, [{ sku, qty: 1 }]);
+    w.fakes.kill.engaged.add(KILL_SWITCH_OF.cod);
+    try {
+      expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_disabled" });
+    } finally {
+      w.fakes.kill.engaged.delete(KILL_SWITCH_OF.cod);
+    }
+  });
+
+  it("risk block and a throwing risk port both read as unavailable", async () => {
+    const sku = await w.seedSku(w.stores[0], 20_000n, 2);
+    const u = await w.newUser();
+    await w.fillBag(u, [{ sku, qty: 1 }]);
+    w.fakes.risk.decision = "block";
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_risk_declined" });
+    const original = w.fakes.risk.assessCod.bind(w.fakes.risk);
+    w.fakes.risk.assessCod = () => Promise.reject(new Error("down"));
+    try {
+      expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_risk_unavailable" });
+    } finally {
+      w.fakes.risk.assessCod = original;
+      w.fakes.risk.decision = "allow";
+    }
+  });
+});
+
+describe("quote honesty: cod availability mirrors placement", () => {
+  const bag = async (price: bigint): Promise<string> => {
+    const sku = await w.seedSku(w.stores[0], price, 2);
+    const u = await w.newUser();
+    await w.fillBag(u, [{ sku, qty: 1 }]);
+    return u;
+  };
+  it("reports COD available within the cap with the risk port allowing", async () => {
+    const u = await bag(20_000n);
+    w.fakes.risk.decision = "allow";
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: true, reasonCode: null });
+  });
+  it("above the first-order cap: unavailable with a reason code, and the risk port is not consulted", async () => {
+    const u = await bag(160_000n);
+    w.fakes.risk.decision = "allow";
+    const calls = w.fakes.risk.calls;
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_above_first_order_cap" });
+    expect(w.fakes.risk.calls).toBe(calls);
+  });
+  it("kill switch engaged: unavailable with cod_disabled", async () => {
+    const u = await bag(20_000n);
+    w.fakes.kill.engaged.add(KILL_SWITCH_OF.cod);
+    try {
+      expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_disabled" });
+    } finally {
+      w.fakes.kill.engaged.delete(KILL_SWITCH_OF.cod);
+    }
+  });
+  it("risk block and a throwing risk port both read as unavailable", async () => {
+    const u = await bag(20_000n);
+    w.fakes.risk.decision = "block";
+    expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_risk_declined" });
+    const original = w.fakes.risk.assessCod.bind(w.fakes.risk);
+    w.fakes.risk.assessCod = () => Promise.reject(new Error("down"));
+    try {
+      expect((await w.svc.quote(u, { addressRef: ADDR, method: "card" })).cod).toEqual({ allowed: false, reasonCode: "cod_risk_unavailable" });
+    } finally {
+      w.fakes.risk.assessCod = original;
+      w.fakes.risk.decision = "allow";
+    }
+  });
+});

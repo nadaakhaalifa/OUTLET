@@ -60,6 +60,12 @@
     "cmd": "select"
   },
   {
+    "table": "disputes",
+    "policy": "disputes__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "dlq_messages",
     "policy": "dlq_messages__worker_outbox_relay",
     "role": "outlet_worker",
@@ -100,6 +106,12 @@
     "policy": "media_assets__worker_platform",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "order_groups",
@@ -182,6 +194,18 @@
   {
     "table": "outbox_events",
     "policy": "outbox_events__worker_media_platform",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_orders_close",
     "role": "outlet_worker",
     "cmd": "insert"
   },
@@ -384,8 +408,20 @@
     "cmd": "select"
   },
   {
+    "table": "refunds",
+    "policy": "refunds__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "return_requests",
     "policy": "return_requests__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_orders_close",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -406,6 +442,18 @@
     "policy": "seller_orders__worker_finance_reconcile",
     "role": "outlet_worker",
     "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_orders_close_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_orders_close_update",
+    "role": "outlet_worker",
+    "cmd": "update"
   },
   {
     "table": "seller_plan_assignments",

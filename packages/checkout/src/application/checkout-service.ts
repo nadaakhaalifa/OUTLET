@@ -35,7 +35,12 @@ export interface QuoteResult {
   readonly expiresAt: Date;
   /** Bag lines that could not be quoted (unlisted, store suspended, out of stock, no delivery coverage). */
   readonly unavailableSkus: readonly string[];
+  /** Whether COD would be accepted at placement for this bag (kill switch, first-order cap, risk). Never true when placement would refuse. */
+  readonly cod: CodAvailability;
 }
+
+export type CodReasonCode = "cod_disabled" | "cod_above_first_order_cap" | "cod_risk_declined" | "cod_risk_unavailable";
+export type CodAvailability = { readonly allowed: true; readonly reasonCode: null } | { readonly allowed: false; readonly reasonCode: CodReasonCode };
 
 export interface PlaceInput extends QuoteRequest {
   /** Client-generated UUIDv7 (Idempotency-Key header). */
@@ -104,8 +109,21 @@ export class CheckoutService {
       if (!built.quote.payableByMethod.has(req.method)) throw new CheckoutError("method-unavailable", "payment method is not available");
       const expiresAt = new Date(this.env.now().getTime() + secondsToMs(this.env.config.priceLockSec));
       const token = this.env.tokens.sign({ jti: this.env.newId(), userId, marketId: this.env.marketId, quoteHash: built.quote.hash, method: req.method, expiresAt });
-      return { quote: built.quote, token, expiresAt, unavailableSkus: built.unavailable };
+      return { quote: built.quote, token, expiresAt, unavailableSkus: built.unavailable, cod: await this.codAvailability(userId, req, built.quote) };
     });
+  }
+
+  /** Same gates as placement (kill switch, C6 first-order cap, RiskPort), evaluated without side effects. The cap is checked before the risk port, as at placement. */
+  private async codAvailability(userId: string, req: QuoteRequest, q: Quote): Promise<CodAvailability> {
+    const env = this.env;
+    if (await env.killSwitches.isEngaged(KILL_SWITCH_OF.cod)) return { allowed: false, reasonCode: "cod_disabled" };
+    if (compare(q.total, env.config.codMaxFirstOrder) > 0) return { allowed: false, reasonCode: "cod_above_first_order_cap" };
+    try {
+      const r = await env.risk.assessCod({ userId, marketId: env.marketId, total: q.total, addressRef: req.addressRef, storeCount: q.stores.length });
+      return r.decision === "allow" || r.decision === "require_confirmation" ? { allowed: true, reasonCode: null } : { allowed: false, reasonCode: "cod_risk_declined" };
+    } catch {
+      return { allowed: false, reasonCode: "cod_risk_unavailable" };
+    }
   }
 
   /** Recomputes everything from the database and the ports; the client's numbers are never read. */

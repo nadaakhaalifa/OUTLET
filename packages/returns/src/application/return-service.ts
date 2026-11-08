@@ -1,5 +1,6 @@
 import { withDbContext } from "@outlet/db";
 import type { Queryable } from "@outlet/db";
+import { DISPUTE_OPENED_EVENT, DISPUTE_RESOLVED_EVENT, DisputeEventPayload } from "@outlet/payouts";
 import { authorize } from "@outlet/policy";
 import type { Principal } from "@outlet/policy";
 import { z } from "zod";
@@ -400,7 +401,7 @@ export class ReturnService {
         `INSERT INTO disputes (id, return_request_id, user_id, store_id, market_id, status, reason_code, shopper_note, sla_due_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'OPEN',$6,$7,$8,$9,$9)`,
         [id, r.id, userId, r.store_id, env.marketId, input.reasonCode, input.note ?? null, sla.toISOString(), now.toISOString()],
       );
-      await emit(env, tx, "dispute.opened", "dispute", id, { dispute_id: id, return_request_id: r.id, reason: input.reasonCode });
+      await emit(env, tx, DISPUTE_OPENED_EVENT, "dispute", id, { ...disputePayload(r.seller_order_id, r.store_id, env.marketId, id), return_request_id: r.id, reason: input.reasonCode });
       return { disputeId: id, slaDueAt: sla.toISOString() };
     });
   }
@@ -432,6 +433,7 @@ export class ReturnService {
       );
       const r = await lockReturn(tx, d.return_request_id);
       const next = await setReturnStatus(tx, r.id, r.status, outcome === "shopper" ? "resolve_shopper" : "resolve_seller", now);
+      await emit(env, tx, DISPUTE_RESOLVED_EVENT, "dispute", d.id, { ...disputePayload(r.seller_order_id, r.store_id, env.marketId, d.id), return_request_id: r.id, outcome });
       if (outcome === "shopper") await emit(env, tx, "return.accepted", "return_request", r.id, { return_request_id: r.id, store_id: r.store_id, user_id: r.user_id, dispute_id: d.id });
       return next;
     });
@@ -446,6 +448,9 @@ export class ReturnService {
     if (d.effect === "deny") throw new ReturnsError(d.reason === "not_found" ? "not_found" : "forbidden");
   }
 }
+
+const disputePayload = (sellerOrderId: string, storeId: string, marketId: string, disputeId: string): DisputeEventPayload =>
+  DisputeEventPayload.parse({ seller_order_id: sellerOrderId, store_id: storeId, market_id: marketId, dispute_id: disputeId });
 
 const lockReturnPlain = async (tx: Queryable, id: string): Promise<ReturnRow> => {
   const r = await tx.query<ReturnRow>(`SELECT id, status, seller_order_id, store_id, user_id, reason_code, resolution, window_ends_at, inspection_due_at, refund_due_at FROM return_requests WHERE id = $1`, [uuid.parse(id)]);
