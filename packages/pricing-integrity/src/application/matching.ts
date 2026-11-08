@@ -35,9 +35,12 @@ export class MatchingService {
       const ins = await tx.query<{ id: string }>(
         `INSERT INTO product_matches (id, sku_id, store_id, market_id, external_product_id, method, confidence_bp, model_version, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT (sku_id, external_product_id) DO UPDATE SET method = EXCLUDED.method, confidence_bp = EXCLUDED.confidence_bp, model_version = EXCLUDED.model_version, status = EXCLUDED.status
-           WHERE product_matches.status = 'needs_confirmation' RETURNING id`,
-        [this.env.newId(), pick.skuId, p.store_id, this.env.marketId, p.id, pick.stage.method, pick.confidenceBp, pick.stage.modelVersion, status],
+         ON CONFLICT (sku_id, external_product_id) DO UPDATE SET method = EXCLUDED.method, confidence_bp = EXCLUDED.confidence_bp, model_version = EXCLUDED.model_version, status = EXCLUDED.status,
+           confirmed_by = CASE WHEN product_matches.status = 'rejected' THEN NULL ELSE product_matches.confirmed_by END,
+           confirmed_at = CASE WHEN product_matches.status = 'rejected' THEN NULL ELSE product_matches.confirmed_at END
+           -- an uncertain match upgrades on a better run; a seller-rejected (sub-tau) match is re-proposed only when NEW evidence reaches tau (A4)
+           WHERE product_matches.status = 'needs_confirmation' OR (product_matches.status = 'rejected' AND EXCLUDED.confidence_bp >= $10) RETURNING id`,
+        [this.env.newId(), pick.skuId, p.store_id, this.env.marketId, p.id, pick.stage.method, pick.confidenceBp, pick.stage.modelVersion, status, this.tauBp],
       );
       return ins.rows.length === 0 ? "kept" : status;
     });

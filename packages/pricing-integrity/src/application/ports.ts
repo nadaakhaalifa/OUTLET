@@ -1,3 +1,5 @@
+import type { ListingFingerprint } from "../domain/anomaly.js";
+
 export interface DnsPort {
   resolve(host: string): Promise<readonly string[]>;
 }
@@ -62,4 +64,16 @@ export interface MatchStage {
   readonly method: "gtin" | "phash" | "embedding" | "llm" | "classifier";
   readonly modelVersion: string;
   find(item: ExternalProductView): Promise<MatchCandidate | null>;
+}
+
+export interface ListingFingerprintSet {
+  readonly listing: ListingFingerprint;
+  /** Other listings of the SAME store (duplicate-reset check). */
+  readonly sameStore: readonly ListingFingerprint[];
+  /** Listings of OTHER stores (image-reuse / counterfeit signal). */
+  readonly otherStores: readonly ListingFingerprint[];
+}
+/** Supplies perceptual-hash fingerprints for the duplicate-reset and image-reuse detectors. The pHash index lives outside this package. */
+export interface ListingFingerprintPort {
+  forSku(skuId: string, storeId: string): Promise<ListingFingerprintSet | null>;
 }

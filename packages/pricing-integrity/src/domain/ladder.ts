@@ -11,9 +11,11 @@ export interface LadderParams {
   readonly windowDays: number;
   readonly repeatThreshold: number;
   readonly sanctionThreshold: number;
+  /** How long lose_verified / commission_surcharge / block_drops last before the lift job expires them (ADR-lite in README, V15/V28). */
+  readonly sanctionDays: number;
 }
 /** repeatThreshold is a default pending counsel (V15) and the owner (V28); suspension always carries human review. */
-export const DEFAULT_LADDER: LadderParams = { windowDays: 90, repeatThreshold: 6, sanctionThreshold: 3 };
+export const DEFAULT_LADDER: LadderParams = { windowDays: 90, repeatThreshold: 6, sanctionThreshold: 3, sanctionDays: 30 };
 
 export interface LadderAct {
   readonly action: LadderAction;
@@ -55,9 +57,9 @@ export const enforcementLadder = (current: Violation, history: readonly Violatio
   const cutoff = now.getTime() - p.windowDays * DAY_MS;
   const recent = history.filter((h) => h.at.getTime() >= cutoff && h.at.getTime() <= now.getTime());
   const n = recent.length + 1;
-  const in30 = new Date(now.getTime() + 30 * DAY_MS);
+  const sanctionEnd = new Date(now.getTime() + p.sanctionDays * DAY_MS);
   const acts = [...perEvent(current, now)];
-  if (n >= p.sanctionThreshold) acts.push({ action: "lose_verified", expiresAt: null }, { action: "commission_surcharge", expiresAt: null }, { action: "block_drops", expiresAt: in30 });
+  if (n >= p.sanctionThreshold) acts.push({ action: "lose_verified", expiresAt: sanctionEnd }, { action: "commission_surcharge", expiresAt: sanctionEnd }, { action: "block_drops", expiresAt: sanctionEnd });
   const severe = current.severe === true || recent.some((h) => h.severe === true) || n >= p.repeatThreshold;
   if (severe) acts.push({ action: "suspend_store", expiresAt: null });
   const seen = new Set<LadderAction>();

@@ -11,13 +11,15 @@ export interface WatchDeps {
   readonly killSwitch: PriceWatchKillSwitch;
   /** Crawler kill switch (A2.12): killed or unreadable means external evidence is ignored (internal history only). */
   readonly crawlerKilled?: () => Promise<boolean>;
+  /** ISO currencies this market accepts as external evidence (A2). Default: EGP. */
+  readonly marketCurrencies?: readonly string[];
   readonly now?: () => Date;
   readonly newId?: () => string;
 }
 export interface WatchEnv extends Required<Omit<WatchDeps, "crawlerKilled">> {
   readonly crawlerKilled: () => Promise<boolean>;
 }
-export const makeWatchEnv = (d: WatchDeps): WatchEnv => ({ ...d, crawlerKilled: d.crawlerKilled ?? (() => Promise.resolve(false)), now: d.now ?? (() => new Date()), newId: d.newId ?? (() => uuidv7()) });
+export const makeWatchEnv = (d: WatchDeps): WatchEnv => ({ ...d, marketCurrencies: d.marketCurrencies ?? ["EGP"], crawlerKilled: d.crawlerKilled ?? (() => Promise.resolve(false)), now: d.now ?? (() => new Date()), newId: d.newId ?? (() => uuidv7()) });
 
 /** Seller-facing work: store context on outlet_app (store isolation + market pin). */
 export const asStore = <T>(env: WatchEnv, storeId: string, userId: string | undefined, fn: (tx: Queryable) => Promise<T>): Promise<T> =>

@@ -43,7 +43,9 @@ const v6Public = (ip: string): boolean => {
   if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && (h5 === 0xffff || h5 === 0)) return v4Public(`${String(h6 >> 8)}.${String(h6 & 255)}.${String(h7 >> 8)}.${String(h7 & 255)}`);
   if (h0 === 0x64 && h1 === 0xff9b) return false;
   if ((h0 & 0xffc0) === 0xfe80 || (h0 & 0xfe00) === 0xfc00 || (h0 & 0xff00) === 0xff00) return false;
-  if (h0 === 0x2001 && h1 === 0xdb8) return false;
+  if (h0 === 0x2001 && (h1 === 0xdb8 || h1 === 0)) return false; // documentation 2001:db8::/32, Teredo 2001::/32
+  if (h0 === 0x2002) return false; // 6to4 2002::/16 (embeds an arbitrary IPv4)
+  if (h0 === 0x100 && h1 === 0 && h2 === 0 && h3 === 0) return false; // discard-only 100::/64
   return true;
 };
 export const isPublicIp = (ip: string): boolean => (isIP(ip) === 4 ? v4Public(ip) : isIP(ip) === 6 ? v6Public(ip) : false);
@@ -85,10 +87,13 @@ export const assertSafeTarget = async (raw: string, o: SsrfOptions): Promise<Saf
 
 export const MAX_REDIRECTS = 3;
 /** Follows redirects manually: every hop is re-validated (verified domain, public address), so a redirect to a private host is refused. */
-export const safeFetch = async (port: ChannelFetchPort, rawUrl: string, o: SsrfOptions, base: Omit<FetchRequest, "url" | "address">): Promise<FetchResponse> => {
+/** Runs before EVERY outbound request (first hop, each redirect hop, each retry attempt): politeness slot, robots.txt for that exact URL. Throws to stop the fetch. */
+export type FetchGate = (url: URL) => Promise<void>;
+export const safeFetch = async (port: ChannelFetchPort, rawUrl: string, o: SsrfOptions, base: Omit<FetchRequest, "url" | "address">, gate?: FetchGate): Promise<FetchResponse> => {
   let current = rawUrl;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const t = await assertSafeTarget(current, o);
+    if (gate !== undefined) await gate(t.url);
     const res = await port.fetch({ ...base, url: t.url.toString(), address: t.address });
     if (res.status < 300 || res.status >= 400 || res.status === 304) return res;
     if (res.location === undefined) throw unsafe("redirect without location");

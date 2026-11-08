@@ -191,7 +191,7 @@ describe("SnapshotIngestor", () => {
     const r = deps([new Error("boom"), { status: 503, items: [] }, new Error("boom3")]);
     const ing = new SnapshotIngestor(env(), r.d);
     expect(await ing.syncOne({ id: c.id, store_id: storeId, type: "feed", domain: c.domain, base_url: `https://${c.domain}/f.json`, risk_tier: "watched" })).toBe("failed");
-    expect(r.sleeps).toEqual([1000, 2000]);
+    expect(r.sleeps).toEqual([1000, 5000, 2000, 10_000]); // A7: every retry attempt reserves a politeness slot after its backoff (clock is frozen, so slots stack 5 s apart)
     expect((await q<{ next_check_at: Date }>("SELECT next_check_at FROM channel_connections WHERE id = $1", [c.id]))[0]?.next_check_at.getTime()).toBe(T0.getTime() + 3_600_000);
     const r2 = deps([{ status: 200, items: [] }, { status: 200, items: [] }]);
     const ing2 = new SnapshotIngestor(env(), r2.d);
@@ -373,7 +373,7 @@ describe("ClaimScorer", () => {
     const ev = (await events("price_enforcement.applied")).find((e) => e.payload.action === "suspend_store");
     expect(ev?.payload.review_due_by).toBe("2026-10-08T09:00:00.000Z"); // Thu 1 Oct + 5 business days (Fri/Sat off)
     expect(out[5]?.trustScore).toBeLessThan(out[0]?.trustScore ?? 0);
-    const none = await scorer().scoreSku({ storeId, skuId: skus[0] ?? "" });
+    const none = await scorer().scoreSku({ storeId, skuId: skus[0] ?? "", claimedReferenceMinor: null }); // the seller drops the claim (A1: only an explicit null clears it)
     expect((await q<{ status: string }>("SELECT status FROM price_findings WHERE sku_id = $1", [skus[0]]))[0]?.status).toBe("resolved");
     expect(none.displayAllowed).toBe(false); // store-level sanctions (lose_verified) still hide the badge
   });

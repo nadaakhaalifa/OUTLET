@@ -4,6 +4,7 @@ import { money } from "@outlet/money";
 import { displayDecision } from "../domain/display.js";
 import type { BrandMode, PriceLabel, Viewer } from "../domain/display.js";
 import { vrpFromInternal } from "../domain/vrp.js";
+import { readLiveClaim } from "./claims.js";
 import { isKilled, loadHistory, windowFor } from "./env.js";
 import type { Env } from "./env.js";
 
@@ -34,7 +35,10 @@ export class PriceEvidencePublic {
     if (await isKilled(this.env)) {
       return { ...base, label: "plain", discountPct: null, referencePrice: null, lowest30d: null, launchPrice: false, history: [] };
     }
-    const vrp = vrpFromInternal(w, now);
+    const internal = vrpFromInternal(w, now);
+    // A scored claim can only tighten the internal reference: no % when it says so or its evidence expired; an external-lowered VRP wins.
+    const live = await readLiveClaim(this.env.client, skuId, this.env.marketId, now);
+    const vrp = !live.exists || internal === null ? internal : !live.displayAllowed ? null : live.vrpMinor !== null && live.vrpMinor < internal ? live.vrpMinor : internal;
     const d = displayDecision({ vrp, price: w.currentPrice, launch: w.launchPrice, brandMode: opts.brandMode ?? "public", viewer: opts.viewer ?? "anonymous", isLowest30d: w.isLowest30d });
     return {
       ...base,
