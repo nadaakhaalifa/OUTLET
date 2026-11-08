@@ -18,3 +18,10 @@ export { COVERAGE_RATES_SQL, SETTINGS_SQL, ShippingQuoteService, toOffers } from
 export type { BagStore, GroupedBag, InternationalQuote, StoreQuoteResult } from "./application/quote-service.js";
 export { StoreShippingSettingsService, settingsInput } from "./application/settings-service.js";
 export type { SettingsInput, StoreShippingSettings } from "./application/settings-service.js";
+export type { CourierWebhookPort, DeliveryPort, LabelStorePort, PiiCipher } from "./domain/ports.js";
+export { AddressService, addressInput, maskPhone } from "./application/address-service.js";
+export type { AddressInput, AddressView, SnapshotView } from "./application/address-service.js";
+export { ShipmentService, shipmentInput } from "./application/shipment-service.js";
+export type { ShipmentDeps, ShipmentInput, ShipmentView } from "./application/shipment-service.js";
+export { CourierWebhookProcessor, STALE_AFTER_MS, TrackingStaleScanner } from "./application/tracking-service.js";
+export type { EventOutcome, TrackingDeps, WebhookResult } from "./application/tracking-service.js";

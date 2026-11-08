@@ -26,6 +26,7 @@
     "@outlet/db": "workspace:*",
     "@outlet/ids": "workspace:*",
     "@outlet/money": "workspace:*",
+    "@outlet/outbox": "workspace:*",
     "@outlet/policy": "workspace:*",
     "zod": "^4.6.7"
   }

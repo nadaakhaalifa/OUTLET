@@ -26,3 +26,5 @@ export { LateRefundConsumer } from "./application/late-refund-consumer.js";
 export { PgStoreCredit } from "./application/pg-store-credit.js";
 export type { CheckoutDeps, WorkerDeps, CheckoutPorts } from "./application/env.js";
 export type { BillingPort, KillSwitchPort, PriceSnapshotPort, SubMerchantPort } from "./ports.js";
+export { INVENTORY_RELEASE_REQUIRED_EVENT, REJECTED_INVENTORY_CONSUMER, RejectedOrderInventoryRelease } from "./application/seller-order-events.js";
+export type { ReleaseOutcome } from "./application/seller-order-events.js";

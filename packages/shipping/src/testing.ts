@@ -1,5 +1,5 @@
 import { GENERIC_STATUS_MAP } from "./domain/tracking-map.js";
-import type { CourierEvent, CourierPort, CreateShipmentRequest, CreatedShipment, NormalisedEvent, ShipmentLabelPort } from "./domain/ports.js";
+import type { CourierEvent, CourierPort, CourierWebhookPort, CreateShipmentRequest, CreatedShipment, LabelStorePort, NormalisedEvent, PiiCipher, ShipmentLabelPort } from "./domain/ports.js";
 
 /** TEST ONLY. In-memory courier: idempotent by shipmentId, no network. */
 export class FakeCourier implements CourierPort, ShipmentLabelPort {
@@ -37,4 +37,24 @@ export class UnconfiguredCourier implements CourierPort {
   createShipment(): Promise<CreatedShipment> { return Promise.reject(new Error("courier adapter unconfigured")); }
   cancelShipment(): Promise<void> { return Promise.reject(new Error("courier adapter unconfigured")); }
   normalise(): undefined { return undefined; }
+}
+
+/** TEST ONLY. Webhook port: signature header must equal "valid"; body is JSON `{ "events": [CourierEvent] }`. */
+export class FakeWebhook implements CourierWebhookPort {
+  verify(_raw: string, headers: Readonly<Record<string, string>>): boolean { return headers["x-signature"] === "valid"; }
+  parse(raw: string): readonly CourierEvent[] { return (JSON.parse(raw) as { events: CourierEvent[] }).events; }
+}
+/** TEST ONLY. Reversible fake cipher. */
+export class FakeCipher implements PiiCipher {
+  encrypt(p: string, aad: string): Promise<Uint8Array> { return Promise.resolve(new TextEncoder().encode(`${aad}|${p}`)); }
+  decrypt(c: Uint8Array, aad: string): Promise<string> {
+    const s = new TextDecoder().decode(c);
+    if (!s.startsWith(`${aad}|`)) return Promise.reject(new Error("aad mismatch"));
+    return Promise.resolve(s.slice(aad.length + 1));
+  }
+}
+/** TEST ONLY. In-memory label store. */
+export class FakeLabelStore implements LabelStorePort {
+  readonly objects = new Map<string, Uint8Array>();
+  put(key: string, bytes: Uint8Array): Promise<void> { this.objects.set(key, bytes); return Promise.resolve(); }
 }

@@ -39,3 +39,27 @@ export interface ShipmentLabelPort {
   /** A6 PDF bytes for the AWB. */
   getLabel(awb: string): Promise<{ readonly contentType: "application/pdf"; readonly bytes: Uint8Array }>;
 }
+
+/** Verifies and parses a courier tracking webhook. Separate from CourierPort so existing adapters keep compiling. */
+export interface CourierWebhookPort {
+  /** HMAC / IP check on the raw body and headers. False = reject (the body is still stored, flagged). */
+  verify(rawBody: string, headers: Readonly<Record<string, string>>): boolean;
+  /** Raw courier events in the body; throws on a malformed body. */
+  parse(rawBody: string): readonly CourierEvent[];
+}
+
+/** Object storage for label PDFs (labels show recipient data: private bucket). */
+export interface LabelStorePort {
+  put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+}
+
+/** P3 field envelope (same contract as auth-core FieldCipher); aad binds a ciphertext to its column. */
+export interface PiiCipher {
+  encrypt(plaintext: string, aad: string): Promise<Uint8Array>;
+  decrypt(ciphertext: Uint8Array, aad: string): Promise<string>;
+}
+
+/** The order-close job's delivery hook (structurally satisfied by @outlet/checkout OrderCloseJob). */
+export interface DeliveryPort {
+  markDelivered(sellerOrderId: string, deliveredAt: Date): Promise<unknown>;
+}

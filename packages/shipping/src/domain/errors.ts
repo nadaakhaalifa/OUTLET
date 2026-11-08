@@ -5,6 +5,7 @@ export type ShippingErrorCode =
   | "INTERNATIONAL_DISABLED"
   | "INVALID_ADDRESS"
   | "INVALID_TRANSITION"
+  | "COURIER_UNAVAILABLE"
   | "not_found"
   | "forbidden";
 
