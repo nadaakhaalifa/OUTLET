@@ -9,6 +9,11 @@ cmd="$(json_get .tool_input.command "$payload")"
 block() { echo "BLOCKED by pre-tool-guard: $1" >&2; exit 2; }
 lc="$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')"
 
+# 0. shared working tree: stash/checkout/reset/clean would revert other agents' uncommitted work
+if printf '%s' "$lc" | grep -Eq 'git[[:space:]]+(-[^ ]+[[:space:]]+)*(stash|checkout[[:space:]]+--|checkout[[:space:]]+\.|reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)'; then
+  block "git stash/checkout --/reset --hard/clean -f are not allowed in the shared working tree (other agents have uncommitted work)"
+fi
+
 # 1. force pushes
 if printf '%s' "$lc" | grep -Eq 'git[[:space:]]+(-[^ ]+[[:space:]]+)*push([[:space:]]|$)'; then
   printf '%s' "$lc" | grep -Eq '(^|[[:space:]])(--force([^ ]*)|-[a-z]*f[a-z]*)([[:space:]]|$)' \

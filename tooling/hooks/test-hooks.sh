@@ -9,6 +9,11 @@ t() { # expect(0|2) description command
   printf '%s' "$payload" | "$here/pre-tool-guard.sh" >/dev/null 2>&1; rc=$?
   if [ "$rc" = "$exp" ]; then pass=$((pass+1)); echo "PASS  $desc (exit $rc)"; else failn=$((failn+1)); echo "FAIL  $desc (exit $rc, want $exp)"; fi
 }
+t 2 "git stash blocked" "git stash"
+t 2 "git stash push blocked" "git stash push -m wip"
+t 2 "reset --hard blocked" "git reset --hard HEAD~1"
+t 2 "clean -fd blocked" "git clean -fd"
+t 0 "git status allowed" "git status --short"
 t 2 "force push blocked" "git push --force origin main"
 t 2 "short -f push blocked" "git push -f origin feat"
 t 0 "normal push allowed" "git push origin feat/x"
