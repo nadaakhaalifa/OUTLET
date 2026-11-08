@@ -28,6 +28,7 @@ export const KILL_SWITCHES = {
   "referrals.payouts.enabled": money("Referral and creator payouts"),
   "gift_cards.sales.enabled": money("Gift-card sales"),
   "pricing.price_watch.enabled": money("Price Watch verified-discount display (off = plain prices everywhere)"),
+  "refunds.enabled": money("Refund execution (off = refunds queue, nothing is paid out)"),
   "drops.enabled": ui("Drops and the waiting room"),
   "games.enabled": ui("Light games (spin, scratch)"),
   "stylist.llm.enabled": ui("Stylist LLM features"),
