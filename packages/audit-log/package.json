@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@outlet/db": "workspace:*",
     "@outlet/ids": "workspace:*",
     "@outlet/logger": "workspace:*",
     "zod": "^4.6.7"

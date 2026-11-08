@@ -60,6 +60,19 @@ export function verifyChain(entries: readonly AuditEntry[], startPrevHash: strin
   return { ok: true };
 }
 
+/** Builds the next chained entry (redacts the diff, stamps id/time, links to prevHash). Shared by every store. */
+export function buildEntry(raw: AuditEntryInput, prevHash: string, at: Date, id: string): AuditEntry {
+  const input = AuditEntryInputSchema.parse(raw);
+  const unsigned: Omit<AuditEntry, "hash"> = {
+    ...input,
+    diff: input.diff === null ? null : (redact(input.diff) as AuditEntryInput["diff"]),
+    id,
+    occurredAt: at.toISOString(),
+    prevHash,
+  };
+  return { ...unsigned, hash: computeHash(unsigned) };
+}
+
 export interface AuditChainOptions {
   readonly now?: () => Date;
   readonly newId?: (nowMs: number) => string;
@@ -83,17 +96,9 @@ export class AuditChain {
   }
 
   private async doAppend(raw: AuditEntryInput): Promise<AuditEntry> {
-    const input = AuditEntryInputSchema.parse(raw);
     const last = await this.store.last();
     const at = this.now();
-    const unsigned: Omit<AuditEntry, "hash"> = {
-      ...input,
-      diff: input.diff === null ? null : (redact(input.diff) as AuditEntryInput["diff"]),
-      id: this.newId(at.getTime()),
-      occurredAt: at.toISOString(),
-      prevHash: last?.hash ?? GENESIS_HASH,
-    };
-    const entry: AuditEntry = { ...unsigned, hash: computeHash(unsigned) };
+    const entry = buildEntry(raw, last?.hash ?? GENESIS_HASH, at, this.newId(at.getTime()));
     await this.store.insert(entry);
     return entry;
   }
