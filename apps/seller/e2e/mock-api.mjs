@@ -10,6 +10,34 @@ const products = new Map();
 const control = { storeActive: true, passkey: true };
 const log = [];
 
+// --- orders and inventory (in-memory; reset through /__control {"reset": true})
+const ORDER_A = "aaaaaaaa-0000-4000-8000-00000000000a";
+const SKU_1 = "5a000000-0000-4000-8000-000000000001";
+const SKU_2 = "5a000000-0000-4000-8000-000000000002";
+const orders = new Map();
+const stock = new Map();
+const levelOf = (id) => {
+  const l = stock.get(id);
+  return { sku_id: id, location_id: "10c00000-0000-4000-8000-000000000001", seller_sku: l.sku, size_label: l.size, product_title_ar: l.title, on_hand: l.onHand, committed: 0, available: l.onHand, low_stock: l.onHand <= 3, version: l.version, updated_at: new Date().toISOString() };
+};
+const money = (v) => ({ amount_minor: String(v), currency: "EGP" });
+const ACTIONS = { PAID: ["accept", "reject"], CONFIRMED_COD: ["accept", "reject"], ACCEPTED: ["pack"], PACKED: ["ship"] };
+const orderView = (o) => ({
+  id: o.id, status: o.status, version: o.version, items_subtotal: money(129900), seller_discount: money(0), platform_discount: money(0), shipping: money(0), vat: money(15900), total: money(129900),
+  commission_bp_snapshot: 1400, commission: money(18186), payment_kind: "prepaid", accept_by: o.accept_by, dispatch_by: o.dispatch_by, delivered_at: null, return_window_ends_at: null,
+  lines: [{ id: "bbbbbbbb-0000-4000-8000-000000000001", sku_id: SKU_1, product_id: "cccccccc-0000-4000-8000-000000000001", title_ar_snapshot: "فستان صيفي", title_en_snapshot: null, condition_grade_snapshot: "new_with_imperfections", qty: 1, unit_price: money(129900), platform_discount: money(0), seller_discount: money(0), vat_rate_bp: 1400, vat: money(15900), claim_type_snapshot: "plain", status: "active" }],
+  delivery: { recipient_name: "منى أحمد", phone_masked: "+20••••••••78", address: { governorate_code: "CAI", city_code: "NASR", district_code: null, street: "شارع مصطفى النحاس", building: "12", floor: "3", apartment: "7", landmark: null }, access_until: null },
+  available_actions: ACTIONS[o.status] ?? [], created_at: o.created_at, server_time: new Date().toISOString(),
+});
+const resetOrders = () => {
+  orders.clear();
+  stock.clear();
+  orders.set(ORDER_A, { id: ORDER_A, status: "PAID", version: 1, accept_by: new Date(Date.now() + 20 * 3600_000).toISOString(), dispatch_by: null, created_at: new Date(Date.now() - 3600_000).toISOString() });
+  stock.set(SKU_1, { sku: "SKU-1", size: "M", title: "فستان صيفي", onHand: 10, version: 1 });
+  stock.set(SKU_2, { sku: "SKU-2", size: "L", title: "حذاء رياضي", onHand: 2, version: 1 });
+};
+resetOrders();
+
 const reasonsOf = (p) => {
   const r = [];
   if (!p.title_ar) r.push("TITLE_AR_REQUIRED");
@@ -37,7 +65,10 @@ createServer(async (req, res) => {
   const path = url.pathname;
   if (path === "/health") return send(res, 200, { ok: true });
   if (path === "/__control") {
-    Object.assign(control, JSON.parse((await readBody(req)).toString() || "{}"));
+    const patch = JSON.parse((await readBody(req)).toString() || "{}");
+    if (patch.reset === true) resetOrders();
+    delete patch.reset;
+    Object.assign(control, patch);
     return send(res, 200, control);
   }
   if (path === "/__log") return send(res, 200, log);
@@ -49,6 +80,50 @@ createServer(async (req, res) => {
   if (!control.passkey) return problem(res, 403, "passkey-required");
   log.push(`${req.method} ${rest}`);
 
+  const sendOrder = (o) => send(res, 200, orderView(o));
+  if (req.method === "GET" && rest === "orders") {
+    const status = url.searchParams.get("status");
+    const items = [...orders.values()].filter((o) => status === null || o.status === status).map((o) => ({ id: o.id, status: o.status, total: money(129900), accept_by: o.accept_by, dispatch_by: o.dispatch_by, created_at: o.created_at, available_actions: ACTIONS[o.status] ?? [] }));
+    return send(res, 200, { items, next_cursor: null, server_time: new Date().toISOString() });
+  }
+  const om = /^orders\/([0-9a-f-]{36})(?:\/(accept|reject|pack))?$/.exec(rest);
+  if (om) {
+    const o = orders.get(om[1]);
+    if (!o) return problem(res, 404, "not-found");
+    if (req.method === "GET" && om[2] === undefined) return sendOrder(o);
+    if (req.method === "POST" && om[2] !== undefined) {
+      await readBody(req);
+      const next = { accept: ["PAID", "ACCEPTED"], reject: ["PAID", "REJECTED_BY_SELLER"], pack: ["ACCEPTED", "PACKED"] }[om[2]];
+      if (o.status !== next[0] && !(om[2] !== "pack" && o.status === "CONFIRMED_COD")) return problem(res, 409, "invalid-transition");
+      o.status = next[1];
+      o.version += 1;
+      if (om[2] === "accept") o.dispatch_by = new Date(Date.now() + 48 * 3600_000).toISOString();
+      return sendOrder(o);
+    }
+  }
+  if (req.method === "POST" && rest === "shipments") {
+    const body = JSON.parse((await readBody(req)).toString());
+    const o = orders.get(body.seller_order_ids?.[0]);
+    if (!o) return problem(res, 404, "not-found");
+    if (o.status !== "PACKED") return problem(res, 409, "invalid-transition");
+    o.status = "SHIPPED";
+    o.version += 1;
+    return send(res, 201, { id: o.id, seller_order_id: o.id, status: "CREATED", courier_code: "mock", awb: "MOCK00000001", label_url: null, created_at: new Date().toISOString() });
+  }
+  if (req.method === "GET" && rest === "inventory") {
+    const sku = url.searchParams.get("sku_id");
+    const ids = [...stock.keys()].filter((id) => sku === null || id === sku);
+    return send(res, 200, { items: ids.map(levelOf), next_cursor: null });
+  }
+  if (req.method === "POST" && rest === "inventory/adjustments") {
+    const body = JSON.parse((await readBody(req)).toString());
+    const l = stock.get(body.sku_id) ?? (stock.set(body.sku_id, { sku: "SKU-NEW", size: null, title: "منتج جديد", onHand: 0, version: 0 }), stock.get(body.sku_id));
+    if (body.expected_version !== undefined && body.expected_version !== l.version) return problem(res, 409, "version-conflict");
+    if (l.onHand + body.delta < 0) return problem(res, 409, "insufficient-stock");
+    l.onHand += body.delta;
+    l.version += 1;
+    return send(res, 201, levelOf(body.sku_id));
+  }
   if (req.method === "GET" && rest === "categories") {
     return send(res, 200, { items: [{ id: CATEGORY, parent_id: null, code: "women_dresses", path: "fashion/women/dresses", depth: 2, vertical: "fashion", name: "فساتين", slug: "fasateen", name_ar: "فساتين", name_en: "Dresses" }], next_cursor: null });
   }

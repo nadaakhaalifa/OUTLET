@@ -3302,6 +3302,15 @@ paths:
                       additionalProperties: false
                   cod_allowed:
                     type: boolean
+                  cod_reason_code:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - cod_disabled
+                          - cod_above_first_order_cap
+                          - cod_risk_declined
+                          - cod_risk_unavailable
+                      - type: "null"
                   notices:
                     maxItems: 50
                     type: array
@@ -3334,6 +3343,7 @@ paths:
                   - fees
                   - payment_options
                   - cod_allowed
+                  - cod_reason_code
                   - notices
                   - quote_echo
                 additionalProperties: false
@@ -5977,6 +5987,2321 @@ paths:
           source: default
       x-max-queries: 1
       x-paginated: keyset
+  /v1/{market}/seller/inventory:
+    get:
+      operationId: listInventoryLevels
+      summary: Stock levels per SKU (real counts, low-stock flag)
+      tags:
+        - Seller Inventory
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: sku_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: location_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        location_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        seller_sku:
+                          type: string
+                          maxLength: 200
+                        size_label:
+                          anyOf:
+                            - type: string
+                              maxLength: 100
+                            - type: "null"
+                        product_title_ar:
+                          type: string
+                          maxLength: 500
+                        on_hand:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        committed:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        available:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        low_stock:
+                          type: boolean
+                        version:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        updated_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - sku_id
+                        - location_id
+                        - seller_sku
+                        - size_label
+                        - product_title_ar
+                        - on_hand
+                        - committed
+                        - available
+                        - low_stock
+                        - version
+                        - updated_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-paginated: keyset
+  /v1/{market}/seller/inventory/adjustments:
+    post:
+      operationId: adjustInventory
+      summary: Adjust on-hand stock (delta + reason, idempotent, optional expected_version)
+      tags:
+        - Seller Inventory
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sku_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  location_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  seller_sku:
+                    type: string
+                    maxLength: 200
+                  size_label:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  product_title_ar:
+                    type: string
+                    maxLength: 500
+                  on_hand:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  committed:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  available:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  low_stock:
+                    type: boolean
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  updated_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - sku_id
+                  - location_id
+                  - seller_sku
+                  - size_label
+                  - product_title_ar
+                  - on_hand
+                  - committed
+                  - available
+                  - low_stock
+                  - version
+                  - updated_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.write
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 24
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sku_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                location_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                delta:
+                  type: integer
+                  minimum: -100000
+                  maximum: 100000
+                reason:
+                  type: string
+                  enum:
+                    - recount
+                    - damage
+                    - received
+                    - correction
+                    - channel_sync
+                expected_version:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - sku_id
+                - delta
+                - reason
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/orders:
+    get:
+      operationId: listSellerOrders
+      summary: Orders for my store (status, date filters)
+      tags:
+        - Seller Orders
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z_]{3,40}$
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          pattern: ^[A-Z_]{3,40}$
+                        total:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        accept_by:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        dispatch_by:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        available_actions:
+                          maxItems: 4
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - accept
+                              - reject
+                              - pack
+                              - ship
+                      required:
+                        - id
+                        - status
+                        - total
+                        - accept_by
+                        - dispatch_by
+                        - created_at
+                        - available_actions
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - items
+                  - next_cursor
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-paginated: keyset
+  /v1/{market}/seller/orders/{seller_order_id}:
+    get:
+      operationId: getSellerOrder
+      summary: One order (delivery data only while the access window is open, phone masked)
+      tags:
+        - Seller Orders
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: seller_order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    pattern: ^[A-Z_]{3,40}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  seller_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  platform_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission_bp_snapshot:
+                    type: integer
+                    minimum: 0
+                    maximum: 10000
+                  commission:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_kind:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - prepaid
+                          - cod
+                      - type: "null"
+                  accept_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  dispatch_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  delivered_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  return_window_ends_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  lines:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        title_ar_snapshot:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        title_en_snapshot:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        condition_grade_snapshot:
+                          type: string
+                          maxLength: 500
+                        qty:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        unit_price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        platform_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        seller_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat_rate_bp:
+                          type: integer
+                          minimum: 0
+                          maximum: 10000
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        claim_type_snapshot:
+                          type: string
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 500
+                      required:
+                        - id
+                        - sku_id
+                        - product_id
+                        - title_ar_snapshot
+                        - title_en_snapshot
+                        - condition_grade_snapshot
+                        - qty
+                        - unit_price
+                        - platform_discount
+                        - seller_discount
+                        - vat_rate_bp
+                        - vat
+                        - claim_type_snapshot
+                        - status
+                      additionalProperties: false
+                  delivery:
+                    anyOf:
+                      - type: object
+                        properties:
+                          recipient_name:
+                            type: string
+                            maxLength: 500
+                          phone_masked:
+                            type: string
+                            maxLength: 50
+                          address:
+                            type: object
+                            properties:
+                              governorate_code:
+                                type: string
+                                maxLength: 16
+                              city_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              district_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              street:
+                                type: string
+                                maxLength: 200
+                              building:
+                                type: string
+                                maxLength: 40
+                              floor:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              apartment:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              landmark:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                            required:
+                              - governorate_code
+                              - city_code
+                              - district_code
+                              - street
+                              - building
+                              - floor
+                              - apartment
+                              - landmark
+                            additionalProperties: false
+                          access_until:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - recipient_name
+                          - phone_masked
+                          - address
+                          - access_until
+                        additionalProperties: false
+                      - type: "null"
+                  available_actions:
+                    maxItems: 4
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - accept
+                        - reject
+                        - pack
+                        - ship
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - status
+                  - version
+                  - items_subtotal
+                  - seller_discount
+                  - platform_discount
+                  - shipping
+                  - vat
+                  - total
+                  - commission_bp_snapshot
+                  - commission
+                  - payment_kind
+                  - accept_by
+                  - dispatch_by
+                  - delivered_at
+                  - return_window_ends_at
+                  - lines
+                  - delivery
+                  - available_actions
+                  - created_at
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 6
+  /v1/{market}/seller/orders/{seller_order_id}/accept:
+    post:
+      operationId: acceptSellerOrder
+      summary: Accept (PAID or CONFIRMED_COD to ACCEPTED); starts the 48 h dispatch SLA
+      tags:
+        - Seller Orders
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: seller_order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    pattern: ^[A-Z_]{3,40}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  seller_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  platform_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission_bp_snapshot:
+                    type: integer
+                    minimum: 0
+                    maximum: 10000
+                  commission:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_kind:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - prepaid
+                          - cod
+                      - type: "null"
+                  accept_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  dispatch_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  delivered_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  return_window_ends_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  lines:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        title_ar_snapshot:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        title_en_snapshot:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        condition_grade_snapshot:
+                          type: string
+                          maxLength: 500
+                        qty:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        unit_price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        platform_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        seller_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat_rate_bp:
+                          type: integer
+                          minimum: 0
+                          maximum: 10000
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        claim_type_snapshot:
+                          type: string
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 500
+                      required:
+                        - id
+                        - sku_id
+                        - product_id
+                        - title_ar_snapshot
+                        - title_en_snapshot
+                        - condition_grade_snapshot
+                        - qty
+                        - unit_price
+                        - platform_discount
+                        - seller_discount
+                        - vat_rate_bp
+                        - vat
+                        - claim_type_snapshot
+                        - status
+                      additionalProperties: false
+                  delivery:
+                    anyOf:
+                      - type: object
+                        properties:
+                          recipient_name:
+                            type: string
+                            maxLength: 500
+                          phone_masked:
+                            type: string
+                            maxLength: 50
+                          address:
+                            type: object
+                            properties:
+                              governorate_code:
+                                type: string
+                                maxLength: 16
+                              city_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              district_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              street:
+                                type: string
+                                maxLength: 200
+                              building:
+                                type: string
+                                maxLength: 40
+                              floor:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              apartment:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              landmark:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                            required:
+                              - governorate_code
+                              - city_code
+                              - district_code
+                              - street
+                              - building
+                              - floor
+                              - apartment
+                              - landmark
+                            additionalProperties: false
+                          access_until:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - recipient_name
+                          - phone_masked
+                          - address
+                          - access_until
+                        additionalProperties: false
+                      - type: "null"
+                  available_actions:
+                    maxItems: 4
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - accept
+                        - reject
+                        - pack
+                        - ship
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - status
+                  - version
+                  - items_subtotal
+                  - seller_discount
+                  - platform_discount
+                  - shipping
+                  - vat
+                  - total
+                  - commission_bp_snapshot
+                  - commission
+                  - payment_kind
+                  - accept_by
+                  - dispatch_by
+                  - delivered_at
+                  - return_window_ends_at
+                  - lines
+                  - delivery
+                  - available_actions
+                  - created_at
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.fulfill
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 14
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/orders/{seller_order_id}/pack:
+    post:
+      operationId: packSellerOrder
+      summary: Mark packed (ACCEPTED to PACKED)
+      tags:
+        - Seller Orders
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: seller_order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    pattern: ^[A-Z_]{3,40}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  seller_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  platform_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission_bp_snapshot:
+                    type: integer
+                    minimum: 0
+                    maximum: 10000
+                  commission:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_kind:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - prepaid
+                          - cod
+                      - type: "null"
+                  accept_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  dispatch_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  delivered_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  return_window_ends_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  lines:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        title_ar_snapshot:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        title_en_snapshot:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        condition_grade_snapshot:
+                          type: string
+                          maxLength: 500
+                        qty:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        unit_price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        platform_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        seller_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat_rate_bp:
+                          type: integer
+                          minimum: 0
+                          maximum: 10000
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        claim_type_snapshot:
+                          type: string
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 500
+                      required:
+                        - id
+                        - sku_id
+                        - product_id
+                        - title_ar_snapshot
+                        - title_en_snapshot
+                        - condition_grade_snapshot
+                        - qty
+                        - unit_price
+                        - platform_discount
+                        - seller_discount
+                        - vat_rate_bp
+                        - vat
+                        - claim_type_snapshot
+                        - status
+                      additionalProperties: false
+                  delivery:
+                    anyOf:
+                      - type: object
+                        properties:
+                          recipient_name:
+                            type: string
+                            maxLength: 500
+                          phone_masked:
+                            type: string
+                            maxLength: 50
+                          address:
+                            type: object
+                            properties:
+                              governorate_code:
+                                type: string
+                                maxLength: 16
+                              city_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              district_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              street:
+                                type: string
+                                maxLength: 200
+                              building:
+                                type: string
+                                maxLength: 40
+                              floor:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              apartment:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              landmark:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                            required:
+                              - governorate_code
+                              - city_code
+                              - district_code
+                              - street
+                              - building
+                              - floor
+                              - apartment
+                              - landmark
+                            additionalProperties: false
+                          access_until:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - recipient_name
+                          - phone_masked
+                          - address
+                          - access_until
+                        additionalProperties: false
+                      - type: "null"
+                  available_actions:
+                    maxItems: 4
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - accept
+                        - reject
+                        - pack
+                        - ship
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - status
+                  - version
+                  - items_subtotal
+                  - seller_discount
+                  - platform_discount
+                  - shipping
+                  - vat
+                  - total
+                  - commission_bp_snapshot
+                  - commission
+                  - payment_kind
+                  - accept_by
+                  - dispatch_by
+                  - delivered_at
+                  - return_window_ends_at
+                  - lines
+                  - delivery
+                  - available_actions
+                  - created_at
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.fulfill
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 14
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/orders/{seller_order_id}/reject:
+    post:
+      operationId: rejectSellerOrder
+      summary: Reject (REJECTED_BY_SELLER); emits seller_order.rejected for the partial-refund saga
+      tags:
+        - Seller Orders
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: seller_order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    pattern: ^[A-Z_]{3,40}$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  items_subtotal:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  seller_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  platform_discount:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  shipping:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission_bp_snapshot:
+                    type: integer
+                    minimum: 0
+                    maximum: 10000
+                  commission:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payment_kind:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - prepaid
+                          - cod
+                      - type: "null"
+                  accept_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  dispatch_by:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  delivered_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  return_window_ends_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  lines:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        title_ar_snapshot:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        title_en_snapshot:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        condition_grade_snapshot:
+                          type: string
+                          maxLength: 500
+                        qty:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        unit_price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        platform_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        seller_discount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        vat_rate_bp:
+                          type: integer
+                          minimum: 0
+                          maximum: 10000
+                        vat:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        claim_type_snapshot:
+                          type: string
+                          maxLength: 500
+                        status:
+                          type: string
+                          maxLength: 500
+                      required:
+                        - id
+                        - sku_id
+                        - product_id
+                        - title_ar_snapshot
+                        - title_en_snapshot
+                        - condition_grade_snapshot
+                        - qty
+                        - unit_price
+                        - platform_discount
+                        - seller_discount
+                        - vat_rate_bp
+                        - vat
+                        - claim_type_snapshot
+                        - status
+                      additionalProperties: false
+                  delivery:
+                    anyOf:
+                      - type: object
+                        properties:
+                          recipient_name:
+                            type: string
+                            maxLength: 500
+                          phone_masked:
+                            type: string
+                            maxLength: 50
+                          address:
+                            type: object
+                            properties:
+                              governorate_code:
+                                type: string
+                                maxLength: 16
+                              city_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              district_code:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 32
+                                  - type: "null"
+                              street:
+                                type: string
+                                maxLength: 200
+                              building:
+                                type: string
+                                maxLength: 40
+                              floor:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              apartment:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 20
+                                  - type: "null"
+                              landmark:
+                                anyOf:
+                                  - type: string
+                                    maxLength: 200
+                                  - type: "null"
+                            required:
+                              - governorate_code
+                              - city_code
+                              - district_code
+                              - street
+                              - building
+                              - floor
+                              - apartment
+                              - landmark
+                            additionalProperties: false
+                          access_until:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                              - type: "null"
+                        required:
+                          - recipient_name
+                          - phone_masked
+                          - address
+                          - access_until
+                        additionalProperties: false
+                      - type: "null"
+                  available_actions:
+                    maxItems: 4
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - accept
+                        - reject
+                        - pack
+                        - ship
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - status
+                  - version
+                  - items_subtotal
+                  - seller_discount
+                  - platform_discount
+                  - shipping
+                  - vat
+                  - total
+                  - commission_bp_snapshot
+                  - commission
+                  - payment_kind
+                  - accept_by
+                  - dispatch_by
+                  - delivered_at
+                  - return_window_ends_at
+                  - lines
+                  - delivery
+                  - available_actions
+                  - created_at
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.fulfill
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 14
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason_code:
+                  type: string
+                  enum:
+                    - out_of_stock
+                    - damaged
+                    - pricing_error
+                    - other
+                note:
+                  type: string
+                  maxLength: 500
+              required:
+                - reason_code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/seller/products:
     get:
       operationId: listSellerProducts
@@ -8432,6 +10757,163 @@ paths:
           layer: app
           source: default
       x-max-queries: 8
+  /v1/{market}/seller/shipments:
+    post:
+      operationId: createShipment
+      summary: Create the shipment and request the AWB (PACKED to SHIPPED); 503 while no courier is configured
+      tags:
+        - Seller Shipments
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  seller_order_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    const: CREATED
+                  courier_code:
+                    type: string
+                    maxLength: 100
+                  awb:
+                    type: string
+                    maxLength: 100
+                  label_url:
+                    anyOf:
+                      - type: string
+                        maxLength: 2048
+                      - type: "null"
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - seller_order_id
+                  - status
+                  - courier_code
+                  - awb
+                  - label_url
+                  - created_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: order.fulfill
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 22
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seller_order_ids:
+                  minItems: 1
+                  maxItems: 1
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                courier_service_id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                declared_weight_g:
+                  type: integer
+                  minimum: 1
+                  maximum: 30000
+                length_mm:
+                  type: integer
+                  minimum: 0
+                  maximum: 2000
+                width_mm:
+                  type: integer
+                  minimum: 0
+                  maximum: 2000
+                height_mm:
+                  type: integer
+                  minimum: 0
+                  maximum: 2000
+              required:
+                - seller_order_ids
+                - declared_weight_g
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/stores:
     get:
       operationId: listStores

@@ -5,7 +5,7 @@ import { STORE_COOKIE, SESSION_COOKIE } from "./env";
 
 const MARKET = /^[a-z]{2}$/;
 const UUID = z.uuid();
-const ALLOWED_PATH = /^(products(\/[0-9a-f-]{36}(\/(readiness|media|defect-cards|publish))?)?|categories|attribute-sets\/[0-9a-f-]{36})$/;
+const ALLOWED_PATH = /^(products(\/[0-9a-f-]{36}(\/(readiness|media|defect-cards|publish))?)?|categories|attribute-sets\/[0-9a-f-]{36}|orders(\/[0-9a-f-]{36}(\/(accept|reject|pack))?)?|shipments|inventory(\/adjustments)?)$/;
 const FORWARD_REQUEST = ["content-type", "idempotency-key", "if-match", "accept-language", "accept"] as const;
 const FORWARD_RESPONSE = ["content-type", "etag", "retry-after", "idempotent-replayed", "www-authenticate"] as const;
 

@@ -4,7 +4,9 @@ import { AesGcmFieldCipher, OtpService, PgRateLimiter, SessionService, createAut
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
 import { CheckoutService, PgStoreCredit, WebhookProcessor } from "@outlet/checkout";
 import { brandClient } from "@outlet/db";
-import { ReservationService } from "@outlet/inventory";
+import { InventoryService, ReservationService } from "@outlet/inventory";
+import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
+import { uuidv7 } from "@outlet/ids";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { DefectService, ListingService, PublicCatalogService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
@@ -31,6 +33,10 @@ import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
+import { SellerInventoryService } from "./modules/seller-inventory/index.js";
+import type { SellerInventoryServices } from "./modules/seller-inventory/index.js";
+import { PgPaymentKind, SellerOrderService, UnconfiguredBuyerDelivery, UnconfiguredCourier } from "./modules/seller-orders/index.js";
+import type { SellerOrdersServices } from "./modules/seller-orders/index.js";
 import { SessionTokenVerifier, UnconfiguredStoreMemberships } from "./platform/auth-ports.js";
 import type { MarketTokenService } from "./platform/auth-ports.js";
 import { pgPoolOptions, pgSqlClient } from "./platform/db.js";
@@ -75,6 +81,8 @@ const catalogs = new Map<string, CatalogServices>();
 const auths = new Map<string, AuthServices>();
 const carts = new Map<string, CartServices>();
 const checkouts = new Map<string, CheckoutServices>();
+const sellerOrders = new Map<string, SellerOrdersServices>();
+const sellerInventories = new Map<string, SellerInventoryServices>();
 const killSwitches = new FlagService({ store: new PostgresFlagStore(appClient), audit: { record: () => Promise.resolve() } });
 for (const m of listMarkets()) {
   const marketId = m.id.toUpperCase();
@@ -130,6 +138,14 @@ for (const m of listMarkets()) {
     cod: unconfiguredCodConfirmation,
     provider: "paymob",
   });
+  // Courier contract and the addresses table do not exist yet (V33/V43): shipping fails closed (503) and no buyer delivery data is shown.
+  sellerOrders.set(marketId, {
+    orders: new SellerOrderService({
+      client: appClient, marketId, now: () => new Date(), newId: uuidv7, outbox: new OutboxWriter(pgTransactionalWriter),
+      delivery: new UnconfiguredBuyerDelivery(), courier: new UnconfiguredCourier(), paymentKinds: new PgPaymentKind(appClient, marketId), courierCode: "bosta", serviceLevel: "standard",
+    }),
+  });
+  sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
   const deps: CatalogDeps = { client: appClient, marketId };
   catalogs.set(marketId, {
     publicCatalog: new PublicCatalogService(deps),
@@ -174,6 +190,16 @@ const deps: ApiDeps = {
   },
   checkout: (marketId) => {
     const c = checkouts.get(marketId);
+    if (c === undefined) throw new Error("market not configured");
+    return c;
+  },
+  sellerOrders: (marketId) => {
+    const c = sellerOrders.get(marketId);
+    if (c === undefined) throw new Error("market not configured");
+    return c;
+  },
+  sellerInventory: (marketId) => {
+    const c = sellerInventories.get(marketId);
     if (c === undefined) throw new Error("market not configured");
     return c;
   },

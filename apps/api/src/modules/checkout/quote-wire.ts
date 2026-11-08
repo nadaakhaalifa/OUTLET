@@ -59,7 +59,8 @@ export const wireQuote = (r: QuoteResult): Record<string, unknown> => {
     verified_savings: wireMoney(q.verifiedSavings),
     fees: q.fees.map((f) => ({ code: f.code === "delivery" ? `delivery:${f.storeId ?? ""}` : `payment_method:${f.method ?? ""}`, amount: wireMoney(f.amount) })),
     payment_options: [...q.payableByMethod.entries()].map(([method, payable]) => ({ method: toContractMethod(method), available: true, payable: wireMoney(payable) })),
-    cod_allowed: q.payableByMethod.has("cod"),
+    cod_allowed: r.cod.allowed,
+    cod_reason_code: r.cod.reasonCode,
     notices: r.unavailableSkus.map(() => ({ code: "unavailable", line_id: null })),
     quote_echo: quoteEcho(q),
   };

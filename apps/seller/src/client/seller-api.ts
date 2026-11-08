@@ -40,6 +40,28 @@ export const AttributeSetWire = z.object({
 });
 export type AttributeSetWire = z.infer<typeof AttributeSetWire>;
 
+const Money = z.object({ amount_minor: z.string(), currency: z.string() });
+export const LevelWire = z.object({
+  sku_id: z.string(),
+  location_id: z.string().nullable(),
+  on_hand: z.number().int(),
+  committed: z.number().int(),
+  available: z.number().int(),
+  low_stock: z.boolean(),
+  version: z.number().int(),
+});
+export type LevelWire = z.infer<typeof LevelWire>;
+const LevelPage = z.object({ items: z.array(LevelWire), next_cursor: z.string().nullable() });
+export const STOCK_REASONS = ["recount", "damage", "received", "correction"] as const;
+export type StockReason = (typeof STOCK_REASONS)[number];
+
+export const OrderActionResult = z.object({ id: z.string(), status: z.string(), available_actions: z.array(z.string()), total: Money });
+export type OrderActionResult = z.infer<typeof OrderActionResult>;
+export const ShipmentWire = z.object({ id: z.string(), awb: z.string(), label_url: z.string().nullable() });
+export type ShipmentWire = z.infer<typeof ShipmentWire>;
+export const REJECT_REASONS = ["out_of_stock", "damaged", "pricing_error", "other"] as const;
+export type RejectReason = (typeof REJECT_REASONS)[number];
+
 export interface ApiFailure {
   readonly ok: false;
   readonly status: number;
@@ -58,6 +80,13 @@ export interface SellerApi {
   publish(id: string, version: number): Promise<ApiResult<{ status: string; blocked_reasons: string[] }>>;
   categories(): Promise<ApiResult<CategoryWire[]>>;
   attributeSet(categoryId: string): Promise<ApiResult<AttributeSetWire>>;
+  /** Stock level of one SKU (null when it has no level yet). */
+  stockLevel(skuId: string): Promise<ApiResult<LevelWire | null>>;
+  adjustStock(body: { sku_id: string; delta: number; reason: StockReason; expected_version?: number }): Promise<ApiResult<LevelWire>>;
+  acceptOrder(id: string): Promise<ApiResult<OrderActionResult>>;
+  rejectOrder(id: string, reason: RejectReason, note?: string): Promise<ApiResult<OrderActionResult>>;
+  packOrder(id: string): Promise<ApiResult<OrderActionResult>>;
+  shipOrder(id: string, weightG: number): Promise<ApiResult<ShipmentWire>>;
 }
 
 const Problem = z.object({ code: z.string(), errors: z.array(z.object({ code: z.string() })).optional() });
@@ -104,6 +133,15 @@ export const createSellerApi = (market: string, fetchImpl: typeof fetch = (...a)
       return r.ok ? { ok: true, data: r.data.items } : r;
     },
     attributeSet: (categoryId) => call(AttributeSetWire, `attribute-sets/${categoryId}`),
+    stockLevel: async (skuId) => {
+      const r = await call(LevelPage, `inventory?limit=1&sku_id=${skuId}`);
+      return r.ok ? { ok: true, data: r.data.items[0] ?? null } : r;
+    },
+    adjustStock: (body) => call(LevelWire, "inventory/adjustments", { method: "POST", body }),
+    acceptOrder: (id) => call(OrderActionResult, `orders/${id}/accept`, { method: "POST", body: {} }),
+    rejectOrder: (id, reason, note) => call(OrderActionResult, `orders/${id}/reject`, { method: "POST", body: { reason_code: reason, ...(note === undefined || note === "" ? {} : { note }) } }),
+    packOrder: (id) => call(OrderActionResult, `orders/${id}/pack`, { method: "POST", body: {} }),
+    shipOrder: (id, weightG) => call(ShipmentWire, "shipments", { method: "POST", body: { seller_order_ids: [id], declared_weight_g: weightG } }),
     upload: (id, kind, file, onProgress) =>
       new Promise((resolve) => {
         const xhr = new XMLHttpRequest();

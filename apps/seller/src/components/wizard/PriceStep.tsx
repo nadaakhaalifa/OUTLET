@@ -22,7 +22,7 @@ export function PriceStep({ locale, state, onChange }: { locale: Locale; state: 
         {t("seller.price.plain")}
       </p>
       <p id="qty-note" className="hint">
-        {t("seller.price.quantityNote")}
+        {t("seller.inventory.wizardNote")}
       </p>
       <fieldset className="offers">
         <legend className="panelTitle">{t("seller.offers.title")}</legend>

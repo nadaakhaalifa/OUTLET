@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { ApiFailure, ApiResult, AttributeSetWire, ProductWire, SellerApi } from "../src/client/seller-api";
+import type { ApiFailure, ApiResult, AttributeSetWire, ProductWire, SellerApi, ShipmentWire } from "../src/client/seller-api";
 
 export const CATEGORY = "00000000-0000-4000-8000-0000000c0011";
 export const ATTRIBUTES: AttributeSetWire = {
@@ -29,6 +29,8 @@ export const fakeApi = (script: { onPatch?: (version: number, body: object) => A
   let server = start;
   let uploads = 0;
   let lastCard: object | undefined;
+  let stock: { onHand: number; version: number } | undefined;
+  const adjustments: { sku_id: string; delta: number; reason: string; expected_version?: number }[] = [];
   const api = {
     createDraft: vi.fn((_grade: string, categoryId: string) => {
       server = { ...server, primary_category_id: categoryId };
@@ -58,11 +60,23 @@ export const fakeApi = (script: { onPatch?: (version: number, body: object) => A
     publish: vi.fn(() => Promise.resolve(script.onPublish?.() ?? ok({ status: "PUBLISHED", blocked_reasons: [] }))),
     categories: vi.fn(() => Promise.resolve(ok([{ id: CATEGORY, name: "فساتين", depth: 2, path: "fashion/women/dresses" }]))),
     attributeSet: vi.fn(() => Promise.resolve(ok(ATTRIBUTES))),
+    stockLevel: vi.fn(() => Promise.resolve(ok(stock === undefined ? null : { sku_id: "sku", location_id: "loc", on_hand: stock.onHand, committed: 0, available: stock.onHand, low_stock: false, version: stock.version }))),
+    adjustStock: vi.fn((body: { sku_id: string; delta: number; reason: string; expected_version?: number }) => {
+      adjustments.push(body);
+      stock = { onHand: (stock?.onHand ?? 0) + body.delta, version: (stock?.version ?? 0) + 1 };
+      return Promise.resolve(ok({ sku_id: body.sku_id, location_id: "loc", on_hand: stock.onHand, committed: 0, available: stock.onHand, low_stock: false, version: stock.version }));
+    }),
+    acceptOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "ACCEPTED", available_actions: ["pack"], total: { amount_minor: "100", currency: "EGP" } }))),
+    rejectOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "REJECTED_BY_SELLER", available_actions: [], total: { amount_minor: "100", currency: "EGP" } }))),
+    packOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "PACKED", available_actions: ["ship"], total: { amount_minor: "100", currency: "EGP" } }))),
+    shipOrder: vi.fn((id: string): Promise<ApiResult<ShipmentWire>> => Promise.resolve(ok({ id, awb: "AWB1", label_url: null }))),
   } satisfies SellerApi;
   return {
     api,
     server: () => server,
     lastCard: () => lastCard,
+    adjustments: () => adjustments,
+    stock: () => stock,
     bump: () => {
       server = { ...server, version: server.version + 1 };
     },

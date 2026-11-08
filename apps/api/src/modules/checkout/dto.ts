@@ -34,6 +34,7 @@ export const QuoteResponse = z.strictObject({
   fees: z.array(z.strictObject({ code: z.string().max(500), amount: MoneyDto })).max(200),
   payment_options: z.array(z.strictObject({ method: z.string().max(50), available: z.boolean(), payable: MoneyDto })).max(20),
   cod_allowed: z.boolean(),
+  cod_reason_code: z.enum(["cod_disabled", "cod_above_first_order_cap", "cod_risk_declined", "cod_risk_unavailable"]).nullable(),
   notices: z.array(z.strictObject({ code: z.literal("unavailable"), line_id: z.null() })).max(50),
   /** Opaque: send it back unchanged in POST /checkout (it is what the signed token's hash covers). */
   quote_echo: z.json(),

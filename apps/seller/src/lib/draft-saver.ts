@@ -1,5 +1,5 @@
 import type { ApiFailure, ApiResult, ProductWire, SellerApi } from "../client/seller-api";
-import { conditionOf, conditionSection, defectCardBody, detailsSection, priceSection, type RequiredAttribute, type WizardState } from "./wizard-model";
+import { conditionOf, conditionSection, defectCardBody, detailsSection, priceSection, quantityOf, type RequiredAttribute, type WizardState } from "./wizard-model";
 
 export type SaveStatus = "saving" | "saved" | "error" | "idle";
 
@@ -39,6 +39,9 @@ export class DraftSaver {
   private latest: { state: WizardState; defs: readonly RequiredAttribute[] } | undefined;
   private sent: Sent = { condition: "", details: "", price: "", card: "" };
   private readonly debounceMs: number;
+  private skuId: string | undefined;
+  /** The on-hand quantity the server confirmed for this listing's SKU (undefined until a sync ran). */
+  private stockApplied: number | undefined;
 
   constructor(
     private readonly api: SellerApi,
@@ -150,6 +153,8 @@ export class DraftSaver {
       if (det !== null) this.sent.details = k.details;
       if (price !== null) this.sent.price = k.price;
     }
+    const qty = quantityOf(state);
+    if (qty !== null && this.sent.price !== "" && !(await this.syncStock(id, qty))) return;
     const card = defectCardBody(state);
     if (card !== null && k.card !== this.sent.card && (cond === null || this.sent.condition === k.condition)) {
       const r = await this.api.defectCard(id, this.version, card);
@@ -165,6 +170,38 @@ export class DraftSaver {
     const ready = await this.api.readiness(id);
     if (ready.ok) this.hooks.reasons(ready.data.blocked_reasons);
     this.hooks.status("saved");
+  }
+
+  /**
+   * Makes the server's on-hand quantity equal what the seller typed. It reads the current level first and sends only the difference
+   * (idempotent in effect: re-saving the same number sends nothing), guarded by the level's version.
+   */
+  private async syncStock(id: string, qty: number): Promise<boolean> {
+    if (this.stockApplied === qty) return true;
+    if (this.skuId === undefined) {
+      const p = await this.api.getProduct(id);
+      if (!p.ok) {
+        this.fail(p);
+        return false;
+      }
+      this.skuId = p.data.skus[0]?.id;
+    }
+    if (this.skuId === undefined) return true;
+    const level = await this.api.stockLevel(this.skuId);
+    if (!level.ok) {
+      this.fail(level);
+      return false;
+    }
+    const delta = qty - (level.data?.on_hand ?? 0);
+    if (delta !== 0) {
+      const r = await this.api.adjustStock({ sku_id: this.skuId, delta, reason: delta > 0 ? "received" : "correction", expected_version: level.data?.version ?? 0 });
+      if (!r.ok) {
+        this.fail(r);
+        return false;
+      }
+    }
+    this.stockApplied = qty;
+    return true;
   }
 
   private async patchWithRetry(id: string, body: object): Promise<ProductWire | null> {

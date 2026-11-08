@@ -3,6 +3,7 @@ import { AuthError } from "@outlet/auth-core";
 import { CartError } from "@outlet/cart";
 import { CatalogError } from "@outlet/catalog";
 import { CheckoutError } from "@outlet/checkout";
+import { InventoryError } from "@outlet/inventory";
 import { MediaError } from "@outlet/media";
 import { ZodError } from "zod";
 import { ProblemError, Problems } from "./problem.js";
@@ -74,6 +75,21 @@ const cartProblem = (e: CartError): ProblemError => {
   }
 };
 
+const inventoryProblem = (e: InventoryError): ProblemError => {
+  switch (e.code) {
+    case "not_found":
+      return Problems.notFound();
+    case "forbidden":
+      return Problems.forbidden();
+    case "validation":
+      return Problems.unprocessable("validation-rule", e.details.map((d) => ({ path: "/body", code: d })));
+    case "conflict":
+    case "invalid_transition":
+    case "insufficient_stock":
+      return Problems.conflict(e.code.replaceAll("_", "-"));
+  }
+};
+
 /** The typed checkout code is the problem code; its HTTP status comes from the package (README section 5/8). Details carry codes only. */
 const checkoutProblem = (e: CheckoutError): ProblemError => {
   const errors = [
@@ -132,6 +148,7 @@ export const toProblem = (e: unknown): ProblemError => {
   if (e instanceof AuthError) return authProblem(e);
   if (e instanceof CartError) return cartProblem(e);
   if (e instanceof CheckoutError) return checkoutProblem(e);
+  if (e instanceof InventoryError) return inventoryProblem(e);
   if (e instanceof ZodError) return Problems.validation(violations(e, ""));
   const f = fastifyError(e);
   if (f !== undefined) {

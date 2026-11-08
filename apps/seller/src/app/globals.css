@@ -102,3 +102,20 @@ progress { inline-size: 100%; }
   .side { position: static; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+
+/* Orders and inventory */
+.chip { display: inline-flex; align-items: center; min-block-size: 28px; padding-inline: var(--space-3); border-radius: var(--radius-pill); background: var(--color-bg-subtle); color: var(--color-text-primary); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); border: 1px solid var(--color-border-default); }
+.chip[data-tone="action"] { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.chip[data-tone="bad"] { background: var(--color-critical-bg); color: var(--color-critical-text); }
+.sla { font-weight: var(--font-weight-semibold); }
+.sla[data-late="true"] { color: var(--color-critical-text); }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); margin-block: var(--space-4); }
+.panelTitle { font-size: var(--font-size-lg); margin: var(--space-5) 0 var(--space-2); }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-5); margin: 0; }
+.facts dt { color: var(--color-text-secondary); }
+.facts dd { margin: 0; }
+.factRow { display: contents; }
+.actionRow { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-block: var(--space-3); }
+.confirmBox { display: grid; gap: var(--space-3); max-inline-size: 32rem; border: 2px solid var(--color-border-input); border-radius: var(--radius-md); padding: var(--space-4); background: var(--color-bg-surface); }
+.adjustForm { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); padding-block: var(--space-2); }
+.resultNote { margin: var(--space-2) 0; font-weight: var(--font-weight-semibold); }

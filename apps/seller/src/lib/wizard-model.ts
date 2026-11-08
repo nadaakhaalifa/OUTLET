@@ -302,3 +302,9 @@ export const stepForReason = (code: string): StepId => {
 
 export const validPhotoFile = (file: { type: string; size: number }): "type" | "size" | null =>
   !ACCEPTED_TYPES.includes(file.type) ? "type" : file.size > MAX_UPLOAD_MB * 1024 * 1024 ? "size" : null;
+
+/** The stock on hand typed in the price step: whole units, 0 to 999999. Blank or invalid is "not set" (nothing is sent). */
+export const quantityOf = (state: Pick<WizardState, "quantity">): number | null => {
+  const q = state.quantity.trim();
+  return /^\d{1,6}$/.test(q) ? Number(q) : null;
+};

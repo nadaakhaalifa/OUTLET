@@ -8,7 +8,9 @@ import {
   FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories, HmacQuoteTokens,
   RecordingRefunds, defaultConfig,
 } from "@outlet/checkout/testing";
-import { ReservationService } from "@outlet/inventory";
+import { InventoryService, ReservationService } from "@outlet/inventory";
+import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
+import { FakeCourier } from "@outlet/shipping/testing";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { DefectService, ListingService, PublicCatalogService, StoreService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
@@ -29,6 +31,9 @@ import { InMemoryChallengeStore, InMemoryPasskeyStore, SessionReader, WebAuthnPa
 import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/index.js";
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
+import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
+import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
+import { InMemoryBuyerDelivery } from "./seller-orders-fakes.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "../src/modules/catalog-public/discovery-reader.js";
 import type { ApiApp, CreateAppOptions } from "../src/app.js";
@@ -41,6 +46,8 @@ import type { RateLimiterPort } from "../src/platform/rate-limit/port.js";
 
 // auth-core refuses its local AES cipher unless this is set (no KMS cipher exists); tests only.
 process.env.OUTLET_LOCAL_CIPHER = "1";
+
+import { uuidv7 as randomUUIDv7 } from "@outlet/ids";
 
 export const MARKET = "eg";
 export const DB_MARKET = "EG";
@@ -97,7 +104,7 @@ export interface TestApp extends ApiApp {
   readonly seed: Seed;
   readonly sms: FakeSms;
   readonly passkeyStore: InMemoryPasskeyStore;
-  readonly fakes: { provider: FakePaymentProvider; shipping: FakeShipping; risk: FakeRisk; kill: FakeKillSwitches; cod: { valid: Set<string> } };
+  readonly fakes: { provider: FakePaymentProvider; shipping: FakeShipping; risk: FakeRisk; kill: FakeKillSwitches; cod: { valid: Set<string> }; courier: FakeCourier; delivery: InMemoryBuyerDelivery };
   /** A real user row (carts and orders reference users) plus a token for it. */
   shopper(): Promise<{ userId: string; token: string }>;
   /** A registered device id (what X-Device-Id carries). */
@@ -258,7 +265,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     voidIntent: (r, k) => fake.voidIntent(r, k),
     verifyWebhook: (i) => fake.verifyWebhook(i),
   };
-  const fakes = { provider: fake, shipping: new FakeShipping(), risk: new FakeRisk(), kill: new FakeKillSwitches(), cod: { valid: new Set(["123456"]) } };
+  const fakes = { provider: fake, shipping: new FakeShipping(), risk: new FakeRisk(), kill: new FakeKillSwitches(), cod: { valid: new Set(["123456"]) }, courier: new FakeCourier(), delivery: new InMemoryBuyerDelivery() };
   const common = {
     marketId: DB_MARKET, now, config: defaultConfig({ provider: "paymob" }), reservations: new ReservationService({ client: appClient, marketId: DB_MARKET, now }), provider: paymobShaped,
     shipping: fakes.shipping, address: new FakeAddress(), risk: fakes.risk, commission: new FakeCommission(), taxCategories: new FakeTaxCategories(),
@@ -273,8 +280,19 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     provider: "paymob" as const,
   };
   const cartServices = { cart: new CartService({ client: appClient, marketId: DB_MARKET, now, availability: pgInventoryAvailability(appClient, DB_MARKET) }), suggestions: noSuggestions };
+  const sellerOrderServices = {
+    orders: new SellerOrderService({
+      client: appClient, marketId: DB_MARKET, now, newId: () => randomUUIDv7(), outbox: new OutboxWriter(pgTransactionalWriter), delivery: fakes.delivery, courier: fakes.courier,
+      paymentKinds: new PgPaymentKind(appClient, DB_MARKET), courierCode: "fake", serviceLevel: "standard",
+    }),
+  };
+  const sellerInventoryServices = {
+    inventory: new SellerInventoryService({ client: appClient, marketId: DB_MARKET, inventory: new InventoryService({ client: appClient, marketId: DB_MARKET, now }), newId: () => randomUUID(), now }),
+  };
   const deps: ApiDeps = {
     auth: () => auth,
+    sellerOrders: () => sellerOrderServices,
+    sellerInventory: () => sellerInventoryServices,
     cart: () => cartServices,
     checkout: () => checkoutServices,
     webhookIps: staticWebhookIps({ paymob: ["127.0.0.1"] }),

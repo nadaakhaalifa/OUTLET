@@ -34,8 +34,10 @@ describe("Sidebar", () => {
     expect(products.getAttribute("href")).toBe("/ar/products");
     expect(screen.getByRole("link", { name: ar("seller.nav.overview") }).getAttribute("aria-current")).toBeNull();
     expect(screen.getByRole("link", { name: ar("seller.nav.overview") }).getAttribute("href")).toBe("/ar");
-    expect(screen.getAllByRole("link")).toHaveLength(2);
-    const soon = screen.getByText(ar("seller.nav.orders"), { exact: false });
+    expect(screen.getByRole("link", { name: ar("seller.nav.orders") }).getAttribute("href")).toBe("/ar/orders");
+    expect(screen.getByRole("link", { name: ar("seller.nav.inventory") }).getAttribute("href")).toBe("/ar/inventory");
+    expect(screen.getAllByRole("link")).toHaveLength(4);
+    const soon = screen.getByText(ar("seller.nav.offers"), { exact: false });
     expect(soon.getAttribute("aria-disabled")).toBe("true");
     expect(soon.textContent).toContain(ar("seller.nav.soon"));
     expect(await clean()).toEqual([]);

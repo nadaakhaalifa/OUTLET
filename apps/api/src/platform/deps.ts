@@ -11,6 +11,8 @@ import type { DiscoveryPort } from "../modules/catalog-public/discovery-reader.j
 import type { AuthServices } from "../modules/auth/ports.js";
 import type { CartServices } from "../modules/cart/ports.js";
 import type { CheckoutServices, WebhookIpPolicy } from "../modules/checkout/ports.js";
+import type { SellerInventoryServices } from "../modules/seller-inventory/services.js";
+import type { SellerOrdersServices } from "../modules/seller-orders/services.js";
 import type { Clock } from "./http.js";
 import type { RateLimiterPort } from "./rate-limit/port.js";
 
@@ -47,6 +49,8 @@ export const DEFAULT_HTTP_CONFIG: HttpConfig = Object.freeze({
   rateLimitKeySecret: "",
 });
 
+export type { SellerInventoryServices, SellerOrdersServices };
+
 export interface CatalogServices {
   readonly publicCatalog: Pick<PublicCatalogService, "getStoreBySlug" | "getListing">;
   /** Store directory, category tree and the store shelf with quick-view fields (published read model only). */
@@ -79,6 +83,10 @@ export interface ApiDeps {
   readonly auth: (marketId: string) => AuthServices;
   readonly cart: (marketId: string) => CartServices;
   readonly checkout: (marketId: string) => CheckoutServices;
+  /** Seller Center orders (accept, reject, pack, ship) for one market. Courier, buyer delivery data and payment kind are ports: production fails closed. */
+  readonly sellerOrders: (marketId: string) => SellerOrdersServices;
+  /** Seller Center stock levels and adjustments for one market. */
+  readonly sellerInventory: (marketId: string) => SellerInventoryServices;
   /** PSP source-address allow-list (first gate of the webhook route, before the HMAC). Deny-all until configured. */
   readonly webhookIps: WebhookIpPolicy;
   /** Set while the process drains (SIGTERM): readiness answers 503 so the balancer stops sending traffic. */

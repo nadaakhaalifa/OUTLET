@@ -29,10 +29,10 @@ describe("planProxy", () => {
   });
 
   it("allows only the seller catalog paths", () => {
-    for (const path of [["products", PRODUCT], ["products", PRODUCT, "readiness"], ["products", PRODUCT, "media"], ["products", PRODUCT, "defect-cards"], ["products", PRODUCT, "publish"], ["categories"], ["attribute-sets", PRODUCT]]) {
+    for (const path of [["products", PRODUCT], ["products", PRODUCT, "readiness"], ["products", PRODUCT, "media"], ["products", PRODUCT, "defect-cards"], ["products", PRODUCT, "publish"], ["categories"], ["attribute-sets", PRODUCT], ["orders"], ["orders", PRODUCT], ["orders", PRODUCT, "accept"], ["orders", PRODUCT, "reject"], ["orders", PRODUCT, "pack"], ["shipments"], ["inventory"], ["inventory", "adjustments"]]) {
       expect(planProxy(input({ segments: ["eg", ...path] })).kind, path.join("/")).toBe("forward");
     }
-    for (const path of [["orders"], ["products", "not-a-uuid"], ["products", PRODUCT, "../../me"], ["store", "members"], []]) {
+    for (const path of [["orders", "not-a-uuid"], ["orders", PRODUCT, "ship"], ["orders", PRODUCT, "../../me"], ["shipments", PRODUCT], ["inventory", "units"], ["products", "not-a-uuid"], ["products", PRODUCT, "../../me"], ["store", "members"], []]) {
       expect(planProxy(input({ segments: ["eg", ...path] })), path.join("/")).toMatchObject({ kind: "reject", status: 404 });
     }
     expect(planProxy(input({ segments: ["EG", "products"] }))).toMatchObject({ status: 404 });

@@ -11,8 +11,8 @@ const ITEMS: readonly Item[] = [
   { id: "overview", key: "seller.nav.overview", href: "" },
   { id: "products", key: "seller.nav.products", href: "/products" },
   { id: "offers", key: "seller.nav.offers", href: null },
-  { id: "orders", key: "seller.nav.orders", href: null },
-  { id: "inventory", key: "seller.nav.inventory", href: null },
+  { id: "orders", key: "seller.nav.orders", href: "/orders" },
+  { id: "inventory", key: "seller.nav.inventory", href: "/inventory" },
   { id: "design", key: "seller.nav.storeDesign", href: null },
   { id: "settings", key: "seller.nav.settings", href: null },
 ];

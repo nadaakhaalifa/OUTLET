@@ -181,7 +181,7 @@ describe("ProductWizard steps 2 to 4", () => {
     expect(await violations()).toEqual([]);
   });
 
-  it("buyer offers and quantity are shown but clearly not saved; barcode and voice are disabled", async () => {
+  it("barcode and voice are disabled", async () => {
     const f = fakeApi();
     mount(f.api);
     await go();

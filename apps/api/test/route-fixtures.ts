@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { DEVICE, RP_ID, RP_ORIGIN, bearer, idemKey } from "./harness.js";
 import { ADDRESS, addToBag, assertVerifyRequest, authedHeaders, checkoutRequest, enrollPasskey, phone, placeOrder, quote, signIn } from "./flows.js";
 import { makePng, multipartBody } from "./png.js";
+import { seedSellerOrder } from "./seller-orders-fakes.js";
 import { VirtualAuthenticator } from "./webauthn.js";
 import type { TestApp } from "./harness.js";
 
@@ -94,7 +95,7 @@ const otpChallenge = async (t: TestApp): Promise<{ device: string; phone: string
 
 const FED = { id_token: "x.y.z", nonce: "n" };
 
-export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
+const BASE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
   "POST /v1/{market}/auth/devices": {
     happy: () => Promise.resolve({ req: { method: "POST", url: "/v1/eg/auth/devices", payload: { install_id: randomUUID(), platform: "web" } }, status: 201 }),
   },
@@ -381,6 +382,70 @@ export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
     },
   },
 };
+
+const ORDER_ROLES = ["warehouse"] as const;
+const READ_ROLES = ["finance"] as const;
+const orderHeaders = (t: TestApp, token: string, store: string): Record<string, string> => ({ ...bearer(token), "x-store-id": store, "idempotency-key": idemKey(t) });
+
+/** A fulfilment action on a fresh store-A order in `from` (happy) and on a store-B order (otherTenant). */
+const orderAction = (action: string, from: string, payload: object = {}): RouteFixture => ({
+  happy: async (t) => {
+    const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA, status: from });
+    const { token } = await t.seller(t.seed.storeA, ORDER_ROLES);
+    return { req: { method: "POST", url: `/v1/eg/seller/orders/${o.id}/${action}`, headers: orderHeaders(t, token, t.seed.storeA), payload }, status: 200 };
+  },
+  otherTenant: async (t) => {
+    const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeB, status: from });
+    const { token } = await t.seller(t.seed.storeA, ORDER_ROLES);
+    return { method: "POST", url: `/v1/eg/seller/orders/${o.id}/${action}`, headers: orderHeaders(t, token, t.seed.storeA), payload };
+  },
+});
+
+export const SELLER_ORDER_FIXTURES: Readonly<Record<string, RouteFixture>> = {
+  "GET /v1/{market}/seller/orders": {
+    happy: async (t) => {
+      await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA });
+      const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+      return { req: { method: "GET", url: "/v1/eg/seller/orders?limit=10", headers: { ...bearer(token), "x-store-id": t.seed.storeA } }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/seller/orders/{seller_order_id}": {
+    happy: async (t) => {
+      const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA });
+      const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+      return { req: { method: "GET", url: `/v1/eg/seller/orders/${o.id}`, headers: { ...bearer(token), "x-store-id": t.seed.storeA } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeB });
+      const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+      return { method: "GET", url: `/v1/eg/seller/orders/${o.id}`, headers: { ...bearer(token), "x-store-id": t.seed.storeA } };
+    },
+  },
+  "POST /v1/{market}/seller/orders/{seller_order_id}/accept": orderAction("accept", "PAID"),
+  "POST /v1/{market}/seller/orders/{seller_order_id}/reject": orderAction("reject", "PAID", { reason_code: "out_of_stock" }),
+  "POST /v1/{market}/seller/orders/{seller_order_id}/pack": orderAction("pack", "ACCEPTED"),
+  "POST /v1/{market}/seller/shipments": {
+    happy: async (t) => {
+      const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA, status: "PACKED" });
+      const { token } = await t.seller(t.seed.storeA, ORDER_ROLES);
+      return { req: { method: "POST", url: "/v1/eg/seller/shipments", headers: orderHeaders(t, token, t.seed.storeA), payload: { seller_order_ids: [o.id], declared_weight_g: 800 } }, status: 201 };
+    },
+  },
+  "GET /v1/{market}/seller/inventory": {
+    happy: async (t) => {
+      const { token } = await t.seller(t.seed.storeA, ["warehouse"]);
+      return { req: { method: "GET", url: "/v1/eg/seller/inventory?limit=10", headers: { ...bearer(token), "x-store-id": t.seed.storeA } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/seller/inventory/adjustments": {
+    happy: async (t) => {
+      const { token } = await t.seller(t.seed.storeA, ["catalog"]);
+      return { req: { method: "POST", url: "/v1/eg/seller/inventory/adjustments", headers: orderHeaders(t, token, t.seed.storeA), payload: { sku_id: t.seed.skuA, delta: 2, reason: "received" } }, status: 201 };
+    },
+  },
+};
+
+export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = { ...BASE_FIXTURES, ...SELLER_ORDER_FIXTURES };
 
 export function DEFECT_CARD() {
   return {
