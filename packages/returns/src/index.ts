@@ -6,8 +6,8 @@ export { DEFAULT_WINDOWS, addBusinessDays, addDays, addHours, cairoDate, checkEl
 export type { Eligibility, EligibilityInput, WindowConfig } from "./domain/eligibility.js";
 export { DISPUTE, DISPUTE_EVENTS, DISPUTE_STATES, REFUND, REFUND_EVENTS, REFUND_STATES, RETURN, RETURN_EVENTS, RETURN_STATES } from "./domain/machines.js";
 export type { DisputeEvent, DisputeState, RefundEvent, RefundState, ReturnEvent, ReturnState } from "./domain/machines.js";
-export { computeRefund, cumulativeDiscount, tenderSplit } from "./domain/calc.js";
-export type { CalcInput, LineAllocation, RefundCalc, ReturnedLine } from "./domain/calc.js";
+export { cancellationAmounts, computeRefund, cumulativeDiscount, tenderSplit } from "./domain/calc.js";
+export type { CalcInput, CancellationAmounts, CancelledSellerOrder, LineAllocation, RefundCalc, ReturnedLine } from "./domain/calc.js";
 export { routeRefund, summaryRoute } from "./domain/router.js";
 export type { CreditLeg, Destination, RouteInput, RouteKind, ShopperChoice, TenderMethod } from "./domain/router.js";
 export type { EvidencePort, KillSwitchPort, ProviderRefundPort, ProviderRefundResult, RestockDecision, RestockPort, ReturnPolicyPort } from "./application/ports.js";

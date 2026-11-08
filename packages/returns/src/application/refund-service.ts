@@ -3,19 +3,19 @@ import { withDbContext } from "@outlet/db";
 import type { Queryable } from "@outlet/db";
 import { Ledger, accountCode } from "@outlet/ledger";
 import type { JournalEntryDraft, PostingDraft } from "@outlet/ledger";
-import { money, percentOf } from "@outlet/money";
+import { allocate, money, percentOf } from "@outlet/money";
 import type { Currency, Money } from "@outlet/money";
 import { authorize, dualApprovalRequired } from "@outlet/policy";
 import type { Principal } from "@outlet/policy";
 import { z } from "zod";
-import { computeRefund, tenderSplit } from "../domain/calc.js";
+import { cancellationAmounts, computeRefund, tenderSplit } from "../domain/calc.js";
 import { addDays } from "../domain/eligibility.js";
 import { ReturnsError } from "../domain/errors.js";
 import { transition } from "@outlet/orders";
 import { REFUND, RETURN } from "../domain/machines.js";
 import type { RefundEvent, RefundState } from "../domain/machines.js";
 import { routeRefund, summaryRoute } from "../domain/router.js";
-import type { CreditLeg, Destination, RouteKind, TenderMethod } from "../domain/router.js";
+import type { CreditLeg, Destination, RouteKind, ShopperChoice, TenderMethod } from "../domain/router.js";
 import { emit, makeEnv } from "./env.js";
 import type { Env, ReturnsDeps } from "./env.js";
 import { REFUNDS_KILL_SWITCH } from "./ports.js";
@@ -191,6 +191,130 @@ export class RefundService {
       await emit(env, tx, needsApproval ? "refund.approval_required" : "refund.approved", "refund", id, { refund_id: id, return_request_id: returnId, amount_minor: calc.total.amountMinor.toString(), currency: cur });
       return { id, status: needsApproval ? "REQUESTED" : "APPROVED", route: summaryRoute(destinations), amount: calc.total, replayed: false };
     });
+  }
+
+  /**
+   * Consumer entry for a seller order cancelled (or rejected) BEFORE shipping (master prompt 20.1, 15.6). Idempotent per seller order on
+   * `refund:cancel:{seller order}`: every CANCELLED (reason cancellation) or REJECTED_BY_SELLER (reason seller_rejected) seller order of the
+   * group that has no refund yet gets one. Nothing is created when nothing was charged (COD, unpaid: no order_paid entry).
+   * Same rules as createForReturn: tender split by cumulative differencing, the RefundRouter per method (shopper choice stored on the seller
+   * order at cancel time), dual approval above the threshold, ledger first (the refund entry posts in process()). In the same transaction the
+   * residual entry `cancel_adjust:{seller order}` reverses what the refund entry does not (platform-funded discount), see cancellationAmounts.
+   * `userId` comes from the event; the transaction is narrowed to it, so a foreign group reads as not_found.
+   */
+  async createForCancellation(input: { readonly userId: string; readonly orderGroupId: string; readonly reason: "cancellation" | "seller_rejected" }): Promise<readonly RefundView[]> {
+    const env = this.env;
+    const userId = uuid.parse(input.userId);
+    const groupId = uuid.parse(input.orderGroupId);
+    const status = input.reason === "cancellation" ? "CANCELLED" : "REJECTED_BY_SELLER";
+    const now = env.now();
+    return this.worker(userId, async (tx) => {
+      const g = (await tx.query<{ method: TenderMethod; credit: string; total: string; currency: Currency }>(
+        "SELECT payment_method AS method, store_credit_minor::text AS credit, total_minor::text AS total, currency FROM order_groups WHERE id = $1 FOR UPDATE", [groupId],
+      )).rows[0];
+      if (g === undefined) throw new ReturnsError("not_found");
+      const paid = (await tx.query("SELECT 1 FROM journal_entries WHERE idempotency_key = $1", [`order_paid:${groupId}`])).rows.length > 0;
+      if (!paid) return [];
+      const cur = g.currency;
+      const sos = (await tx.query<{ id: string; store_id: string; total: string; ship: string; ship_vat: string; comm: string; comm_vat: string; net: string; pd: string; ship_disc: string; choice: ShopperChoice | null; cancelled_at: string | null }>(
+        `SELECT id, store_id, total_minor::text AS total,
+                (platform_discount_minor + seller_discount_minor
+                 - (SELECT COALESCE(SUM(l.platform_discount_minor + l.seller_discount_minor), 0) FROM order_lines l WHERE l.seller_order_id = seller_orders.id))::text AS ship_disc, shipping_minor::text AS ship, shipping_vat_minor::text AS ship_vat, commission_minor::text AS comm, commission_vat_minor::text AS comm_vat,
+                seller_net_minor::text AS net, platform_discount_minor::text AS pd, cancel_refund_choice AS choice, cancelled_at
+           FROM seller_orders WHERE order_group_id = $1 AND status = $2 ORDER BY id FOR UPDATE`, [groupId, status],
+      )).rows;
+      const intent = (await tx.query<{ provider: string; bnpl: string | null }>("SELECT provider, bnpl_provider AS bnpl FROM payment_intents WHERE order_group_id = $1", [groupId])).rows[0];
+      const legs: CreditLeg[] = (await tx.query<{ code: string; amount: string }>(
+        `SELECT a.code, h.amount_minor::text AS amount FROM ledger_holds h JOIN ledger_accounts a ON a.id = h.account_id WHERE h.ref_type = 'order_group' AND h.ref_id = $1 AND h.status = 'CAPTURED' ORDER BY a.code`, [groupId],
+      )).rows.map((r) => ({ accountCode: r.code, amount: money(BigInt(r.amount), cur) }));
+      const owner = g.method === "bnpl" ? (intent?.bnpl ?? null) : g.method === "cod" || g.method === "store_credit" ? null : intent === undefined ? null : intent.provider === "paymob" || intent.provider === "fake" ? "paymob" : intent.provider;
+      const acc = (type: "seller_pending" | "commission_revenue" | "platform_vat_output" | "shipping_revenue" | "promo_expense_platform", o?: string): string =>
+        accountCode({ type, market: env.marketId, currency: cur, ...(o === undefined ? {} : { owner: o }) });
+      const out: RefundView[] = [];
+      for (const so of sos) {
+        const key = `refund:cancel:${so.id}`;
+        const existing = (await tx.query<RefundRow>(`${SELECT_REFUND} WHERE idempotency_key = $1`, [key])).rows[0];
+        if (existing !== undefined) {
+          out.push({ id: existing.id, status: existing.status, route: existing.route, amount: money(BigInt(existing.amount_minor), existing.currency), replayed: true });
+          continue;
+        }
+        const a = cancellationAmounts({
+          currency: cur, total: BigInt(so.total), shipping: BigInt(so.ship), shippingVat: BigInt(so.ship_vat), commission: BigInt(so.comm), commissionVat: BigInt(so.comm_vat),
+          sellerNet: BigInt(so.net), platformDiscount: BigInt(so.pd), deliveryDiscount: BigInt(so.ship_disc),
+        });
+        const r = a.residual;
+        const residual: PostingDraft[] = [
+          { accountCode: acc("seller_pending", so.store_id), amount: money(r.seller, cur) },
+          { accountCode: acc("commission_revenue"), amount: money(r.commission, cur) },
+          { accountCode: acc("platform_vat_output"), amount: money(r.vat, cur) },
+          { accountCode: acc("shipping_revenue"), amount: money(r.shippingNet, cur) },
+          { accountCode: acc("promo_expense_platform"), amount: money(-r.platformPromo, cur) },
+        ].filter((p) => p.amount.amountMinor !== 0n);
+        // Idempotent by key (Ledger.post replays the same content); a seller order the shopper paid nothing for has only this entry.
+        if (residual.length > 0) {
+          await Ledger.post(tx, { kind: "refund_issued", idempotencyKey: `cancel_adjust:${so.id}`, marketId: env.marketId, occurredAt: now, ref: { type: "seller_order", id: so.id }, postings: residual });
+        }
+        if (a.refund.amount.amountMinor === 0n) continue;
+
+        const groupPrior = (await tx.query<{ t: string }>("SELECT COALESCE(SUM(amount_minor),0)::text AS t FROM refunds WHERE order_group_id = $1", [groupId])).rows[0];
+        const creditPaid = BigInt(g.credit);
+        const split = tenderSplit(a.refund.amount, BigInt(groupPrior?.t ?? "0"), creditPaid, BigInt(g.total) - creditPaid);
+        const destinations = routeRefund({
+          marketId: env.marketId, userId, method: g.method, clearingOwner: owner, pspReversible: env.provider.canReverse(g.method),
+          refund: a.refund.amount, credit: split.credit, external: split.external, creditLegs: legs, choice: so.choice,
+        });
+        const id = env.newId();
+        const needsApproval = dualApprovalRequired("refund.approve", env.config.dualApproval, a.refund.amount.amountMinor);
+        const due = addDays(so.cancelled_at === null ? now : new Date(so.cancelled_at), env.config.refundDeadlineDays);
+        const f = a.refund;
+        await tx.query(
+          `INSERT INTO refunds (id, order_group_id, seller_order_id, return_request_id, user_id, store_id, market_id, reason, route, shopper_choice, currency, amount_minor, goods_minor, delivery_fee_minor,
+                                delivery_vat_minor, commission_minor, commission_vat_minor, seller_minor, seller_account, destinations, status, idempotency_key, due_at, created_at, updated_at)
+           VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'seller_pending',$18::jsonb,'REQUESTED',$19,$20,$21,$21)`,
+          [id, groupId, so.id, userId, so.store_id, env.marketId, input.reason, summaryRoute(destinations), so.choice, cur, f.amount.amountMinor.toString(), f.goods.amountMinor.toString(),
+           f.deliveryFee.amountMinor.toString(), f.deliveryVat.amountMinor.toString(), f.commission.amountMinor.toString(), f.commissionVat.amountMinor.toString(), f.seller.amountMinor.toString(),
+           JSON.stringify(destinations.map((d) => ({ route: d.route, amountMinor: d.amount.amountMinor.toString(), accountCode: d.accountCode }))), key, due.toISOString(), now.toISOString()],
+        );
+        await this.cancellationAllocations(tx, id, so.id, userId, so.store_id, f);
+        if (!needsApproval) await this.setStatus(tx, id, "REQUESTED", "approve", now);
+        await emit(env, tx, needsApproval ? "refund.approval_required" : "refund.approved", "refund", id, {
+          refund_id: id, seller_order_id: so.id, order_group_id: groupId, reason: input.reason, amount_minor: f.amount.amountMinor.toString(), currency: cur,
+        });
+        out.push({ id, status: needsApproval ? "REQUESTED" : "APPROVED", route: summaryRoute(destinations), amount: f.amount, replayed: false });
+      }
+      return out;
+    });
+  }
+
+  /** Allocation rows of a cancellation refund: the goods amount spread over the lines by paid amount (largest remainder), plus the delivery fee. */
+  private async cancellationAllocations(tx: Queryable, refundId: string, sellerOrderId: string, userId: string, storeId: string, f: ReturnType<typeof cancellationAmounts>["refund"]): Promise<void> {
+    const cur = f.amount.currency;
+    const lines = (await tx.query<{ id: string; unit: string; qty: number; disc: string }>(
+      "SELECT id, unit_price_minor::text AS unit, qty, (platform_discount_minor + seller_discount_minor)::text AS disc FROM order_lines WHERE seller_order_id = $1 ORDER BY id", [sellerOrderId],
+    )).rows.map((l) => ({ id: l.id, qty: l.qty, gross: BigInt(l.unit) * BigInt(l.qty), paid: BigInt(l.unit) * BigInt(l.qty) - BigInt(l.disc) }));
+    const weights = lines.map((l) => (l.paid > 0n ? l.paid : 0n));
+    const any = weights.some((w) => w > 0n);
+    const goods = any && f.goods.amountMinor > 0n ? allocate(f.goods, weights) : [];
+    const comm = any && f.commission.amountMinor > 0n ? allocate(f.commission, weights) : [];
+    const vat = any && f.commissionVat.amountMinor > 0n ? allocate(f.commissionVat, weights) : [];
+    let n = 0;
+    for (const [idx, l] of lines.entries()) {
+      const amount = goods[idx]?.amountMinor ?? 0n;
+      if (amount <= 0n) continue;
+      n += 1;
+      await tx.query(
+        `INSERT INTO refund_allocations (refund_id, line_no, order_line_id, user_id, store_id, market_id, component, qty, gross_minor, discount_share_minor, amount_minor, commission_minor, commission_vat_minor, currency)
+         VALUES ($1,$2,$3,$4,$5,$6,'goods',$7,$8,$9,$10,$11,$12,$13)`,
+        [refundId, n, l.id, userId, storeId, this.env.marketId, l.qty, l.gross.toString(), (l.gross - amount).toString(), amount.toString(), (comm[idx]?.amountMinor ?? 0n).toString(), (vat[idx]?.amountMinor ?? 0n).toString(), cur],
+      );
+    }
+    if (f.deliveryFee.amountMinor > 0n) {
+      n += 1;
+      await tx.query(
+        `INSERT INTO refund_allocations (refund_id, line_no, order_line_id, user_id, store_id, market_id, component, qty, gross_minor, discount_share_minor, amount_minor, currency) VALUES ($1,$2,NULL,$3,$4,$5,'delivery_fee',0,$6,0,$6,$7)`,
+        [refundId, n, userId, storeId, this.env.marketId, f.deliveryFee.amountMinor.toString(), cur],
+      );
+    }
   }
 
   private deny(actor: Principal): void {

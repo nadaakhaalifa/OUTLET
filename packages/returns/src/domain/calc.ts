@@ -99,3 +99,73 @@ export function tenderSplit(refund: Money, alreadyRefunded: bigint, creditPaid: 
   const credit = cum(alreadyRefunded + refund.amountMinor) - cum(alreadyRefunded);
   return { credit: money(credit, refund.currency), external: money(refund.amountMinor - credit, refund.currency) };
 }
+
+/** One cancelled seller order as stored at placement (seller_orders snapshot, piastres). */
+export interface CancelledSellerOrder {
+  readonly currency: Currency;
+  /** What the shopper paid for this seller order: items - platform discount - seller discount + delivery. */
+  readonly total: bigint;
+  readonly shipping: bigint;
+  readonly shippingVat: bigint;
+  readonly commission: bigint;
+  readonly commissionVat: bigint;
+  /** seller_net_minor: what order_recognised credited to seller_pending. */
+  readonly sellerNet: bigint;
+  /** platform_discount_minor: what order_recognised debited to promo_expense_platform. */
+  readonly platformDiscount: bigint;
+  /**
+   * Discount on the delivery fee (platform + seller funded): seller order discounts minus the order lines' discounts. The shopper paid
+   * `shipping - deliveryDiscount` for delivery, which is what the refund row reports as delivery fee (L2). Default 0.
+   */
+  readonly deliveryDiscount?: bigint;
+}
+
+export interface CancellationAmounts {
+  /** The refund row (refunds CHECKs: amount = goods + fee, goods = seller + commission + commission VAT, every part >= 0). */
+  readonly refund: {
+    readonly amount: Money; readonly goods: Money; readonly deliveryFee: Money; readonly deliveryVat: Money;
+    readonly commission: Money; readonly commissionVat: Money; readonly seller: Money;
+  };
+  /**
+   * What the refund entry does not reverse, posted with the refund row (key cancel_adjust:{seller order}): debits seller_pending,
+   * commission revenue, VAT output and delivery revenue; credits promo_expense_platform. Its debits always sum to the platform discount.
+   */
+  readonly residual: { readonly seller: bigint; readonly commission: bigint; readonly vat: bigint; readonly shippingNet: bigint; readonly platformPromo: bigint };
+}
+
+/**
+ * Ledger spec 4.1 reversed by differencing for a WHOLE seller order cancelled before shipping. The refund entry (refundDraft) gives the
+ * shopper back exactly `total`; the residual entry reverses the rest of the seller order's share of order_recognised (the platform-funded
+ * discount, which a return keeps, and any delivery discount). Together they negate that share exactly, so seller_pending, commission,
+ * VAT output, delivery revenue and promo expense return to their pre-order values and the trial balance stays 0. Pure, integer only.
+ */
+export function cancellationAmounts(i: CancelledSellerOrder): CancellationAmounts {
+  const deliveryDiscount = i.deliveryDiscount ?? 0n;
+  const nonNeg = [i.total, i.shipping, i.shippingVat, i.commission, i.commissionVat, i.sellerNet, i.platformDiscount, deliveryDiscount];
+  if (nonNeg.some((x) => x < 0n) || i.shippingVat > i.shipping || deliveryDiscount > i.shipping) throw new ReturnsError("refund_exceeds_paid", "seller order amounts are inconsistent");
+  const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
+  // delivery the shopper actually paid, and the VAT inside it (floor, proportional); the residual entry reverses the rest
+  const fee = min(i.shipping - deliveryDiscount, i.total);
+  const feeVat = i.shipping === 0n ? 0n : min((i.shippingVat * fee) / i.shipping, fee);
+  const goods = i.total - fee;
+  const commission = min(i.commission, goods);
+  const commissionVat = min(i.commissionVat, goods - commission);
+  const seller = goods - commission - commissionVat;
+  const residual = {
+    seller: i.sellerNet - seller,
+    commission: i.commission - commission,
+    vat: i.commissionVat - commissionVat + (i.shippingVat - feeVat),
+    shippingNet: i.shipping - i.shippingVat - (fee - feeVat),
+    platformPromo: i.platformDiscount,
+  };
+  const debits = residual.seller + residual.commission + residual.vat + residual.shippingNet;
+  // residual.seller may be negative (a seller-funded delivery waiver larger than the platform goods discount): refund + residual stay exact.
+  if (residual.commission < 0n || residual.vat < 0n || residual.shippingNet < 0n || debits !== residual.platformPromo) {
+    throw new ReturnsError("refund_exceeds_paid", "seller order snapshot does not match its order_recognised share");
+  }
+  const m = (x: bigint): Money => money(x, i.currency);
+  return {
+    refund: { amount: m(i.total), goods: m(goods), deliveryFee: m(fee), deliveryVat: m(feeVat), commission: m(commission), commissionVat: m(commissionVat), seller: m(seller) },
+    residual,
+  };
+}
