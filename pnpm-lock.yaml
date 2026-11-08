@@ -119,6 +119,12 @@ importers:
       '@nestjs/platform-fastify':
         specifier: 11.2.8
         version: 11.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@11.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@outlet/admin-access':
+        specifier: workspace:*
+        version: link:../../packages/admin-access
+      '@outlet/audit-log':
+        specifier: workspace:*
+        version: link:../../packages/audit-log
       '@outlet/auth-core':
         specifier: workspace:*
         version: link:../../packages/auth-core
@@ -173,6 +179,9 @@ importers:
       '@outlet/pricing-integrity':
         specifier: workspace:*
         version: link:../../packages/pricing-integrity
+      '@outlet/returns':
+        specifier: workspace:*
+        version: link:../../packages/returns
       '@outlet/seller-accounts':
         specifier: workspace:*
         version: link:../../packages/seller-accounts
@@ -353,6 +362,9 @@ importers:
 
   packages/audit-log:
     dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
       '@outlet/ids':
         specifier: workspace:*
         version: link:../ids
@@ -428,6 +440,9 @@ importers:
       '@outlet/db':
         specifier: workspace:*
         version: link:../db
+      '@outlet/flags':
+        specifier: workspace:*
+        version: link:../flags
       '@outlet/ids':
         specifier: workspace:*
         version: link:../ids
@@ -446,6 +461,12 @@ importers:
       '@outlet/outbox':
         specifier: workspace:*
         version: link:../outbox
+      '@outlet/promotions':
+        specifier: workspace:*
+        version: link:../promotions
+      '@outlet/shipping':
+        specifier: workspace:*
+        version: link:../shipping
       '@outlet/tax':
         specifier: workspace:*
         version: link:../tax
@@ -456,9 +477,15 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.3.16
         version: 0.3.16
+      '@outlet/admin-access':
+        specifier: workspace:*
+        version: link:../admin-access
       '@outlet/payouts':
         specifier: workspace:*
         version: link:../payouts
+      '@outlet/returns':
+        specifier: workspace:*
+        version: link:../returns
 
   packages/db:
     devDependencies:
