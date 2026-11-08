@@ -1,4 +1,4 @@
-import type { ApiClient, ProductSummary, StoreProfile } from "../src/server/api-client";
+import type { ApiClient, ProductDetail, ProductSummary, StoreProfile } from "../src/server/api-client";
 
 /** Real-shaped fixtures, TESTS ONLY. */
 export const store: StoreProfile = {
@@ -18,11 +18,23 @@ export function product(i: number, over: Partial<ProductSummary["price"]> = {}):
 
 export function stubClient(over: Partial<ApiClient> = {}): ApiClient {
   return {
-    listStores: () => Promise.resolve({ stores: [], reason: "UNCONFIGURED" as const }),
+    listStores: () => Promise.resolve({ stores: [], nextCursor: null, reason: "UNCONFIGURED" as const }),
+    listCategories: () => Promise.resolve([]),
     getStore: () => Promise.resolve(store),
     listStoreProducts: () => Promise.resolve({ items: Array.from({ length: 7 }, (_, i) => product(i)), nextCursor: null }),
     getProduct: () => Promise.resolve(null),
-    listDealBands: () => Promise.resolve([]),
+    listDeals: () => Promise.resolve([]),
     ...over,
+  };
+}
+
+export function detail(over: Partial<ProductDetail> = {}): ProductDetail {
+  return {
+    id: "prod1", titleAr: "جاكيت", titleEn: "Jacket", descriptionAr: "وصف المنتج", descriptionEn: "Product description", brandName: null,
+    conditionCode: "open_box", conditionLabelAr: "علبة مفتوحة", conditionLabelEn: "Open box", schemaOrgCondition: "https://schema.org/UsedCondition",
+    defectCard: null,
+    skus: [{ id: "k1", sizeLabel: "M", price: { amountMinor: 80_000n, currency: "EGP", claimType: "plain", priceProofPath: "/v1/eg/proof/1" }, availability: "in_stock" }],
+    store, legal: { legalNameAr: "نيل للتجارة", legalNameEn: "Nile Trading", commercialRegisterNo: "CR-12345", taxCardNo: "TC-67890", governorateNameAr: "القاهرة" },
+    canonicalPath: "/p/prod1", ...over,
   };
 }

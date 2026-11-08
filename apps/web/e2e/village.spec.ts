@@ -1,17 +1,46 @@
 import { expect, test } from "@playwright/test";
 
-test("village renders RTL with the honest empty state (no directory route yet)", async ({ page }) => {
+test("village renders RTL with real stores, category chips and a link to the directory", async ({ page }) => {
   await page.goto("/eg-ar");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("اختر متجرًا. اكتشف صفقة.");
-  await expect(page.getByRole("status")).toBeVisible();
-  await expect(page.getByRole("link", { name: "اكتشف العروض" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /نيل أوتليت/ }).first()).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "فئات المتاجر" }).getByRole("link", { name: "أزياء" })).toBeVisible();
+  await page.getByRole("link", { name: "عرض كل المتاجر" }).click();
+  await expect(page).toHaveURL(/\/eg-ar\/stores$/);
 });
 
-test("deals page shows no band without verified evidence", async ({ page }) => {
+test("directory filters by world, keyset load-more is a link", async ({ page }) => {
+  await page.goto("/eg-en/stores");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("All stores");
+  await expect(page.getByRole("link", { name: "Load more stores" })).toBeVisible();
+  await page.getByRole("link", { name: "Global", exact: true }).click();
+  await expect(page).toHaveURL(/world=global/);
+  await expect(page.getByRole("link", { name: /Nile Outlet/ })).toHaveCount(0);
+  await page.goto("/eg-en/stores?world=local");
+  await expect(page.getByRole("link", { name: /Nile Outlet/ }).first()).toBeVisible();
+  await page.goto("/eg-en/stores?world=local&cursor=zzzz");
+  await expect(page.getByText("No stores match these filters.")).toBeVisible();
+});
+
+test("product page: Arabic legal identity, no % without evidence", async ({ page }) => {
+  await page.goto("/eg-ar/p/prod0");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("جاكيت 0");
+  await expect(page.getByText("CR-12345")).toBeVisible();
+  await expect(page.getByText("TC-67890")).toBeVisible();
+  await expect(page.getByText("القاهرة")).toBeVisible();
+  await expect(page.getByText("نيل للتجارة ش.م.م")).toBeVisible();
+  await expect(page.locator("main").getByText(/[%٪]/)).toHaveCount(0);
+  await page.goto("/eg-ar/p/missing1");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});
+
+test("deals page renders only the band that has verified items", async ({ page }) => {
   await page.goto("/eg-en/deals");
-  await expect(page.getByText("No verified discounts yet")).toBeVisible();
-  await expect(page.getByText(/OFF/)).toHaveCount(0);
+  await expect(page.getByText("70%–60% OFF").first()).toBeVisible();
+  await expect(page.getByText("59%–50% OFF")).toHaveCount(0);
+  await expect(page.getByText("49%–40% OFF")).toHaveCount(0);
+  await expect(page.getByText("No verified discounts yet")).toHaveCount(0);
 });
 
 test("store page: shelf wall, keyboard carousel in RTL, URL-addressable quick view", async ({ page }) => {

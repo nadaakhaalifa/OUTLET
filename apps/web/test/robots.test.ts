@@ -26,8 +26,9 @@ describe("server layer", () => {
     const c = new UnconfiguredApiClient();
     expect(await c.getProduct()).toBeNull();
     expect(await c.getStore()).toBeNull();
-    expect(await c.listStores()).toEqual({ stores: [], reason: "UNCONFIGURED" });
-    expect(await c.listDealBands()).toEqual([]);
+    expect(await c.listStores()).toEqual({ stores: [], nextCursor: null, reason: "UNCONFIGURED" });
+    expect(await c.listDeals()).toEqual([]);
+    expect(await c.listCategories()).toEqual([]);
   });
   it("tag convention", () => {
     expect([tags.product("p1"), tags.store("s-1"), tags.market("eg")]).toEqual(["product:p1", "store:s-1", "market:eg"]);

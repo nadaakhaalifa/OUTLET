@@ -1,7 +1,7 @@
 import { CURRENCIES, CURRENCY_MINOR_UNITS, money, type Currency, type Money } from "@outlet/money";
 import { language, type Locale } from "@outlet/i18n";
 import type { ConditionKey, CubbyItem, PriceInput } from "@outlet/ui-web";
-import type { ProductSummary, StoreProfile } from "../server/api-client";
+import type { ProductSummary, StoreProfile, StoreSummary } from "../server/api-client";
 
 /** Arabic is authoritative (CPL 181/2018); English falls back to Arabic when missing. */
 export function pick(locale: Locale, ar: string, en: string | null): string {
@@ -15,7 +15,7 @@ const isCurrency = (c: string): c is Currency => (CURRENCIES as readonly string[
  * with a reference price in the same currency AND the store shows discounts publicly. Everything else is a plain price
  * (launch price keeps its label). Returns null when the currency is unknown (the item is then not rendered).
  */
-export function toPricing(p: ProductSummary, store: Pick<StoreProfile, "discountDisplayMode"> | null): PriceInput | null {
+export function toPricing(p: Pick<ProductSummary, "price">, store: Pick<StoreProfile, "discountDisplayMode"> | null): PriceInput | null {
   if (!isCurrency(p.price.currency)) return null;
   const price = money(p.price.amountMinor, p.price.currency);
   const refCur = p.price.referenceCurrency;
@@ -39,7 +39,7 @@ export function toImage(p: ProductSummary, locale: Locale): { src: string; alt: 
   return { src: p.image.url, alt, ...(p.image.width !== null ? { width: p.image.width } : {}), ...(p.image.height !== null ? { height: p.image.height } : {}) };
 }
 
-export function toCubby(p: ProductSummary, locale: Locale, store: StoreProfile | null, storeHref: string): CubbyItem | null {
+export function toCubby(p: ProductSummary, locale: Locale, store: Pick<StoreProfile, "discountDisplayMode"> | null, storeHref: string): CubbyItem | null {
   const pricing = toPricing(p, store);
   if (pricing === null) return null;
   const image = toImage(p, locale);
@@ -53,4 +53,15 @@ export function decimalString(m: Money): string {
   if (units === 0) return `${m.amountMinor < 0n ? "-" : ""}${abs.toString()}`;
   const s = abs.toString().padStart(units + 1, "0");
   return `${m.amountMinor < 0n ? "-" : ""}${s.slice(0, -units)}.${s.slice(-units)}`;
+}
+
+/** Props for a storefront card from a directory entry. */
+export function toStoreCard(s: StoreSummary, locale: Locale, base: string, kindLabel: string) {
+  return {
+    key: s.slug,
+    storeName: pick(locale, s.nameAr, s.nameEn),
+    category: kindLabel,
+    href: `${base}/stores/${s.slug}`,
+    ...(s.art ? { image: { src: s.art.src, alt: "", ...(s.art.width !== undefined ? { width: s.art.width } : {}), ...(s.art.height !== undefined ? { height: s.art.height } : {}) } } : {}),
+  };
 }

@@ -1,11 +1,9 @@
-import type { PriceInput } from "@outlet/ui-web";
-import { readEnv } from "./env";
-import { HttpApiClient } from "./http-api-client";
 
 /** Why a list is empty. UNCONFIGURED = no API_URL; NO_ROUTE = apps/api does not serve the route yet; OK = real result. */
 export type DataReason = "OK" | "UNCONFIGURED" | "NO_ROUTE";
 
 export interface StoreSummary {
+  readonly id: string;
   readonly slug: string;
   readonly nameAr: string;
   readonly nameEn: string | null;
@@ -15,7 +13,27 @@ export interface StoreSummary {
 
 export interface StoreDirectory {
   readonly stores: readonly StoreSummary[];
+  /** Keyset cursor for the next page, or null on the last page. */
+  readonly nextCursor: string | null;
   readonly reason: DataReason;
+}
+
+export type StoreWorld = "local" | "global" | "both";
+
+export interface StoreQuery {
+  readonly world?: StoreWorld;
+  readonly categoryId?: string;
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+export interface CategoryNode {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly depth: number;
+  readonly nameAr: string;
+  readonly nameEn: string | null;
+  readonly slug: string;
 }
 
 export interface StoreProfile {
@@ -61,6 +79,10 @@ export interface ProductSummary {
   };
   readonly availability: "in_stock" | "low_stock" | "out_of_stock";
   readonly canonicalPath: string;
+  /** Quick-view fields (store products route only). */
+  readonly conditionLabelAr?: string | null;
+  readonly conditionLabelEn?: string | null;
+  readonly colourCode?: string | null;
 }
 
 export interface ProductsPage {
@@ -68,32 +90,88 @@ export interface ProductsPage {
   readonly nextCursor: string | null;
 }
 
-export interface ProductDetail {
-  readonly id: string;
-  readonly name: string;
-  readonly storeSlug: string;
-  /** Price and optional verified evidence from the Price Integrity Engine; always read live, never cached. */
-  readonly pricing: PriceInput;
+export type PriceView = ProductSummary["price"];
+
+export interface SellerLegalIdentity {
+  readonly legalNameAr: string;
+  readonly legalNameEn: string | null;
+  readonly commercialRegisterNo: string;
+  readonly taxCardNo: string;
+  readonly governorateNameAr: string;
 }
 
-export interface DealBand {
-  readonly highPercent: number;
-  readonly lowPercent: number;
+export interface DefectItemView {
+  readonly labelAr: string;
+  readonly labelEn: string | null;
+  readonly locationAr: string;
+  readonly locationEn: string | null;
+  readonly affectsFunction: boolean;
+  readonly photo: ProductImage;
+}
+
+export interface DefectCardView {
+  readonly gradeCode: string;
+  readonly summaryAr: string | null;
+  readonly summaryEn: string | null;
+  readonly affectsFunction: boolean;
+  readonly defectCount: number;
+  readonly items: readonly DefectItemView[];
+}
+
+export interface SkuView {
+  readonly id: string;
+  readonly sizeLabel: string | null;
+  /** Price and optional evidence from the Price Integrity Engine; always read live, never cached. */
+  readonly price: PriceView;
+  readonly availability: "in_stock" | "low_stock" | "out_of_stock";
+}
+
+export interface ProductDetail {
+  readonly id: string;
+  readonly titleAr: string;
+  readonly titleEn: string | null;
+  readonly descriptionAr: string;
+  readonly descriptionEn: string | null;
+  readonly brandName: string | null;
+  readonly conditionCode: string;
+  readonly conditionLabelAr: string;
+  readonly conditionLabelEn: string | null;
+  /** schema.org itemCondition URL as served by the API. */
+  readonly schemaOrgCondition: string;
+  readonly defectCard: DefectCardView | null;
+  readonly skus: readonly SkuView[];
+  readonly store: StoreProfile;
+  readonly legal: SellerLegalIdentity;
+  readonly canonicalPath: string;
+}
+
+export const DEAL_BANDS = [
+  { code: "70_60", highPercent: 70, lowPercent: 60 },
+  { code: "59_50", highPercent: 59, lowPercent: 50 },
+  { code: "49_40", highPercent: 49, lowPercent: 40 },
+] as const;
+export type DealBandCode = (typeof DEAL_BANDS)[number]["code"];
+
+export interface DealShelf {
+  readonly band: (typeof DEAL_BANDS)[number];
+  readonly items: readonly ProductSummary[];
 }
 
 /** Every method returns null or an empty list when there is nothing real to show. Implementations never invent data. */
 export interface ApiClient {
-  listStores(marketId: string): Promise<StoreDirectory>;
+  listStores(marketId: string, opts?: StoreQuery): Promise<StoreDirectory>;
+  listCategories(marketId: string): Promise<readonly CategoryNode[]>;
   getStore(marketId: string, slug: string): Promise<StoreProfile | null>;
   listStoreProducts(marketId: string, slug: string, opts?: { readonly cursor?: string; readonly limit?: number }): Promise<ProductsPage>;
   getProduct(marketId: string, id: string): Promise<ProductDetail | null>;
-  listDealBands(marketId: string): Promise<readonly DealBand[]>;
+  /** Verified-discount products of one band (empty until Price Watch has history). */
+  listDeals(marketId: string, band: DealBandCode): Promise<readonly ProductSummary[]>;
 }
 
 /** Production default until API_URL is set (ADR-0029 pattern): fails closed with empty results. */
 export class UnconfiguredApiClient implements ApiClient {
   listStores(): Promise<StoreDirectory> {
-    return Promise.resolve({ stores: [], reason: "UNCONFIGURED" });
+    return Promise.resolve({ stores: [], nextCursor: null, reason: "UNCONFIGURED" });
   }
   getStore(): Promise<StoreProfile | null> {
     return Promise.resolve(null);
@@ -104,20 +182,10 @@ export class UnconfiguredApiClient implements ApiClient {
   getProduct(): Promise<ProductDetail | null> {
     return Promise.resolve(null);
   }
-  listDealBands(): Promise<readonly DealBand[]> {
+  listCategories(): Promise<readonly CategoryNode[]> {
     return Promise.resolve([]);
   }
-}
-
-let client: ApiClient | null = null;
-export function getApiClient(): ApiClient {
-  if (client === null) {
-    const base = readEnv().API_URL;
-    client = base === undefined ? new UnconfiguredApiClient() : new HttpApiClient(base);
+  listDeals(): Promise<readonly ProductSummary[]> {
+    return Promise.resolve([]);
   }
-  return client;
-}
-/** Test seam and composition root. */
-export function setApiClient(next: ApiClient | null): void {
-  client = next;
 }

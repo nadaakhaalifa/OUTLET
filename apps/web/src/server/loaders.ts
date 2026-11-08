@@ -1,4 +1,5 @@
-import { getApiClient, type DealBand, type ProductDetail, type ProductsPage, type StoreDirectory, type StoreProfile } from "./api-client";
+import { DEAL_BANDS, type CategoryNode, type DealShelf, type ProductDetail, type ProductsPage, type StoreDirectory, type StoreProfile, type StoreQuery } from "./api-client";
+import { getApiClient } from "./client-registry";
 
 export function loadProduct(marketId: string, id: string): Promise<ProductDetail | null> {
   return getApiClient().getProduct(marketId, id);
@@ -6,13 +7,20 @@ export function loadProduct(marketId: string, id: string): Promise<ProductDetail
 export function loadStore(marketId: string, slug: string): Promise<StoreProfile | null> {
   return getApiClient().getStore(marketId, slug);
 }
-/** Typed loader for the village; returns an empty list plus the reason until apps/api serves a directory route. */
-export function loadStoreDirectory(marketId: string): Promise<StoreDirectory> {
-  return getApiClient().listStores(marketId);
+/** Keyset page of the stores directory (market-tagged, revalidated every 60 s). */
+export function loadStoreDirectory(marketId: string, opts?: StoreQuery): Promise<StoreDirectory> {
+  return getApiClient().listStores(marketId, opts);
+}
+/** Top-level categories only (the chips); the full tree stays available via the client. */
+export async function loadRootCategories(marketId: string): Promise<readonly CategoryNode[]> {
+  return (await getApiClient().listCategories(marketId)).filter((c) => c.depth === 0);
 }
 export function loadStoreProducts(marketId: string, slug: string, opts?: { readonly cursor?: string; readonly limit?: number }): Promise<ProductsPage> {
   return getApiClient().listStoreProducts(marketId, slug, opts);
 }
-export function loadDealBands(marketId: string): Promise<readonly DealBand[]> {
-  return getApiClient().listDealBands(marketId);
+/** The three verified-discount bands. A band with no items is dropped, never rendered as an empty header. */
+export async function loadDealShelves(marketId: string): Promise<readonly DealShelf[]> {
+  const client = getApiClient();
+  const shelves = await Promise.all(DEAL_BANDS.map(async (band) => ({ band, items: await client.listDeals(marketId, band.code) })));
+  return shelves.filter((s) => s.items.length > 0);
 }
