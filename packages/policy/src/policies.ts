@@ -33,8 +33,8 @@ export const SELLER_POLICY: Readonly<Record<(typeof SELLER_ROLES)[number], reado
 
 /** Admin role -> actions, market scoped. */
 export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonly Action[]>> = {
-  ops: ["store.read", "store.suspend", "listing.read", "order.read", "return.read", "return.decide", "seller_kyc.review"],
-  finance: ["order.read", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read"],
+  ops: ["store.read", "store.suspend", "store.threshold.write", "listing.read", "order.read", "return.read", "return.decide", "seller_kyc.review"],
+  finance: ["order.read", "store.threshold.write", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read"],
   trust_safety: ["store.read", "store.suspend", "listing.read", "listing.takedown", "return.read", "dispute.decide", "seller_kyc.review"],
   support: ["order.read", "return.read", "user.read", "customer_message.read", "customer_message.write"],
   marketing: ["promotion.write", "catalog.read", "plan.price.change"],

@@ -1,4 +1,4 @@
-import { percentOf, type Money } from "@outlet/money";
+import { add, percentOf, type Money } from "@outlet/money";
 import type { TaxRate } from "./rates.js";
 import { TaxError } from "./rates.js";
 import { addExclusive, splitInclusive, type VatSplit } from "./vat.js";
@@ -20,9 +20,20 @@ export function commissionInvoiceLines(
   sellerOrder: { readonly id: string; readonly commissionBase: Money },
   commissionBps: number,
   vatRate: TaxRate,
+  opts: { readonly posted?: { readonly commission: Money; readonly vat: Money } } = {},
 ): CommissionInvoiceLine[] {
   if (!Number.isInteger(commissionBps) || commissionBps < 0 || commissionBps > 10_000) {
     throw new TaxError("INVALID_RATE", "commissionBps must be an integer in 0..10000");
+  }
+  const posted = opts.posted;
+  if (posted !== undefined) {
+    // I14: the invoice echoes the POSTED ledger figures exactly; nothing is recomputed here.
+    if (posted.commission.amountMinor < 0n || posted.vat.amountMinor < 0n || posted.commission.currency !== posted.vat.currency) {
+      throw new TaxError("INVALID_INPUT", "posted commission and vat must be non-negative and in one currency");
+    }
+    return [
+      { kind: "commission", sellerOrderId: sellerOrder.id, vatBps: vatRate.bps, commissionBps, net: posted.commission, vat: posted.vat, gross: add(posted.commission, posted.vat) },
+    ];
   }
   const commission = percentOf(sellerOrder.commissionBase, BigInt(commissionBps));
   return [

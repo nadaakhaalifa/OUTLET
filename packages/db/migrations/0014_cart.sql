@@ -22,12 +22,14 @@ CREATE TABLE carts (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- (id, user_id) is the target of the cart_lines composite FK: a line can never point at another user's cart (C2).
+ALTER TABLE carts ADD CONSTRAINT carts_id_user_uq UNIQUE (id, user_id);
 CREATE UNIQUE INDEX carts_one_active_uq ON carts (user_id, market_id) WHERE status = 'active';
 SELECT app.enable_user_rls('carts');
 
 CREATE TABLE cart_lines (
   id                 uuid PRIMARY KEY,
-  cart_id            uuid NOT NULL REFERENCES carts (id),
+  cart_id            uuid NOT NULL,
   user_id            uuid NOT NULL REFERENCES users (id),
   market_id          text NOT NULL CHECK (length(market_id) > 0),
   sku_id             uuid NOT NULL REFERENCES skus (id),
@@ -42,19 +44,37 @@ CREATE TABLE cart_lines (
   version            int NOT NULL DEFAULT 1 CHECK (version >= 1),
   added_at           timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (cart_id, sku_id)
+  UNIQUE (cart_id, sku_id),
+  FOREIGN KEY (cart_id, user_id) REFERENCES carts (id, user_id)
 );
 CREATE INDEX cart_lines_cart_store_idx ON cart_lines (cart_id, store_ref, added_at);
 CREATE INDEX cart_lines_sku_idx ON cart_lines (sku_id);
 SELECT app.enable_user_rls('cart_lines');
 
+-- Free-delivery settings: the WRITE side. Store-isolated (FORCE RLS on store_id, app.enable_store_rls); a user or anonymous context
+-- cannot write it. Bounds: 0..1,000,000 minor; 0 means free delivery for everyone and needs an explicit allow_free_for_all (C1).
+CREATE TABLE store_free_delivery_settings (
+  store_id           uuid PRIMARY KEY REFERENCES stores (id),
+  market_id          text NOT NULL,
+  threshold_minor    bigint NOT NULL CHECK (threshold_minor BETWEEN 0 AND 1000000),
+  allow_free_for_all boolean NOT NULL DEFAULT false,
+  updated_by         uuid,
+  updated_at         timestamptz NOT NULL DEFAULT now(),
+  CHECK (threshold_minor > 0 OR allow_free_for_all)
+);
+SELECT app.enable_store_rls('store_free_delivery_settings');
+
+-- Public read projection of the settings (same pattern as catalog_public_*): keyed by store_ref (a pointer, not a tenant key),
+-- no personal data, shopper-readable. It is only ever written by the service in the SAME transaction as the settings row.
 CREATE TABLE cart_store_thresholds (
   store_ref       uuid PRIMARY KEY REFERENCES stores (id),
   market_id       text NOT NULL,
-  threshold_minor bigint NOT NULL CHECK (threshold_minor >= 0),
+  threshold_minor bigint NOT NULL CHECK (threshold_minor BETWEEN 0 AND 1000000),
   updated_by      uuid,
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
+REVOKE DELETE ON cart_store_thresholds FROM outlet_app;
 
 -- Add-to-bag resolves a sku inside the published listing variants with a containment lookup.
+-- (The GIN stays here: a sku_ids uuid[] column would belong to catalog's projection, not this migration.)
 CREATE INDEX catalog_public_listings_variants_gin ON catalog_public_listings USING gin (variants jsonb_path_ops);

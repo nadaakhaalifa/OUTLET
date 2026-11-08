@@ -55,15 +55,36 @@ export class InMemoryTaxRateProvider implements TaxRateProviderPort {
       throw new TaxError("INVALID_RATE", "validTo must be after validFrom");
     }
     const end = (r: { validTo: Date | null }): number => (r.validTo === null ? Infinity : r.validTo.getTime());
-    const clash = this.rates.some(
+    const clashes = this.rates.filter(
       (r) =>
         r.marketId === rate.marketId &&
         r.category === rate.category &&
         rate.validFrom.getTime() < end(r) &&
         r.validFrom.getTime() < end(rate),
     );
-    if (clash) throw new TaxError("OVERLAPPING_RATE", "rate periods must not overlap; close the previous period first");
+    // A later-starting rate closes the earlier period at its start, but only when no tail of the old period would be left uncovered.
+    const closable = (r: TaxRate): boolean =>
+      r.validFrom.getTime() < rate.validFrom.getTime() && (rate.validTo === null || (r.validTo !== null && r.validTo.getTime() <= rate.validTo.getTime()));
+    if (clashes.some((r) => !closable(r))) throw new TaxError("OVERLAPPING_RATE", "rate periods must not overlap");
+    for (const r of clashes) this.rates[this.rates.indexOf(r)] = { ...r, validTo: rate.validFrom };
     this.rates.push(rate);
+  }
+
+  /** Ends the period that is open at validTo (exclusive end). Leaves a gap until the next upsert: rateAt then throws RATE_NOT_CONFIGURED. */
+  close(marketId: string, category: TaxCategoryCode, validTo: Date): void {
+    const t = validTo.getTime();
+    const i = this.rates.findIndex(
+      (r) => r.marketId === marketId && r.category === category && r.validFrom.getTime() < t && (r.validTo === null || t < r.validTo.getTime()),
+    );
+    const hit = this.rates[i];
+    if (hit === undefined) throw new TaxError("INVALID_RATE", "no period to close at that instant (validTo must be after the period start)");
+    this.rates[i] = { ...hit, validTo };
+  }
+
+  /** Number of periods covering an instant (0 or 1 by construction); used by the invariant test. */
+  periodsAt(marketId: string, category: TaxCategoryCode, at: Date): number {
+    const t = at.getTime();
+    return this.rates.filter((r) => r.marketId === marketId && r.category === category && r.validFrom.getTime() <= t && (r.validTo === null || t < r.validTo.getTime())).length;
   }
 
   rateAt(marketId: string, category: TaxCategoryCode, at: Date): TaxRate {

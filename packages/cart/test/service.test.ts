@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { countQueries } from "../src/testing.js";
 import { CartService, pgInventoryAvailability } from "../src/index.js";
 import type { AvailabilityPort } from "../src/index.js";
+import { withDbContext } from "@outlet/db";
+import type { Principal } from "@outlet/policy";
 import { buildWorld, errorCode, staffOf } from "./fixtures.js";
 import type { World } from "./fixtures.js";
 
@@ -213,7 +215,82 @@ describe("thresholds", () => {
   });
 });
 
+const adminOf = (role: string): Principal => ({ kind: "admin", userId: randomUUID(), marketId: "EG", roles: [role], scopes: [] });
+
+describe("threshold settings (C1)", () => {
+  it("rejects out-of-bounds values and a zero threshold without allowFreeForAll", async () => {
+    const x = await world();
+    const o = staffOf(x.storeA);
+    expect(await errorCode(x.svc.setThreshold(o, x.storeA, 1_000_001n))).toBe("invalid_qty");
+    expect(await errorCode(x.svc.setThreshold(o, x.storeA, 0n))).toBe("invalid_qty");
+    await x.svc.setThreshold(o, x.storeA, 0n, { allowFreeForAll: true });
+    expect(await x.svc.thresholdFor(x.storeA)).toBe(0n);
+    await x.svc.setThreshold(o, x.storeA, 1_000_000n);
+    expect(await x.svc.thresholdFor(x.storeA)).toBe(1_000_000n);
+  });
+
+  it("the DB refuses a user-context write to the settings table and a zero row without the flag", async () => {
+    const x = await world();
+    const ins = (tx: { query: (s: string, p: unknown[]) => Promise<unknown> }) =>
+      tx.query("INSERT INTO store_free_delivery_settings (store_id, market_id, threshold_minor) VALUES ($1,'EG',100)", [x.storeA]);
+    await expect(withDbContext(x.app, { kind: "user", marketId: "EG", userId: x.userA }, ins)).rejects.toThrow();
+    await expect(withDbContext(x.app, { kind: "store", marketId: "EG", storeId: x.storeB }, ins)).rejects.toThrow();
+    await expect(
+      withDbContext(x.app, { kind: "store", marketId: "EG", storeId: x.storeA }, (tx) =>
+        tx.query("INSERT INTO store_free_delivery_settings (store_id, market_id, threshold_minor) VALUES ($1,'EG',0)", [x.storeA]),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("admin ops/finance write through store.threshold.write and the audit port; others and missing audit are refused", async () => {
+    const x = await world();
+    const entries: { action: string; targetId: string; diff: unknown }[] = [];
+    const svc = new CartService({ ...x.deps, audit: { append: (e) => { entries.push(e); return Promise.resolve(undefined); } } });
+    await svc.setThresholdAsAdmin(adminOf("finance"), x.storeA, 75_000n);
+    await svc.setThresholdAsAdmin(adminOf("ops"), x.storeA, 80_000n);
+    expect(await svc.thresholdFor(x.storeA)).toBe(80_000n);
+    expect(entries.map((e) => e.action)).toEqual(["store.threshold.write", "store.threshold.write"]);
+    expect(entries[1]?.diff).toMatchObject({ before: { thresholdMinor: "75000" }, after: { thresholdMinor: "80000" } });
+    expect(await errorCode(svc.setThresholdAsAdmin(adminOf("support"), x.storeA, 1n))).toBe("forbidden");
+    expect(await errorCode(svc.setThresholdAsAdmin(staffOf(x.storeA), x.storeA, 1n))).toBe("forbidden");
+    expect(await errorCode(x.svc.setThresholdAsAdmin(adminOf("ops"), x.storeA, 1_000n))).toBe("forbidden"); // no audit port: fail closed
+    expect(await x.svc.thresholdFor(x.storeA)).toBe(80_000n);
+  });
+});
+
+describe("line ownership (C2)", () => {
+  it("the composite FK refuses a line pointing at another user's cart, and update/remove are scoped to the user", async () => {
+    const x = await world();
+    const s = await x.seedSku(x.storeA, 1_000);
+    const a = await x.svc.addLine(x.userA, { skuId: s.skuId, qty: 1 }, key());
+    await x.svc.addLine(x.userB, { skuId: s.skuId, qty: 1 }, key());
+    const cartA = (await x.raw.query<{ id: string }>("SELECT id FROM carts WHERE user_id = $1", [x.userA])).rows[0]?.id;
+    await expect(
+      x.raw.query(
+        `INSERT INTO cart_lines (id, cart_id, user_id, market_id, sku_id, product_id, store_ref, qty, price_at_add_minor, currency)
+         SELECT $1, $2, $3, market_id, sku_id, product_id, store_ref, 1, 1000, 'EGP' FROM cart_lines WHERE id = $4`,
+        [randomUUID(), cartA, x.userB, a.lineId],
+      ),
+    ).rejects.toThrow();
+    expect(await errorCode(x.svc.updateQty(x.userB, a.lineId, 3))).toBe("not_found");
+    expect(await errorCode(x.svc.removeLine(x.userB, a.lineId))).toBe("not_found");
+    expect((await x.svc.get(x.userA)).groups[0]?.lines[0]?.line.qty).toBe(1);
+  });
+});
+
 describe("query counts", () => {
+  it("addLine statement count is constant in the number of lines already in the bag", async () => {
+    const x = await world();
+    const counts: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const sk = await x.seedSku(x.storeA, 1_000);
+      const r = await countQueries(x.app, (c) => new CartService({ ...x.deps, client: c }).addLine(x.userA, { skuId: sk.skuId, qty: 1 }, key()));
+      counts.push(r.count);
+    }
+    expect(new Set(counts).size).toBe(1);
+    expect(counts[0]).toBeLessThanOrEqual(10);
+  });
+
   const stub: AvailabilityPort = { availableSkus: (q) => Promise.resolve(new Set([...q.skuIdsByStore.values()].flat())) };
 
   it("get is 3 statements regardless of lines and stores (stock check behind a port)", async () => {

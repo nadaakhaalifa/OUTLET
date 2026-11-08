@@ -9,6 +9,6 @@ export type {
 export { listingStatusAvailability, pgInventoryAvailability } from "./application/availability.js";
 export type { AvailabilityPort, AvailabilityQuery } from "./application/availability.js";
 export { makeEnv } from "./application/env.js";
-export type { CartDeps } from "./application/env.js";
-export { CartService, groupWire } from "./application/cart-service.js";
-export type { AddLineInput, AddLineResult, CartView } from "./application/cart-service.js";
+export type { AuditPort, CartDeps } from "./application/env.js";
+export { CartService, groupWire, MAX_THRESHOLD_MINOR } from "./application/cart-service.js";
+export type { ThresholdOptions, AddLineInput, AddLineResult, CartView } from "./application/cart-service.js";

@@ -6,7 +6,16 @@ import { DEFAULT_THRESHOLD_MINOR } from "../domain/bag.js";
 import { listingStatusAvailability } from "./availability.js";
 import type { AvailabilityPort } from "./availability.js";
 
+/** Port: AuditChain satisfies it structurally. Required for the admin threshold path (fails closed without it). */
+export interface AuditPort {
+  append(input: {
+    marketId: string; actorType: "staff"; actorId: string | null; action: string; targetType: string; targetId: string;
+    diff: { before?: unknown; after?: unknown } | null; ipHash: string | null; deviceId: string | null; requestId: string | null;
+  }): Promise<unknown>;
+}
+
 export interface CartDeps {
+  readonly audit?: AuditPort;
   /** Connection as outlet_app (ADR-0011). Every call binds its own user context. */
   readonly client: RoleSqlClient<"outlet_app">;
   readonly marketId: string;
@@ -21,6 +30,7 @@ export interface CartDeps {
 }
 
 export interface Env {
+  readonly audit: AuditPort | undefined;
   readonly client: RoleSqlClient<"outlet_app">;
   readonly marketId: string;
   readonly currency: Currency;
@@ -32,6 +42,7 @@ export interface Env {
 }
 
 export const makeEnv = (d: CartDeps): Env => ({
+  audit: d.audit,
   client: d.client,
   marketId: d.marketId,
   currency: d.currency ?? "EGP",

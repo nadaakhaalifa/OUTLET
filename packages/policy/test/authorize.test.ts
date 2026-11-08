@@ -24,7 +24,7 @@ describe("seller role matrix", () => {
 });
 
 describe("admin role matrix", () => {
-  const actions = ["payout.approve", "refund.approve", "role.grant", "privacy.export", "store.suspend", "promotion.write", "audit.read"];
+  const actions = ["payout.approve", "refund.approve", "role.grant", "privacy.export", "store.suspend", "promotion.write", "audit.read", "store.threshold.write"];
   for (const role of ADMIN_ROLES) {
     for (const a of actions) {
       const expected = ADMIN_POLICY[role].includes(a) ? "allow" : "forbidden";
@@ -36,6 +36,11 @@ describe("admin role matrix", () => {
 });
 
 describe("explicit role matrix (spec, not derived from the tables)", () => {
+  it("only admin ops and finance may write a store free-delivery threshold", () => {
+    const allowed = [...ADMIN_ROLES].filter((r) => reason(authorize(admin(r, true), "store.threshold.write", res())) === "allow");
+    expect(allowed.sort()).toEqual(["finance", "ops"]);
+    expect(reason(authorize(seller("owner"), "store.threshold.write", res()))).toBe("forbidden");
+  });
   it("seller finance and owner cannot approve payouts, only read them", () => {
     for (const role of ["finance", "owner"]) {
       expect(reason(authorize(seller(role), "payout.approve", res()))).toBe("forbidden");
