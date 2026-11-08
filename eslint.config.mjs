@@ -25,6 +25,12 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-non-null-assertion": "off" },
   },
   {
+    // User-facing strings must come from the i18n catalogs (AR required).
+    files: ["packages/ui-web/src/**/*.tsx", "apps/**/src/**/*.tsx"],
+    ignores: ["**/*.test.tsx", "**/examples/**"],
+    rules: { "district/no-hardcoded-ui-strings": "error" },
+  },
+  {
     // Bigint arithmetic is implemented here; the rule guards every other caller.
     files: ["packages/money/src/**/*.ts"],
     rules: { "district/no-float-money": "off" },

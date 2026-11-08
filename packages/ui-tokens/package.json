@@ -1,0 +1,17 @@
+{
+  "name": "@outlet/ui-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.json": "./tokens.json",
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens": { "types": "./dist/tokens.ts", "default": "./dist/tokens.ts" }
+  },
+  "files": ["tokens.json", "build.mjs", "dist"],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node build.mjs && node ../../tooling/design/contrast.mjs > /dev/null && vitest run"
+  }
+}

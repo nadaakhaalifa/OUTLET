@@ -1,0 +1,8 @@
+.skeleton { border-radius: var(--radius-sm); background: transparent; }
+.skeleton[data-visible="true"] {
+  background: linear-gradient(90deg, var(--color-bg-subtle), var(--color-bg-surface), var(--color-bg-subtle));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton[data-visible="true"] { animation: none; } }

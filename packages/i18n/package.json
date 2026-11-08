@@ -1,0 +1,24 @@
+{
+  "name": "@outlet/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@outlet/markets-config": "workspace:*",
+    "@outlet/money": "workspace:*",
+    "intl-messageformat": "^12.1.4"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check-catalogs": "node scripts/check-catalogs.mjs",
+    "test": "node scripts/check-catalogs.mjs && vitest run"
+  }
+}

@@ -1,0 +1,16 @@
+.field { display: grid; gap: var(--space-1); }
+.label { font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+.optional { font-weight: var(--font-weight-regular); color: var(--color-text-muted); }
+.input {
+  min-block-size: 44px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: var(--font-size-md) / var(--font-line-height-normal) var(--font-family-sans);
+}
+.input:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
+.input[aria-invalid="true"] { border-color: var(--color-critical-text); }
+.hint { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+.error { margin: 0; font-size: var(--font-size-sm); color: var(--color-critical-text); }

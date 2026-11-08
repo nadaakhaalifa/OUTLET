@@ -1,0 +1,20 @@
+.block { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.price { font: var(--font-weight-bold) var(--font-size-lg) / var(--font-line-height-tight) var(--font-family-sans); color: var(--color-text-primary); }
+.reference { font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: line-through; }
+.pill {
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-discount-bg);
+  color: var(--color-discount-text);
+  font: var(--font-weight-semibold) var(--font-size-sm) var(--font-family-sans);
+}
+.badge, .label {
+  padding-block: 2px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-verified-bg);
+  color: var(--color-verified-text);
+  font: var(--font-weight-medium) var(--font-size-xs) var(--font-family-sans);
+}
+.label { background: var(--color-bg-subtle); color: var(--color-text-secondary); }

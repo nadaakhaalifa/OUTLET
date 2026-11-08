@@ -1,0 +1,5 @@
+.wrap { display: grid; gap: var(--space-2); }
+.track { block-size: 8px; border-radius: var(--radius-pill); background: var(--color-bg-subtle); overflow: hidden; }
+.fill { block-size: 100%; border-radius: inherit; background: var(--color-action-primary-bg); transition: inline-size var(--motion-duration-slow) ease; }
+.fill[data-unlocked="true"] { background: var(--color-savings-text); }
+.text { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-secondary); }

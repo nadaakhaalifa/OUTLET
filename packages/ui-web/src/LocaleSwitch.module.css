@@ -1,0 +1,13 @@
+.group { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-pill); overflow: hidden; }
+.option {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-4);
+  border: 0;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: var(--font-weight-medium) var(--font-size-md) var(--font-family-sans);
+  cursor: pointer;
+}
+.option[aria-pressed="true"] { background: var(--color-action-primary-bg); color: var(--color-action-primary-text); }
+.option:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: -3px; }
