@@ -7,3 +7,7 @@ minimumReleaseAge: 10080
 allowBuilds:
   esbuild: true
   protobufjs: false # transitive via OpenTelemetry OTLP; its postinstall is not needed (ADR-lite in docs/adr/dependencies.md)
+
+overrides:
+  # GHSA-g3hv-75wg-m249 (ReDoS, medium) in minimatch 10.2.6 via dev tooling; OSV gate
+  "minimatch@<11.0.1": "11.0.1"

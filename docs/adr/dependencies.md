@@ -48,3 +48,21 @@ packages/privacy otherwise uses workspace packages (`@outlet/db`, `ids`, `logger
 | @opentelemetry/core, @opentelemetry/context-async-hooks, @opentelemetry/semantic-conventions | Propagators/baggage, async context, attribute names | 2019-03 / 2019-03 / 2019-03 | Apache-2.0 |
 
 Note: `@opentelemetry/sdk-trace@3.0.0` is a recent major (rename of sdk-trace-base); the 3.x line was needed to match sdk-node 0.300. `pnpm add` reports `protobufjs` build script ignored; it stays blocked (not needed at runtime). Dates are first publish of the package name and were not re-verified online. Local stack images (docker, unpinned-by-digest): otel/opentelemetry-collector-contrib 0.136.0, grafana/tempo 2.8.2, prom/prometheus v3.5.0, grafana/grafana 12.2.0.
+
+## E-07 (ledger core, 2026-11-08)
+
+No new third-party packages. `packages/ledger` (`@outlet/ledger`) uses workspace packages only (`@outlet/db`, `idempotency`, `ids`, `money`, `outbox`) plus `zod`, `fast-check` and `vitest` already in the root table. Hashing uses `node:crypto` (SHA-256).
+
+## E-10 (i18n, ui-tokens, ui-web, 2026-11-08)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| intl-messageformat | ICU MessageFormat runtime for `@outlet/i18n` (plurals incl. Arabic one/two/few/many/other, number formatting). Chosen over `@formatjs/intl`: same formatjs engine, but no React or cache/provider layer, so one small dependency serves server, web and (later) Expo; plural and number handling comes from native `Intl` | 2014-09 | BSD-3-Clause |
+| react, react-dom | UI runtime for `@outlet/ui-web` (React 19) | 2011-10 / 2013-06 | MIT |
+| @types/react, @types/react-dom | React type definitions (dev) | 2016-05 | MIT |
+| jsdom | DOM for component tests (dev) | 2011-12 | MIT |
+| @testing-library/react, @testing-library/dom | Component rendering and queries in tests (dev; dom is its peer) | 2018-03 / 2018-07 | MIT |
+| axe-core | Accessibility rules run on every component in both directions (dev). Used directly instead of the stale `vitest-axe` wrapper; colour contrast is checked on tokens instead because jsdom has no layout | 2015-07 | MPL-2.0 |
+
+`@outlet/ui-web` uses plain CSS Modules over the generated CSS custom properties (`@outlet/ui-tokens/tokens.css`): no CSS-in-JS runtime, no build plugin, logical properties for RTL, and it works unchanged under Next.js SSR. vanilla-extract was rejected as it adds a compiler plugin to every consumer for no benefit at this size. Dates are first publish of the package name and were not re-verified online.
+| minimatch (override to 11.0.1) | fixes GHSA-g3hv-75wg-m249 ReDoS in dev tooling transitive; pnpm override in pnpm-workspace.yaml | 2011-09 | ISC |
