@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, createTranslator, dir, type Direction, type Locale, type Numerals, type Translator } from "@outlet/i18n";
+import s from "./LocaleProvider.module.css";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 interface I18nState {
@@ -13,7 +14,7 @@ export function LocaleProvider(props: { locale: Locale; numerals?: Numerals; chi
   const value = useMemo<I18nState>(() => (numerals ? { locale, numerals } : { locale }), [locale, numerals]);
   return (
     <Ctx.Provider value={value}>
-      <div lang={locale} dir={dir(locale)} style={{ display: "contents" }}>
+      <div lang={locale} dir={dir(locale)} className={s.scope}>
         {children}
       </div>
     </Ctx.Provider>

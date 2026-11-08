@@ -4,8 +4,11 @@ import { useI18n } from "./i18n-context.js";
 import { VisuallyHidden } from "./VisuallyHidden.js";
 import s from "./Skeleton.module.css";
 
+/** Fixed size classes (no inline style: strict CSP forbids style attributes). */
+export type SkeletonSize = "text" | "price" | "tile" | "image" | "line70" | "line40";
+
 /** Loading placeholder. Becomes visible only after `delayMs` (default 300) so fast loads never flash. */
-export function Skeleton({ delayMs = 300, inlineSize = "100%", blockSize = "1em", locale }: { delayMs?: number; inlineSize?: string; blockSize?: string; locale?: Locale }) {
+export function Skeleton({ delayMs = 300, size = "text", locale }: { delayMs?: number; size?: SkeletonSize; locale?: Locale }) {
   const { t } = useI18n(locale);
   const [shown, setShown] = useState(delayMs <= 0);
   useEffect(() => {
@@ -18,7 +21,7 @@ export function Skeleton({ delayMs = 300, inlineSize = "100%", blockSize = "1em"
     };
   }, [delayMs]);
   return (
-    <div role="status" aria-busy="true" className={s.skeleton} data-visible={shown} style={{ inlineSize, blockSize }}>
+    <div role="status" aria-busy="true" className={`${s.skeleton} ${s[size]}`} data-visible={shown} data-size={size}>
       {shown ? <VisuallyHidden>{t("state.loading")}</VisuallyHidden> : null}
     </div>
   );

@@ -1,0 +1,19 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "pnpm exec next start --port 3100",
+      "url": ["http://localhost:3100/eg-ar", "http://localhost:3100/eg-ar/deals"],
+      "numberOfRuns": 3,
+      "settings": { "preset": "desktop", "throttlingMethod": "simulate" }
+    },
+    "assert": {
+      "assertions": {
+        "largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
+        "total-byte-weight": ["warn", { "maxNumericValue": 1500000 }],
+        "resource-summary:script:size": ["error", { "maxNumericValue": 174080 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "categories:accessibility": ["error", { "minScore": 0.95 }]
+      }
+    }
+  }
+}

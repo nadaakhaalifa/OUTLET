@@ -88,5 +88,9 @@
   "shelf.bandHint": "Verified discounts only",
   "storefront.open": "Open {store} ({category})",
   "storefront.hint": "Click a store to explore",
-  "cubby.quickAdd": "Add {name} to bag"
+  "cubby.quickAdd": "Add {name} to bag",
+  "village.heroTitle": "Pick a store. Discover a deal.",
+  "village.heroSubtitle": "Browse stores and see verified discounts only.",
+  "village.swipeHint": "Swipe or drag to discover stores",
+  "deals.heroTitle": "Big discounts. Unexpected finds."
 }

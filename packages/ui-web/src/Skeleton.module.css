@@ -6,3 +6,9 @@
 }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton[data-visible="true"] { animation: none; } }
+.text { inline-size: 100%; block-size: 1em; }
+.price { inline-size: 8rem; block-size: 1.5rem; }
+.tile { inline-size: 100%; block-size: 9rem; }
+.image { inline-size: 100%; block-size: 10rem; }
+.line70 { inline-size: 70%; block-size: 1em; }
+.line40 { inline-size: 40%; block-size: 1em; }

@@ -121,6 +121,22 @@ describe("Skeleton 300 ms rule", () => {
   });
 });
 
+describe("CSP-safe markup (no inline style attributes)", () => {
+  it("Skeleton uses size classes and PriceBlock loading emits no style attribute", () => {
+    const { container } = render(<Skeleton size="tile" delayMs={0} locale="en-EG" />);
+    expect(container.querySelector("[style]")).toBeNull();
+    expect(container.firstElementChild?.getAttribute("data-size")).toBe("tile");
+    const pb = render(<PriceBlock price={money(1n, "EGP")} loading />);
+    expect(pb.container.querySelector("[style]")).toBeNull();
+  });
+  it("LocaleProvider wrapper carries lang/dir and no style attribute", () => {
+    const { container } = render(<LocaleProvider locale="ar-EG"><span>x</span></LocaleProvider>);
+    const w = container.firstElementChild;
+    expect(w?.getAttribute("dir")).toBe("rtl");
+    expect(container.querySelector("[style]")).toBeNull();
+  });
+});
+
 describe("Button, Field, LocaleSwitch", () => {
   it("Button defaults to type=button and blocks clicks while loading", () => {
     const onClick = vi.fn();

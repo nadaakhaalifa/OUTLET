@@ -42,7 +42,7 @@ export function verifiedPercent(price: Money, evidence: VerifiedEvidence | undef
 
 export function PriceBlock(props: PriceBlockProps) {
   const { t, locale, numerals } = useI18n(props.locale);
-  if (props.loading) return <Skeleton inlineSize="8rem" blockSize="1.5rem" locale={locale} />;
+  if (props.loading) return <Skeleton size="price" locale={locale} />;
 
   const opts = numerals ? { numerals } : {};
   const { price } = props;

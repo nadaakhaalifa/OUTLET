@@ -35,9 +35,9 @@ export function ProductCard({ name, storeName, href, image, pricing, condition, 
   if (state === "loading") {
     return (
       <div className={s.card}>
-        <Skeleton blockSize="10rem" locale={l} />
-        <Skeleton inlineSize="70%" locale={l} />
-        <Skeleton inlineSize="40%" locale={l} />
+        <Skeleton size="image" locale={l} />
+        <Skeleton size="line70" locale={l} />
+        <Skeleton size="line40" locale={l} />
       </div>
     );
   }

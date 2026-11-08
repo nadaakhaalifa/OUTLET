@@ -88,5 +88,9 @@
   "shelf.bandHint": "الخصومات المؤكدة فقط",
   "storefront.open": "افتح متجر {store} ({category})",
   "storefront.hint": "اضغط على متجر لاستكشافه",
-  "cubby.quickAdd": "أضف {name} إلى الحقيبة"
+  "cubby.quickAdd": "أضف {name} إلى الحقيبة",
+  "village.heroTitle": "اختر متجرًا. اكتشف صفقة.",
+  "village.heroSubtitle": "تصفّح المتاجر وشوف الخصومات المؤكدة فقط.",
+  "village.swipeHint": "اسحب أو مرّر لاستكشاف المتاجر",
+  "deals.heroTitle": "خصومات كبيرة. اكتشافات مفاجئة."
 }
