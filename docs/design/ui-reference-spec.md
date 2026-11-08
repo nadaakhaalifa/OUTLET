@@ -1,4 +1,4 @@
-# UI Reference Spec v1: the "Outlet District" look
+# UI Reference Spec v1: the "Outlex" look
 
 Status: **approved by the owner as the target look (2026-11-06): "exactly like that."**
 Reference images are in `docs/design/reference/`. Build the screens to match them; this file says how they behave and what must change for legal reasons.
@@ -95,7 +95,7 @@ A 4-step wizard: **1 Photos & condition → 2 Product details → 3 Price & stoc
 
 ## 7. Changes this design brings to the plan
 1. **Multi-category, not fashion-only.** The design covers Electronics, Home, Kitchen, Toys, Beauty and **Pantry (food)** as well as Fashion. Pantry and "Near expiry" add food-safety and labelling rules (⚠ VERIFY: NFSA requirements, expiry display, return exclusions), plus Cosmetics rules for Beauty Lab. Electronics need warranty terms.
-2. **Brand name "Outlet District"** appears in the design. Proposed working name: Outlet District (العنوان/الاسم النهائي = owner decision; check trademark availability in Egypt ⚠).
+2. **Brand name "Outlex"** appears in the design. Proposed working name: Outlex (العنوان/الاسم النهائي = owner decision; check trademark availability in Egypt ⚠).
 3. **Exploration is store-first** (village → store → shelf), which matches the Outlet Village concept.
 4. **Fit features stay fashion-only:** size, My Size feed and stylist. Electronics and home get warranty and condition instead.
 

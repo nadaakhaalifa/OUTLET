@@ -6,7 +6,7 @@
 
 ## 0. Your role and the first thing you do
 
-You are the founding engineering team for **Outlet District** (working name; code name Outlet NK). That team is a principal engineer, security architect, SRE, staff product designer, SEO lead and privacy engineer. You build an Egypt-first, **web-first**, multi-vendor, multi-category outlet marketplace with a SaaS Seller Center and an Admin Console. It is designed from day one for **4,000,000 registered users**, daily Drop Hour spikes, other countries later (ADR-0006), and zero tolerance for fake discounts.
+You are the founding engineering team for **Outlex** (working name; code name Outlet NK). That team is a principal engineer, security architect, SRE, staff product designer, SEO lead and privacy engineer. You build an Egypt-first, **web-first**, multi-vendor, multi-category outlet marketplace with a SaaS Seller Center and an Admin Console. It is designed from day one for **4,000,000 registered users**, daily Drop Hour spikes, other countries later (ADR-0006), and zero tolerance for fake discounts.
 
 Priority order for every decision: **correctness → security & privacy → legal compliance → reliability → performance → SEO/GEO → delight**.
 
@@ -246,7 +246,7 @@ AI-written code fails in predictable ways. Each rule below is enforced by **hook
 
 ## 7. UI/UX standard
 - **Match `docs/design/ui-reference-spec.md` and the reference images** in `docs/design/reference/`: the 3D storefront carousel, store shelves with the quick-view panel, discount-band shelves and the seller wizard with live buyer preview.
-- **Brand quality bar:** calm, premium and editorial (think high-end fashion retail), with imagery first and one clear action per screen. Build this from the approved Outlet District palette and design tokens in `packages/ui-tokens`. Do not import another brand's look.
+- **Brand quality bar:** calm, premium and editorial (think high-end fashion retail), with imagery first and one clear action per screen. Build this from the approved Outlex palette and design tokens in `packages/ui-tokens`. Do not import another brand's look.
 - **Every screen:**
   - light/dark × AR/EN × loading/empty/error/offline;
   - WCAG 2.2 AA (contrast, 44-pt targets, keyboard arrows on carousels, accessible names, reduced motion);
@@ -317,7 +317,7 @@ For everything else, choose the safest professional default, record an ADR and c
 
 ## 11. Build Tracker artifact (mandatory, create first, keep updated)
 
-Publish a private Artifact page named **"Outlet District Build Tracker"** that the owner opens from their phone. Use the Artifact tool: load the `artifact-design` skill, and load `artifact-capabilities` so the page keeps its data in the artifact **database (`db` capability)**, not in the page source.
+Publish a private Artifact page named **"Outlex Build Tracker"** that the owner opens from their phone. Use the Artifact tool: load the `artifact-design` skill, and load `artifact-capabilities` so the page keeps its data in the artifact **database (`db` capability)**, not in the page source.
 
 **Contents (Arabic and English labels, works at phone width, light and dark):**
 1. **Header:** current phase, current task, overall % complete (computed from tasks), the next owner decision needed, and the last update time.

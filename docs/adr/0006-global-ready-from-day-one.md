@@ -47,6 +47,8 @@ What we will **not** build now: real multi-country checkout, FX pricing, cross-b
 - **Follow-ups:** add the `market` entity to the ERD; add a residency column to `data_inventory.yaml`; add a "global-ready" check to the PR template; add verify rows V29–V31.
 
 ## Verify register
+Numbering follows the single register (`docs/compliance/verify-register.md`; see the numbering note in `docs/open-questions.md`): V1–V18 master prompt, V19–V26 vision addendum, V27–V28 Price Watch, **V29–V31 this ADR**, V32–V36 shipping spec, V37–V39 infrastructure (ADR-0002), V40–V52 other build-plan report items, V53+ later additions. The build-plan report used V29–V31 for different items; those items now have other numbers.
+
 - **V29:** KSA/UAE entity, VAT and e-invoicing obligations for a marketplace.
 - **V30:** Cross-border data transfer between EG and the next market's cells (both laws).
 - **V31:** Trademark availability of the brand name in EG, KSA, UAE and Morocco.

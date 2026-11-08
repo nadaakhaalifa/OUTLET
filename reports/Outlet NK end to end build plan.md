@@ -593,24 +593,26 @@ Week 1 starts **Monday 9 November 2026**. Sprints are two weeks. Ramadan 2027 is
 
 ### Verify items from this report (add to the register)
 
+Numbers here were renumbered on 2026-11-07 (old V27–V42 are now V37–V52) so they match `docs/compliance/verify-register.md`.
+
 | # | Item | Owner |
 |---|---|---|
-| V27 | Huawei Cloud Cairo service catalog: PostgreSQL version, pg_cron, multi-AZ, PITR, KMS, IaC support, SLA, pricing | CTO |
-| V28 | Measured latency Cairo → Huawei Cairo, AWS me-central-1, Frankfurt | CTO |
-| V29 | Whether the PDPC treats encrypted or tokenized data abroad as a transfer; any adequacy list (UAE, EU) | Counsel/DPO |
-| V30 | PDPC licence fees above 200k records; marketing licence fee; DPO qualification; processing times; decree number 81 vs 816/2025 | Counsel/DPO |
-| V31 | Paymob split/sub-merchant and payout-from-settlement; Kashier connected-account settlement, payouts and multi-account checkout | Finance |
-| V32 | BNPL quote API for "from X/month" copy; refund cascades to loan cancellation via PSP | Finance |
-| V33 | Bosta webhook signing, rate limits, COD remittance cycle; Aramex API | Ops |
-| V34 | WhatsApp Egypt rate card from Meta; rule for "international" authentication sender; utility charges after 1 Oct 2026 | Marketing/Ops |
-| V35 | SMS OTP providers and sender-ID rules in Egypt | CTO |
-| V36 | Valify data residency, price, registry-backed match; any Commercial Registry lookup API | Ops/CTO |
-| V37 | Typesense Arabic support (official docs); bake-off result | CTO |
-| V38 | Cloudflare Business vs Enterprise pricing for Waiting Room and bot management | CTO |
-| V39 | Employer social insurance rate and cap; 2026 salary bands from Wuzzuf/recruiters | Founder |
-| V40 | Holding-company options and costs (Delaware, ADGM, DIFC) | Counsel |
-| V41 | Ramadan 2027 and Eid al-Adha 2027 exact dates | Marketing |
-| V42 | Startup Charter certificate criteria and Law 6/2025 revenue caps | Tax adviser |
+| V37 | Huawei Cloud Cairo service catalog: PostgreSQL version, pg_cron, multi-AZ, PITR, KMS, IaC support, SLA, pricing | CTO |
+| V38 | Measured latency Cairo → Huawei Cairo, AWS me-central-1, Frankfurt | CTO |
+| V39 | Whether the PDPC treats encrypted or tokenized data abroad as a transfer; any adequacy list (UAE, EU) | Counsel/DPO |
+| V40 | PDPC licence fees above 200k records; marketing licence fee; DPO qualification; processing times; decree number 81 vs 816/2025 | Counsel/DPO |
+| V41 | Paymob split/sub-merchant and payout-from-settlement; Kashier connected-account settlement, payouts and multi-account checkout | Finance |
+| V42 | BNPL quote API for "from X/month" copy; refund cascades to loan cancellation via PSP | Finance |
+| V43 | Bosta webhook signing, rate limits, COD remittance cycle; Aramex API | Ops |
+| V44 | WhatsApp Egypt rate card from Meta; rule for "international" authentication sender; utility charges after 1 Oct 2026 | Marketing/Ops |
+| V45 | SMS OTP providers and sender-ID rules in Egypt | CTO |
+| V46 | Valify data residency, price, registry-backed match; any Commercial Registry lookup API | Ops/CTO |
+| V47 | Typesense Arabic support (official docs); bake-off result | CTO |
+| V48 | Cloudflare Business vs Enterprise pricing for Waiting Room and bot management | CTO |
+| V49 | Employer social insurance rate and cap; 2026 salary bands from Wuzzuf/recruiters | Founder |
+| V50 | Holding-company options and costs (Delaware, ADGM, DIFC) | Counsel |
+| V51 | Ramadan 2027 and Eid al-Adha 2027 exact dates | Marketing |
+| V52 | Startup Charter certificate criteria and Law 6/2025 revenue caps | Tax adviser |
 
 Rows 1–26 of the existing register (master prompt P2 and vision addendum V19–V26) remain open, with row 14 (Expo SDK version) now resolvable as **SDK 57+** based on the SDK 56 Hermes V1 regression ([Expo SDK 56 changelog](https://expo.dev/changelog/sdk-56)).
 

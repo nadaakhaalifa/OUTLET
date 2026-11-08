@@ -22,7 +22,7 @@ Hard rules that apply to everything below:
 | C5 | **Daily rhythm.** A fixed Drop Hour every day plus themed Outlet Parties replaces ad-hoc flash sales. | Extends §16 |
 | C6 | **B2B lot channel** for resellers and shops. | New module `lots` |
 
-| C7 | **Approved UI look** = `docs/design/ui-reference-spec.md` (Outlet District screens). Multi-category (fashion, electronics, home, kitchen, toys, beauty, pantry). Working name "Outlet District" pending owner and trademark check. | §25 UI, scope |
+| C7 | **Approved UI look** = `docs/design/ui-reference-spec.md` (Outlex screens). Multi-category (fashion, electronics, home, kitchen, toys, beauty, pantry). Working name "Outlex" pending owner and trademark check. | §25 UI, scope |
 | C8 | **Price Watch**: sellers connect their own website or store; fake discounts are blocked before publish and auto-corrected while live. Spec: `docs/specs/price-watch.md`. | Extends §9 |
 | C9 | **Shipping inside Egypt + international**: seller weight/size required, chargeable-weight pricing, Local/Global/Both and delivery filters, DAP first then DDP. Spec: `docs/specs/shipping-domestic-international.md`. Prototype: `docs/design/prototype-shipping.html`. | Extends §21 |
 
