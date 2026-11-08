@@ -44,3 +44,11 @@ describe("metadata alternates", () => {
     expect(md.alternates?.languages).toMatchObject({ "ar-EG": "/eg-ar/p/abc", "en-EG": "/eg-en/p/abc" });
   });
 });
+
+describe("alternateLinks x-default for a market without an Arabic locale", () => {
+  it("falls back to the market's own language segment and lists no hreflang it cannot resolve", () => {
+    const links = alternateLinks({ marketId: "zz", locale: "en-EG", dir: "ltr" }, "/deals");
+    expect(links.languages).toEqual({ "x-default": "/zz-en/deals" });
+    expect(links.canonical).toBe("/zz-en/deals");
+  });
+});

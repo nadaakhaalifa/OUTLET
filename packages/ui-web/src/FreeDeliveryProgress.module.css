@@ -1,5 +1,10 @@
 .wrap { display: grid; gap: var(--space-2); }
 .track { block-size: 8px; border-radius: var(--radius-pill); background: var(--color-bg-subtle); overflow: hidden; }
-.fill { block-size: 100%; border-radius: inherit; background: var(--color-action-primary-bg); transition: inline-size var(--motion-duration-slow) ease; }
-.fill[data-unlocked="true"] { background: var(--color-savings-text); }
+.fill { display: block; inline-size: 100%; block-size: 100%; border: 0; appearance: none; background: transparent; color: var(--color-action-primary-bg); }
+.fill::-webkit-progress-bar { background: transparent; }
+.fill::-webkit-progress-value { background: var(--color-action-primary-bg); border-radius: var(--radius-pill); transition: inline-size var(--motion-duration-slow) ease; }
+.fill::-moz-progress-bar { background: var(--color-action-primary-bg); border-radius: var(--radius-pill); }
+.fill[data-unlocked="true"] { color: var(--color-savings-text); }
+.fill[data-unlocked="true"]::-webkit-progress-value { background: var(--color-savings-text); }
+.fill[data-unlocked="true"]::-moz-progress-bar { background: var(--color-savings-text); }
 .text { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-secondary); }

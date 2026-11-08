@@ -35,7 +35,8 @@ export function FreeDeliveryProgress({ subtotal, threshold, storeName, isPlus = 
         aria-valuetext={text}
         className={s.track}
       >
-        <div className={s.fill} style={{ inlineSize: `${String(Math.max(0, percent))}%` }} data-unlocked={unlocked} />
+        {/* A native <progress> keeps the fill width out of inline styles (strict CSP: no style attributes). */}
+        <progress className={s.fill} max={100} value={Math.max(0, percent)} data-unlocked={unlocked} aria-hidden="true" />
       </div>
       <p className={s.text}>{text}</p>
     </div>
