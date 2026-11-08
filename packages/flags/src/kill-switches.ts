@@ -37,6 +37,8 @@ export const KILL_SWITCHES = {
   "notifications.whatsapp.enabled": ui("WhatsApp Business messages"),
   "notifications.sms.enabled": ui("SMS messages"),
   "notifications.email.enabled": ui("Email messages"),
+  "pricing.crawler.enabled": ui("Price Watch polite crawler (off = seller-site snapshots pause; evidence degrades to plain price after 72 h)"),
+  "promotions.enabled": money("Promotions and vouchers (off = no discounts applied at quote/place)"),
   "games.enabled": ui("Light games (spin, scratch)"),
   "stylist.llm.enabled": ui("Stylist LLM features"),
   "ranking.ml.enabled": ui("ML ranking (falls back to popularity)"),
