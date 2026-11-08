@@ -11,6 +11,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint . --cache --cache-location .cache/eslint",
     "depcruise": "depcruise packages apps tooling --config .dependency-cruiser.cjs",
+    "privacy:check": "node tooling/privacy/check-data-inventory.mjs",
     "test": "vitest run --coverage",
     "sbom:generate": "pnpm sbom --sbom-format cyclonedx --lockfile-only --out sbom.cdx.json",
     "prepare": "node tooling/git-hooks/install.mjs"

@@ -35,6 +35,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm privacy:check
       # Coverage thresholds (90 percent) are enforced in vitest.config.ts; the command fails below them.
       - run: pnpm test
 

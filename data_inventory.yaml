@@ -11,7 +11,7 @@ generated: "2026-11-07"
 status: DRAFT_NOT_REVIEWED_BY_COUNSEL
 model_doc: docs/data-model.md
 controller: "Outlex operating entity in Egypt (not yet incorporated; VERIFY)"
-summary: {tables: 209, columns: 2142, personal_tables: 99, p0: 271, p1: 1643, p2: 207, p3: 21}
+summary: {tables: 219, columns: 2288, personal_tables: 105, p0: 318, p1: 1714, p2: 235, p3: 21}
 
 pii_classes:
   P0: "Public. May be cached on the CDN and projected to the global plane."
@@ -78,6 +78,8 @@ retention_rules:
   staff_access: {rule: "12 months after the staff contract ends", verify: []}
   audit_7y: {rule: "7 years (proposed), WORM copy", verify: ["V71"]}
   pii_access_2y: {rule: "24 months (proposed)", verify: ["V1"]}
+  rate_limit_7d: {rule: "7 days after the hit (sliding-window counters, purged nightly)", verify: []}
+  test_fixture_drop: {rule: "Test fixture; no retention. Drop with the migration that owns it", verify: []}
   analytics_25m: {rule: "25 months, then aggregated (master prompt B1)", verify: []}
   delivery_24m: {rule: "24 months after delivery or return closure; seller access ends 30 days after delivery", verify: []}
   returns_evidence_24m: {rule: "24 months after the return closes (proposed)", verify: ["V7"]}
@@ -418,6 +420,8 @@ tables:
       - {name: "occurred_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
       - {name: "published_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
       - {name: "attempts", type: "smallint", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "last_error", type: "text", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell, note: "error text may echo event payload fields; redact before write"}
+      - {name: "dead_lettered_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
   - name: inbox_processed
     module: kernel
     phase: "0"
@@ -450,6 +454,7 @@ tables:
       - {name: "response_body", type: "jsonb", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: idempotency_24h, processors: ["cloud_cell"], residency: cell, note: "minimal response (ids, status); never P3"}
       - {name: "locked_until", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: idempotency_24h, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: idempotency_24h, processors: ["cloud_cell"], residency: cell}
+      - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: idempotency_24h, processors: ["cloud_cell"], residency: cell}
   - name: dedup_keys
     module: kernel
     phase: "0"
@@ -581,6 +586,12 @@ tables:
       - {name: "uploaded_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["catalog_publishing", "seller_onboarding_kyc", "returns_refunds"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing", "seller_onboarding_kyc", "returns_refunds"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "deleted_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing", "seller_onboarding_kyc", "returns_refunds"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell}
+      - {name: "variants", type: "jsonb", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell}
+      - {name: "storage_key", type: "text", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell, note: "object key of an uploaded image; photos may show a person (EXIF/GPS stripped on upload)"}
+      - {name: "rejected_reason", type: "text", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell, note: "moderation reason may describe image content"}
+      - {name: "created_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: ugc_published, processors: ["cloud_cell"], residency: cell, note: "uploader account id"}
   - name: crypto_keys
     module: kernel
     phase: "0"
@@ -616,6 +627,12 @@ tables:
       - {name: "fail_mode", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
       - {name: "archived_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "enabled", type: "boolean", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "rules", type: "jsonb", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell, note: "targeting rules must not embed personal data"}
+      - {name: "version", type: "integer", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "updated_by", type: "text", pii_class: P2, encryption: none, purpose: ["staff_access", "security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell, note: "staff identifier of the person who changed the flag"}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
   - name: flag_rules
     module: flags
     phase: "0"
@@ -735,6 +752,7 @@ tables:
       - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
       - {name: "revoked_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "revoked_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
   - name: staff_sessions
     module: admin
     phase: "0"
@@ -776,6 +794,9 @@ tables:
       - {name: "reason", type: "text", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "payload", type: "jsonb", pii_class: P2, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell, note: "payload may carry refund or payout details; personal fields redacted where possible"}
+      - {name: "required_approvals", type: "integer", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "executed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
   - name: users
     module: auth
     phase: "0"
@@ -1101,6 +1122,7 @@ tables:
       - {name: "idempotency_key", type: "uuid", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: legal_obligation, retention: consent_evidence, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: legal_obligation, retention: consent_evidence, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: legal_obligation, retention: consent_evidence, processors: ["cloud_cell"], residency: cell}
+      - {name: "export_object_key", type: "text", pii_class: P2, encryption: none, purpose: ["privacy_rights"], lawful_basis: legal_obligation, retention: consent_evidence, processors: ["cloud_cell"], residency: cell, note: "object key names the export file of a data subject"}
   - name: breach_records
     module: privacy
     phase: "0"
@@ -1209,6 +1231,8 @@ tables:
       - {name: "risk_tier", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "governorate_code", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell"], residency: cell, note: "legal identity (B5 governorate)"}
+      - {name: "governorate_name_ar", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell"], residency: cell, note: "legal identity (B5 governorate)"}
   - name: seller_signatories
     module: sellers
     phase: "1"
@@ -1325,6 +1349,7 @@ tables:
       - {name: "launched_at", type: "timestamptz", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell", "global_catalog_plane", "global_edge"], residency: cell_publishable}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
   - name: store_settings
     module: sellers
     phase: "1"
@@ -1790,6 +1815,7 @@ tables:
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "deleted_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
   - name: product_categories
     module: catalog
     phase: "1"
@@ -1923,6 +1949,8 @@ tables:
       - {name: "location_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "passport_token_hash", type: "bytea", pii_class: P2, encryption: one_way_hash, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "hash of public passport token (pseudonymous under the hash rule)"}
+      - {name: "issued_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
   - name: size_charts
     module: catalog
     phase: "1"
@@ -2174,6 +2202,9 @@ tables:
       - {name: "actor_type", type: "text", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: contract, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "actor_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["price_integrity"], lawful_basis: contract, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: contract, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_ref", type: "uuid", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "evidence_ref", type: "text", pii_class: P2, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell, note: "evidence pointer; document evidence may carry invoice personal data"}
+      - {name: "source_event_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
   - name: sku_price_state
     module: price_watch
     phase: "1"
@@ -2446,6 +2477,8 @@ tables:
       - {name: "reservation_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
       - {name: "item_unit_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "defect_card_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
   - name: reservations
     module: inventory
     phase: "1"
@@ -2467,6 +2500,9 @@ tables:
       - {name: "claimed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
       - {name: "released_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "order_group_ref", type: "text", pii_class: P2, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell, note: "pseudonymous link to the shopper's order group"}
+      - {name: "state", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_ids", type: "uuid[]", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
   - name: reservation_lines
     module: inventory
     phase: "1"
@@ -2482,6 +2518,7 @@ tables:
       - {name: "location_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
       - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
       - {name: "qty", type: "smallint", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
   - name: inventory_adjustments
     module: inventory
     phase: "1"
@@ -2504,6 +2541,7 @@ tables:
       - {name: "actor_type", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "actor_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "idempotency_key", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
   - name: carts
     module: cart
     phase: "1"
@@ -3075,6 +3113,11 @@ tables:
       - {name: "occurred_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "txid", type: "xid8", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "note", type: "text", pii_class: P2, encryption: none, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "free-text reversal reason; may name a person"}
+      - {name: "chain_seq", type: "bigint", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "content_hash", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "hash of entry content (pseudonymous under the hash rule)"}
+      - {name: "prev_hash", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "hash-chain link (pseudonymous under the hash rule)"}
+      - {name: "hash", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "hash-chain value (pseudonymous under the hash rule)"}
   - name: journal_entry_keys
     module: ledger
     phase: "0"
@@ -3104,6 +3147,8 @@ tables:
       - {name: "account_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "amount_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: ledger_holds
     module: ledger
     phase: "1"
@@ -4514,3 +4559,216 @@ tables:
       - {name: "props", type: "json", pii_class: P1, encryption: none, purpose: ["analytics_product"], lawful_basis: consent, retention: analytics_25m, processors: ["analytics_warehouse"], residency: cell}
       - {name: "consent_basis", type: "text", pii_class: P1, encryption: none, purpose: ["analytics_product"], lawful_basis: consent, retention: analytics_25m, processors: ["analytics_warehouse"], residency: cell}
       - {name: "occurred_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["analytics_product"], lawful_basis: consent, retention: analytics_25m, processors: ["analytics_warehouse"], residency: cell}
+  - name: tenancy_rls_smoke
+    module: kernel
+    phase: "0"
+    residency: cell
+    tenant: "store"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    description: "Migration 0002 RLS smoke-test fixture. Must be dropped before any real data load."
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: test_fixture_drop, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: test_fixture_drop, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: test_fixture_drop, processors: ["cloud_cell"], residency: cell}
+      - {name: "note", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: test_fixture_drop, processors: ["cloud_cell"], residency: cell}
+  - name: rate_limit_hits
+    module: auth
+    phase: "0"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["visitor", "shopper"]
+    description: "Postgres rate limiter hits (sliding window), keyed by a hash of the limited identifier."
+    verify: []
+    columns:
+      - {name: "key", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["fraud_prevention"], lawful_basis: legitimate_interest, retention: rate_limit_7d, processors: ["cloud_cell"], residency: cell, note: "keyed hash of the limited identifier (phone or device); confirm in RateLimiter code"}
+      - {name: "hit_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["fraud_prevention"], lawful_basis: legitimate_interest, retention: rate_limit_7d, processors: ["cloud_cell"], residency: cell}
+  - name: retention_policies
+    module: privacy
+    phase: "0"
+    residency: global
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    description: "Retention rules executed by the nightly purge jobs; configuration only."
+    verify: ["V1"]
+    columns:
+      - {name: "code", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "table_name", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "timestamp_column", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "retain_for", type: "interval", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "action", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "verify_ref", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "note", type: "text", pii_class: P1, encryption: none, purpose: ["platform_config"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+  - name: elevation_requests
+    module: admin
+    phase: "0"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["admin_staff"]
+    description: "Just-in-time staff elevation requests (migration 0009)."
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "staff_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "role_code", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "reason", type: "text", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell, note: "free-text justification written by staff"}
+      - {name: "ttl_minutes", type: "integer", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "approved_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "decided_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "starts_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "pending_until", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: legitimate_interest, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+  - name: approval_decisions
+    module: admin
+    phase: "0"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["admin_staff"]
+    description: "Dual-approval decisions on approval_requests (migration 0009)."
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "approval_request_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "approver_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "decision", type: "text", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "note", type: "text", pii_class: P2, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell, note: "free text written by the approver"}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legitimate_interest, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+  - name: catalog_public_stores
+    module: catalog
+    phase: "1"
+    residency: cell_publishable
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    description: "Public projection of stores for the storefront and passports (migration 0010)."
+    verify: ["V7"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "market_id", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "slug", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "display_name_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "display_name_en", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "tagline_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "tagline_en", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "kind", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "status", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "verified_badge", type: "boolean", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "ships_from_country", type: "char(2)", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "followers_count", type: "int", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable, note: "count of real follows; never inflated"}
+      - {name: "discount_display_mode", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "price_trust_score", type: "smallint", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "internal score; shown only as derived badge"}
+      - {name: "legal_identity", type: "jsonb", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: legal_obligation, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "seller legal identity shown on listings by CPL 181/2018 (B5); public projection needs V7 sign-off"}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+  - name: catalog_public_listings
+    module: catalog
+    phase: "1"
+    residency: cell_publishable
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    description: "Public projection of listings (migration 0010)."
+    verify: ["V7"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "store_ref", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "market_id", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "store", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable, note: "must not embed legal_identity; VERIFY V7 projection test"}
+      - {name: "status", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_en", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "description_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "description_en", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "brand_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "brand_name", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "primary_category_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "condition_grade_code", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "condition_grade", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "stock_reason", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "colour_code", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "main_media_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "main_media_alt_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "defect_count", type: "smallint", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "min_price_minor", type: "bigint", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "currency", type: "char(3)", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "attributes", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "variants", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "defect_card", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+      - {name: "published_at", type: "timestamptz", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+  - name: sku_price_windows
+    module: price_watch
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    description: "Per-SKU 30-day low and price window used for verified-discount evidence (migration 0012)."
+    verify: []
+    columns:
+      - {name: "sku_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "current_price_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "low_30d_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "low_30d_from", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "first_seen_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "last_increase_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["price_integrity"], lawful_basis: legal_obligation, retention: price_evidence_7y, processors: ["cloud_cell"], residency: cell}
+  - name: inventory_expiry_index
+    module: inventory
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["shopper"]
+    description: "Expiry index for reservations (migration 0013); pointers only."
+    verify: []
+    columns:
+      - {name: "reservation_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_refs", type: "uuid[]", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "owner_ref", type: "uuid", pii_class: P2, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell, note: "shopper account id of the reservation owner"}
+      - {name: "expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: checkout_90d, processors: ["cloud_cell"], residency: cell}
+  - name: catalog_public_passports
+    module: catalog
+    phase: "1"
+    residency: cell_publishable
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    description: "Public product passport projection per item unit (migration 0010)."
+    verify: []
+    columns:
+      - {name: "token_hash", type: "bytea", pii_class: P2, encryption: one_way_hash, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "hash of the public passport token"}
+      - {name: "market_id", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "product_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_en", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "store_slug", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "store_name_ar", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "unit_status", type: "text", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "condition_grade", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "defect_card", type: "jsonb", pii_class: P0, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "content_hash", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "hash of passport content (pseudonymous under the hash rule)"}
+      - {name: "inspections", type: "jsonb", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "inspection notes may name the inspector; redact before publishing"}
+      - {name: "issued_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
