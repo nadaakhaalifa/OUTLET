@@ -6,6 +6,8 @@ import { brandClient } from "@outlet/db";
 import type { Queryable, RoleSqlClient, SqlClient } from "@outlet/db";
 import { createTestClient, roleClient } from "@outlet/db/testing";
 import { FlagService, InMemoryFlagStore } from "@outlet/flags";
+import { MediaService } from "@outlet/media";
+import { FakeAvScanner, HmacSigner, InMemoryStorage } from "@outlet/media/testing";
 import { PRICE_WATCH_KILL_SWITCH } from "@outlet/pricing-integrity";
 import { IdempotencyStore } from "@outlet/idempotency";
 import { createLogger } from "@outlet/logger";
@@ -13,6 +15,7 @@ import type { Principal } from "@outlet/policy";
 import { SignJWT, generateKeyPair } from "jose";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import { createApp } from "../src/app.js";
+import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "../src/modules/catalog-public/discovery-reader.js";
 import type { ApiApp, CreateAppOptions } from "../src/app.js";
@@ -180,6 +183,9 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     publicCatalog: new PublicCatalogService(catalogDeps),
     defects: new DefectService(catalogDeps),
     listings: new ListingService(catalogDeps),
+    variants: new VariantService(catalogDeps),
+    attributeSets: new AttributeSetReader({ client: appClient, marketId: DB_MARKET }),
+    media: new MediaService({ app: appClient, worker: roleClient(raw, "outlet_worker"), storage: new InMemoryStorage(), scanner: new FakeAvScanner(), signer: new HmacSigner("test"), marketId: DB_MARKET, now: () => new Date(clock.now) }),
     discovery: new DiscoveryReader({ client: appClient, marketId: DB_MARKET }),
     deals: new DealsReader({
       client: appClient,

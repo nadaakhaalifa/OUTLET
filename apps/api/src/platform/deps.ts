@@ -1,10 +1,12 @@
-import type { DefectService, ListingService, PublicCatalogService } from "@outlet/catalog";
+import type { DefectService, ListingService, PublicCatalogService, VariantService } from "@outlet/catalog";
 import type { RoleSqlClient } from "@outlet/db";
 import type { KillSwitchName } from "@outlet/flags";
 import type { BeginInput, BeginResult, StoredResponse } from "@outlet/idempotency";
 import type { Logger } from "@outlet/logger";
+import type { MediaService } from "@outlet/media";
 import type { AccessTokenVerifier, StoreMembershipPort } from "./auth-ports.js";
 import type { DealsPort } from "../modules/catalog-public/deals-reader.js";
+import type { AttributeSetPort } from "../modules/seller-catalog/index.js";
 import type { DiscoveryPort } from "../modules/catalog-public/discovery-reader.js";
 import type { Clock } from "./http.js";
 import type { RateLimiterPort } from "./rate-limit/port.js";
@@ -48,8 +50,12 @@ export interface CatalogServices {
   readonly discovery: DiscoveryPort;
   /** Verified-discount bands (Price Watch evidence; empty until history exists). */
   readonly deals: DealsPort;
-  readonly defects: Pick<DefectService, "lookupPassport">;
-  readonly listings: Pick<ListingService, "createDraft">;
+  readonly defects: Pick<DefectService, "lookupPassport" | "putDefectCard">;
+  readonly listings: Pick<ListingService, "createDraft" | "get" | "listOwn" | "readiness" | "updateDetails" | "setConditionAndMedia" | "activate">;
+  readonly variants: Pick<VariantService, "list" | "create" | "update">;
+  /** Photo ingest (sniff, AV scan, renditions). Production wiring is fail-closed until storage and the scanner are configured. */
+  readonly media: Pick<MediaService, "ingest">;
+  readonly attributeSets: AttributeSetPort;
 }
 
 /** Everything the HTTP layer needs, injected once (composition root: cli.ts in production, test/harness.ts in tests). */

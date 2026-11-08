@@ -1,6 +1,7 @@
 import { HttpException } from "@nestjs/common";
 import { AuthError } from "@outlet/auth-core";
 import { CatalogError } from "@outlet/catalog";
+import { MediaError } from "@outlet/media";
 import { ZodError } from "zod";
 import { ProblemError, Problems } from "./problem.js";
 import type { ProblemViolation } from "./problem.js";
@@ -36,6 +37,21 @@ const catalogProblem = (e: CatalogError): ProblemError => {
   }
 };
 
+const mediaProblem = (e: MediaError): ProblemError => {
+  switch (e.code) {
+    case "too_large":
+      return Problems.payloadTooLarge();
+    case "not_found":
+      return Problems.notFound();
+    case "forbidden":
+      return Problems.forbidden();
+    case "av_unavailable":
+      return Problems.unavailable("media-unavailable");
+    default:
+      return Problems.unprocessable(`media-${e.code.replaceAll("_", "-")}`, [{ path: "/body/file", code: e.code }]);
+  }
+};
+
 /**
  * Every thrown value becomes one Problem. Unknown errors are a bare 500: their message is never sent.
  * Order matters: ProblemError first (already decided), then typed domain errors, then framework errors.
@@ -43,6 +59,7 @@ const catalogProblem = (e: CatalogError): ProblemError => {
 export const toProblem = (e: unknown): ProblemError => {
   if (e instanceof ProblemError) return e;
   if (e instanceof CatalogError) return catalogProblem(e);
+  if (e instanceof MediaError) return mediaProblem(e);
   if (e instanceof AuthError) {
     if (e.code === "RATE_LIMITED") return Problems.rateLimited(e.retryAfterSeconds ?? 1);
     return e.code === "ACCESS_TOKEN_INVALID" ? Problems.unauthenticated("invalid-token") : Problems.badRequest("auth-rejected");

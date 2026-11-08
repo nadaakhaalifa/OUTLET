@@ -1,12 +1,13 @@
 import "reflect-metadata";
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { SessionService } from "@outlet/auth-core";
-import { DefectService, ListingService, PublicCatalogService } from "@outlet/catalog";
+import { DefectService, ListingService, PublicCatalogService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
 import { FlagService, PostgresFlagStore } from "@outlet/flags";
 import { IdempotencyStore } from "@outlet/idempotency";
 import { createLogger } from "@outlet/logger";
 import { listMarkets } from "@outlet/markets-config";
+import { MediaError } from "@outlet/media";
 import { initTelemetry } from "@outlet/observability";
 import { PRICE_WATCH_KILL_SWITCH } from "@outlet/pricing-integrity";
 import { Redis } from "ioredis";
@@ -15,6 +16,7 @@ import { createApp } from "./app.js";
 import { parseEnv, trustProxyList } from "./config.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
+import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SessionTokenVerifier, UnconfiguredStoreMemberships } from "./platform/auth-ports.js";
 import type { MarketTokenService } from "./platform/auth-ports.js";
 import { pgPoolOptions, pgSqlClient } from "./platform/db.js";
@@ -53,6 +55,10 @@ for (const m of listMarkets()) {
     publicCatalog: new PublicCatalogService(deps),
     defects: new DefectService(deps),
     listings: new ListingService(deps),
+    variants: new VariantService(deps),
+    attributeSets: new AttributeSetReader({ client: appClient, marketId }),
+    // Object storage and the AV scanner are provider contracts (ADR-0029): until configured, uploads fail closed with 503.
+    media: { ingest: () => Promise.reject(new MediaError("av_unavailable", "media storage is not configured")) },
     discovery: new DiscoveryReader({ client: appClient, marketId }),
     // Fail closed: an unreadable Price Watch switch counts as killed, so no band is ever shown without it.
     deals: new DealsReader({ client: appClient, marketId, now: () => new Date(), priceWatchKilled: () => killSwitches.isKilled(PRICE_WATCH_KILL_SWITCH, { marketId }).catch(() => true) }),

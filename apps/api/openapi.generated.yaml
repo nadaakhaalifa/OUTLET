@@ -1252,7 +1252,422 @@ paths:
           source: default
       x-max-queries: 2
       x-cache-control: no-store
+  /v1/{market}/seller/attribute-sets/{category_id}:
+    get:
+      operationId: getSellerAttributeSet
+      summary: Attributes (and which are required) for a category
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  attributes:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        data_type:
+                          type: string
+                          enum:
+                            - enum
+                            - text
+                            - number
+                            - boolean
+                            - size_run
+                        unit:
+                          type:
+                            - string
+                            - "null"
+                        options:
+                          maxItems: 200
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              code:
+                                type: string
+                              label_ar:
+                                type: string
+                              label_en:
+                                type:
+                                  - string
+                                  - "null"
+                            required:
+                              - code
+                              - label_ar
+                              - label_en
+                            additionalProperties: false
+                        required:
+                          type: boolean
+                      required:
+                        - code
+                        - data_type
+                        - unit
+                        - options
+                        - required
+                      additionalProperties: false
+                  defect_types:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        label_ar:
+                          type: string
+                        label_en:
+                          type:
+                            - string
+                            - "null"
+                        default_severity:
+                          type: string
+                          enum:
+                            - minor
+                            - major
+                      required:
+                        - code
+                        - label_ar
+                        - label_en
+                        - default_severity
+                      additionalProperties: false
+                required:
+                  - category_id
+                  - attributes
+                  - defect_types
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+  /v1/{market}/seller/categories:
+    get:
+      operationId: listSellerCategories
+      summary: Categories a listing can use in this market (path order)
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: parent_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        parent_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        code:
+                          type: string
+                        path:
+                          type: string
+                        depth:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        vertical:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        name_ar:
+                          type: string
+                        name_en:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - id
+                        - parent_id
+                        - code
+                        - path
+                        - depth
+                        - vertical
+                        - name
+                        - slug
+                        - name_ar
+                        - name_en
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
   /v1/{market}/seller/products:
+    get:
+      operationId: listSellerProducts
+      summary: My listings
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - DRAFT
+              - IN_REVIEW
+              - PUBLISHED
+              - PAUSED
+              - SOLD_OUT
+              - ARCHIVED
+              - BLOCKED
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                        title_ar:
+                          type:
+                            - string
+                            - "null"
+                        condition_grade_code:
+                          type:
+                            - string
+                            - "null"
+                        sku_count:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        updated_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      required:
+                        - id
+                        - status
+                        - sku_count
+                        - updated_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-paginated: keyset
     post:
       operationId: createProductDraft
       summary: Start a new listing (DRAFT)
@@ -1762,6 +2177,1826 @@ paths:
       x-idempotency:
         header: required
         mode: store
+  /v1/{market}/seller/products/{product_id}:
+    get:
+      operationId: getSellerProduct
+      summary: One listing (the body carries the `version` used as If-Match)
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - DRAFT
+                      - IN_REVIEW
+                      - PUBLISHED
+                      - PAUSED
+                      - SOLD_OUT
+                      - ARCHIVED
+                      - BLOCKED
+                  title_ar:
+                    type:
+                      - string
+                      - "null"
+                  title_en:
+                    type:
+                      - string
+                      - "null"
+                  description_ar:
+                    type:
+                      - string
+                      - "null"
+                  description_en:
+                    type:
+                      - string
+                      - "null"
+                  brand_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  primary_category_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  category_ids:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  condition_grade_code:
+                    type:
+                      - string
+                      - "null"
+                  stock_reason:
+                    type:
+                      - string
+                      - "null"
+                  defect_card:
+                    anyOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                          version:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          grade_code:
+                            type: string
+                            maxLength: 500
+                          stock_reason:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_ar:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_en:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          affects_function:
+                            type: boolean
+                          defect_count:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          inspected_by:
+                            type: string
+                            enum:
+                              - seller
+                              - hub
+                          inspected_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          published_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          items:
+                            maxItems: 50
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                defect_type_code:
+                                  type: string
+                                  maxLength: 500
+                                label_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                label_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                location_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                location_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                size_mm:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                severity:
+                                  type: string
+                                  enum:
+                                    - minor
+                                    - major
+                                affects_function:
+                                  type: boolean
+                                photo:
+                                  type: object
+                                  properties:
+                                    media_id:
+                                      type: string
+                                    url:
+                                      type: string
+                                    width:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    height:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    blurhash:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_ar:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_en:
+                                      type:
+                                        - string
+                                        - "null"
+                                  required:
+                                    - media_id
+                                    - url
+                                  additionalProperties: false
+                                hotspot_x_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                hotspot_y_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                note_ar:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                note_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                position:
+                                  type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                              required:
+                                - id
+                                - defect_type_code
+                                - label_ar
+                                - location_ar
+                                - severity
+                                - affects_function
+                                - photo
+                                - position
+                              additionalProperties: false
+                        required:
+                          - id
+                          - version
+                          - grade_code
+                          - affects_function
+                          - defect_count
+                          - inspected_by
+                          - items
+                        additionalProperties: false
+                      - type: "null"
+                  attributes:
+                    type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  colour_code:
+                    type:
+                      - string
+                      - "null"
+                  size_chart_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  warranty_months:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
+                  warranty_kind:
+                    type:
+                      - string
+                      - "null"
+                  included_accessories_ar:
+                    type:
+                      - string
+                      - "null"
+                  origin_country:
+                    type:
+                      - string
+                      - "null"
+                  media:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        role:
+                          type: string
+                          enum:
+                            - main
+                            - gallery
+                            - condition
+                            - defect
+                            - packaging
+                            - video
+                        position:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        media:
+                          type: object
+                          properties:
+                            media_id:
+                              type: string
+                            url:
+                              type: string
+                            width:
+                              anyOf:
+                                - type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            height:
+                              anyOf:
+                                - type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            blurhash:
+                              type:
+                                - string
+                                - "null"
+                            alt_ar:
+                              type:
+                                - string
+                                - "null"
+                            alt_en:
+                              type:
+                                - string
+                                - "null"
+                          required:
+                            - media_id
+                            - url
+                          additionalProperties: false
+                        defect_item_id:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - id
+                        - role
+                        - position
+                        - media
+                      additionalProperties: false
+                  skus:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        seller_sku:
+                          type:
+                            - string
+                            - "null"
+                        gtin:
+                          type:
+                            - string
+                            - "null"
+                        option_values:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        size_label:
+                          type:
+                            - string
+                            - "null"
+                        price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        status:
+                          type: string
+                        version:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - option_values
+                        - price
+                        - status
+                        - version
+                      additionalProperties: false
+                  published_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  updated_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                required:
+                  - id
+                  - status
+                  - category_ids
+                  - attributes
+                  - media
+                  - skus
+                  - updated_at
+                  - version
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 6
+    patch:
+      operationId: patchSellerProduct
+      summary: "Autosave: photos and condition, details and price in one call (If-Match = version)"
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - DRAFT
+                      - IN_REVIEW
+                      - PUBLISHED
+                      - PAUSED
+                      - SOLD_OUT
+                      - ARCHIVED
+                      - BLOCKED
+                  title_ar:
+                    type:
+                      - string
+                      - "null"
+                  title_en:
+                    type:
+                      - string
+                      - "null"
+                  description_ar:
+                    type:
+                      - string
+                      - "null"
+                  description_en:
+                    type:
+                      - string
+                      - "null"
+                  brand_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  primary_category_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  category_ids:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  condition_grade_code:
+                    type:
+                      - string
+                      - "null"
+                  stock_reason:
+                    type:
+                      - string
+                      - "null"
+                  defect_card:
+                    anyOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                          version:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          grade_code:
+                            type: string
+                            maxLength: 500
+                          stock_reason:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_ar:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_en:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          affects_function:
+                            type: boolean
+                          defect_count:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          inspected_by:
+                            type: string
+                            enum:
+                              - seller
+                              - hub
+                          inspected_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          published_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          items:
+                            maxItems: 50
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                defect_type_code:
+                                  type: string
+                                  maxLength: 500
+                                label_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                label_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                location_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                location_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                size_mm:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                severity:
+                                  type: string
+                                  enum:
+                                    - minor
+                                    - major
+                                affects_function:
+                                  type: boolean
+                                photo:
+                                  type: object
+                                  properties:
+                                    media_id:
+                                      type: string
+                                    url:
+                                      type: string
+                                    width:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    height:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    blurhash:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_ar:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_en:
+                                      type:
+                                        - string
+                                        - "null"
+                                  required:
+                                    - media_id
+                                    - url
+                                  additionalProperties: false
+                                hotspot_x_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                hotspot_y_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                note_ar:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                note_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                position:
+                                  type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                              required:
+                                - id
+                                - defect_type_code
+                                - label_ar
+                                - location_ar
+                                - severity
+                                - affects_function
+                                - photo
+                                - position
+                              additionalProperties: false
+                        required:
+                          - id
+                          - version
+                          - grade_code
+                          - affects_function
+                          - defect_count
+                          - inspected_by
+                          - items
+                        additionalProperties: false
+                      - type: "null"
+                  attributes:
+                    type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  colour_code:
+                    type:
+                      - string
+                      - "null"
+                  size_chart_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  warranty_months:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
+                  warranty_kind:
+                    type:
+                      - string
+                      - "null"
+                  included_accessories_ar:
+                    type:
+                      - string
+                      - "null"
+                  origin_country:
+                    type:
+                      - string
+                      - "null"
+                  media:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        role:
+                          type: string
+                          enum:
+                            - main
+                            - gallery
+                            - condition
+                            - defect
+                            - packaging
+                            - video
+                        position:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        media:
+                          type: object
+                          properties:
+                            media_id:
+                              type: string
+                            url:
+                              type: string
+                            width:
+                              anyOf:
+                                - type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            height:
+                              anyOf:
+                                - type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            blurhash:
+                              type:
+                                - string
+                                - "null"
+                            alt_ar:
+                              type:
+                                - string
+                                - "null"
+                            alt_en:
+                              type:
+                                - string
+                                - "null"
+                          required:
+                            - media_id
+                            - url
+                          additionalProperties: false
+                        defect_item_id:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - id
+                        - role
+                        - position
+                        - media
+                      additionalProperties: false
+                  skus:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        seller_sku:
+                          type:
+                            - string
+                            - "null"
+                        gtin:
+                          type:
+                            - string
+                            - "null"
+                        option_values:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        size_label:
+                          type:
+                            - string
+                            - "null"
+                        price:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        status:
+                          type: string
+                        version:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - option_values
+                        - price
+                        - status
+                        - version
+                      additionalProperties: false
+                  published_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  updated_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                  version:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                required:
+                  - id
+                  - status
+                  - category_ids
+                  - attributes
+                  - media
+                  - skus
+                  - updated_at
+                  - version
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.write
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 32
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                condition:
+                  type: object
+                  properties:
+                    media:
+                      minItems: 1
+                      maxItems: 20
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          media_id:
+                            type: string
+                            format: uuid
+                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                          role:
+                            type: string
+                            enum:
+                              - main
+                              - gallery
+                              - condition
+                              - packaging
+                              - video
+                          position:
+                            type: integer
+                            minimum: 0
+                            maximum: 9007199254740991
+                          alt_ar:
+                            type: string
+                          alt_en:
+                            type: string
+                        required:
+                          - media_id
+                          - role
+                          - position
+                        additionalProperties: false
+                    condition_grade_code:
+                      type: string
+                      maxLength: 500
+                    stock_reason:
+                      type: string
+                      maxLength: 500
+                  required:
+                    - media
+                    - condition_grade_code
+                  additionalProperties: false
+                details:
+                  type: object
+                  properties:
+                    title_ar:
+                      type: string
+                      minLength: 1
+                      maxLength: 500
+                    title_en:
+                      type: string
+                      maxLength: 500
+                    description_ar:
+                      type: string
+                      minLength: 1
+                      maxLength: 5000
+                    description_en:
+                      type: string
+                      maxLength: 5000
+                    brand_id:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    primary_category_id:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    category_ids:
+                      maxItems: 50
+                      type: array
+                      items:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    attributes:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                    size_chart_id:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    warranty_months:
+                      type: integer
+                      minimum: 0
+                      maximum: 9007199254740991
+                    warranty_kind:
+                      type: string
+                      enum:
+                        - seller
+                        - brand
+                        - none
+                    included_accessories_ar:
+                      type: string
+                      maxLength: 500
+                    origin_country:
+                      type: string
+                      pattern: ^[A-Z]{2}$
+                  required:
+                    - title_ar
+                    - description_ar
+                    - primary_category_id
+                    - attributes
+                  additionalProperties: false
+                price:
+                  type: object
+                  properties:
+                    seller_sku:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                    price:
+                      type: object
+                      properties:
+                        amount_minor:
+                          type: string
+                          pattern: ^-?[0-9]{1,19}$
+                        currency:
+                          type: string
+                          pattern: ^[A-Z]{3}$
+                      required:
+                        - amount_minor
+                        - currency
+                      additionalProperties: false
+                  required:
+                    - price
+                  additionalProperties: false
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/products/{product_id}/defect-cards:
+    post:
+      operationId: createSellerDefectCard
+      summary: Record the defect card (a new immutable version) for the listing's condition grade (If-Match = version)
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  defect_card:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      version:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      grade_code:
+                        type: string
+                        maxLength: 500
+                      stock_reason:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      summary_ar:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      summary_en:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      affects_function:
+                        type: boolean
+                      defect_count:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      inspected_by:
+                        type: string
+                        enum:
+                          - seller
+                          - hub
+                      inspected_at:
+                        anyOf:
+                          - type: string
+                            format: date-time
+                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                          - type: "null"
+                      published_at:
+                        anyOf:
+                          - type: string
+                            format: date-time
+                            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                          - type: "null"
+                      items:
+                        maxItems: 50
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            defect_type_code:
+                              type: string
+                              maxLength: 500
+                            label_ar:
+                              type: string
+                              minLength: 1
+                              maxLength: 500
+                            label_en:
+                              anyOf:
+                                - type: string
+                                  maxLength: 500
+                                - type: "null"
+                            location_ar:
+                              type: string
+                              minLength: 1
+                              maxLength: 500
+                            location_en:
+                              anyOf:
+                                - type: string
+                                  maxLength: 500
+                                - type: "null"
+                            size_mm:
+                              anyOf:
+                                - type: integer
+                                  minimum: 0
+                                  maximum: 9007199254740991
+                                - type: "null"
+                            severity:
+                              type: string
+                              enum:
+                                - minor
+                                - major
+                            affects_function:
+                              type: boolean
+                            photo:
+                              type: object
+                              properties:
+                                media_id:
+                                  type: string
+                                url:
+                                  type: string
+                                width:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                height:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                blurhash:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_ar:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_en:
+                                  type:
+                                    - string
+                                    - "null"
+                              required:
+                                - media_id
+                                - url
+                              additionalProperties: false
+                            hotspot_x_bp:
+                              anyOf:
+                                - type: integer
+                                  minimum: 0
+                                  maximum: 10000
+                                - type: "null"
+                            hotspot_y_bp:
+                              anyOf:
+                                - type: integer
+                                  minimum: 0
+                                  maximum: 10000
+                                - type: "null"
+                            note_ar:
+                              anyOf:
+                                - type: string
+                                  maxLength: 500
+                                - type: "null"
+                            note_en:
+                              anyOf:
+                                - type: string
+                                  maxLength: 500
+                                - type: "null"
+                            position:
+                              type: integer
+                              minimum: -9007199254740991
+                              maximum: 9007199254740991
+                          required:
+                            - id
+                            - defect_type_code
+                            - label_ar
+                            - location_ar
+                            - severity
+                            - affects_function
+                            - photo
+                            - position
+                          additionalProperties: false
+                    required:
+                      - id
+                      - version
+                      - grade_code
+                      - affects_function
+                      - defect_count
+                      - inspected_by
+                      - items
+                    additionalProperties: false
+                required:
+                  - defect_card
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.write
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 12
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary_ar:
+                  type: string
+                  maxLength: 500
+                summary_en:
+                  type: string
+                  maxLength: 500
+                affects_function:
+                  type: boolean
+                items:
+                  maxItems: 30
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      defect_type_code:
+                        type: string
+                        maxLength: 500
+                      location_ar:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                      location_en:
+                        type: string
+                        maxLength: 500
+                      size_mm:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      severity:
+                        type: string
+                        enum:
+                          - minor
+                          - major
+                      affects_function:
+                        type: boolean
+                      photo_media_id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      hotspot_media_id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      hotspot_x_bp:
+                        type: integer
+                        minimum: 0
+                        maximum: 10000
+                      hotspot_y_bp:
+                        type: integer
+                        minimum: 0
+                        maximum: 10000
+                      note_ar:
+                        type: string
+                        maxLength: 500
+                      note_en:
+                        type: string
+                        maxLength: 500
+                    required:
+                      - defect_type_code
+                      - location_ar
+                      - severity
+                      - affects_function
+                      - photo_media_id
+                    additionalProperties: false
+              required:
+                - affects_function
+                - items
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/products/{product_id}/media:
+    post:
+      operationId: uploadSellerProductMedia
+      summary: "Upload one photo (multipart: field `kind` first, then `file`; image/jpeg|png|webp|heic, up to 10 MB)"
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  media_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  kind:
+                    type: string
+                    enum:
+                      - product
+                      - defect
+                  status:
+                    type: string
+                    enum:
+                      - ready
+                      - rejected
+                      - pending_scan
+                  width:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
+                  height:
+                    anyOf:
+                      - type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      - type: "null"
+                  url:
+                    type: string
+                required:
+                  - media_id
+                  - kind
+                  - status
+                  - width
+                  - height
+                  - url
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.write
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 10
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - product
+                    - defect
+              required:
+                - kind
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/products/{product_id}/publish:
+    post:
+      operationId: publishProduct
+      summary: Publish; 409 `activation-blocked` lists every unmet requirement
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - PUBLISHED
+                      - IN_REVIEW
+                      - DRAFT
+                  blocked_reasons:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 500
+                required:
+                  - product_id
+                  - status
+                  - blocked_reasons
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.write
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_write
+          key: store
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 30
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/seller/products/{product_id}/readiness:
+    get:
+      operationId: getProductReadiness
+      summary: "Review step: what would block publishing, as reason codes"
+      tags:
+        - Seller Listings
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - PUBLISHED
+                      - IN_REVIEW
+                      - DRAFT
+                  blocked_reasons:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: string
+                      maxLength: 500
+                required:
+                  - product_id
+                  - status
+                  - blocked_reasons
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: listing.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
   /v1/{market}/stores:
     get:
       operationId: listStores

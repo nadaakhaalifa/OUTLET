@@ -83,7 +83,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const key = this.validKey(headerValue(req, "idempotency-key"));
     const actorId = req.ctx.user?.userId ?? this.deviceActor(req);
     const id = { key, actorId, route: `${req.method} ${routeTemplate(req)}` };
-    const hash = requestHash({ params: req.params ?? {}, query: req.query ?? {}, body: req.body ?? null, store: req.ctx.storeId ?? null });
+    const hash = requestHash({ params: req.params ?? {}, query: req.query ?? {}, body: req.body ?? null, store: req.ctx.storeId ?? null, upload: req.body === undefined ? (headerValue(req, "content-length") ?? null) : null });
     const begun = await this.deps.idempotency.begin({ ...id, requestHash: hash });
     switch (begun.kind) {
       case "conflict":

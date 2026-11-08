@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import multipart from "@fastify/multipart";
 import { Module } from "@nestjs/common";
 import type { DynamicModule, Type } from "@nestjs/common";
 import { APP_GUARD, APP_INTERCEPTOR, NestFactory } from "@nestjs/core";
@@ -75,6 +76,8 @@ export const createApp = async (deps: ApiDeps, opts: CreateAppOptions = {}): Pro
   fastify.addHook("onRoute", (r) => {
     for (const m of [r.method].flat()) if (m !== "HEAD" && m !== "OPTIONS") served.push(servedRouteKey(m, r.url));
   });
+  // Seller photo uploads: one file of at most 10 MB per request (MediaService re-checks the size after sniffing).
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 4, parts: 5, headerPairs: 50 } });
   app.useGlobalFilters(new ProblemFilter(deps.logger));
   await app.init();
   await fastify.ready();
