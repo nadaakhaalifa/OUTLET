@@ -1,0 +1,13 @@
+export { SEARCH_ENGINE_KILL_SWITCH, SEARCH_FTS_KILL_SWITCH } from "./ports.js";
+export type { Clock, PriceDisplay, PriceDisplayLookup, SearchKillSwitchPort } from "./ports.js";
+export { pricingDisplayLookup } from "./pricing-adapter.js";
+export { SEARCH_SYNC_CONSUMER, SYNC_EVENT_TYPES, SearchIndexSync, seqOf } from "./index-sync.js";
+export type { SyncOutcome } from "./index-sync.js";
+export { DEFAULT_PAGE, MAX_FACET_VALUES, MAX_PAGE, searchFilterSchema } from "./filters.js";
+export type { SearchFilters } from "./filters.js";
+export { InvalidCursorError } from "./cursor.js";
+export { SPONSORED_CAP, SPONSORED_SLOTS, SPONSORED_WINDOW, placeSponsored } from "./sponsored.js";
+export { STALENESS_SLO_MS, measureStaleness, outboxPendingSource } from "./staleness.js";
+export type { PendingSource, StalenessReading } from "./staleness.js";
+export { RELAX_ORDER, SearchService, SearchUnavailableError } from "./service.js";
+export type { RelaxStep, SearchDeps, SearchItem, SearchOptions, SearchPage } from "./service.js";
