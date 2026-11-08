@@ -1,3 +1,4 @@
+| [0012](0012-http-layer.md) | HTTP layer: contracts, guards, idempotency, rate limits, generated OpenAPI | Proposed (two-key) | NestJS/Fastify; @Contract Zod validation drives validation, response allow-list and OpenAPI; app refuses to start if a route lacks policy/rate-limit/contract/pagination; guard order token→policy→rate-limit→kill-switch; GCRA limits never IP-only | — |
 # Architecture decision records (ADRs)
 
 Outlex (working name; code name Outlet NK). Format: MADR (Status, Context, Options considered, Decision, Consequences, Verify-register rows, Related).
@@ -33,4 +34,3 @@ V1–V18 master prompt P2 · V19–V26 vision addendum · V27–V28 Price Watch 
 Other existing rows these ADRs also use: V47 Typesense Arabic support, V48 Cloudflare plan pricing, V56 Pantry/cosmetics/electronics rules.
 
 The register itself lives in `docs/compliance/verify-register.md` (task P0-12).
-| [ADR-0012](0012-http-layer.md) | HTTP layer: contracts, guards, idempotency, rate limits, generated OpenAPI | Proposed (two-key) |
