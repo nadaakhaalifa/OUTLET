@@ -61,7 +61,7 @@ createServer(async (req, res) => {
   res.end(JSON.stringify({ title: "not found" }));
 }).listen(3101);
 
-// ---- Shopper surface (auth, bag, checkout, orders, account): in-memory, TEST ONLY. Mirrors docs/api/openapi.yaml shapes. ----
+// ---- Shopper surface (auth, bag, checkout, orders, account): in-memory, TEST ONLY. Mirrors the SERVED API (apps/api, openapi.generated.yaml): device registration, strict bodies, UUIDv7 keys, urn problem types. ----
 function createShopperMock() {
   const ACCESS = "at-1";
   const REFRESH = "rt-1";
@@ -71,7 +71,12 @@ function createShopperMock() {
   const fresh = () => ({ qty: 1, bump: false, addresses: [], orders: new Map(), consents: { analytics: false, marketing_push: false, personalization: false }, deleteRequest: null, sessions: [{ id: "s1", device_id: "d1", platform: "web", ua_family: "Chrome", amr: ["otp"], created_at: "2026-11-01T10:00:00Z", last_seen_at: "2026-11-08T09:00:00Z", current: true }, { id: "s2", device_id: "d2", platform: "ios", ua_family: null, amr: ["otp"], created_at: "2026-10-01T10:00:00Z", last_seen_at: "2026-11-02T09:00:00Z", current: false }], checkoutBodies: [] });
   let st = fresh();
   const send = (res, status, body, headers = {}) => { for (const [k, v] of Object.entries(headers)) res.setHeader(k, v); res.statusCode = status; res.end(body === null ? "" : JSON.stringify(body)); return true; };
-  const problem = (res, status, type, extra = {}) => send(res, status, { type: `https://api.outlex.invalid/problems/${type}`, title: type, status, ...extra }, { "content-type": "application/problem+json" });
+  const problem = (res, status, type, extra = {}, headers = {}) => send(res, status, { type: `urn:outlex:problem:${type}`, title: type, status, ...extra }, { "content-type": "application/problem+json", ...headers });
+  const devices = new Set();
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const strict = (body, allowed, required) => Object.keys(body).every((k) => allowed.includes(k)) && required.every((k) => body[k] !== undefined);
+  const ageOf = (dob) => { const [y, m, d] = dob.split("-").map(Number); const n = new Date(); let a = n.getUTCFullYear() - y; if (n.getUTCMonth() + 1 < m || (n.getUTCMonth() + 1 === m && n.getUTCDate() < d)) a -= 1; return a; };
   const pair = (isNew) => ({ access_token: ACCESS, access_expires_at: new Date(Date.now() + 600_000).toISOString(), refresh_token: REFRESH, refresh_expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), token_type: "Bearer", amr: ["otp"], user_id: "0b7d1f4e-0000-4000-8000-0000000000aa", is_new_user: isNew });
   const itemsTotal = () => st.qty * 80_000 + (st.bump ? 4_000 : 0);
   const cartBody = () => ({
@@ -110,11 +115,32 @@ function createShopperMock() {
     if (!p.startsWith("/v1/eg/")) return false;
     const path = p.slice("/v1/eg/".length);
     const body = req.method === "GET" ? {} : await readBody(req);
-    if (path === "auth/age-gate") return send(res, 200, { age_gate_token: "gate-1", expires_at: new Date(Date.now() + 600_000).toISOString(), age_band: "21_plus" });
-    if (path === "auth/otp/request") return send(res, 201, { challenge_id: "0b7d1f4e-0000-4000-8000-0000000000c9", expires_at: new Date(Date.now() + 300_000).toISOString(), resend_after_s: 30, channel: "sms" }, { "x-purpose": String(body.purpose) });
-    if (path === "auth/otp/verify") return body.code === "123456" ? send(res, 200, pair(body.age_gate_token !== undefined)) : problem(res, 422, "invalid-otp");
-    if (path === "auth/refresh") return body.refresh_token === REFRESH ? send(res, 200, pair(false)) : problem(res, 401, "invalid-refresh");
-    if (path === "auth/logout") return send(res, 204, null);
+    if (path === "auth/devices") {
+      if (!strict(body, ["install_id", "platform"], ["install_id", "platform"]) || !UUID.test(body.install_id)) return problem(res, 400, "invalid-body");
+      const id = `0b7d1f4e-0000-4000-8000-${String(devices.size + 1).padStart(12, "d")}`.replace(/d/g, "0");
+      devices.add(id);
+      return send(res, 201, { device_id: id });
+    }
+    const deviceId = req.headers["x-device-id"];
+    if (/^(auth|me|cart|checkout|order-groups)(\/|$)/.test(path)) {
+      if (typeof deviceId !== "string" || !devices.has(deviceId)) return problem(res, 400, deviceId === undefined ? "device-id-required" : "invalid-device");
+    }
+    if (req.method !== "GET" && !UUID7.test(String(req.headers["idempotency-key"] ?? ""))) return problem(res, 400, "idempotency-key-invalid");
+    if (path === "auth/otp/request") {
+      if (!strict(body, ["phone_e164", "channel", "purpose"], ["phone_e164", "channel", "purpose"])) return problem(res, 400, "invalid-body");
+      if (body.phone_e164 === "+201000000429") return problem(res, 429, "rate-limited", {}, { "retry-after": "42" });
+      return send(res, 201, { challenge_id: "0b7d1f4e-0000-4000-8000-0000000000c9", expires_at: new Date(Date.now() + 300_000).toISOString(), resend_after_s: 30, channel: "sms" });
+    }
+    if (path === "auth/otp/verify") {
+      if (!strict(body, ["challenge_id", "phone_e164", "code", "dob"], ["challenge_id", "phone_e164", "code"])) return problem(res, 400, "invalid-body");
+      if (body.dob !== undefined && ageOf(body.dob) < 18) return problem(res, 403, "under-age");
+      return body.code === "123456" ? send(res, 200, pair(body.dob !== undefined)) : problem(res, 400, "otp-invalid");
+    }
+    if (path === "auth/refresh") {
+      if (!strict(body, ["refresh_token"], [])) return problem(res, 400, "invalid-body");
+      return body.refresh_token === REFRESH ? send(res, 200, pair(false)) : problem(res, 401, "refresh-rejected");
+    }
+    if (path === "auth/logout") return req.headers.authorization === `Bearer ${ACCESS}` ? send(res, 204, null) : problem(res, 401, "unauthenticated");
     if (/^(products|stores|categories|deals|village)(\/|$)/.test(path)) return false;
     if (path === "geo-areas") return send(res, 200, { items: geo[url.searchParams.get("level") ?? "governorate"] ?? [], next_cursor: null });
     if (req.headers.authorization !== `Bearer ${ACCESS}`) return problem(res, 401, "unauthenticated");

@@ -2,12 +2,12 @@ import { z } from "zod";
 import { toWire, type Money } from "@outlet/money";
 import { uuidv7 } from "./uuid7";
 import {
-  addressPageSchema, addressSchema, ageGateSchema, cartSchema, challengeSchema, checkoutResultSchema, consentListSchema, consentPageSchema, geoPageSchema, meSchema, orderGroupSchema,
+  addressPageSchema, addressSchema, cartSchema, challengeSchema, checkoutResultSchema, consentListSchema, consentPageSchema, geoPageSchema, meSchema, orderGroupSchema,
   privacyPageSchema, privacyRequestSchema, productBriefSchema, quoteSchema, sessionInfoSchema, sessionPageSchema, walletSchema,
   type Address, type Cart, type CheckoutResult, type ConsentState, type GeoArea, type OrderGroup, type PaymentMethod, type PrivacyRequest, type ProductBrief, type Quote, type SessionFamily,
 } from "./wire";
 
-/** Non-2xx answer from the API (via the BFF). `type` is the last path segment of the problem `type` URI, e.g. `price-changed`. */
+/** Non-2xx answer from the API (via the BFF). `type` is the last path segment of the problem `type` URI, e.g. `price-changed` (from `urn:outlex:problem:price-changed` or a URL). */
 export class ApiProblem extends Error {
   constructor(readonly status: number, readonly type: string, readonly retryAfterS: number | null, readonly body: unknown) {
     super(`API problem ${String(status)} ${type}`);
@@ -43,8 +43,8 @@ export interface NewAddress {
 /** Everything the shopper pages call. The browser implementation talks only to same-origin BFF routes; tests pass stubs. */
 export interface ShopperApi {
   requestOtp: (phoneE164: string, purpose: "sign_in" | "register") => Promise<Challenge>;
-  ageGate: (dob: string, attested18: boolean) => Promise<string>;
-  verifyOtp: (input: { challengeId: string; code: string; ageGateToken?: string }) => Promise<{ isNewUser: boolean }>;
+  /** `dob` is sent for new accounts; the API enforces the 18+ rule (under-age / age-blocked problems). */
+  verifyOtp: (input: { challengeId: string; phoneE164: string; code: string; dob?: string }) => Promise<{ isNewUser: boolean }>;
   passkeyOptions: () => Promise<{ challengeId: string; publicKey: Record<string, unknown> }>;
   passkeyVerify: (challengeId: string, credential: Record<string, unknown>) => Promise<{ isNewUser: boolean }>;
   logout: () => Promise<void>;
@@ -73,7 +73,7 @@ export interface ShopperApi {
 }
 
 function problemType(body: unknown): string {
-  if (typeof body === "object" && body !== null && "type" in body && typeof body.type === "string") return body.type.split("/").filter(Boolean).pop() ?? "unknown";
+  if (typeof body === "object" && body !== null && "type" in body && typeof body.type === "string") return body.type.split(/[/:]/).filter(Boolean).pop() ?? "unknown";
   return "unknown";
 }
 
@@ -112,11 +112,8 @@ export function createBrowserApi(market = "eg", doFetch: typeof fetch = (i, init
       const c = challengeSchema.parse(await auth("otp-request", { phone_e164: phone, purpose, channel: "sms" }));
       return { challengeId: c.challenge_id, resendAfterS: c.resend_after_s };
     },
-    async ageGate(dob, attested18) {
-      return ageGateSchema.parse(await auth("age-gate", { dob, attested_18: attested18 })).age_gate_token;
-    },
     async verifyOtp(i) {
-      const r = sessionInfoSchema.parse(await auth("otp-verify", { challenge_id: i.challengeId, code: i.code, ...(i.ageGateToken === undefined ? {} : { age_gate_token: i.ageGateToken }) }));
+      const r = sessionInfoSchema.parse(await auth("otp-verify", { challenge_id: i.challengeId, phone_e164: i.phoneE164, code: i.code, ...(i.dob === undefined ? {} : { dob: i.dob }) }));
       return { isNewUser: r.is_new_user };
     },
     async passkeyOptions() {

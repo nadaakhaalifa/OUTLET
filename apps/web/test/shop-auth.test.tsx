@@ -44,7 +44,7 @@ describe("LoginForm", () => {
     type(/Verification code/, "١٢٣٤٥٦");
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => { expect(navigate).toHaveBeenCalledWith("/eg-en/bag"); });
-    expect(api.verifyOtp).toHaveBeenCalledWith({ challengeId: "c1", code: "123456" });
+    expect(api.verifyOtp).toHaveBeenCalledWith({ challengeId: "c1", phoneE164: "+201012345678", code: "123456" });
   });
 
   it("rejects a bad number and a short code locally, without calling the API", async () => {
@@ -59,7 +59,7 @@ describe("LoginForm", () => {
   it("shows a wrong-code error and a rate-limit message with the Retry-After seconds", async () => {
     const api = stubApi({
       requestOtp: vi.fn().mockResolvedValue(challenge),
-      verifyOtp: vi.fn().mockRejectedValueOnce(new ApiProblem(422, "invalid-otp", null, null)).mockRejectedValueOnce(new ApiProblem(429, "too-many-requests", 120, null)),
+      verifyOtp: vi.fn().mockRejectedValueOnce(new ApiProblem(422, "invalid-otp", null, null)).mockRejectedValueOnce(new ApiProblem(429, "otp-locked", 120, null)),
     });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={{ supported: () => false, authenticate: vi.fn() }} />);
     type(/Mobile number/, "01012345678");
@@ -75,9 +75,9 @@ describe("LoginForm", () => {
     await waitFor(() => { expect(screen.getByRole("alert").textContent).toBe("Too many attempts. Try again in 120 s."); });
   });
 
-  it("registration needs a valid DOB and the 18+ attestation before any request, then sends the age-gate token", async () => {
+  it("registration needs a valid DOB and the 18+ attestation before any request, then sends dob with the phone on verify", async () => {
     const api = stubApi({
-      ageGate: vi.fn().mockResolvedValue("gate-token"), requestOtp: vi.fn().mockResolvedValue(challenge),
+      requestOtp: vi.fn().mockResolvedValue(challenge),
       verifyOtp: vi.fn().mockResolvedValue({ isNewUser: false }), listConsents: vi.fn(),
     });
     const navigate = vi.fn();
@@ -93,20 +93,19 @@ describe("LoginForm", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));
     expect((await screen.findByRole("alert")).textContent).toBe("This service is for people aged 18 and over.");
-    expect(api.ageGate).not.toHaveBeenCalled();
+    expect(api.requestOtp).not.toHaveBeenCalled();
     type(/Date of birth/, "1995-05-05");
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));
     await screen.findByLabelText(/Verification code/);
-    expect(api.ageGate).toHaveBeenCalledWith("1995-05-05", true);
     expect(api.requestOtp).toHaveBeenCalledWith("+201012345678", "register");
     type(/Verification code/, "123456");
     fireEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => { expect(navigate).toHaveBeenCalled(); });
-    expect(api.verifyOtp).toHaveBeenCalledWith({ challengeId: "c1", code: "123456", ageGateToken: "gate-token" });
+    expect(api.verifyOtp).toHaveBeenCalledWith({ challengeId: "c1", phoneE164: "+201012345678", code: "123456", dob: "1995-05-05" });
   });
 
-  it("a server age-gate demand on verify sends the shopper to the registration form", async () => {
-    const api = stubApi({ requestOtp: vi.fn().mockResolvedValue(challenge), verifyOtp: vi.fn().mockRejectedValue(new ApiProblem(422, "age-gate-required", null, null)) });
+  it("a dob-required problem on verify sends the shopper to the registration form", async () => {
+    const api = stubApi({ requestOtp: vi.fn().mockResolvedValue(challenge), verifyOtp: vi.fn().mockRejectedValue(new ApiProblem(422, "dob-required", null, null)) });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={{ supported: () => false, authenticate: vi.fn() }} />);
     type(/Mobile number/, "01012345678");
     fireEvent.click(screen.getByRole("button", { name: "Send code" }));

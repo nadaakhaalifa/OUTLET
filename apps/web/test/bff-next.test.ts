@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { liveDeps, toBffRequest, toNextResponse } from "../src/server/bff-next";
-import { COOKIE_ACCESS, COOKIE_INSTALL, COOKIE_REFRESH } from "../src/server/bff";
+import { COOKIE_ACCESS, COOKIE_DEVICE, COOKIE_INSTALL, COOKIE_REFRESH } from "../src/server/bff";
 
 const mk = (method: string, init: { headers?: Record<string, string>; body?: string } = {}) =>
   new NextRequest("https://shop.test/api/bff/eg/cart?limit=5", { method, headers: init.headers ?? {}, ...(init.body === undefined ? {} : { body: init.body }) });
@@ -14,7 +14,7 @@ describe("toBffRequest", () => {
       cookie: `${COOKIE_ACCESS}=at; ${COOKIE_REFRESH}=rt; other=zzz`,
     } }));
     expect(r).toMatchObject({ method: "POST", host: "shop.test", origin: "https://shop.test", contentType: "application/json", acceptLanguage: "ar-EG", idempotencyKey: "K", userAgent: "UA", search: "?limit=5", body: '{"a":1}' });
-    expect(r.cookies).toEqual({ [COOKIE_ACCESS]: "at", [COOKIE_REFRESH]: "rt", [COOKIE_INSTALL]: undefined });
+    expect(r.cookies).toEqual({ [COOKIE_ACCESS]: "at", [COOKIE_REFRESH]: "rt", [COOKIE_INSTALL]: undefined, [COOKIE_DEVICE]: undefined });
     expect(Object.keys(r.cookies)).not.toContain("other");
   });
   it("does not read a body for GET or HEAD and reports absent headers as null", async () => {

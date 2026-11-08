@@ -96,7 +96,6 @@ export const privacyPageSchema = page(privacyRequestSchema);
 export const meSchema = z.object({ id: uuid, phone_masked: z.string(), locale: z.enum(["ar-EG", "en-EG"]) });
 export const challengeSchema = z.object({ challenge_id: uuid, resend_after_s: z.number().int(), expires_at: z.string() });
 export const sessionInfoSchema = z.object({ user_id: uuid, is_new_user: z.boolean() });
-export const ageGateSchema = z.object({ age_gate_token: z.string() });
 
 /** Product facts the bag needs (title, size) from the public product route; the cart contract carries ids only. */
 export const productBriefSchema = z.object({

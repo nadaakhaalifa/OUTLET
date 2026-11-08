@@ -16,6 +16,10 @@ describe("buildCsp", () => {
   it("locks framing, base and forms", () => {
     for (const d of ["default-src 'self'", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "connect-src 'self'", "object-src 'none'"]) expect(csp).toContain(d);
   });
+  it("reports violations to the same-origin sink (report-uri and report-to)", () => {
+    expect(csp).toContain("report-uri /api/csp-report");
+    expect(csp).toContain("report-to csp");
+  });
   it("adds Trusted Types only behind the flag", () => {
     expect(csp).not.toContain("require-trusted-types-for");
     expect(buildCsp(nonce, { trustedTypes: true })).toContain("require-trusted-types-for 'script'");
@@ -36,6 +40,7 @@ describe("staticSecurityHeaders", () => {
     expect(h["X-Content-Type-Options"]).toBe("nosniff");
     expect(h["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
     expect(h["Cross-Origin-Opener-Policy"]).toBe("same-origin");
+    expect(h["Reporting-Endpoints"]).toBe('csp="/api/csp-report"');
   });
 });
 

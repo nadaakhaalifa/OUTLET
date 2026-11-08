@@ -1,3 +1,7 @@
+/** Same-origin violation sink (src/app/api/csp-report) and the Reporting API group name that points at it. */
+export const CSP_REPORT_PATH = "/api/csp-report";
+export const CSP_REPORT_GROUP = "csp";
+
 export interface CspOptions {
   /** Adds `require-trusted-types-for 'script'`. Off by default until every dependency is Trusted Types clean. */
   readonly trustedTypes?: boolean;
@@ -27,6 +31,8 @@ export function buildCsp(nonce: string, opts: CspOptions = {}): string {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    `report-uri ${CSP_REPORT_PATH}`,
+    `report-to ${CSP_REPORT_GROUP}`,
   ];
   if (opts.dev !== true) directives.push("upgrade-insecure-requests");
   if (opts.trustedTypes === true) directives.push("require-trusted-types-for 'script'");

@@ -55,7 +55,6 @@ export function LoginForm({ locale, next, api = browserApi(), webauthn = browser
   const [attest, setAttest] = useState(false);
   const [code, setCode] = useState("");
   const [challenge, setChallenge] = useState("");
-  const [gateToken, setGateToken] = useState<string | undefined>(undefined);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,11 +72,15 @@ export function LoginForm({ locale, next, api = browserApi(), webauthn = browser
   }, [secondsLeft]);
 
   const fail = (e: unknown, fallback: string): void => {
-    if (isProblem(e, 429)) {
-      const s = e.retryAfterS ?? 60;
+    // Decided by the problem `type` (urn:outlex:problem:<code>), not the HTTP status.
+    const problem = isProblem(e) ? e : null;
+    const type = problem?.type ?? "";
+    if (type === "rate-limited" || type === "otp-locked") {
+      const s = problem?.retryAfterS ?? 60;
       setSecondsLeft(s);
       setError(t("auth.rateLimited", { seconds: s }));
-    } else setError(fallback);
+    } else if (type === "under-age" || type === "age-blocked") setError(t("auth.underage", { age: MIN_AGE }));
+    else setError(fallback);
   };
 
   async function requestCode(): Promise<void> {
@@ -92,7 +95,6 @@ export function LoginForm({ locale, next, api = browserApi(), webauthn = browser
     setBusy(true);
     setError(null);
     try {
-      if (mode === "register") setGateToken(await api.ageGate(dob, attest));
       const c = await api.requestOtp(p, mode);
       setE164(p);
       setChallenge(c.challengeId);
@@ -100,7 +102,7 @@ export function LoginForm({ locale, next, api = browserApi(), webauthn = browser
       setStep("code");
       setCode("");
     } catch (e) {
-      fail(e, isProblem(e, 403) || isProblem(e, 422) ? t("auth.underage", { age: MIN_AGE }) : t("error.generic"));
+      fail(e, t("error.generic"));
     } finally { setBusy(false); }
   }
 
@@ -121,10 +123,10 @@ export function LoginForm({ locale, next, api = browserApi(), webauthn = browser
     setBusy(true);
     setError(null);
     try {
-      const r = await api.verifyOtp({ challengeId: challenge, code: c, ...(gateToken === undefined ? {} : { ageGateToken: gateToken }) });
+      const r = await api.verifyOtp({ challengeId: challenge, phoneE164: e164, code: c, ...(mode === "register" ? { dob } : {}) });
       await finish(r.isNewUser);
     } catch (e) {
-      if (isProblem(e) && e.type.includes("age-gate")) { setMode("register"); setStep("phone"); setError(t("auth.ageGateRequired")); }
+      if (isProblem(e) && e.type === "dob-required") { setMode("register"); setStep("phone"); setError(t("auth.ageGateRequired")); }
       else fail(e, t("auth.code.wrong"));
     } finally { setBusy(false); }
   }

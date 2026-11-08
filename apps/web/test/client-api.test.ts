@@ -60,6 +60,10 @@ describe("createBrowserApi transport", () => {
     const h = harness(() => res(200, { items_subtotal: "oops" }));
     await expect(h.api.getCart()).rejects.toThrow();
   });
+  it("reads the problem type from the served API's urn form", async () => {
+    const h = harness(() => res(403, { type: "urn:outlex:problem:under-age", status: 403 }));
+    expect(await h.api.getCart().catch((x: unknown) => x)).toMatchObject({ status: 403, type: "under-age" });
+  });
   it("surfaces 409 price-changed with the full problem body so the checkout can read body.quote", async () => {
     const problem = { type: "https://x/problems/price-changed", status: 409, quote: wireQuote({ quote_token: "qt-new" }) };
     const h = harness(() => res(409, problem));
@@ -70,25 +74,22 @@ describe("createBrowserApi transport", () => {
 });
 
 describe("createBrowserApi auth", () => {
-  it("requestOtp / ageGate / verifyOtp (with and without age-gate token) / passkeys use the auth routes", async () => {
+  it("requestOtp / verifyOtp (phone + optional dob) / passkeys use the auth routes", async () => {
     const h = harness((c) => {
       if (c.url.endsWith("otp-request")) return res(200, { challenge_id: ids.ORDER, resend_after_s: 45, expires_at: "2026-11-08T10:05:00Z" });
-      if (c.url.endsWith("age-gate")) return res(200, { age_gate_token: "agt" });
       if (c.url.endsWith("passkey-options")) return res(200, { challenge_id: "pk", public_key: { rp: "x" } });
       return res(200, sessionInfo);
     });
     expect(await h.api.requestOtp("+201012345678", "register")).toEqual({ challengeId: ids.ORDER, resendAfterS: 45 });
     expect(body(h.calls[0]!)).toEqual({ phone_e164: "+201012345678", purpose: "register", channel: "sms" });
-    expect(await h.api.ageGate("2000-01-01", true)).toBe("agt");
-    expect(body(h.calls[1]!)).toEqual({ dob: "2000-01-01", attested_18: true });
-    expect(await h.api.verifyOtp({ challengeId: "c1", code: "123456", ageGateToken: "agt" })).toEqual({ isNewUser: true });
-    expect(body(h.calls[2]!)).toEqual({ challenge_id: "c1", code: "123456", age_gate_token: "agt" });
-    await h.api.verifyOtp({ challengeId: "c1", code: "123456" });
-    expect(body(h.calls[3]!)).not.toHaveProperty("age_gate_token");
+    expect(await h.api.verifyOtp({ challengeId: "c1", phoneE164: "+201012345678", code: "123456", dob: "2000-01-01" })).toEqual({ isNewUser: true });
+    expect(body(h.calls[1]!)).toEqual({ challenge_id: "c1", phone_e164: "+201012345678", code: "123456", dob: "2000-01-01" });
+    await h.api.verifyOtp({ challengeId: "c1", phoneE164: "+201012345678", code: "123456" });
+    expect(body(h.calls[2]!)).not.toHaveProperty("dob");
     expect(await h.api.passkeyOptions()).toEqual({ challengeId: "pk", publicKey: { rp: "x" } });
-    expect(body(h.calls[4]!)).toEqual({});
+    expect(body(h.calls[3]!)).toEqual({});
     expect(await h.api.passkeyVerify("pk", { id: "cred" })).toEqual({ isNewUser: true });
-    expect(body(h.calls[5]!)).toEqual({ challenge_id: "pk", credential: { id: "cred" } });
+    expect(body(h.calls[4]!)).toEqual({ challenge_id: "pk", credential: { id: "cred" } });
   });
 });
 

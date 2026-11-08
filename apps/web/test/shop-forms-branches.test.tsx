@@ -23,7 +23,7 @@ const toCode = async (api: ReturnType<typeof stubApi>, navigate = vi.fn(), local
 
 describe("LoginForm error and recovery branches", () => {
   it("a 429 on sending the code starts the cooldown from Retry-After and shows the rate-limit message", async () => {
-    const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new ApiProblem(429, "too-many", 45, null)) });
+    const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new ApiProblem(429, "rate-limited", 45, null)) });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={noPasskey} />);
     type(/Mobile number/, "01012345678");
     click("Send code");
@@ -31,22 +31,34 @@ describe("LoginForm error and recovery branches", () => {
     expect(screen.queryByLabelText(/Verification code/)).toBeNull();
   });
   it("a 429 without Retry-After falls back to 60 seconds", async () => {
-    const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new ApiProblem(429, "too-many", null, null)) });
+    const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new ApiProblem(429, "rate-limited", null, null)) });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={noPasskey} />);
     type(/Mobile number/, "01012345678");
     click("Send code");
     expect((await screen.findByRole("alert")).textContent).toBe("Too many attempts. Try again in 60 s.");
   });
-  it.each([[403], [422]])("a %i from the server on register is shown as the under-18 rejection", async (status) => {
-    const api = stubApi({ ageGate: vi.fn().mockRejectedValue(new ApiProblem(status, "age-blocked", null, null)), requestOtp: vi.fn() });
+  it.each([["under-age"], ["age-blocked"]])("a %s problem from the server on verify is shown as the under-18 rejection", async (kind) => {
+    const api = stubApi({ requestOtp: vi.fn().mockResolvedValue({ challengeId: "c1", resendAfterS: 30 }), verifyOtp: vi.fn().mockRejectedValue(new ApiProblem(403, kind, null, null)) });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} now={NOW} webauthn={noPasskey} />);
     click("New here? Create an account");
     type(/Mobile number/, "01012345678");
     type(/Date of birth/, "1990-01-01");
     fireEvent.click(screen.getByRole("checkbox"));
     click("Send code");
+    await screen.findByLabelText(/Verification code/);
+    type(/Verification code/, "123456");
+    click("Verify");
     expect((await screen.findByRole("alert")).textContent).toBe("This service is for people aged 18 and over.");
-    expect(api.requestOtp).not.toHaveBeenCalled();
+  });
+  it("otp-locked and rate-limited problems show the Retry-After wait", async () => {
+    for (const [t, secs] of [["otp-locked", 300], ["rate-limited", 7]] as const) {
+      const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new ApiProblem(429, t, secs, null)) });
+      const { unmount } = render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={noPasskey} />);
+      type(/Mobile number/, "01012345678");
+      click("Send code");
+      expect((await screen.findByRole("alert")).textContent).toBe(`Too many attempts. Try again in ${String(secs)} s.`);
+      unmount();
+    }
   });
   it("an unexpected failure sends a generic error and keeps the form usable", async () => {
     const api = stubApi({ requestOtp: vi.fn().mockRejectedValue(new Error("network")) });
@@ -125,7 +137,7 @@ describe("LoginForm error and recovery branches", () => {
     expect(screen.queryByText("Consent analytics")).toBeNull();
   });
   it("a 429 during passkey sign-in surfaces the rate limit", async () => {
-    const api = stubApi({ passkeyOptions: vi.fn().mockRejectedValue(new ApiProblem(429, "x", 9, null)) });
+    const api = stubApi({ passkeyOptions: vi.fn().mockRejectedValue(new ApiProblem(429, "rate-limited", 9, null)) });
     render(<LoginForm locale={EN} api={api} navigate={vi.fn()} webauthn={{ supported: () => true, authenticate: vi.fn() }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Sign in with a passkey" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Too many attempts. Try again in 9 s.");
