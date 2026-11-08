@@ -203,7 +203,7 @@ CREATE POLICY outbox_events__worker_outbox_relay_update ON outbox_events FOR UPD
   USING (app.ctx() = 'worker' AND app.job() = 'outbox.relay' AND market_id = app.current_market_id())
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'outbox.relay' AND market_id = app.current_market_id());
 CREATE POLICY outbox_events__worker_emit ON outbox_events FOR INSERT TO outlet_worker
-  WITH CHECK (app.ctx() = 'worker' AND app.job() IN ('privacy.deletion', 'privacy.retention', 'outbox.relay')
+  WITH CHECK (app.ctx() = 'worker' AND app.job() IN ('privacy.deletion', 'privacy.retention', 'outbox.relay', 'seller.kyc')
               AND market_id = app.current_market_id());
 -- Request-path writers (outlet_app) keep INSERT only; the market pin is the only condition.
 CREATE POLICY outbox_events__app_insert ON outbox_events FOR INSERT TO outlet_app

@@ -15,6 +15,9 @@ export const brandClient = <R extends DbRole>(client: SqlClient): RoleSqlClient<
 
 const APP_AUTH_ONLY_TABLES = ["otp_challenges", "refresh_tokens", "age_blocks", "rate_limit_hits"] as const;
 
+/** The only store_members columns outlet_auth may SELECT (policy store_members__auth_my_memberships, migration 0015). */
+export const AUTH_STORE_MEMBERS_COLUMNS: readonly string[] = ["store_id", "user_id", "role_code", "status", "strong_auth_enrolled_at"];
+
 const exists = async (db: Queryable, table: string): Promise<boolean> => {
   const r = await db.query<{ ok: boolean }>("SELECT to_regclass($1) IS NOT NULL AS ok", [`public.${table}`]);
   return r.rows[0]?.ok === true;
@@ -75,7 +78,23 @@ export const assertRuntimeRole = async (db: Queryable, expected: DbRole): Promis
           WHERE n.nspname = 'public' AND c.relkind IN ('r','p')
             AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'store_id' AND NOT a.attisdropped)`,
       );
-      for (const x of st.rows) await deny(x.t, "SELECT,INSERT,UPDATE,DELETE");
+      for (const x of st.rows) {
+        if (x.t === "store_members") {
+          // Reviewed exception (ADR-0011 decision log, 2026-11-08): the pre-auth store switcher reads the
+          // caller's own memberships through store_members__auth_my_memberships. outlet_auth may hold
+          // column SELECT on exactly AUTH_STORE_MEMBERS_COLUMNS and nothing else on the table.
+          await deny(x.t, "INSERT,UPDATE,DELETE");
+          const cols = await db.query<{ c: string }>(
+            `SELECT a.attname AS c FROM pg_attribute a
+              WHERE a.attrelid = 'public.store_members'::regclass AND a.attnum > 0 AND NOT a.attisdropped
+                AND has_column_privilege(current_user, 'public.store_members', a.attname, 'SELECT')`,
+          );
+          const extra = cols.rows.map((c) => c.c).filter((c) => !AUTH_STORE_MEMBERS_COLUMNS.includes(c));
+          if (extra.length > 0) denied.push(`SELECT on store_members.${extra.join(",")}`);
+          continue;
+        }
+        await deny(x.t, "SELECT,INSERT,UPDATE,DELETE");
+      }
     } else {
       for (const t of ["users", "devices", "session_families"]) await deny(t, "INSERT");
     }
