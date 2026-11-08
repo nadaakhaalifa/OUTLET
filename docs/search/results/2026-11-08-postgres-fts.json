@@ -1,0 +1,48 @@
+{
+  "engine": "postgres-fts",
+  "date": "2026-11-08",
+  "docs": 5000,
+  "queries": 500,
+  "judgedQueries": 203,
+  "latencyMs": {
+    "p50": 5.461,
+    "p95": 68.983,
+    "p99": 175.247
+  },
+  "recallAt10": 0.995,
+  "ndcgAt10": 0.993,
+  "zeroResultRate": 0.088,
+  "typoHitRate": 0.958,
+  "francoHitRate": 0.982,
+  "byScript": {
+    "ar": {
+      "queries": 171,
+      "judged": 70,
+      "recallAt10": 1,
+      "ndcgAt10": 1,
+      "zeroResultRate": 0.082
+    },
+    "en": {
+      "queries": 144,
+      "judged": 57,
+      "recallAt10": 0.998,
+      "ndcgAt10": 0.993,
+      "zeroResultRate": 0.104
+    },
+    "franco": {
+      "queries": 133,
+      "judged": 56,
+      "recallAt10": 0.982,
+      "ndcgAt10": 0.982,
+      "zeroResultRate": 0.083
+    },
+    "mixed": {
+      "queries": 52,
+      "judged": 20,
+      "recallAt10": 1,
+      "ndcgAt10": 1,
+      "zeroResultRate": 0.077
+    }
+  },
+  "corpusSource": "synthetic"
+}
