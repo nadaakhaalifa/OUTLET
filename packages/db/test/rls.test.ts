@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import { applyMigrations, assertNotBypassingRls, assertTenantTablesProtected, listTenantTables, withTenant } from "../src/index.js";
-import { createTestClient } from "../src/testing.js";
+import { bootstrapTestRoles, createTestClient } from "../src/testing.js";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -9,11 +9,8 @@ const B = "22222222-2222-4222-8222-222222222222";
 /** PGlite is superuser: it bypasses RLS even when forced. Tests therefore SET ROLE to a plain role. */
 const setup = async () => {
   const { client, close } = await createTestClient();
-  await client.query("CREATE ROLE app_user NOLOGIN NOSUPERUSER NOBYPASSRLS");
-  await client.query("GRANT USAGE ON SCHEMA app TO app_user");
-  await client.query("GRANT SELECT, INSERT, UPDATE, DELETE ON tenancy_rls_smoke TO app_user");
   await client.query("INSERT INTO tenancy_rls_smoke (store_id, market_id, note) VALUES ($1,'EG','a'),($2,'EG','b')", [A, B]);
-  await client.query("SET ROLE app_user");
+  await client.query("SET ROLE outlet_app");
   return { client, close };
 };
 
@@ -83,6 +80,7 @@ describe("tenancy RLS (non-superuser role via SET ROLE)", () => {
 describe("app.enable_store_rls", () => {
   it("rejects missing tables and tables without store_id", async () => {
     const db = new PGlite();
+    await bootstrapTestRoles(db);
     await applyMigrations(db);
     await expect(db.query("SELECT app.enable_store_rls('nope')")).rejects.toThrow(/does not exist/);
     await db.exec("CREATE TABLE no_tenant (id int)");
@@ -95,11 +93,8 @@ describe("app.enable_store_rls", () => {
 describe("cross-market isolation (L7)", () => {
   it("a store id in another market is invisible and unwritable", async () => {
     const { client, close } = await createTestClient();
-    await client.query("CREATE ROLE app_user NOLOGIN NOSUPERUSER NOBYPASSRLS");
-    await client.query("GRANT USAGE ON SCHEMA app TO app_user");
-    await client.query("GRANT SELECT, INSERT ON tenancy_rls_smoke TO app_user");
     await client.query("INSERT INTO tenancy_rls_smoke (store_id, market_id, note) VALUES ($1,'EG','eg'),($1,'AE','ae')", [A]);
-    await client.query("SET ROLE app_user");
+    await client.query("SET ROLE outlet_app");
     const eg = await withTenant(client, { storeId: A, marketId: "EG" }, (tx) => tx.query<{ note: string }>("SELECT note FROM tenancy_rls_smoke"));
     expect(eg.rows).toEqual([{ note: "eg" }]);
     await expect(
@@ -128,23 +123,20 @@ describe("user isolation (M8)", () => {
       );
       await client.query("INSERT INTO session_families (id, user_id, device_id, amr, created_at) VALUES ($1,$2,$3,'{otp}',$4)", [f, u, d, ts]);
     }
-    await client.query("CREATE ROLE app_user NOLOGIN NOSUPERUSER NOBYPASSRLS");
-    await client.query("GRANT USAGE ON SCHEMA app TO app_user");
-    await client.query("GRANT SELECT, UPDATE, DELETE ON users, devices, session_families, user_identities, age_attestations TO app_user");
-    await client.query("SET ROLE app_user");
+    await client.query("SET ROLE outlet_app");
     return { client, close };
   };
 
-  it("user A cannot read user B's user row or sessions; devices are intentionally not user-RLS until 0007", async () => {
+  it("user A cannot read user B's user row, sessions or devices", async () => {
     const { client, close } = await seed();
     const a = await withTenant(client, { userId: U1, marketId: "EG" }, async (tx) => ({
       users: (await tx.query<{ id: string }>("SELECT id FROM users")).rows.map((r) => r.id),
       sessions: (await tx.query<{ id: string }>("SELECT id FROM session_families")).rows.map((r) => r.id),
     }));
     expect(a).toEqual({ users: [U1], sessions: [F1] });
-    // devices stay pre-auth reachable (ADR-0011): not RLS-forced, both rows visible
+    // 0007 forces user RLS on devices too: only the caller's device is visible
     const devs = await withTenant(client, { userId: U1, marketId: "EG" }, (tx) => tx.query<{ id: string }>("SELECT id FROM devices ORDER BY id"));
-    expect(devs.rows.map((r) => r.id)).toEqual([D1, D2]);
+    expect(devs.rows.map((r) => r.id)).toEqual([D1]);
     const upd = await withTenant(client, { userId: U1, marketId: "EG" }, (tx) => tx.query("UPDATE session_families SET revoked_at = now() WHERE id = $1 RETURNING id", [F2]));
     expect(upd.rows).toHaveLength(0);
     await close();
@@ -158,18 +150,19 @@ describe("user isolation (M8)", () => {
     await close();
   });
 
-  it("0006 forces user RLS on users, session_families, age_attestations and not on devices/consent_records", async () => {
+  it("RLS is forced on users, session_families, age_attestations, devices and consent_records (0006 + 0007)", async () => {
     const { client, close } = await createTestClient();
     const forced = await client.query<{ relname: string; f: boolean }>(
       "SELECT relname, relforcerowsecurity AS f FROM pg_class WHERE relname IN ('users','session_families','age_attestations','devices','consent_records') AND relkind = 'r'",
     );
     const m = Object.fromEntries(forced.rows.map((r) => [r.relname, r.f]));
-    expect(m).toMatchObject({ users: true, session_families: true, age_attestations: true, devices: false, consent_records: false });
+    expect(m).toMatchObject({ users: true, session_families: true, age_attestations: true, devices: true, consent_records: true });
     await close();
   });
 
   it("the migration DO block skips a table whose user_id is nullable", async () => {
     const db = new PGlite();
+    await bootstrapTestRoles(db);
     await applyMigrations(db);
     // re-run the 0006 auto-apply block against fresh tables
     await db.exec("CREATE TABLE nullable_t (user_id uuid); CREATE TABLE notnull_t (user_id uuid NOT NULL)");
@@ -184,6 +177,7 @@ describe("user isolation (M8)", () => {
 
   it("enable_user_rls rejects a missing table and a missing column", async () => {
     const db = new PGlite();
+    await bootstrapTestRoles(db);
     await applyMigrations(db);
     await expect(db.query("SELECT app.enable_user_rls('nope')")).rejects.toThrow(/does not exist/);
     await expect(db.query("SELECT app.enable_user_rls('devices', 'nope')")).rejects.toThrow(/needs a uuid/);
@@ -195,8 +189,7 @@ describe("assertNotBypassingRls (M7)", () => {
   it("throws for a superuser and passes for a plain role", async () => {
     const { client, close } = await createTestClient();
     await expect(assertNotBypassingRls(client)).rejects.toThrow(/bypasses row-level security/);
-    await client.query("CREATE ROLE app_user NOLOGIN NOSUPERUSER NOBYPASSRLS");
-    await client.query("SET ROLE app_user");
+    await client.query("SET ROLE outlet_app");
     await expect(assertNotBypassingRls(client)).resolves.toBeUndefined();
     await close();
   });

@@ -73,7 +73,7 @@ All: `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT`, no membe
 Worst case 45 server connections per PgBouncer; production rule unchanged (pools × size × instances < `max_connections`). No `SET ROLE` through the pooler, ever: role = pool.
 
 ### `assertRuntimeRole(db, expected)` (replaces `assertNotBypassingRls` at boot, per pool)
-Fails unless: `current_user = expected`; `rolsuper`, `rolbypassrls`, `rolcreaterole` all false; not a member of any role (`pg_auth_members` empty both ways); owns no relation in non-system schemas. Per role: `outlet_app` has **no** privilege on `otp_challenges`, `refresh_tokens`, `age_blocks`, `rate_limit_hits` and only INSERT on `outbox_events`; `outlet_auth` has no privilege on `outbox_events`, `privacy_requests`, store tables; `outlet_worker` has no INSERT on `users`/`devices`/`session_families`.
+Fails unless: `current_user = expected`; `rolsuper`, `rolbypassrls`, `rolcreaterole` all false; not a member of any role (`pg_auth_members` empty both ways); owns no relation in non-system schemas. Per role: `outlet_app` has **no** privilege on `otp_challenges`, `refresh_tokens`, `age_blocks`, `rate_limit_hits` and only INSERT on `outbox_events`; `outlet_auth` has INSERT only on `outbox_events` (ctx `auth`, market-pinned, for `user.registered`) and no SELECT/UPDATE/DELETE on it, and no privilege on `privacy_requests` or store tables; `outlet_worker` has no INSERT on `users`/`devices`/`session_families`.
 
 ### RLS audit changes (`rls-audit.ts`)
 Keeps the isolation-policy checks and adds: (1) every policy other than `_user_isolation`/`_store_isolation` must have `polroles` = exactly one named role (never PUBLIC), follow the naming rule, and have a qual containing `app.ctx()`; worker ones also `app.job()`. (2) No policy qual equal to `true` or missing a market pin when `market_id` exists. (3) Every `retention_policies` row whose table exists has its generated worker policy. (4) The full exception list (`table, policy, role, cmd`) is emitted and **snapshot-tested** (`packages/db/test/__snapshots__/rls-exceptions.snap`) with CODEOWNERS = security, so any new cross-user path is a reviewed diff.
@@ -98,6 +98,25 @@ None new. Managed-Postgres support for custom roles, `NOBYPASSRLS` and PgBouncer
 
 ## Related
 ADR-0001 (modular monolith, pools), ADR-0002 (cells), ADR-0006 (`market_id` everywhere), `docs/data-model.md` §2.5, §7.5; chief-review findings H1, M8 (0006).
+
+## Decision log
+
+- **2026-11-08:** `outlet_auth` gets INSERT-only on `outbox_events` (policy `outbox_events__auth_emit`, ctx `auth`, market-pinned) so auth-core can emit `user.registered` at OTP verify. Implementation deviations already made in migration 0007, recorded here for review:
+  - `outbox_events` and `dlq_messages` have FORCE RLS; `outbox_events` carries `outbox_events__app_insert` (outlet_app), `outbox_events__auth_emit` (outlet_auth) and `outbox_events__worker_emit` (outlet_worker).
+  - `consent_records__auth_visitor`: outlet_auth INSERT for visitor consent (`user_id IS NULL`).
+  - `session_families__auth_device_rebind_select` is added beside `session_families__auth_device_rebind`, so the rebind UPDATE can read the device's families.
+  - Worker grants are narrow-then-act: the worker first selects the queue or the purge set, then acts on rows through the job-scoped policies.
+  - One retention policy per table.
+
+- **2026-11-08 (chief-reviewer round 1, B/A findings):**
+  - `contextClient(client, ctx)` (production twin of the test-only `roleClient`) and `narrowContext(tx, {userId})` live in `@outlet/db`. auth-core builds one auth context per request (market pin plus phone / device / token keys) and narrows to the user as soon as the user row is found or created. `withDbContext`'s unbranded overload rejects role-branded clients (`UnbrandedSqlClient`), so the `ContextFor<R>` check cannot be bypassed.
+  - New context key `app.auth_device_hash` (`AuthKeys.deviceHash`): `age_blocks__auth_device` matches `HMAC(device, deviceId)`, which is what OtpService stores; the install hash stays for `devices`.
+  - New policy `session_families__auth_revoke_by_token` (UPDATE): a real token presented from the wrong device still revokes its family. `refresh_tokens__auth_issue` WITH CHECK now requires the family to be visible to the context (no planting tokens in another device's family).
+  - `outlet_auth` gets DELETE on `otp_challenges` (kept DELETE rather than an UPDATE of a consumed column: no such column exists and the failed-SMS rollback is pinned by a test) and SELECT on `users.phone_verified_at`.
+  - `registerDevice` is `INSERT ... ON CONFLICT (install_id_hash) DO NOTHING` plus a lookup-policy SELECT; the user binding and `last_seen_at` are written by `SessionService.issue` in the narrowed user context.
+  - `user_identities`: `outlet_auth` keeps SELECT/INSERT/UPDATE for the future Apple/Google/passkey login; auth-core does not touch it yet, and the table is user-isolated, so it is reachable only after `narrowContext`.
+  - The outbox relay must run PER MARKET (one worker context per market): relay policies pin `app.current_market_id()`.
+  - `assertRuntimeRole(outlet_app)` now also denies UPDATE/DELETE on `postings` and `journal_entries` (ledger is append-only).
 
 ## Revisit when
 The admin console needs DB access (`outlet_admin` reason-code policies, own ADR), or a worker needs cross-user access to a table not listed here (new policy + snapshot diff + security review).

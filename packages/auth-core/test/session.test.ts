@@ -37,7 +37,7 @@ describe("access tokens", () => {
       expect(await code(s.verifyAccessToken(await forge({ amr: [], sid: "x" }), T0))).toBe("ACCESS_TOKEN_INVALID");
       expect(await code(s.verifyAccessToken("garbage", T0))).toBe("ACCESS_TOKEN_INVALID");
       const own = await generateKeyPair("ES256");
-      const s2 = new SessionService(db, { issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k", privateKey: own.privateKey, publicKey: own.publicKey });
+      const s2 = new SessionService(db, { marketId: "EG", issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k", privateKey: own.privateKey, publicKey: own.publicKey });
       const badAud = await new SignJWT({ amr: [], sid: "x" }).setProtectedHeader({ alg: "ES256" }).setIssuer("https://api.outlet.test").setAudience("other").setSubject("u").setExpirationTime("10m").sign(own.privateKey);
       expect(await code(s2.verifyAccessToken(badAud))).toBe("ACCESS_TOKEN_INVALID");
       const noAmr = await new SignJWT({ sid: "x" }).setProtectedHeader({ alg: "ES256" }).setIssuer("https://api.outlet.test").setAudience("outlet-app").setSubject("u").setExpirationTime("10m").sign(own.privateKey);
@@ -133,7 +133,7 @@ describe("absolute refresh cap (M2)", () => {
   it("caps the initial refresh expiry at created_at + absoluteMaxDays", async () => {
     await withTestDb(async (db) => {
       const { privateKey, publicKey } = await generateKeyPair("ES256");
-      const s = new SessionService(db, { issuer: "i", audience: "a", kid: "k", privateKey, publicKey, absoluteMaxDays: 7 });
+      const s = new SessionService(db, { marketId: "EG", issuer: "i", audience: "a", kid: "k", privateKey, publicKey, absoluteMaxDays: 7 });
       const { userId, deviceId } = await makeUserAndDevice(db);
       const a = await s.issue(userId, deviceId, { now: T0 });
       expect(a.refreshExpiresAt.getTime()).toBe(T0.getTime() + 7 * DAY);
@@ -145,7 +145,7 @@ describe("absolute refresh cap (M2)", () => {
   it("honours a configured cap", async () => {
     await withTestDb(async (db) => {
       const { privateKey, publicKey } = await generateKeyPair("ES256");
-      const s = new SessionService(db, { issuer: "i", audience: "a", kid: "k", privateKey, publicKey, absoluteMaxDays: 10 });
+      const s = new SessionService(db, { marketId: "EG", issuer: "i", audience: "a", kid: "k", privateKey, publicKey, absoluteMaxDays: 10 });
       const { userId, deviceId } = await makeUserAndDevice(db);
       const a = await s.issue(userId, deviceId, { now: T0 });
       expect(await code(s.refresh(a.refreshToken, deviceId, at(10 * DAY)))).toBe("REFRESH_EXPIRED");
@@ -156,7 +156,7 @@ describe("absolute refresh cap (M2)", () => {
 describe("access token negatives (L2)", () => {
   const setupKeys = async (db: Parameters<Parameters<typeof withTestDb>[0]>[0]) => {
     const keys = await generateKeyPair("ES256");
-    const cfg = { issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k1", privateKey: keys.privateKey, publicKey: keys.publicKey };
+    const cfg = { marketId: "EG", issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k1", privateKey: keys.privateKey, publicKey: keys.publicKey };
     return { keys, s: new SessionService(db, cfg), cfg };
   };
   const nowS = Math.floor(T0.getTime() / 1000);

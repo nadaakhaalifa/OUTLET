@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { contextClient, narrowContext } from "@outlet/db";
 import type { SqlClient } from "@outlet/db";
 import { uuidv7 } from "@outlet/ids";
 import { SignJWT, jwtVerify } from "jose";
@@ -12,6 +13,8 @@ export const DEFAULT_ABSOLUTE_MAX_DAYS = 90;
 export type Amr = "otp" | "apple" | "google" | "passkey";
 
 export interface SessionConfig {
+  /** Market this service instance runs in; it pins the database context (ADR-0011). */
+  readonly marketId: string;
   readonly issuer: string;
   readonly audience: string;
   readonly kid: string;
@@ -66,6 +69,19 @@ type Tx = Parameters<Parameters<SqlClient["transaction"]>[0]>[0];
 export class SessionService {
   constructor(private readonly db: SqlClient, private readonly cfg: SessionConfig) {}
 
+  /** Auth-role context for this market with the given lookup keys (and optionally the known user). */
+  private scoped(auth: { deviceId?: string; tokenHash?: Buffer }, userId?: string): SqlClient {
+    return contextClient(this.db, {
+      kind: "auth",
+      marketId: this.cfg.marketId,
+      ...(userId !== undefined ? { userId } : {}),
+      auth: {
+        ...(auth.deviceId !== undefined ? { deviceId: auth.deviceId } : {}),
+        ...(auth.tokenHash !== undefined ? { tokenHash: auth.tokenHash.toString("hex") } : {}),
+      },
+    });
+  }
+
   private async signAccess(userId: string, familyId: string, amr: readonly string[], now: Date): Promise<{ jwt: string; exp: Date }> {
     const iat = Math.floor(now.getTime() / 1000);
     const jwt = await new SignJWT({ amr: [...amr], sid: familyId })
@@ -87,7 +103,9 @@ export class SessionService {
     const rt = newRefreshToken();
     const absoluteEnd = now.getTime() + (this.cfg.absoluteMaxDays ?? DEFAULT_ABSOLUTE_MAX_DAYS) * 86_400_000;
     const refreshExpiresAt = new Date(Math.min(now.getTime() + REFRESH_TTL_MS, absoluteEnd));
-    await this.db.transaction(async (tx) => {
+    await this.scoped({ deviceId }).transaction(async (tx) => {
+      // The user is known (the caller verified them): bind it, then act. The device filter keeps the new family visible.
+      await narrowContext(tx, { userId });
       await tx.query(
         "INSERT INTO session_families (id, user_id, device_id, amr, created_at) VALUES ($1,$2,$3,$4,$5)",
         [familyId, userId, deviceId, amr, now.toISOString()],
@@ -106,7 +124,7 @@ export class SessionService {
   /** Rotates the refresh token. A token that was already used revokes the whole family. */
   async refresh(token: string, deviceId: string, now: Date = new Date()): Promise<IssuedSession> {
     const hash = sha256(token);
-    const outcome = await this.db.transaction(async (tx: Tx): Promise<
+    const outcome = await this.scoped({ deviceId, tokenHash: hash }).transaction(async (tx: Tx): Promise<
       { kind: "err"; code: "REFRESH_INVALID" | "REFRESH_EXPIRED" | "REFRESH_REUSE" | "SESSION_REVOKED" } | { kind: "ok"; userId: string; amr: string[]; familyId: string; exp: Date; rt: string }
     > => {
       const r = await tx.query<Row>(
@@ -117,6 +135,7 @@ export class SessionService {
       );
       const row = r.rows[0];
       if (!row) return { kind: "err", code: "REFRESH_INVALID" };
+      await narrowContext(tx, { userId: row.user_id });
       if (row.device_id !== deviceId) {
         // A real token on the wrong device means the token leaked: kill the family, answer opaquely.
         await this.revokeFamily(tx, row.family_id, "reuse_detected", now);
@@ -156,7 +175,7 @@ export class SessionService {
 
   /** Idempotent logout. Scoped to the owner so one user cannot revoke another's session. */
   async revoke(sessionId: string, userId: string, now: Date = new Date()): Promise<boolean> {
-    const r = await this.db.query(
+    const r = await this.scoped({}, userId).query(
       "UPDATE session_families SET revoked_at = $3, revoke_reason = 'logout' WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id",
       [sessionId, userId, now.toISOString()],
     );
@@ -164,7 +183,7 @@ export class SessionService {
   }
 
   async listSessions(userId: string): Promise<SessionSummary[]> {
-    const r = await this.db.query<{ id: string; device_id: string; amr: string[]; created_at: Date }>(
+    const r = await this.scoped({}, userId).query<{ id: string; device_id: string; amr: string[]; created_at: Date }>(
       "SELECT id, device_id, amr, created_at FROM session_families WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC",
       [userId],
     );

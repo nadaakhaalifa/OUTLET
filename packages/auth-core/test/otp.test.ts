@@ -47,7 +47,7 @@ describe("OtpService.request", () => {
 
   it("allows 10 per device per day and blocks the 11th (Postgres limiter)", async () => {
     await withTestDb(async (db) => {
-      const { req } = await setup(db, new PgRateLimiter(db));
+      const { req } = await setup(db, new PgRateLimiter(db, "EG"));
       for (let i = 0; i < 10; i++) await req(`+2010000000${String(i).padStart(2, "0")}`, at(i * 1000));
       expect(await code(req("+201000000099", at(11_000)))).toBe("RATE_LIMITED");
       await expect(req("+201000000099", at(24 * 3600_000 + 20_000))).resolves.toBeDefined();
@@ -56,7 +56,7 @@ describe("OtpService.request", () => {
 
   it("Postgres limiter applies the per-phone cap too", async () => {
     await withTestDb(async (db) => {
-      const { req } = await setup(db, new PgRateLimiter(db));
+      const { req } = await setup(db, new PgRateLimiter(db, "EG"));
       for (let i = 0; i < 3; i++) await req(PHONE, at(i));
       expect(await code(req(PHONE, at(10)))).toBe("RATE_LIMITED");
     });
@@ -108,7 +108,7 @@ describe("device binding (H1)", () => {
       const { sms, svc, req } = await setup(db);
       const c = await req();
       const other = await registerDevice(db, hasher, { marketId: "EG", platform: "ios", installId: "i2", now: T0 });
-      expect(await code(svc.verify({ deviceId: other, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) }))).toBe("INVALID_DEVICE");
+      expect(await code(svc.verify({ marketId: "EG", deviceId: other, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) }))).toBe("INVALID_DEVICE");
       const a = await db.query<{ attempts: number }>("SELECT attempts FROM otp_challenges WHERE id=$1", [c.challengeId]);
       expect(a.rows[0]?.attempts).toBe(1);
       expect((await db.query("SELECT 1 FROM users")).rows).toHaveLength(0);
@@ -119,7 +119,7 @@ describe("device binding (H1)", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2012-01-01", now: at(1000) }))).toBe("UNDER_AGE");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2012-01-01", now: at(1000) }))).toBe("UNDER_AGE");
       // a random device id never reaches the age check: the request is refused outright
       expect(await code(req("+201002222222", at(2000), "0197c0de-0000-7000-8000-00000000beef"))).toBe("INVALID_DEVICE");
     });
@@ -138,7 +138,7 @@ describe("per-market phone shape (M9) and retry hint (L4)", () => {
   });
 
   it("RATE_LIMITED carries retryAfterSeconds from both limiters", async () => {
-    for (const mk of [() => new InMemoryRateLimiter(), (db: Parameters<Parameters<typeof withTestDb>[0]>[0]) => new PgRateLimiter(db)]) {
+    for (const mk of [() => new InMemoryRateLimiter(), (db: Parameters<Parameters<typeof withTestDb>[0]>[0]) => new PgRateLimiter(db, "EG")]) {
       await withTestDb(async (db) => {
         const { req } = await setup(db, mk(db));
         for (let i = 0; i < 3; i++) await req(PHONE, at(i * 1000));
@@ -171,7 +171,7 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c1 = await req();
-      const u1 = await svc.verify({ deviceId, challengeId: c1.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) });
+      const u1 = await svc.verify({ marketId: "EG", deviceId, challengeId: c1.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) });
       expect(u1.isNew).toBe(true);
       const row = await db.query<{ phone_ct: Buffer; phone_bidx: Buffer; age_band: string; limited_capacity: boolean }>("SELECT * FROM users WHERE id=$1", [u1.userId]);
       expect(row.rows[0]?.age_band).toBe("21_plus");
@@ -179,7 +179,7 @@ describe("OtpService.verify", () => {
       expect(await deps.cipher.decrypt(row.rows[0]?.phone_ct ?? new Uint8Array(), "users.phone_ct")).toBe(PHONE);
       expect(Buffer.from(row.rows[0]?.phone_bidx ?? []).equals(hasher.hmac("phone", `EG:${PHONE}`))).toBe(true);
       const c2 = await req(PHONE, at(60_000));
-      const u2 = await svc.verify({ deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(61_000) });
+      const u2 = await svc.verify({ marketId: "EG", deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(61_000) });
       expect(u2).toMatchObject({ userId: u1.userId, isNew: false });
     });
   });
@@ -188,7 +188,7 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      const u = await svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2006-01-01", now: at(1000) });
+      const u = await svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2006-01-01", now: at(1000) });
       const r = await db.query<{ limited_capacity: boolean; age_band: string }>("SELECT limited_capacity, age_band FROM users WHERE id=$1", [u.userId]);
       expect(r.rows[0]).toEqual({ limited_capacity: true, age_band: "18_20" });
     });
@@ -198,8 +198,8 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), now: at(1) }))).toBe("DOB_REQUIRED");
-      await expect(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(2) })).resolves.toBeDefined();
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), now: at(1) }))).toBe("DOB_REQUIRED");
+      await expect(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(2) })).resolves.toBeDefined();
     });
   });
 
@@ -209,9 +209,9 @@ describe("OtpService.verify", () => {
       const c = await req();
       const wrong = sms.last() === "000000" ? "111111" : "000000";
       for (let i = 0; i < 5; i++) {
-        expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: wrong, dob: DOB_ADULT, now: at(i) }))).toBe("OTP_INVALID");
+        expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: wrong, dob: DOB_ADULT, now: at(i) }))).toBe("OTP_INVALID");
       }
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(9) }))).toBe("OTP_LOCKED");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(9) }))).toBe("OTP_LOCKED");
     });
   });
 
@@ -220,11 +220,11 @@ describe("OtpService.verify", () => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
       const good = sms.last();
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(300_000) }))).toBe("OTP_EXPIRED");
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: "+201111111111", code: good, dob: DOB_ADULT, now: at(1) }))).toBe("OTP_NOT_FOUND");
-      expect(await code(svc.verify({ deviceId, challengeId: "0197c0de-0000-7000-8000-000000000001", phoneE164: PHONE, code: good, now: at(1) }))).toBe("OTP_NOT_FOUND");
-      await svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(2) });
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(3) }))).toBe("OTP_CONSUMED");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(300_000) }))).toBe("OTP_EXPIRED");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: "+201111111111", code: good, dob: DOB_ADULT, now: at(1) }))).toBe("OTP_NOT_FOUND");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: "0197c0de-0000-7000-8000-000000000001", phoneE164: PHONE, code: good, now: at(1) }))).toBe("OTP_NOT_FOUND");
+      await svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(2) });
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: good, dob: DOB_ADULT, now: at(3) }))).toBe("OTP_CONSUMED");
     });
   });
 
@@ -232,13 +232,13 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      const u = await svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1) });
+      const u = await svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1) });
       await db.query("UPDATE users SET status='deletion_pending' WHERE id=$1", [u.userId]);
       const c2 = await req(PHONE, at(1000));
-      expect(await svc.verify({ deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(2000) })).toMatchObject({ userId: u.userId });
+      expect(await svc.verify({ marketId: "EG", deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(2000) })).toMatchObject({ userId: u.userId });
       await db.query("UPDATE users SET status='deleted' WHERE id=$1", [u.userId]);
       const c3 = await req(PHONE, at(70_000));
-      expect(await code(svc.verify({ deviceId, challengeId: c3.challengeId, phoneE164: PHONE, code: sms.last(), now: at(71_000) }))).toBe("OTP_NOT_FOUND");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c3.challengeId, phoneE164: PHONE, code: sms.last(), now: at(71_000) }))).toBe("OTP_NOT_FOUND");
     });
   });
 
@@ -247,7 +247,7 @@ describe("OtpService.verify", () => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
       await db.query("UPDATE devices SET revoked_at = $2 WHERE id = $1", [deviceId, at(500).toISOString()]);
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) }))).toBe("INVALID_DEVICE");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1000) }))).toBe("INVALID_DEVICE");
     });
   });
 
@@ -255,10 +255,10 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      const u = await svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1) });
+      const u = await svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: DOB_ADULT, now: at(1) });
       await db.query("UPDATE users SET status='suspended' WHERE id=$1", [u.userId]);
       const c2 = await req(PHONE, at(1000));
-      expect(await code(svc.verify({ deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(2000) }))).toBe("OTP_NOT_FOUND");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c2.challengeId, phoneE164: PHONE, code: sms.last(), now: at(2000) }))).toBe("OTP_NOT_FOUND");
     });
   });
 
@@ -266,7 +266,7 @@ describe("OtpService.verify", () => {
     await withTestDb(async (db) => {
       const { sms, svc, req, deviceId } = await setup(db);
       const c = await req();
-      expect(await code(svc.verify({ deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2012-01-01", now: at(1000) }))).toBe("UNDER_AGE");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c.challengeId, phoneE164: PHONE, code: sms.last(), dob: "2012-01-01", now: at(1000) }))).toBe("UNDER_AGE");
       expect((await db.query("SELECT 1 FROM users")).rows).toHaveLength(0);
       expect((await db.query("SELECT 1 FROM age_attestations")).rows).toHaveLength(0);
       const b = await db.query("SELECT * FROM age_blocks");
@@ -275,11 +275,11 @@ describe("OtpService.verify", () => {
       expect(JSON.stringify(b.rows[0])).not.toContain("2012");
       // retry with a different, adult dob on the same device within 30 days is blocked
       const c2 = await req("+201002222222", at(2000));
-      expect(await code(svc.verify({ deviceId, challengeId: c2.challengeId, phoneE164: "+201002222222", code: sms.last(), dob: DOB_ADULT, now: at(3000) }))).toBe("AGE_BLOCKED");
+      expect(await code(svc.verify({ marketId: "EG", deviceId, challengeId: c2.challengeId, phoneE164: "+201002222222", code: sms.last(), dob: DOB_ADULT, now: at(3000) }))).toBe("AGE_BLOCKED");
       // after the block it works
       const later = at(31 * 24 * 3600_000);
       const c3 = await req("+201002222222", later);
-      await expect(svc.verify({ deviceId, challengeId: c3.challengeId, phoneE164: "+201002222222", code: sms.last(), dob: DOB_ADULT, now: at(31 * 24 * 3600_000 + 1000) })).resolves.toMatchObject({ isNew: true });
+      await expect(svc.verify({ marketId: "EG", deviceId, challengeId: c3.challengeId, phoneE164: "+201002222222", code: sms.last(), dob: DOB_ADULT, now: at(31 * 24 * 3600_000 + 1000) })).resolves.toMatchObject({ isNew: true });
     });
   });
 });

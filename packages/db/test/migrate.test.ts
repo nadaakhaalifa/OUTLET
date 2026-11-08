@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import { applyMigrations, loadMigrations } from "../src/index.js";
-import { withTestDb } from "../src/testing.js";
+import { bootstrapTestRoles, withTestDb } from "../src/testing.js";
 
 describe("migrations", () => {
   it("loads the shipped migrations in order", async () => {
@@ -14,6 +14,7 @@ describe("migrations", () => {
 
   it("is idempotent: second run applies nothing", async () => {
     const db = new PGlite();
+    await bootstrapTestRoles(db);
     expect((await applyMigrations(db)).slice(0, 2)).toEqual(["0001_outbox_inbox_idempotency", "0002_tenancy_rls"]);
     expect(await applyMigrations(db)).toEqual([]);
     await db.close();

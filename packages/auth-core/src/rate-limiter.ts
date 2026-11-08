@@ -1,3 +1,4 @@
+import { contextClient } from "@outlet/db";
 import type { SqlClient } from "@outlet/db";
 import type { RateLimiter } from "./ports.js";
 
@@ -16,11 +17,17 @@ export class InMemoryRateLimiter implements RateLimiter {
   }
 }
 
-/** Postgres-backed limiter (table rate_limit_hits). An advisory lock per key serialises check+insert. */
+/**
+ * Postgres-backed limiter (table rate_limit_hits). An advisory lock per key serialises check+insert.
+ * Runs in an auth context for `marketId` (rate_limit_hits is auth-only under RLS; ADR-0011).
+ */
 export class PgRateLimiter implements RateLimiter {
-  constructor(private readonly db: SqlClient) {}
+  private readonly scoped: SqlClient;
+  constructor(db: SqlClient, marketId: string) {
+    this.scoped = contextClient(db, { kind: "auth", marketId });
+  }
   hit(key: string, limit: number, windowMs: number, now: Date): Promise<{ allowed: boolean; remaining: number; retryAfterMs?: number }> {
-    return this.db.transaction(async (tx) => {
+    return this.scoped.transaction(async (tx) => {
       await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [key]);
       const since = new Date(now.getTime() - windowMs);
       const r = await tx.query<{ n: string; oldest: Date | null }>(

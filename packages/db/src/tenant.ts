@@ -1,24 +1,19 @@
+import { withDbContext } from "./context.js";
 import type { Queryable, SqlClient } from "./sql.js";
 
 export interface TenantContext {
   readonly marketId: string;
-  /** Binds app.current_store_id; omit for user-scoped work. */
+  /** Binds app.current_store_id (kind 'store'); omit for user-scoped work. */
   readonly storeId?: string;
   /** Binds app.current_user_id; omit for store-scoped work. */
   readonly userId?: string;
 }
 
 /**
- * Runs fn in one transaction with the tenant bound via set_config(..., true)
- * (transaction-local, parameterised; the equivalent of SET LOCAL). The settings
- * disappear at commit or rollback, so pooled connections never leak a tenant.
- * An omitted id is bound to '' (read as NULL by app.current_*_id()), never inherited.
+ * Thin wrapper over withDbContext for the request path: kind 'store' when a storeId is given, else 'user'.
+ * Settings are transaction-local; an omitted id is bound to '' (read as NULL), never inherited.
  */
 export const withTenant = <T>(client: SqlClient, ctx: TenantContext, fn: (tx: Queryable) => Promise<T>): Promise<T> =>
-  client.transaction(async (tx) => {
-    await tx.query(
-      "SELECT set_config('app.current_store_id', $1, true), set_config('app.current_market_id', $2, true), set_config('app.current_user_id', $3, true)",
-      [ctx.storeId ?? "", ctx.marketId, ctx.userId ?? ""],
-    );
-    return fn(tx);
-  });
+  ctx.storeId !== undefined
+    ? withDbContext(client, { kind: "store", marketId: ctx.marketId, storeId: ctx.storeId, ...(ctx.userId !== undefined ? { userId: ctx.userId } : {}) }, fn)
+    : withDbContext(client, { kind: "user", marketId: ctx.marketId, ...(ctx.userId !== undefined ? { userId: ctx.userId } : {}) }, fn);

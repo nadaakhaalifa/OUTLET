@@ -26,7 +26,7 @@ export class FakeSms implements SmsSender {
 
 export const makeSessions = async (db: SqlClient): Promise<SessionService> => {
   const { privateKey, publicKey } = await generateKeyPair("ES256");
-  return new SessionService(db, { issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k1", privateKey, publicKey });
+  return new SessionService(db, { marketId: "EG", issuer: "https://api.outlet.test", audience: "outlet-app", kid: "k1", privateKey, publicKey });
 };
 
 export const makeUserAndDevice = async (db: SqlClient, n = 1): Promise<{ userId: string; deviceId: string }> => {

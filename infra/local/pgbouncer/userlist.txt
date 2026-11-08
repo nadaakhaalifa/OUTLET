@@ -1,2 +1,4 @@
 "outlet_app" "app_local_only"
+"outlet_auth" "auth_local_only"
+"outlet_worker" "worker_local_only"
 "outlet_migrator" "migrator_local_only"

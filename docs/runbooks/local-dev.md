@@ -29,6 +29,9 @@ pgvector is not in the Postgres image, so it is not enabled. Add it (custom imag
 
 ## Rules
 - Migrations use `DATABASE_URL_DIRECT` (migrator). The app uses `DATABASE_URL` via PgBouncer.
+- Roles (ADR-0011): `outlet_app` (request path, pools `outlet_catalog` 20 and `outlet_checkout` 10+5), `outlet_auth` (`/v1/auth/*`, `DATABASE_URL_AUTH`, pool `outlet_auth` 5), `outlet_worker` (workers and outbox relay, `DATABASE_URL_WORKER`, pool `outlet_worker` 5). Role = pool: each alias pins `user=` in `pgbouncer.ini`; never `SET ROLE` through the pooler. Roles are created by `postgres/init/001-roles.sql` (IaC in real cells); migration 0007 fails with a clear message if one is missing. After pulling 0007 on an existing volume, run `infra/local/scripts/reset.sh` so the new roles and pool aliases exist.
+- Every transaction sets its context with `withDbContext` (`packages/db`): `app.ctx` (user|store|auth|worker), `app.job`, market, user/store and the auth lookup keys, all via `set_config(..., true)`.
+- Inspect a role: `infra/local/scripts/psql.sh auth -c "select current_user"` (also `worker`).
 - Always `SET LOCAL` inside a transaction (session settings leak in transaction pooling). See `pgbouncer/pgbouncer.ini`.
 
 ## Fallback without Docker: Postgres.app
