@@ -7,6 +7,7 @@ settings:
 overrides:
   minimatch@<11.0.1: 11.0.1
   fastify@<5.12.6: 5.12.6
+  qs@<6.16.1: 6.16.1
 
 importers:
 
@@ -51,6 +52,58 @@ importers:
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+
+  apps/admin:
+    dependencies:
+      '@outlet/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      '@outlet/money':
+        specifier: workspace:*
+        version: link:../../packages/money
+      '@outlet/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@outlet/ui-tokens':
+        specifier: workspace:*
+        version: link:../../packages/ui-tokens
+      next:
+        specifier: 16.4.3
+        version: 16.4.3(@babel/core@7.29.7(supports-color@7.2.0))(@opentelemetry/api@1.10.0)(@playwright/test@1.64.1)(@types/node@26.6.6)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.3.1
+        version: 19.3.1(react@19.3.1)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@outlet/admin-access':
+        specifier: workspace:*
+        version: link:../../packages/admin-access
+      '@playwright/test':
+        specifier: 1.64.1
+        version: 1.64.1
+      '@testing-library/dom':
+        specifier: ^10.4.2
+        version: 10.4.2
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      axe-core:
+        specifier: 4.14.0
+        version: 4.14.0
+      jsdom:
+        specifier: ^30.1.3
+        version: 30.1.3
 
   apps/api:
     dependencies:
@@ -108,6 +161,12 @@ importers:
       '@outlet/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@outlet/orders':
+        specifier: workspace:*
+        version: link:../../packages/orders
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../../packages/outbox
       '@outlet/policy':
         specifier: workspace:*
         version: link:../../packages/policy
@@ -117,6 +176,9 @@ importers:
       '@outlet/seller-accounts':
         specifier: workspace:*
         version: link:../../packages/seller-accounts
+      '@outlet/shipping':
+        specifier: workspace:*
+        version: link:../../packages/shipping
       '@outlet/tax':
         specifier: workspace:*
         version: link:../../packages/tax
@@ -391,6 +453,9 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.3.16
         version: 0.3.16
+      '@outlet/payouts':
+        specifier: workspace:*
+        version: link:../payouts
 
   packages/db:
     devDependencies:
@@ -519,6 +584,36 @@ importers:
         version: 0.35.5(@types/node@26.6.6)
 
   packages/money: {}
+
+  packages/notifications:
+    dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
+      '@outlet/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@outlet/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@outlet/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@outlet/money':
+        specifier: workspace:*
+        version: link:../money
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../outbox
+      '@outlet/privacy':
+        specifier: workspace:*
+        version: link:../privacy
+      intl-messageformat:
+        specifier: ^12.1.4
+        version: 12.1.4
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
   packages/observability:
     dependencies:
@@ -675,9 +770,37 @@ importers:
       '@outlet/outbox':
         specifier: workspace:*
         version: link:../outbox
+      '@outlet/payouts':
+        specifier: workspace:*
+        version: link:../payouts
       '@outlet/policy':
         specifier: workspace:*
         version: link:../policy
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.3.16
+        version: 0.3.16
+
+  packages/search:
+    dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
+      '@outlet/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../outbox
+      '@outlet/pricing-integrity':
+        specifier: workspace:*
+        version: link:../pricing-integrity
+      '@outlet/search-bakeoff':
+        specifier: workspace:*
+        version: link:../search-bakeoff
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -3164,8 +3287,8 @@ packages:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
 
-  qs@6.15.1:
-    resolution: {integrity: sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg==}
+  qs@6.16.1:
+    resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
     engines: {node: '>=0.6'}
 
   quick-format-unescaped@4.0.4:
@@ -6119,8 +6242,9 @@ snapshots:
     dependencies:
       hookified: 2.2.0
 
-  qs@6.15.1:
+  qs@6.16.1:
     dependencies:
+      es-define-property: 1.0.1
       side-channel: 1.1.1
 
   quick-format-unescaped@4.0.4: {}
@@ -6430,7 +6554,7 @@ snapshots:
     dependencies:
       des.js: 1.1.0
       js-md4: 0.3.2
-      qs: 6.15.1
+      qs: 6.16.1
       tunnel: 0.0.6
       underscore: 1.13.8
 

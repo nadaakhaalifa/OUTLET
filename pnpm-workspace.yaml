@@ -13,3 +13,5 @@ overrides:
   "minimatch@<11.0.1": "11.0.1"
   # 7 fastify advisories (4 high) in 5.11.3; OSV gate
   "fastify@<5.12.6": "5.12.6"
+  # 4 qs advisories (medium) in 6.15.1 via dev/transitive deps; OSV gate
+  "qs@<6.16.1": "6.16.1"

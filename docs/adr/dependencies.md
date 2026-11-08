@@ -154,3 +154,4 @@ Workspace-only additions to apps/api: `@outlet/cart`, `@outlet/checkout`, `@outl
 | @stryker-mutator/vitest-runner 9.6.1 (root, dev, exact pin) | Vitest runner plugin for StrykerJS (peer of core 9.6.1) | 2019-12 | Apache-2.0 |
 
 9.6.1 (2026-04-10) is pinned instead of 10.x (10.0.0 is from 2026-08-14, under the 90-day rule). Both are dev-only and add no runtime dependency.
+| qs (override to 6.16.1) | fixes GHSA-4mjr-xmp4-gh2g, 6pq8-jhm2-2vcw, q8mj-m7cp-5q26, x5fp-wj9c-mxmx (transitive) | 2014-01 | BSD-3-Clause |

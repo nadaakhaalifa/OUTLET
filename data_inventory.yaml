@@ -4487,6 +4487,8 @@ tables:
       - {name: "provider_template_name", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
       - {name: "approval_status", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
+      - {name: "title", type: "text", pii_class: P0, encryption: none, purpose: ["transactional_comms"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global, note: "push title / email subject; no personal data"}
+      - {name: "active", type: "boolean", pii_class: P1, encryption: none, purpose: ["transactional_comms"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: global}
   - name: notification_preferences
     module: notifications
     phase: "1"
@@ -5276,3 +5278,62 @@ tables:
       - {name: "escalated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "ticket_ref", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: search_documents
+    module: search
+    phase: "1"
+    residency: cell_publishable
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "product_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "store_ref", type: "uuid", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "category_id", type: "uuid", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "world", type: "text", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_ar", type: "text", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "title_en", type: "text", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "search_text", type: "text", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "tsv", type: "tsvector", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "attributes", type: "jsonb", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "price_minor", type: "bigint", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "currency", type: "char(3)", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "condition_grade", type: "text", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "sizes", type: "text[]", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "verified_discount", type: "boolean", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "lowest_30d", type: "boolean", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "in_stock", type: "boolean", pii_class: P0, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "is_published", type: "boolean", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "seq", type: "bigint", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+  - name: notification_log
+    module: notifications
+    phase: "1"
+    residency: cell
+    tenant: "user"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["shopper"]
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "template_code", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "category", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "channel", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "fallback_channels", type: "text[]", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "event_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "dedupe_key", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "vars", type: "jsonb", pii_class: P2, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell, note: "render variables only (ids, formatted amounts); no body, no destination, never P3"}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "suppression_reason", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "provider", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "provider_msg_id", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "error_code", type: "text", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "attempts", type: "int", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "scheduled_for", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "sent_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
