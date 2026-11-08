@@ -121,3 +121,12 @@ w2qp-rph6-63g4, 389g-gv7q-r4x8 |No third-party dependencies are added. packages/
 
 ## apps/api shopper discovery routes (2026-11-08)
 No new third-party packages. `apps/api` now depends on the workspace package `@outlet/pricing-integrity` (pure window, VRP and display functions for the verified-discount deals read).
+
+## apps/seller and seller catalog routes (2026-11-08)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @fastify/multipart 10.1.6 (apps/api, pinned exact) | Multipart photo upload on `POST /v1/{market}/seller/products/{product_id}/media`: one file per request, 10 MB cap, `kind` field before the file. Chosen over base64-in-JSON (33 percent larger, buffers twice, blows the 1 MiB JSON body limit) and over a raw-body parser (no field/size/parts limits). Official Fastify plugin; 10.1.6 is older than the 7-day release age | 2018-10 | MIT |
+| axe-core 4.14.0 (apps/seller, dev) | Accessibility assertions in the wizard component tests (already in the lockfile via the web toolchain) | 2015-06 | MPL-2.0 |
+
+`apps/seller` otherwise reuses the dependencies of `apps/web` (next 16.4.3, react, zod, @playwright/test, @testing-library, jsdom) and the workspace packages `@outlet/ids` (UUIDv7 Idempotency-Key in the browser), `@outlet/i18n`, `@outlet/money`, `@outlet/ui-tokens`, `@outlet/ui-web`. `apps/api` now also depends on the workspace package `@outlet/media`.

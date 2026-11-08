@@ -65,6 +65,12 @@ describe("devices and DTOs", () => {
       expect(a).toBe(b);
     });
   });
+  it("an install id already registered under another market is never handed back (no cross-market device id leak)", async () => {
+    await withTestDb(async (db) => {
+      await registerDevice(db, hasher, { marketId: "EG", platform: "web", installId: "cross", now: T0 });
+      await expect(registerDevice(db, hasher, { marketId: "SA", platform: "web", installId: "cross", now: at(5) })).rejects.toThrow(/device register returned no row/);
+    });
+  });
   it("validates passkey and oidc DTOs", () => {
     expect(oidcLoginDtoSchema.safeParse({ provider: "apple", idToken: "t", nonce: "n" }).success).toBe(true);
     expect(oidcLoginDtoSchema.safeParse({ provider: "facebook", idToken: "t", nonce: "n" }).success).toBe(false);

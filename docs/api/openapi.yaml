@@ -7625,6 +7625,243 @@ paths:
         param: "market"
         binding: "token market must equal path market"
       x-phase: 1
+    patch:
+      operationId: "patchSellerProduct"
+      tags:
+        - "Seller Listings"
+      summary: "Autosave: photos and condition, details and price (If-Match = listing version)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "product_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - "$ref": "#/components/parameters/StoreScope"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SellerProductPatch"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerProduct"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "listing.write"
+        principal: "seller_staff"
+      x-phase: 1
+  "/v1/{market}/seller/products/{product_id}/media":
+    post:
+      operationId: "uploadSellerProductMedia"
+      tags:
+        - "Seller Listings"
+      summary: "Upload one photo (multipart: field kind, then file; up to 10 MB)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "product_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - "$ref": "#/components/parameters/StoreScope"
+      requestBody:
+        required: true
+        content:
+          "multipart/form-data":
+            schema:
+              "$ref": "#/components/schemas/SellerMediaUploadForm"
+      responses:
+        "201":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerMediaUploadResult"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "listing.write"
+        principal: "seller_staff"
+      x-phase: 1
+  "/v1/{market}/seller/products/{product_id}/defect-cards":
+    post:
+      operationId: "createSellerDefectCard"
+      tags:
+        - "Seller Listings"
+      summary: "Record a defect card version (If-Match = listing version)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "product_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - "$ref": "#/components/parameters/StoreScope"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/DefectCardInput"
+      responses:
+        "201":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerDefectCardResult"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "listing.write"
+        principal: "seller_staff"
+      x-phase: 1
+  "/v1/{market}/seller/categories":
+    get:
+      operationId: "listSellerCategories"
+      tags:
+        - "Seller Listings"
+      summary: "Categories a listing can use in this market"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "parent_id"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/CategoryPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "listing.read"
+        principal: "seller_staff"
+      x-phase: 1
+  "/v1/{market}/seller/attribute-sets/{category_id}":
+    get:
+      operationId: "getSellerAttributeSet"
+      tags:
+        - "Seller Listings"
+      summary: "Attributes, required flags and defect types for a category"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "category_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerAttributeSet"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "listing.read"
+        principal: "seller_staff"
+      x-phase: 1
   "/v1/{market}/seller/products/{product_id}/photos-condition":
     put:
       operationId: "putProductPhotosCondition"
@@ -19423,6 +19660,96 @@ components:
       type: "object"
       additionalProperties: true
       description: "Raw provider payload. HMAC is verified over the RAW bytes before parsing; then the body is validated by the provider's Zod schema (API10). Raw body is stored encrypted in payment_events_raw / courier_events_raw."
+    SellerProductPatch:
+      type: "object"
+      additionalProperties: false
+      description: "Each section present is validated in full by the catalog service; send a section once it is complete."
+      properties:
+        condition:
+          "$ref": "#/components/schemas/PhotosConditionInput"
+        details:
+          "$ref": "#/components/schemas/DetailsInput"
+        price:
+          type: "object"
+          additionalProperties: false
+          required: ["price"]
+          properties:
+            seller_sku:
+              type: "string"
+              maxLength: 64
+            price:
+              "$ref": "#/components/schemas/Money"
+    SellerMediaUploadForm:
+      type: "object"
+      required: ["kind", "file"]
+      properties:
+        kind:
+          type: "string"
+          enum: ["product", "defect"]
+        file:
+          type: "string"
+          format: "binary"
+    SellerMediaUploadResult:
+      type: "object"
+      required: ["media_id", "kind", "status", "width", "height", "url"]
+      properties:
+        media_id:
+          type: "string"
+          format: "uuid"
+        kind:
+          type: "string"
+          enum: ["product", "defect"]
+        status:
+          type: "string"
+          enum: ["ready", "rejected", "pending_scan"]
+        width:
+          type: ["integer", "null"]
+        height:
+          type: ["integer", "null"]
+        url:
+          type: "string"
+    SellerDefectCardResult:
+      type: "object"
+      required: ["defect_card"]
+      properties:
+        defect_card:
+          "$ref": "#/components/schemas/DefectCard"
+    SellerAttributeSet:
+      type: "object"
+      required: ["category_id", "attributes", "defect_types"]
+      properties:
+        category_id:
+          type: "string"
+          format: "uuid"
+        attributes:
+          type: "array"
+          items:
+            type: "object"
+            required: ["code", "data_type", "unit", "options", "required"]
+            properties:
+              code: { type: "string" }
+              data_type: { type: "string", enum: ["enum", "text", "number", "boolean", "size_run"] }
+              unit: { type: ["string", "null"] }
+              required: { type: "boolean" }
+              options:
+                type: "array"
+                items:
+                  type: "object"
+                  required: ["code", "label_ar", "label_en"]
+                  properties:
+                    code: { type: "string" }
+                    label_ar: { type: "string" }
+                    label_en: { type: ["string", "null"] }
+        defect_types:
+          type: "array"
+          items:
+            type: "object"
+            required: ["code", "label_ar", "label_en", "default_severity"]
+            properties:
+              code: { type: "string" }
+              label_ar: { type: "string" }
+              label_en: { type: ["string", "null"] }
+              default_severity: { type: "string", enum: ["minor", "major"] }
     PublishResult:
       type: "object"
       additionalProperties: false
