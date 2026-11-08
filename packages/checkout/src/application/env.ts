@@ -6,8 +6,8 @@ import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
 import type { TaxRateProviderPort } from "@outlet/tax";
 import { UnconfiguredRisk } from "./unconfigured.js";
 import type {
-  AddressPort, BillingPort, CheckoutConfig, CommissionPort, KillSwitchPort, PaymentProviderPort, PriceSnapshotPort, QuoteTokenPort, RawBodyCipher,
-  RefundPort, RiskPort, ShippingQuotePort, StoreCreditPort, SubMerchantPort, TaxCategoryPort,
+  AddressPort, AddressSnapshotPort, BillingPort, CheckoutConfig, CommissionPort, KillSwitchPort, PaymentProviderPort, PriceSnapshotPort, QuoteTokenPort, RawBodyCipher,
+  PromotionsPort, RefundPort, RiskPort, ShippingQuotePort, StoreCreditPort, SubMerchantPort, TaxCategoryPort,
 } from "../ports.js";
 
 /** Ports shared by the request path, the webhook processor and the expiry sweeper. */
@@ -28,6 +28,10 @@ export interface CheckoutPorts {
   readonly subMerchants: SubMerchantPort;
   readonly billing: BillingPort;
   readonly refunds: RefundPort;
+  /** Absent = no promotions (fail closed to full price). */
+  readonly promotions?: PromotionsPort;
+  /** Absent = no delivery snapshot is written (the production wiring must pass AddressService). */
+  readonly addressSnapshots?: AddressSnapshotPort;
 }
 
 /** `risk` is optional: when absent the fail-closed UnconfiguredRisk applies (COD blocked). */

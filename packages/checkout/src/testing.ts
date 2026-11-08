@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { Currency, Money } from "@outlet/money";
 import { PAYMENT_METHODS } from "./ports.js";
 import type {
-  AddressPort, BillingPort, CheckoutConfig, ClientAction, CommissionPort, CreateIntentRequest, CreateIntentResult, ExternalMethod, KillSwitchPort,
+  AddressPort, AddressSnapshotPort, BillingPort, CheckoutConfig, ClientAction, CommissionPort, CreateIntentRequest, CreateIntentResult, ExternalMethod, KillSwitchPort,
   NormalizedPaymentEvent, PaymentMethod, PaymentProviderPort, PriceSnapshotPort, QuoteTokenPort, RawBodyCipher, RefundPort, RiskDecision, RiskPort,
   ShippingQuotePort, SubMerchantPort, TaxCategoryPort, WebhookInput, WebhookVerification,
 } from "./ports.js";
@@ -108,8 +108,10 @@ export class FakeShipping implements ShippingQuotePort {
   defaultFee = 6000n;
   readonly unavailable = new Set<string>();
   calls = 0;
+  readonly requests: Parameters<ShippingQuotePort["quote"]>[0][] = [];
   quote(req: Parameters<ShippingQuotePort["quote"]>[0]): ReturnType<ShippingQuotePort["quote"]> {
     this.calls += 1;
+    this.requests.push(req);
     if (this.unavailable.has(req.storeId)) return Promise.resolve({ unavailable: true, reason: "no_coverage" });
     return Promise.resolve({ quoteRef: `ship_${req.storeId}`, fee: money(this.fees.get(req.storeId) ?? this.defaultFee, EGP), etaDaysMin: 1, etaDaysMax: 3, serviceLevel: "standard" });
   }
@@ -136,8 +138,10 @@ export class FakeAddress implements AddressPort {
   /** address ref -> owning user; any ref not listed resolves for nobody (404). `open` makes every ref resolve. */
   readonly owners = new Map<string, string>();
   open = true;
+  /** landmark + pin present (AddressService.codEligible) for every ref */
+  codEligible = true;
   resolve(userId: string, addressRef: string): ReturnType<AddressPort["resolve"]> {
-    if (this.open || this.owners.get(addressRef) === userId) return Promise.resolve({ geoAreaId: "00000000-0000-4000-8000-0000000000aa", countryCode: "EG" });
+    if (this.open || this.owners.get(addressRef) === userId) return Promise.resolve({ geoAreaId: "00000000-0000-4000-8000-0000000000aa", countryCode: "EG", codEligible: this.codEligible });
     return Promise.resolve(null);
   }
 }
@@ -243,5 +247,16 @@ export class FakeCipher implements RawBodyCipher {
     c.setAAD(Buffer.from(aad));
     const ct = Buffer.concat([c.update(plaintext), c.final()]);
     return Promise.resolve(Buffer.concat([iv, c.getAuthTag(), ct]));
+  }
+}
+
+/** Records snapshotForOrder calls (AddressSnapshotPort); `failWith` makes the next calls throw. */
+export class FakeAddressSnapshots implements AddressSnapshotPort {
+  readonly calls: { readonly userId: string; readonly sellerOrderId: string; readonly addressId: string }[] = [];
+  failWith: Error | null = null;
+  snapshotForOrder(userId: string, sellerOrderId: string, addressId: string): Promise<void> {
+    if (this.failWith !== null) return Promise.reject(this.failWith);
+    this.calls.push({ userId, sellerOrderId, addressId });
+    return Promise.resolve();
   }
 }

@@ -4,12 +4,13 @@ import type { ClaimResult } from "@outlet/inventory";
 import { compare, money, sub } from "@outlet/money";
 import type { Currency, Money } from "@outlet/money";
 import { taxSnapshotForLine } from "@outlet/tax";
+import type { AppliedPromotion } from "@outlet/promotions";
 import { CheckoutError } from "../domain/errors.js";
 import { compareLock } from "../domain/price-lock.js";
 import { KILL_SWITCH_OF, holdSecondsOf, holdWindowOf, isExternal, secondsToMs } from "../domain/methods.js";
 import { canonical, canonicalQuote, quote as buildQuote } from "../domain/quote.js";
 import { sellerAmounts, splitInstructions } from "../domain/split.js";
-import type { Quote, QuoteLineInput } from "../domain/types.js";
+import type { PriceDelta, Quote, QuoteDiscounts, QuoteLineInput } from "../domain/types.js";
 import { PAYMENT_METHODS } from "../ports.js";
 import type { ClientAction, ExternalMethod, PaymentMethod, RiskDecision } from "../ports.js";
 import { eachStoreContext } from "./context.js";
@@ -18,6 +19,7 @@ import type { CheckoutDeps, Env } from "./env.js";
 import { sha256Hex } from "./hash.js";
 import { emit, lockGroup, lockIntentOfGroup, loadSellerAmounts, moveGroup, moveIntent } from "./order-ops.js";
 import type { GroupRow } from "./order-ops.js";
+import { evalBagOf, evaluatePromotions, settleVouchers } from "./promotions-glue.js";
 import { compensate, recordCodConfirmed, recordPaid } from "./settlement.js";
 
 export interface QuoteRequest {
@@ -26,6 +28,8 @@ export interface QuoteRequest {
   /** Store credit the shopper wants to apply (split tender). Ignored for method store_credit (spends as much as the total needs). */
   readonly creditRequested?: Money;
   readonly bnplProvider?: string;
+  /** Voucher codes the shopper entered. Resolved server-side by the promotions evaluator; unresolved codes come back in `invalidVoucherCodes`. */
+  readonly voucherCodes?: readonly string[];
 }
 
 export interface QuoteResult {
@@ -35,11 +39,13 @@ export interface QuoteResult {
   readonly expiresAt: Date;
   /** Bag lines that could not be quoted (unlisted, store suspended, out of stock, no delivery coverage). */
   readonly unavailableSkus: readonly string[];
+  /** Entered codes that did not resolve ("code not valid", never why). */
+  readonly invalidVoucherCodes: readonly string[];
   /** Whether COD would be accepted at placement for this bag (kill switch, first-order cap, risk). Never true when placement would refuse. */
   readonly cod: CodAvailability;
 }
 
-export type CodReasonCode = "cod_disabled" | "cod_above_first_order_cap" | "cod_risk_declined" | "cod_risk_unavailable";
+export type CodReasonCode = "cod_disabled" | "cod_address_ineligible" | "cod_above_first_order_cap" | "cod_risk_declined" | "cod_risk_unavailable";
 export type CodAvailability = { readonly allowed: true; readonly reasonCode: null } | { readonly allowed: false; readonly reasonCode: CodReasonCode };
 
 export interface PlaceInput extends QuoteRequest {
@@ -73,7 +79,34 @@ interface CartRow {
   condition_grade_code: string | null; price_minor: string | null; store_active: boolean;
 }
 interface LineMeta { readonly productId: string; readonly titleAr: string; readonly titleEn: string | null; readonly conditionGrade: string; readonly locationId: string; readonly evidenceIds: readonly string[] }
-interface Built { readonly quote: Quote; readonly meta: ReadonlyMap<string, LineMeta>; readonly unavailable: readonly string[] }
+interface Prepared {
+  readonly lines: readonly QuoteLineInput[];
+  readonly shipping: ReadonlyMap<string, { fee: Money; quoteRef: string; etaDaysMin: number; etaDaysMax: number }>;
+  readonly methods: ReadonlyMap<PaymentMethod, { fee: Money }>;
+  readonly creditAvailable: Money;
+  readonly meta: ReadonlyMap<string, LineMeta>;
+  readonly unavailable: readonly string[];
+  readonly codEligible: boolean;
+  readonly isFirstOrder: boolean;
+}
+interface Built {
+  readonly quote: Quote;
+  readonly meta: ReadonlyMap<string, LineMeta>;
+  readonly unavailable: readonly string[];
+  readonly codEligible: boolean;
+  /** promotions to reserve at placement (empty without discounts) */
+  readonly applied: readonly AppliedPromotion[];
+  readonly invalidCodes: readonly string[];
+}
+interface Plan {
+  readonly built: Built;
+  readonly method: PaymentMethod;
+  readonly risk: RiskDecision | null;
+  readonly amounts: readonly SellerAmountsOf[];
+  readonly commissionPlans: ReadonlyMap<string, string | null>;
+  readonly externalPay: boolean;
+}
+type SellerAmountsOf = ReturnType<typeof sellerAmounts>;
 
 const CART_SQL = `
   SELECT cl.id AS cart_line_id, cl.sku_id, cl.product_id, cl.store_ref AS store_id, cl.qty, l.title_ar, l.title_en, l.condition_grade_code,
@@ -104,19 +137,19 @@ export class CheckoutService {
 
   // ------------------------------------------------------------------ quote (pure: no writes)
   async quote(userId: string, req: QuoteRequest): Promise<QuoteResult> {
-    return this.inUserTx(userId, async (tx) => {
-      const built = await this.build(tx, userId, req);
-      if (!built.quote.payableByMethod.has(req.method)) throw new CheckoutError("method-unavailable", "payment method is not available");
-      const expiresAt = new Date(this.env.now().getTime() + secondsToMs(this.env.config.priceLockSec));
-      const token = this.env.tokens.sign({ jti: this.env.newId(), userId, marketId: this.env.marketId, quoteHash: built.quote.hash, method: req.method, expiresAt });
-      return { quote: built.quote, token, expiresAt, unavailableSkus: built.unavailable, cod: await this.codAvailability(userId, req, built.quote) };
-    });
+    const built = await this.build(userId, req);
+    if (!built.quote.payableByMethod.has(req.method)) throw new CheckoutError("method-unavailable", "payment method is not available");
+    const expiresAt = new Date(this.env.now().getTime() + secondsToMs(this.env.config.priceLockSec));
+    const token = this.env.tokens.sign({ jti: this.env.newId(), userId, marketId: this.env.marketId, quoteHash: built.quote.hash, method: req.method, expiresAt });
+    return { quote: built.quote, token, expiresAt, unavailableSkus: built.unavailable, invalidVoucherCodes: built.invalidCodes, cod: await this.codAvailability(userId, req, built) };
   }
 
   /** Same gates as placement (kill switch, C6 first-order cap, RiskPort), evaluated without side effects. The cap is checked before the risk port, as at placement. */
-  private async codAvailability(userId: string, req: QuoteRequest, q: Quote): Promise<CodAvailability> {
+  private async codAvailability(userId: string, req: QuoteRequest, built: Built): Promise<CodAvailability> {
     const env = this.env;
+    const q = built.quote;
     if (await env.killSwitches.isEngaged(KILL_SWITCH_OF.cod)) return { allowed: false, reasonCode: "cod_disabled" };
+    if (!built.codEligible) return { allowed: false, reasonCode: "cod_address_ineligible" };
     if (compare(q.total, env.config.codMaxFirstOrder) > 0) return { allowed: false, reasonCode: "cod_above_first_order_cap" };
     try {
       const r = await env.risk.assessCod({ userId, marketId: env.marketId, total: q.total, addressRef: req.addressRef, storeCount: q.stores.length });
@@ -126,8 +159,29 @@ export class CheckoutService {
     }
   }
 
-  /** Recomputes everything from the database and the ports; the client's numbers are never read. */
-  private async build(tx: Queryable, userId: string, req: QuoteRequest): Promise<Built> {
+  /**
+   * Recomputes everything from the database and the ports; the client's numbers are never read. Reads run in one user transaction;
+   * the promotion evaluation (its own transactions) runs after it, then the pure quote.
+   */
+  private async build(userId: string, req: QuoteRequest): Promise<Built> {
+    const env = this.env;
+    const p = await this.inUserTx(userId, (tx) => this.prepare(tx, userId, req));
+    const bag = evalBagOf(env.currency, p.lines, p.shipping);
+    const promo = await evaluatePromotions(
+      env, bag,
+      { now: env.now(), userId, isPlus: false, isFirstOrder: p.isFirstOrder, birthdayToday: false, daysSinceLastOrder: null, followedStoreIds: [], paymentMethod: req.method, city: null, segments: [], tier: null },
+      req.voucherCodes,
+    );
+    const zero = money(0n, env.currency);
+    const creditRequested = req.method === "store_credit" ? money(BIG, env.currency) : (req.creditRequested ?? zero);
+    const quote = buildQuote(
+      { marketId: env.marketId, currency: env.currency, lines: p.lines, shipping: p.shipping, methods: p.methods, creditAvailable: p.creditAvailable, creditRequested, shippingTaxBp: env.config.shippingTaxBp, ...(promo.discounts === null ? {} : { discounts: promo.discounts satisfies QuoteDiscounts }) },
+      sha256Hex,
+    );
+    return { quote, meta: p.meta, unavailable: p.unavailable, codEligible: p.codEligible, applied: promo.applied, invalidCodes: promo.invalidCodes };
+  }
+
+  private async prepare(tx: Queryable, userId: string, req: QuoteRequest): Promise<Prepared> {
     const env = this.env;
     const cur = env.currency;
     const zero = money(0n, cur);
@@ -165,7 +219,7 @@ export class CheckoutService {
     for (const storeId of [...new Set(inStock.map((r) => r.store_id))].sort()) {
       const lines = inStock.filter((r) => r.store_id === storeId);
       const items = lines.reduce((a, r) => a + BigInt(r.price_minor ?? "0") * BigInt(r.qty), 0n);
-      const s = await env.shipping.quote({ marketId: env.marketId, storeId, addressRef: req.addressRef, itemsSubtotal: money(items, cur), parcels: lines.map((r) => ({ skuId: r.sku_id, qty: r.qty })) });
+      const s = await env.shipping.quote({ marketId: env.marketId, storeId, addressRef: req.addressRef, geoAreaId: addr.geoAreaId, itemsSubtotal: money(items, cur), parcels: lines.map((r) => ({ skuId: r.sku_id, qty: r.qty })) });
       if ("unavailable" in s) for (const r of lines) unavailable.add(r.sku_id);
       else shipping.set(storeId, { fee: s.fee, quoteRef: s.quoteRef, etaDaysMin: s.etaDaysMin, etaDaysMax: s.etaDaysMax });
     }
@@ -202,49 +256,73 @@ export class CheckoutService {
     }
     const creditOn = !(await env.killSwitches.isEngaged(KILL_SWITCH_OF.store_credit));
     const creditAvailable = creditOn && req.method !== "cod" ? await env.credit.available(tx, userId, env.marketId) : zero;
-    const creditRequested = req.method === "store_credit" ? money(BIG, cur) : (req.creditRequested ?? zero);
-    const quote = buildQuote(
-      { marketId: env.marketId, currency: cur, lines, shipping, methods, creditAvailable, creditRequested, shippingTaxBp: env.config.shippingTaxBp, discount: zero },
-      sha256Hex,
-    );
-    return { quote, meta, unavailable: [...unavailable].sort() };
+    // first order = no settled order group yet (feeds first-order promotions; only queried when promotions are wired)
+    const isFirstOrder =
+      env.promotions !== undefined &&
+      (await tx.query("SELECT 1 FROM order_groups WHERE user_id = $1 AND status NOT IN ('PENDING_PAYMENT', 'AWAITING_COD_CONFIRMATION', 'PAYMENT_FAILED', 'EXPIRED') LIMIT 1", [userId])).rows.length === 0;
+    return { lines, shipping, methods, creditAvailable, meta, unavailable: [...unavailable].sort(), codEligible: addr.codEligible === true, isFirstOrder };
   }
 
   // ------------------------------------------------------------------ place
   async place(userId: string, input: PlaceInput): Promise<PlaceResult> {
-    const tok = this.env.tokens.verify(input.quoteToken);
-    if (tok?.userId !== userId || tok.marketId !== this.env.marketId) throw new CheckoutError("quote-token-invalid", "quote token is not valid");
-    let placed: { groupId: string; resume: boolean; claim: ClaimResult | null } | undefined;
-    for (let attempt = 0; placed === undefined; attempt += 1) {
+    const env = this.env;
+    const tok = env.tokens.verify(input.quoteToken);
+    if (tok?.userId !== userId || tok.marketId !== env.marketId) throw new CheckoutError("quote-token-invalid", "quote token is not valid");
+    // a replayed Idempotency-Key returns the group before anything is re-validated (the quote may have expired by now)
+    const prior = await this.inUserTx(userId, (tx) => this.existingGroup(tx, userId, input.idempotencyKey, tok.jti));
+    if (prior !== null) return this.afterPlace(userId, prior, true);
+
+    const built = await this.build(userId, input);
+    const plan = await this.plan(userId, input, built, tok);
+    const groupId = env.newId();
+    // saga step: vouchers are reserved (idempotent by order group) before the order commits and before any PSP call; any failure below releases them
+    if (built.applied.length > 0 && env.promotions !== undefined) {
       try {
-        placed = await this.inUserTx(userId, (tx) => this.placeIn(tx, userId, input, tok));
-      } catch (e) {
-        // two taps raced past the key lookup: the unique index lets one win, the loser replays
-        if (!isUnique(e)) throw e;
-        // C7: the second unique violation is not a key race (the replay would have found the group): the same quote token (session id) was
-        // used with another Idempotency-Key. A typed 409, never the raw database error.
-        if (attempt > 0) throw new CheckoutError("quote-token-invalid", "this quote was already used to place an order; request a new quote", {}, 409);
+        await env.promotions.reserve(userId, groupId, built.applied);
+      } catch {
+        throw new CheckoutError("price-changed", "a promotion in this order is no longer available", { fresh: built.quote });
       }
     }
-    if (placed.claim !== null) await this.env.reservations.publish(placed.claim);
+    let placed: { groupId: string; resume: boolean; claim: ClaimResult | null; settled: boolean } | undefined;
+    try {
+      for (let attempt = 0; placed === undefined; attempt += 1) {
+        try {
+          placed = await this.inUserTx(userId, (tx) => this.placeIn(tx, userId, input, tok, plan, groupId));
+        } catch (e) {
+          // two taps raced past the key lookup: the unique index lets one win, the loser replays
+          if (!isUnique(e)) throw e;
+          // C7: the second unique violation is not a key race (the replay would have found the group): the same quote token (session id) was
+          // used with another Idempotency-Key. A typed 409, never the raw database error.
+          if (attempt > 0) throw new CheckoutError("quote-token-invalid", "this quote was already used to place an order; request a new quote", {}, 409);
+        }
+      }
+    } catch (e) {
+      if (built.applied.length > 0) await settleVouchers(env, "release", userId, groupId);
+      throw e;
+    }
+    if (placed.resume && built.applied.length > 0) await settleVouchers(env, "release", userId, groupId);
+    if (placed.claim !== null) await env.reservations.publish(placed.claim);
+    if (placed.settled && !placed.resume && built.applied.length > 0) await settleVouchers(env, "confirm", userId, groupId);
     return this.afterPlace(userId, placed.groupId, placed.resume);
   }
 
-  private async placeIn(tx: Queryable, userId: string, input: PlaceInput, tok: NonNullable<ReturnType<Env["tokens"]["verify"]>>): Promise<{ groupId: string; resume: boolean; claim: ClaimResult | null }> {
+  private async existingGroup(tx: Queryable, userId: string, key: string, sessionId: string): Promise<string | null> {
+    const existing = (await tx.query<{ id: string; checkout_session_id: string }>("SELECT id, checkout_session_id FROM order_groups WHERE user_id = $1 AND idempotency_key = $2", [userId, key])).rows[0];
+    if (existing === undefined) return null;
+    if (existing.checkout_session_id !== sessionId) throw new CheckoutError("idempotency-conflict", "Idempotency-Key was used with a different request");
+    return existing.id;
+  }
+
+  /** Every gate that needs no transaction: token, price-lock, method, credit, COD, commission and sub-merchant (fail closed). */
+  private async plan(userId: string, input: PlaceInput, built: Built, tok: NonNullable<ReturnType<Env["tokens"]["verify"]>>): Promise<Plan> {
     const env = this.env;
-    const existing = (await tx.query<{ id: string; checkout_session_id: string }>("SELECT id, checkout_session_id FROM order_groups WHERE user_id = $1 AND idempotency_key = $2", [userId, input.idempotencyKey])).rows[0];
-    if (existing !== undefined) {
-      if (existing.checkout_session_id !== tok.jti) throw new CheckoutError("idempotency-conflict", "Idempotency-Key was used with a different request");
-      return { groupId: existing.id, resume: true, claim: null };
-    }
-    const built = await this.build(tx, userId, input);
     const q = built.quote;
     const method = input.method;
     if (tok.method !== method) throw new CheckoutError("quote-token-invalid", "quote token was issued for another payment method");
     if (!q.payableByMethod.has(method)) throw new CheckoutError("method-unavailable", "payment method is not available");
     if (tok.expiresAt.getTime() <= env.now().getTime()) throw new CheckoutError("quote-expired", "the quote has expired", { fresh: q });
     if (sha256Hex(canonicalQuote(input.quote)) !== tok.quoteHash) throw new CheckoutError("quote-token-invalid", "the echoed quote does not match the signed token");
-    const deltas = compareLock(input.quote, q, method);
+    const deltas: PriceDelta[] = compareLock(input.quote, q, method);
     if (deltas.length > 0) throw new CheckoutError("price-changed", "prices or fees changed since the quote", { deltas, fresh: q });
 
     const fee = env.config.methodFee[method];
@@ -258,7 +336,8 @@ export class CheckoutService {
 
     let risk: RiskDecision | null = null;
     if (method === "cod") {
-      // C6: the first-order cap is a floor that holds even if the risk adapter is missing, wrong or says allow (master prompt 20.7)
+      // the address must be COD-eligible (landmark + pin); the first-order cap is a floor that holds even if the risk adapter is missing, wrong or says allow (20.7, C6)
+      if (!built.codEligible) throw new CheckoutError("cod-not-allowed", "cash on delivery is not available for this address", { riskDecision: "require_prepayment" });
       if (compare(total, env.config.codMaxFirstOrder) > 0) throw new CheckoutError("cod-not-allowed", "cash on delivery is not available above the first-order limit", { riskDecision: "limit_value" });
       const r = await env.risk.assessCod({ userId, marketId: env.marketId, total, addressRef: input.addressRef, storeCount: q.stores.length });
       risk = r.decision;
@@ -267,19 +346,30 @@ export class CheckoutService {
 
     // seller amounts and (model A) sub-merchant refs: a store that cannot be paid out through the PSP fails closed
     const now = env.now();
-    const amounts = [];
-    const subMerchants = new Map<string, string | null>();
+    const amounts: SellerAmountsOf[] = [];
     const commissionPlans = new Map<string, string | null>();
     for (const s of q.stores) {
       const rate = await env.commission.rateFor(s.storeId, now);
       commissionPlans.set(s.storeId, rate.planId);
       amounts.push(sellerAmounts(s, rate.bp, env.config.commissionVatBp));
-      const ref = await env.subMerchants.refFor(s.storeId);
-      if (externalPay && ref === null) throw new CheckoutError("store-not-onboarded", "a store in this order is not set up for payments");
-      subMerchants.set(s.storeId, ref);
+      if (externalPay && (await env.subMerchants.refFor(s.storeId)) === null) throw new CheckoutError("store-not-onboarded", "a store in this order is not set up for payments");
     }
+    return { built, method, risk, amounts, commissionPlans, externalPay };
+  }
 
-    const groupId = env.newId();
+  private async placeIn(
+    tx: Queryable, userId: string, input: PlaceInput, tok: NonNullable<ReturnType<Env["tokens"]["verify"]>>, plan: Plan, groupId: string,
+  ): Promise<{ groupId: string; resume: boolean; claim: ClaimResult | null; settled: boolean }> {
+    const env = this.env;
+    const prior = await this.existingGroup(tx, userId, input.idempotencyKey, tok.jti);
+    if (prior !== null) return { groupId: prior, resume: true, claim: null, settled: false };
+    const { built, method, risk, amounts, commissionPlans, externalPay } = plan;
+    const q = built.quote;
+    const total = q.total;
+    const credit = q.storeCredit;
+    const external = sub(total, credit);
+    const now = env.now();
+
     const window = holdWindowOf(env.config, method);
     const ttlSec = holdSecondsOf(env.config, method);
     const reserve = await env.reservations.reserveIn(tx, {
@@ -311,12 +401,12 @@ export class CheckoutService {
       if (a === undefined) throw new Error("seller amounts missing");
       const soId = env.newId();
       await tx.query(
-        `INSERT INTO seller_orders (id, order_group_id, store_id, user_id, market_id, currency, status, funds_flow, items_subtotal_minor, shipping_minor, shipping_vat_minor, vat_minor,
+        `INSERT INTO seller_orders (id, order_group_id, store_id, user_id, market_id, currency, status, funds_flow, items_subtotal_minor, platform_discount_minor, seller_discount_minor, shipping_minor, shipping_vat_minor, vat_minor,
            total_minor, commission_bp_snapshot, commission_minor, commission_vat_minor, seller_net_minor, plan_id_snapshot, shipping_quote_ref)
-         VALUES ($1,$2,$3,$4,$5,$6,'PENDING_PAYMENT',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)`,
+         VALUES ($1,$2,$3,$4,$5,$6,'PENDING_PAYMENT',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)`,
         [
-          soId, groupId, s.storeId, userId, env.marketId, env.currency, env.config.fundsFlow, s.itemsSubtotal.amountMinor.toString(), s.shipping.gross.amountMinor.toString(),
-          s.shipping.vat.amountMinor.toString(), s.vat.amountMinor.toString(), s.total.amountMinor.toString(), a.commissionBp, a.commission.amountMinor.toString(),
+          soId, groupId, s.storeId, userId, env.marketId, env.currency, env.config.fundsFlow, s.itemsSubtotal.amountMinor.toString(), s.platformDiscount.amountMinor.toString(), s.sellerDiscount.amountMinor.toString(),
+          s.shipping.gross.amountMinor.toString(), s.shipping.vat.amountMinor.toString(), s.vat.amountMinor.toString(), s.total.amountMinor.toString(), a.commissionBp, a.commission.amountMinor.toString(),
           a.commissionVat.amountMinor.toString(), a.net.amountMinor.toString(), commissionPlans.get(s.storeId) ?? null,
           JSON.stringify({ quote_ref: s.shipping.quoteRef, eta_days_min: s.shipping.etaDaysMin, eta_days_max: s.shipping.etaDaysMax }),
         ],
@@ -327,10 +417,11 @@ export class CheckoutService {
         const verified = l.verifiedSaving.amountMinor > 0n;
         await tx.query(
           `INSERT INTO order_lines (id, seller_order_id, order_group_id, store_id, user_id, market_id, sku_id, product_id, title_ar_snapshot, title_en_snapshot, condition_grade_snapshot,
-             qty, unit_price_minor, currency, tax_category, vat_rate_bp, vat_minor, vrp_minor_snapshot, claim_type_snapshot, evidence_ids_snapshot)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::uuid[])`,
+             qty, unit_price_minor, currency, platform_discount_minor, seller_discount_minor, tax_category, vat_rate_bp, vat_minor, vrp_minor_snapshot, claim_type_snapshot, evidence_ids_snapshot)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::uuid[])`,
           [
             env.newId(), soId, groupId, s.storeId, userId, env.marketId, l.skuId, m.productId, m.titleAr, m.titleEn, m.conditionGrade, l.qty, l.unitPrice.amountMinor.toString(), env.currency,
+            l.platformDiscount.amountMinor.toString(), l.sellerDiscount.amountMinor.toString(),
             l.taxCategory, l.vatBp, l.vat.amountMinor.toString(), verified || (l.claimType === "lowest_30d" && l.vrp !== null) ? (l.vrp?.amountMinor.toString() ?? null) : null,
             l.claimType === "verified_discount" && !verified ? "plain" : l.claimType, verified ? m.evidenceIds : [],
           ],
@@ -345,14 +436,14 @@ export class CheckoutService {
     );
     await emit(env, tx, "order_group.placed", groupId, { total_minor: total.amountMinor.toString(), currency: env.currency, payment_method: method, store_count: q.stores.length });
 
-    if (externalPay) return { groupId, resume: false, claim: null };
+    if (externalPay) return { groupId, resume: false, claim: null, settled: false };
     const g = await lockGroup(tx, groupId);
     const intent = await lockIntentOfGroup(tx, groupId);
     if (method === "cod" && risk === "require_confirmation") {
       await moveIntent(env, tx, intent, "not_required");
       await moveGroup(env, tx, g, "cod_requires_confirmation");
       await tx.query("UPDATE payment_intents SET client_action = $2::jsonb WHERE id = $1", [intent.id, JSON.stringify({ kind: "cod_confirmation", channel: "whatsapp", expiresAt: iso(expiresAt) })]);
-      return { groupId, resume: false, claim: null };
+      return { groupId, resume: false, claim: null, settled: false };
     }
     const claim = await env.reservations.claimIn(tx, reserve.reservationId);
     if (claim.outcome === "unavailable") throw new CheckoutError("stock-shortfall", "some items are no longer available", { shortfalls: claim.shortfalls });
@@ -363,12 +454,22 @@ export class CheckoutService {
       await recordPaid(env, tx, g, { ...intent, status: "NOT_REQUIRED" }, { late: false });
       await moveIntent(env, tx, intent, "not_required");
     }
-    return { groupId, resume: false, claim };
+    return { groupId, resume: false, claim, settled: true };
   }
 
   /** External tender: the PSP call is never inside a database transaction (README section 2). Same Idempotency-Key resumes a half-placed group. */
   private async afterPlace(userId: string, groupId: string, resume: boolean): Promise<PlaceResult> {
     const env = this.env;
+    // the delivery address is frozen per seller order after the order transaction committed (AddressService.snapshotForOrder runs in its own
+    // user transaction and needs the seller order rows); idempotent, so a replayed Idempotency-Key repeats it safely
+    if (env.addressSnapshots !== undefined) {
+      const orders = await this.inUserTx(userId, async (tx) =>
+        (await tx.query<{ id: string; address_ref: string }>(
+          "SELECT so.id, cs.address_ref FROM seller_orders so JOIN checkout_sessions cs ON cs.order_group_id = so.order_group_id WHERE so.order_group_id = $1 ORDER BY so.id", [groupId],
+        )).rows,
+      );
+      for (const so of orders) await env.addressSnapshots.snapshotForOrder(userId, so.id, so.address_ref);
+    }
     const state = await this.inUserTx(userId, async (tx) => {
       const g = await lockGroup(tx, groupId);
       const i = await lockIntentOfGroup(tx, groupId);
@@ -400,6 +501,7 @@ export class CheckoutService {
           const i = await lockIntentOfGroup(tx, groupId);
           await compensate(env, tx, g, i, "failed", res.code);
         });
+        if (BigInt(state.g.discount_minor) > 0n) await settleVouchers(env, "release", userId, groupId);
         throw new CheckoutError("payment-declined", "the payment was declined");
       }
       await this.inUserTx(userId, async (tx) => {
@@ -415,15 +517,16 @@ export class CheckoutService {
 
   /** COD confirmation (WhatsApp / SMS / IVR): claim immediately, then CONFIRMED_COD. */
   async confirmCod(userId: string, orderGroupId: string): Promise<{ status: string }> {
-    const claim = await this.inUserTx(userId, async (tx) => {
+    const { claim, hasDiscount } = await this.inUserTx(userId, async (tx) => {
       const g = await lockGroup(tx, orderGroupId);
       if (g.status !== "AWAITING_COD_CONFIRMATION" || g.reservation_id === null) throw new CheckoutError("invalid-state", "order is not waiting for COD confirmation");
       const c = await this.env.reservations.claimIn(tx, g.reservation_id);
       if (c.outcome === "unavailable") throw new CheckoutError("stock-shortfall", "items are no longer available", { shortfalls: c.shortfalls });
       await recordCodConfirmed(this.env, tx, g);
-      return c;
+      return { claim: c, hasDiscount: BigInt(g.discount_minor) > 0n };
     });
     await this.env.reservations.publish(claim);
+    if (hasDiscount) await settleVouchers(this.env, "confirm", userId, orderGroupId);
     return { status: "CONFIRMED_COD" };
   }
 

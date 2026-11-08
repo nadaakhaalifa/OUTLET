@@ -8,6 +8,7 @@ import type { NormalizedPaymentEvent, WebhookInput } from "../ports.js";
 import { makeEnv } from "./env.js";
 import type { Env, WorkerDeps } from "./env.js";
 import { sha256Bytes, sha256Hex } from "./hash.js";
+import { settleVouchers } from "./promotions-glue.js";
 import { compensate, recordAttemptFailed, recordLateRefund, recordPaid } from "./settlement.js";
 import { lockGroup, lockIntentOfGroup } from "./order-ops.js";
 import type { IntentRow } from "./order-ops.js";
@@ -17,7 +18,9 @@ export type WebhookOutcome =
   | { readonly outcome: "duplicate" }
   | { readonly outcome: "processed" | "ignored"; readonly detail: string };
 
-interface ProcessResult { readonly result: WebhookOutcome; readonly after: { readonly claim: ClaimResult | null } }
+/** Work that must follow the commit: the stock publish, and the voucher settlement (VoucherService has its own transaction). */
+interface After { readonly claim: ClaimResult | null; readonly vouchers?: { readonly kind: "confirm" | "release"; readonly userId: string; readonly groupId: string } }
+interface ProcessResult { readonly result: WebhookOutcome; readonly after: After }
 interface RawRow { id: string; processing_status: "received" | "processed" | "ignored" | "failed" | "rejected" }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AAD = "payment_events_raw.body_ct";
@@ -71,19 +74,20 @@ export class WebhookProcessor {
     }
     const { result, after } = done;
     if (after.claim !== null) await env.reservations.publish(after.claim);
+    if (after.vouchers !== undefined) await settleVouchers(env, after.vouchers.kind, after.vouchers.userId, after.vouchers.groupId);
     return result;
   }
 
   private async process(tx: Queryable, rawId: string, ev: NormalizedPaymentEvent): Promise<ProcessResult> {
     const env = this.env;
-    const none = { claim: null } as const;
+    const none: After = { claim: null };
     const locked = (await tx.query<RawRow>("SELECT id, processing_status FROM payment_events_raw WHERE id = $1 FOR UPDATE", [rawId])).rows[0];
     if (locked === undefined) throw new Error("raw webhook row vanished");
     if (locked.processing_status === "processed" || locked.processing_status === "ignored") return { result: { outcome: "duplicate" }, after: none };
     const mark = async (status: "processed" | "ignored" | "rejected", reason: string | null, intentId: string | null): Promise<void> => {
       await tx.query("UPDATE payment_events_raw SET processing_status = $2, failure_reason = $3, payment_intent_id = $4, processed_at = $5::timestamptz WHERE id = $1", [rawId, status, reason, intentId, iso(env.now())]);
     };
-    const reject = async (reason: string, intent: IntentRow | null, extra: Record<string, string> = {}): Promise<{ result: WebhookOutcome; after: typeof none }> => {
+    const reject = async (reason: string, intent: IntentRow | null, extra: Record<string, string> = {}): Promise<{ result: WebhookOutcome; after: After }> => {
       await mark("rejected", reason, intent?.id ?? null);
       await env.outbox.append(tx, { id: env.newId(), type: "payment.webhook_rejected", aggregateType: "payment_event", aggregateId: rawId, marketId: env.marketId, occurredAt: iso(env.now()), visibility: "internal", payload: { reason, provider: env.provider.provider, intent_id: intent?.id ?? null, ...extra } });
       return { result: { outcome: "rejected", reason }, after: none };
@@ -122,7 +126,7 @@ export class WebhookProcessor {
       }
       const did = g.status === "PENDING_PAYMENT" ? await compensate(env, tx, g, i, "failed", ev.failureCode ?? "failed") : false;
       await mark(did ? "processed" : "ignored", did ? null : `failed_after_${g.status.toLowerCase()}`, i.id);
-      return { result: did ? { outcome: "processed", detail: "payment_failed" } : { outcome: "ignored", detail: "failure_after_settlement" }, after: none };
+      return { result: did ? { outcome: "processed", detail: "payment_failed" } : { outcome: "ignored", detail: "failure_after_settlement" }, after: did && BigInt(g.discount_minor) > 0n ? { claim: null, vouchers: { kind: "release", userId: g.user_id, groupId: g.id } } : none };
     }
 
     // payment.succeeded
@@ -136,11 +140,11 @@ export class WebhookProcessor {
         const i2 = await lockIntentOfGroup(tx, g.id);
         await recordLateRefund(env, tx, g2, i2);
         await mark("processed", "late_refund", i.id);
-        return { result: { outcome: "processed", detail: "late_refund" }, after: none };
+        return { result: { outcome: "processed", detail: "late_refund" }, after: BigInt(g.discount_minor) > 0n ? { claim: null, vouchers: { kind: "release", userId: g.user_id, groupId: g.id } } : none };
       }
       await recordPaid(env, tx, g, i, { late: false });
       await mark("processed", null, i.id);
-      return { result: { outcome: "processed", detail: "paid" }, after: { claim } };
+      return { result: { outcome: "processed", detail: "paid" }, after: BigInt(g.discount_minor) > 0n ? { claim, vouchers: { kind: "confirm", userId: g.user_id, groupId: g.id } } : { claim } };
     }
     if (g.status === "PAYMENT_FAILED" || g.status === "EXPIRED") {
       const credit = BigInt(g.store_credit_minor);
@@ -165,7 +169,15 @@ export class WebhookProcessor {
       await tx.query("RELEASE SAVEPOINT late_pay");
       await recordPaid(env, tx, g, i, { late: true });
       await mark("processed", null, i.id);
-      return { result: { outcome: "processed", detail: "late_paid" }, after: { claim } };
+      return { result: { outcome: "processed", detail: "late_paid" }, after: BigInt(g.discount_minor) > 0n ? { claim, vouchers: { kind: "confirm", userId: g.user_id, groupId: g.id } } : { claim } };
+    }
+    if (g.status === "CANCELLED" && i.status === "CANCELLED") {
+      // H1: the shopper cancelled the unpaid group (intent voided) and the PSP captured anyway. Never re-claim the stock: the money is owed
+      // back through the late-refund path (ledger entry + order_group.late_payment_refund, owned by LateRefundConsumer). A group cancelled
+      // AFTER payment has a CAPTURED intent and falls through to `ignored` (its refunds come from the cancellation saga).
+      await recordLateRefund(env, tx, g, i);
+      await mark("processed", "late_refund_after_cancel", i.id);
+      return { result: { outcome: "processed", detail: "late_refund" }, after: none };
     }
     await mark("ignored", `succeeded_after_${g.status.toLowerCase()}`, i.id);
     return { result: { outcome: "ignored", detail: "already_settled" }, after: none };

@@ -9,6 +9,7 @@ import { UnconfiguredRisk } from "../src/application/unconfigured.js";
 const e = (n: bigint) => money(n, "EGP");
 const store = (id: string, items: bigint, ship: bigint, shipVat: bigint): StoreQuote => ({
   storeId: id, lines: [], itemsSubtotal: e(items), shipping: { gross: e(ship), vat: e(shipVat), quoteRef: "r", etaDaysMin: 1, etaDaysMax: 2 },
+  shippingDiscount: { platform: e(0n), seller: e(0n) }, platformDiscount: e(0n), sellerDiscount: e(0n),
   vat: e(shipVat + (items * 14n) / 114n), total: e(items + ship),
 });
 

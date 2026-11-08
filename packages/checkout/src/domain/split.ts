@@ -1,4 +1,4 @@
-import { allocate, money, percentOf, sub } from "@outlet/money";
+import { add, allocate, money, percentOf, sub } from "@outlet/money";
 import type { Money } from "@outlet/money";
 import type { SplitInstruction } from "../ports.js";
 import { SellerNetError } from "./errors.js";
@@ -17,20 +17,31 @@ export interface SellerAmounts {
   readonly commissionVat: Money;
   /** I13 residual: items - commission - commission VAT. */
   readonly net: Money;
+  /** What the shopper owes this seller order: items + delivery - platform - seller discounts. */
   readonly total: Money;
+  /** Platform-funded discount (goods + delivery): the ledger debits promo_expense_platform for it (chart 4.2). */
+  readonly platformDiscount: Money;
+  /** Seller-funded discount (goods + delivery): only shrinks the seller's share (chart 4.2). */
+  readonly sellerDiscount: Money;
 }
 
 export function sellerAmounts(store: StoreQuote, commissionBp: number, commissionVatBp: number): SellerAmounts {
   if (!Number.isInteger(commissionBp) || commissionBp < 0 || commissionBp > 10_000) throw new RangeError("commission bp must be an integer in 0..10000");
   const items = store.itemsSubtotal;
-  const commission = percentOf(items, BigInt(commissionBp));
+  // ledger chart 4.2 / V60: the commission base is the goods after SELLER-funded discounts and before platform-funded ones.
+  // A seller-funded delivery waiver is not commissionable; it comes off the seller's residual so the platform still earns the full delivery fee.
+  const sellerGoods = store.lines.reduce((a, l) => add(a, l.sellerDiscount), money(0n, items.currency));
+  const sellerShipping = store.shippingDiscount.seller;
+  const base = sub(items, sellerGoods);
+  const commission = percentOf(base, BigInt(commissionBp));
   const commissionVat = percentOf(commission, BigInt(commissionVatBp));
-  const net = sub(sub(items, commission), commissionVat);
+  const net = sub(sub(sub(base, commission), commissionVat), sellerShipping);
   if (net.amountMinor < 0n) throw new SellerNetError(store.storeId, net.amountMinor);
   const shippingVat = store.shipping.vat;
   return {
     storeId: store.storeId, items, shipping: store.shipping.gross, shippingVat, shippingNet: sub(store.shipping.gross, shippingVat),
     goodsVat: sub(store.vat, shippingVat), commissionBp, commission, commissionVat, net, total: store.total,
+    platformDiscount: store.platformDiscount, sellerDiscount: store.sellerDiscount,
   };
 }
 

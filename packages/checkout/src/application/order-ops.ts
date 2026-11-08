@@ -20,6 +20,8 @@ export interface GroupRow {
   readonly reservation_id: string | null;
   readonly payment_expires_at: Date | string | null;
   readonly checkout_session_id: string;
+  /** promotion discount of the group (goods + delivery); > 0 means vouchers were reserved at placement */
+  readonly discount_minor: string | bigint;
 }
 export interface IntentRow {
   readonly id: string;
@@ -40,7 +42,7 @@ const iso = (d: Date): string => d.toISOString();
 export const lockGroup = async (tx: Queryable, groupId: string): Promise<GroupRow> => {
   const g = (
     await tx.query<GroupRow>(
-      `SELECT id, user_id, status, currency, payment_method, total_minor, store_credit_minor, reservation_id, payment_expires_at, checkout_session_id
+      `SELECT id, user_id, status, currency, payment_method, total_minor, store_credit_minor, reservation_id, payment_expires_at, checkout_session_id, discount_minor
          FROM order_groups WHERE id = $1 FOR UPDATE`,
       [groupId],
     )
@@ -61,14 +63,14 @@ export const lockIntentOfGroup = async (tx: Queryable, groupId: string): Promise
   return i;
 };
 
-export const moveGroup = async (env: Env, tx: Queryable, g: GroupRow, event: OrderGroupEvent, extra: { paid?: boolean } = {}): Promise<OrderGroupState> => {
+export const moveGroup = async (env: Pick<Env, "now">, tx: Queryable, g: GroupRow, event: OrderGroupEvent, extra: { paid?: boolean } = {}): Promise<OrderGroupState> => {
   const next = transition(ORDER_GROUP, g.status, event);
   const at = iso(env.now());
   await tx.query("UPDATE order_groups SET status = $2, paid_at = CASE WHEN $3::boolean THEN $4::timestamptz ELSE paid_at END, version = version + 1, updated_at = $4::timestamptz WHERE id = $1", [g.id, next, extra.paid === true, at]);
   return next;
 };
 
-export const moveIntent = async (env: Env, tx: Queryable, i: IntentRow, event: PaymentIntentEvent, set: { failureCode?: string } = {}): Promise<PaymentIntentState> => {
+export const moveIntent = async (env: Pick<Env, "now">, tx: Queryable, i: IntentRow, event: PaymentIntentEvent, set: { failureCode?: string } = {}): Promise<PaymentIntentState> => {
   const next = transition(PAYMENT_INTENT, i.status, event);
   await tx.query("UPDATE payment_intents SET status = $2, failure_code = COALESCE($3, failure_code), version = version + 1, updated_at = $4::timestamptz WHERE id = $1", [i.id, next, set.failureCode ?? null, iso(env.now())]);
   return next;
@@ -84,15 +86,15 @@ export const moveSellerOrders = async (env: Env, tx: Queryable, groupId: string,
   return rows.length;
 };
 
-export const setSessionStatus = async (env: Env, tx: Queryable, sessionId: string, status: "completed" | "expired"): Promise<void> => {
+export const setSessionStatus = async (env: Pick<Env, "now">, tx: Queryable, sessionId: string, status: "completed" | "expired"): Promise<void> => {
   await tx.query("UPDATE checkout_sessions SET status = $2, updated_at = $3::timestamptz WHERE id = $1", [sessionId, status, iso(env.now())]);
 };
 
 /** Rebuilds the per-store amounts from the rows written at placement (the stored snapshot is authoritative, never re-quoted). */
 export const loadSellerAmounts = async (tx: Queryable, groupId: string, currency: Currency): Promise<{ sellers: SellerAmounts[]; sellerOrderIds: Map<string, string> }> => {
   const rows = (
-    await tx.query<{ id: string; store_id: string; items_subtotal_minor: string | bigint; shipping_minor: string | bigint; shipping_vat_minor: string | bigint; vat_minor: string | bigint; total_minor: string | bigint; commission_bp_snapshot: number; commission_minor: string | bigint; commission_vat_minor: string | bigint; seller_net_minor: string | bigint }>(
-      `SELECT id, store_id, items_subtotal_minor, shipping_minor, shipping_vat_minor, vat_minor, total_minor, commission_bp_snapshot, commission_minor, commission_vat_minor, seller_net_minor
+    await tx.query<{ id: string; store_id: string; items_subtotal_minor: string | bigint; shipping_minor: string | bigint; shipping_vat_minor: string | bigint; vat_minor: string | bigint; total_minor: string | bigint; commission_bp_snapshot: number; commission_minor: string | bigint; commission_vat_minor: string | bigint; seller_net_minor: string | bigint; platform_discount_minor: string | bigint; seller_discount_minor: string | bigint }>(
+      `SELECT id, store_id, platform_discount_minor, seller_discount_minor, items_subtotal_minor, shipping_minor, shipping_vat_minor, vat_minor, total_minor, commission_bp_snapshot, commission_minor, commission_vat_minor, seller_net_minor
          FROM seller_orders WHERE order_group_id = $1 ORDER BY store_id`,
       [groupId],
     )
@@ -104,6 +106,7 @@ export const loadSellerAmounts = async (tx: Queryable, groupId: string, currency
       storeId: r.store_id, items: m(r.items_subtotal_minor), shipping: m(r.shipping_minor), shippingVat: m(r.shipping_vat_minor),
       shippingNet: m(BigInt(r.shipping_minor) - BigInt(r.shipping_vat_minor)), goodsVat: m(BigInt(r.vat_minor) - BigInt(r.shipping_vat_minor)),
       commissionBp: r.commission_bp_snapshot, commission: m(r.commission_minor), commissionVat: m(r.commission_vat_minor), net: m(r.seller_net_minor), total: m(r.total_minor),
+      platformDiscount: m(r.platform_discount_minor), sellerDiscount: m(r.seller_discount_minor),
     })),
   };
 };

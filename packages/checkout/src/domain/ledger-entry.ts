@@ -25,6 +25,8 @@ const acc = (m: string, c: Money["currency"], type: Parameters<typeof accountCod
  * Ledger spec 4.1 / README section 8, one entry per order group, kind order_recognised, key order_paid:{group}.
  * Dr clearing (external) + Dr store_credit (holds) = Cr seller_pending (net) + commission_revenue + platform_vat_output
  * (commission VAT + delivery VAT) + shipping_revenue (delivery net). Zero postings are omitted (the ledger rejects them).
+ * Promotions (chart 4.2): the platform-funded discount is a DEBIT on promo_expense_platform (the seller is paid as if the shopper paid full
+ * price); a seller-funded discount has no account, it is already inside the smaller seller_pending credit (net comes from the stored seller order).
  */
 export function orderPaidDraft(i: OrderPaidInput): JournalEntryDraft {
   const cur = i.currency;
@@ -40,6 +42,8 @@ export function orderPaidDraft(i: OrderPaidInput): JournalEntryDraft {
   const debits: PostingDraft[] = [];
   if (i.external.amountMinor > 0n) debits.push({ accountCode: acc(i.marketId, cur, i.clearing.type, i.clearing.owner), amount: i.external });
   for (const c of i.credit) if (c.amount.amountMinor > 0n) debits.push({ accountCode: c.accountCode, amount: c.amount });
+  const platformPromo = sum(i.sellers.map((s) => s.platformDiscount));
+  if (platformPromo.amountMinor > 0n) debits.push({ accountCode: acc(i.marketId, cur, "promo_expense_platform"), amount: platformPromo });
   const dr = sum(debits.map((p) => p.amount));
   const cr = sum(credits.map((p) => negate(p.amount)));
   if (dr.amountMinor !== cr.amountMinor) throw new Error("order_paid entry does not balance (debits differ from credits)");

@@ -9,7 +9,9 @@ import { money } from "@outlet/money";
 import type { Money } from "@outlet/money";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { CheckoutService, ExpirySweeper, OrderCloseJob, PgStoreCredit, WebhookProcessor } from "../src/index.js";
-import type { CheckoutConfig, PaymentMethod, PlaceInput } from "../src/index.js";
+import type { CheckoutConfig, CheckoutDeps, PaymentMethod, PlaceInput } from "../src/index.js";
+
+type CommonDeps = Omit<CheckoutDeps, "client">;
 import {
   FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories,
   HmacQuoteTokens, RecordingRefunds, defaultConfig,
@@ -17,6 +19,8 @@ import {
 
 export const CAT = "00000000-0000-4000-8000-0000000c0011";
 const T0 = Date.parse("2030-01-01T00:00:00.000Z");
+
+export type Extra = Partial<Pick<CommonDeps, "promotions" | "addressSnapshots" | "reservations">>;
 
 export interface Sku { readonly skuId: string; readonly productId: string; readonly storeId: string }
 
@@ -32,7 +36,9 @@ export interface World {
   };
   readonly reservations: ReservationService;
   readonly svc: CheckoutService;
-  readonly makeSvc: (config: Partial<CheckoutConfig>) => CheckoutService;
+  readonly makeSvc: (config: Partial<CheckoutConfig>, extra?: Extra) => CheckoutService;
+  readonly makeWorkers: (extra: Extra) => { readonly webhooks: WebhookProcessor; readonly sweeper: ExpirySweeper };
+  readonly now: () => Date;
   readonly webhooks: WebhookProcessor;
   readonly sweeper: ExpirySweeper;
   readonly closer: OrderCloseJob;
@@ -139,7 +145,8 @@ export const buildWorld = async (): Promise<World> => {
   const svc = new CheckoutService({ ...common, client: app });
   const worker = { ...common, client: workerClient, cipher: new FakeCipher() };
   return {
-    raw, app, workerClient, statements, clock, fakes, reservations, svc, makeSvc: (c) => new CheckoutService({ ...common, config: defaultConfig(c), client: app }), webhooks: new WebhookProcessor(worker), sweeper: new ExpirySweeper(worker), closer: new OrderCloseJob(worker), stores, newUser, seedSku, fillBag, grantCredit,
+    raw, app, workerClient, statements, clock, fakes, reservations, svc, makeSvc: (c, extra = {}) => new CheckoutService({ ...common, ...extra, config: defaultConfig(c), client: app }),
+    makeWorkers: (extra) => ({ webhooks: new WebhookProcessor({ ...worker, ...extra }), sweeper: new ExpirySweeper({ ...worker, ...extra }) }), now, webhooks: new WebhookProcessor(worker), sweeper: new ExpirySweeper(worker), closer: new OrderCloseJob(worker), stores, newUser, seedSku, fillBag, grantCredit,
     outboxTypes: async () => (await raw.query<{ t: string }>("SELECT event_type AS t FROM outbox_events ORDER BY occurred_at, id")).rows.map((r) => r.t),
     free: async (sku) => Number((await raw.query<{ f: string }>("SELECT (on_hand - committed)::text AS f FROM inventory_levels WHERE sku_id = $1", [sku.skuId])).rows[0]?.f ?? "0"),
     close,

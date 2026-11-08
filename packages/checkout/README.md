@@ -129,6 +129,30 @@ Options: (a) treat the first `payment.failed` webhook as final and release the r
 
 The outbox event `order_group.late_payment_refund` (idempotency key `late_refund:{group}` in the payload, plus the intent id and amount) is the only trigger of the refund request. `LateRefundConsumer` (`src/application/late-refund-consumer.ts`) calls `RefundPort.requestRefund` outside any transaction with that key, throws if the port does not accept (the relay redelivers, the group stays REFUND_PENDING, the ledger already owes the money), and writes `inbox_processed (checkout.late_refund, event id)` only after acceptance; a redelivery is a no-op. The webhook processor no longer calls the port.
 
+### 9.3 Order cancellation before shipping (`src/application/cancellation*.ts`)
+
+Master prompt 20.1 / 15.6 / B5. `OrderCancellation` (apps/api `OrderCancellationPort`: `cancel(input)`; `execute` returns the result; `cancelBySeller`).
+
+| Case | Effect (one outlet_app transaction, shopper user context) |
+|---|---|
+| Unpaid (PENDING_PAYMENT, AWAITING_COD_CONFIRMATION), whole group only | PSP `voidIntent(key cancel:{group})` first, outside the tx (`already_captured` = 409 `payment-in-flight`); intent `cancel`, group `cancel`, seller orders `void`, lines cancelled, credit holds RELEASED, reservation `releaseIn`, session expired; vouchers `release` after commit. No refund (nothing charged) |
+| Paid (PAID, CONFIRMED_COD, PARTIALLY_FULFILLED), whole group or chosen stores | each target PAID / CONFIRMED_COD / ACCEPTED / PACKED -> CANCELLED (`cancel_reason`, `cancelled_at`, `cancel_refund_choice`), lines cancelled, per store `inventory.release_required` (claimed units) and `seller_order.cancelled`; group -> CANCELLED when no live seller order remains, then vouchers `reinstate` after commit |
+| A target at or after SHIPPED | 409 `cancel-after-shipping` (a refusal or a return) |
+| Same request again (group + reason) | replay, no new rows or events; another reason on a cancelled target is 409 `order-not-cancellable` |
+| BNPL + `store_credit` preference | 422 `refund-preference-invalid` (provider only, B3) |
+
+Every change emits `order_group.cancelled {user_id, scope, reason_code, initiator, seller_order_ids, refund_expected}` (notifications); the audit record is appended after commit. Money: `CancellationRefundConsumer` (inbox `checkout.cancellation_refund`) consumes `seller_order.cancelled` and `seller_order.rejected` and calls `RefundService.createForCancellation` (finance.refunds worker): per seller order, key `refund:cancel:{seller order}`, RefundRouter by tender with the stored shopper choice, the same dual approval as returns, `due_at` = cancelled_at + 14 days (V7). In that worker transaction `cancel_adjust:{seller order}` reverses what the refund entry does not (platform-funded discount, delivery discount); refund entry + adjustment negate the seller order's share of `order_paid:{group}` exactly (property test in @outlet/returns). The provider call happens in `RefundService.process` (ledger first), never in the API process. COD before delivery and unpaid groups create no refund row.
+
+Details fixed by the chief review: a replay keeps the refund choice stored by the FIRST cancel (`cancel_refund_choice`); a repeat with another `refundPreference` replays and changes nothing (L4). A replay of a whole-group cancel re-runs the voucher release / reinstate (both idempotent), so a failed settlement is retried by repeating the request (M3). A PSP capture that lands after an unpaid group was cancelled (intent CANCELLED) is never re-claimed: `recordLateRefund` posts `late_refund:{group}` and emits `order_group.late_payment_refund` (LateRefundConsumer), group CANCELLED -> REFUND_PENDING (H1); `voidIntent` answering `not_found` for an intent in REQUIRES_ACTION / AUTHORIZED is 409 `payment-in-flight` (state unknown, fail closed). The refund consumer parks permanent refusals (ReturnsError, ZodError) as `refund.attention {order_group_id, seller_order_id?, error}` in the inbox transaction and keeps throwing on infrastructure errors (M1). The refund row reports the delivery fee the shopper actually paid (shipping minus the delivery discount, VAT floor-proportional); the rest is in `cancel_adjust` (L2).
+
+Not yet composed (open items, not built):
+- **M2** `cancelBySeller` does not go through the Seller Center reject path and does no `@outlet/policy` authorize (`order.fulfill`, store role) itself: the API route must authorize before calling it, and seller cancel vs `reject` semantics (health penalty, SLA) must be unified.
+- **M4** cancelling a PACKED seller order leaves its courier AWB/label: a shipping consumer of `seller_order.cancelled` must call `CourierPort.cancelShipment`.
+- **M5** the audit record is appended after commit: a crash between commit and append loses it, and the replay that follows does not re-audit the original change (the outbox `order_group.cancelled` row is the durable trace meanwhile). Move to an in-transaction audit insert when the audit store accepts the caller's transaction.
+- Notifications has no template mapped for `order_group.cancelled` yet.
+
+ADR-lite (options compared): (a) one worker transaction in the API doing state, ledger and refund rows: atomic, but the API would hold outlet_worker finance credentials (ADR-0011) and post money from the request path; (b) **chosen**: state + events in the request transaction (outlet_app), refunds from the outbox in the finance.refunds worker. Same pattern as `return.accepted -> createForReturn`; at-least-once + per-seller-order keys make it exactly-once in effect, and the 24 h initiation SLO only needs the relay and the refund worker running.
+
 ## 10. Threat notes (STRIDE / OWASP API 2023)
 
 - **API1 BOLA:** order data only through RLS; foreign ids -> 404. `address_id` checked by `AddressPort` (404), cart lines come from the caller's own cart.

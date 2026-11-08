@@ -24,17 +24,22 @@
   },
   "dependencies": {
     "@outlet/db": "workspace:*",
+    "@outlet/flags": "workspace:*",
     "@outlet/ids": "workspace:*",
     "@outlet/inventory": "workspace:*",
     "@outlet/ledger": "workspace:*",
     "@outlet/money": "workspace:*",
     "@outlet/orders": "workspace:*",
     "@outlet/outbox": "workspace:*",
+    "@outlet/promotions": "workspace:*",
+    "@outlet/shipping": "workspace:*",
     "@outlet/tax": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
+    "@outlet/admin-access": "workspace:*",
     "@outlet/payouts": "workspace:*",
-    "@electric-sql/pglite": "^0.3.16"
+    "@outlet/returns": "workspace:*"
   }
 }

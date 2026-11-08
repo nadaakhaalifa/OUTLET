@@ -28,6 +28,10 @@ export function compareLock(echo: Quote, fresh: Quote, method: PaymentMethod): P
   const fa = fee(echo);
   const fb = fee(fresh);
   if (fa !== undefined && fb !== undefined && !equals(fa, fb)) out.push({ kind: "method_fee", method, before: fa, after: fb });
+  const promos = (q: Quote): string[] => q.promotions.map((p) => `${p.promotionId}@${String(p.version)}:${p.total.amountMinor.toString()}`);
+  const pa = promos(echo);
+  const pb = promos(fresh);
+  if (pa.join("|") !== pb.join("|")) out.push({ kind: "promotions", before: pa, after: pb });
   if (!equals(echo.storeCredit, fresh.storeCredit)) out.push({ kind: "store_credit", before: echo.storeCredit, after: fresh.storeCredit });
   if (!equals(echo.total, fresh.total)) out.push({ kind: "total", before: echo.total, after: fresh.total });
   return out;

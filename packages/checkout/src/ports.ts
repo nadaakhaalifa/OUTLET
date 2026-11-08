@@ -5,6 +5,8 @@
  */
 import type { Queryable } from "@outlet/db";
 import type { Money } from "@outlet/money";
+import type { AppliedPromotion, EvalBag, EvalContext, QuoteEvaluation } from "@outlet/promotions";
+import type { AddressService } from "@outlet/shipping";
 
 // ------------------------------------------------------------------ shared vocabulary
 export const PAYMENT_METHODS = ["card", "apple_pay", "meeza", "wallet", "instapay", "fawry", "bnpl", "cod", "store_credit"] as const;
@@ -117,6 +119,8 @@ export interface ShippingQuotePort {
     readonly marketId: string;
     readonly storeId: string;
     readonly addressRef: string;
+    /** Destination geo area of the owned address (AddressPort.resolve): the real shipping adapter prices by area, not by the opaque ref. */
+    readonly geoAreaId?: string;
     readonly itemsSubtotal: Money;
     readonly parcels: readonly { readonly skuId: string; readonly qty: number }[];
   }): Promise<{ readonly quoteRef: string; readonly fee: Money; readonly etaDaysMin: number; readonly etaDaysMax: number; readonly serviceLevel: string } | { readonly unavailable: true; readonly reason: string }>;
@@ -124,7 +128,7 @@ export interface ShippingQuotePort {
 
 /** Owned-address check (body_refs_owned) and the delivery data needed for billing. not_found = 404, never 403. */
 export interface AddressPort {
-  resolve(userId: string, addressRef: string): Promise<{ readonly geoAreaId: string; readonly countryCode: string } | null>;
+  resolve(userId: string, addressRef: string): Promise<{ readonly geoAreaId: string; readonly countryCode: string; /** landmark + map pin present (master prompt 20.7); absent is treated as not eligible */ readonly codEligible?: boolean } | null>;
 }
 
 export type RiskDecision = "allow" | "require_confirmation" | "require_prepayment" | "prepaid_only" | "limit_value" | "block";
@@ -212,3 +216,17 @@ export interface SubMerchantPort {
 export interface BillingPort {
   billingFor(userId: string): Promise<CreateIntentRequest["billing"]>;
 }
+
+/**
+ * Promotions seen by checkout (structurally PromotionEvaluator.evaluateForQuote + VoucherService.reserve/confirm/release; see makePromotionsPort).
+ * reserve is idempotent by (order group, promotion). Checkout never reads budget, wellbeing or measurement data to build the context.
+ */
+export interface PromotionsPort {
+  evaluateForQuote(bag: EvalBag, ctx: EvalContext, opts?: { readonly codes?: readonly string[] }): Promise<QuoteEvaluation>;
+  reserve(userId: string, orderGroupId: string, applied: readonly AppliedPromotion[]): Promise<{ readonly reserved: number; readonly replayed: number }>;
+  confirm(userId: string, orderGroupId: string): Promise<number>;
+  release(userId: string, orderGroupId: string): Promise<number>;
+}
+
+/** Freezes the delivery address for one seller order (AddressService.snapshotForOrder satisfies this). */
+export type AddressSnapshotPort = Pick<AddressService, "snapshotForOrder">;

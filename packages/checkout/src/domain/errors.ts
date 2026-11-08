@@ -18,7 +18,11 @@ export type CheckoutErrorCode =
   | "not-found"
   | "invalid-state"
   | "webhook-rejected"
-  | "invalid-quantity";
+  | "invalid-quantity"
+  | "cancel-after-shipping"
+  | "order-not-cancellable"
+  | "refund-preference-invalid"
+  | "payment-in-flight";
 
 /** `status` is the HTTP status the API layer maps to (Problem+JSON type = code). */
 const STATUS: Readonly<Record<CheckoutErrorCode, number>> = {
@@ -40,6 +44,12 @@ const STATUS: Readonly<Record<CheckoutErrorCode, number>> = {
   "invalid-state": 409,
   "webhook-rejected": 400,
   "invalid-quantity": 422,
+  // OrderCancellation (master prompt 20.1): after SHIPPED it is a return, not a cancel
+  "cancel-after-shipping": 409,
+  "order-not-cancellable": 409,
+  "refund-preference-invalid": 422,
+  // the PSP reports the money already moved for an unpaid group: the webhook settles it first, then the shopper cancels the paid order
+  "payment-in-flight": 409,
 };
 
 export interface CheckoutErrorDetails {

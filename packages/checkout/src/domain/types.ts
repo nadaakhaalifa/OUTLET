@@ -36,8 +36,37 @@ export interface QuoteInput {
   readonly creditAvailable: Money;
   readonly creditRequested: Money;
   readonly shippingTaxBp: number;
-  /** Promotions are not built: always zero in this step. */
-  readonly discount: Money;
+  /** Evaluated promotions (server-side only). Absent = no discounts (kill switch off, no promotions port, nothing applies). */
+  readonly discounts?: QuoteDiscounts;
+}
+
+/** What a promotion evaluation hands to the pure quote: per-line and per-store-shipping amounts by funder, the promotion versions and the display labels. */
+export interface QuoteDiscounts {
+  /** keyed by cartLineId (goods) */
+  readonly lines: ReadonlyMap<string, { readonly platform: Money; readonly seller: Money }>;
+  /** keyed by storeId (delivery fee waived or reduced) */
+  readonly shipping: ReadonlyMap<string, { readonly platform: Money; readonly seller: Money }>;
+  readonly promotions: readonly AppliedPromotionRef[];
+  readonly labels: readonly DiscountLabelLine[];
+}
+
+/** Identity of an applied promotion; the quote hash covers it, so a promotion edited between quote and place changes the hash (price-changed, 409). */
+export interface AppliedPromotionRef {
+  readonly promotionId: string;
+  readonly version: number;
+  readonly voucherId: string | null;
+  readonly total: Money;
+  readonly platform: Money;
+  readonly seller: Money;
+}
+
+/** "voucher -X" / "discount -X" only: no reference price, no percentage (master prompt section 17). */
+export interface DiscountLabelLine {
+  readonly promotionId: string;
+  readonly kind: "voucher" | "discount";
+  readonly textAr: string;
+  readonly textEn: string;
+  readonly amount: Money;
 }
 
 export interface QuoteLine {
@@ -47,7 +76,12 @@ export interface QuoteLine {
   readonly qty: number;
   readonly unitPrice: Money;
   readonly lineGross: Money;
-  readonly vat: Money; // VAT included in lineGross (splitInclusive, computed once per line)
+  /** funder split of the promotion discount on this line (zero without promotions) */
+  readonly platformDiscount: Money;
+  readonly sellerDiscount: Money;
+  /** lineGross - platformDiscount - sellerDiscount: what the shopper pays for the goods */
+  readonly payable: Money;
+  readonly vat: Money; // VAT in the taxable base (allocateVatWithLineDiscounts: one splitInclusive per line, seller discounts reduce the base)
   readonly vatBp: number;
   readonly taxCategory: QuoteLineInput["taxCategory"];
   readonly vrp: Money | null;
@@ -61,7 +95,13 @@ export interface StoreQuote {
   readonly lines: readonly QuoteLine[];
   readonly itemsSubtotal: Money;
   readonly shipping: { readonly gross: Money; readonly vat: Money; readonly quoteRef: string; readonly etaDaysMin: number; readonly etaDaysMax: number };
+  /** delivery waiver by funder (zero without promotions); VAT on the fee stays on the full fee (HAUL's own supply, conservative V62) */
+  readonly shippingDiscount: { readonly platform: Money; readonly seller: Money };
+  /** goods + delivery discounts of this store by funder (seller_orders.platform_discount_minor / seller_discount_minor) */
+  readonly platformDiscount: Money;
+  readonly sellerDiscount: Money;
   readonly vat: Money; // goods VAT + delivery VAT
+  /** itemsSubtotal + delivery - platformDiscount - sellerDiscount */
   readonly total: Money;
 }
 
@@ -78,7 +118,10 @@ export interface Quote {
   readonly fees: readonly Fee[];
   readonly itemsSubtotal: Money;
   readonly shipping: Money;
+  /** All promotion discounts (goods + delivery). Shown only through `discountLabels`. */
   readonly discount: Money;
+  readonly promotions: readonly AppliedPromotionRef[];
+  readonly discountLabels: readonly DiscountLabelLine[];
   readonly vat: Money;
   /** Merchandise + delivery - discount, before method fee and store credit. */
   readonly total: Money;
@@ -98,5 +141,6 @@ export type PriceDelta =
   | { readonly kind: "line_added"; readonly skuId: string }
   | { readonly kind: "shipping"; readonly storeId: string; readonly before: Money; readonly after: Money }
   | { readonly kind: "method_fee"; readonly method: PaymentMethod; readonly before: Money; readonly after: Money }
+  | { readonly kind: "promotions"; readonly before: readonly string[]; readonly after: readonly string[] }
   | { readonly kind: "store_credit"; readonly before: Money; readonly after: Money }
   | { readonly kind: "total"; readonly before: Money; readonly after: Money };

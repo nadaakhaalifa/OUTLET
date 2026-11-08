@@ -3,6 +3,7 @@ import type { Queryable } from "@outlet/db";
 import { makeEnv } from "./env.js";
 import type { Env, WorkerDeps } from "./env.js";
 import { lockGroup, lockIntentOfGroup } from "./order-ops.js";
+import { settleVouchers } from "./promotions-glue.js";
 import { compensate } from "./settlement.js";
 
 export interface ExpiryResult {
@@ -53,9 +54,12 @@ export class ExpirySweeper {
         const g = await lockGroup(tx, row.id);
         const i = await lockIntentOfGroup(tx, row.id);
         const past = g.payment_expires_at !== null && new Date(g.payment_expires_at).getTime() < env.now().getTime();
-        return past && (await compensate(env, tx, g, i, "expired", null));
+        const done = past && (await compensate(env, tx, g, i, "expired", null));
+        return { done, promo: done && BigInt(g.discount_minor) > 0n };
       });
-      (did ? expired : skipped).push(row.id);
+      // the lapsed vouchers give their caps back (a late capture of a discounted order is not re-reserved: README section 9)
+      if (did.promo) await settleVouchers(env, "release", row.user_id, row.id);
+      (did.done ? expired : skipped).push(row.id);
     }
     return { expired, leftForWebhook, skipped };
   }

@@ -381,6 +381,7 @@ describe("makeEnv and errors", () => {
       "quote-token-invalid": 422, "quote-expired": 409, "price-changed": 409, "stock-shortfall": 409, "method-unavailable": 403, "address-not-found": 404, "empty-bag": 422,
       "idempotency-conflict": 422, "credit-insufficient": 422, "cod-credit-unsupported": 422, "cod-not-allowed": 403, "store-not-onboarded": 409, "payment-declined": 402,
       "psp-unavailable": 503, "not-found": 404, "invalid-state": 409, "webhook-rejected": 400, "invalid-quantity": 422,
+      "cancel-after-shipping": 409, "order-not-cancellable": 409, "refund-preference-invalid": 422, "payment-in-flight": 409,
     };
     for (const [code, status] of Object.entries(table) as [CheckoutErrorCode, number][]) {
       const e = new CheckoutError(code, "m");

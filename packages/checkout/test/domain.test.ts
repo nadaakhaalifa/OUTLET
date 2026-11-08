@@ -18,7 +18,7 @@ const input = (lines: QuoteLineInput[], over: Partial<QuoteInput> = {}): QuoteIn
   const stores = [...new Set(lines.map((l) => l.storeId))];
   return {
     marketId: "EG", currency: "EGP", lines, shipping: new Map(stores.map((s) => [s, { fee: e(6000n), quoteRef: `r-${s}`, etaDaysMin: 1, etaDaysMax: 2 }])),
-    methods: new Map<PaymentMethod, { fee: Money }>([["card", { fee: e(0n) }], ["cod", { fee: e(0n) }]]), creditAvailable: e(0n), creditRequested: e(0n), shippingTaxBp: 1400, discount: e(0n), ...over,
+    methods: new Map<PaymentMethod, { fee: Money }>([["card", { fee: e(0n) }], ["cod", { fee: e(0n) }]]), creditAvailable: e(0n), creditRequested: e(0n), shippingTaxBp: 1400, ...over,
   };
 };
 const Q = (i: QuoteInput) => quote(i, sha256Hex);
