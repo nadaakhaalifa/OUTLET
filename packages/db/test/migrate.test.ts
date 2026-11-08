@@ -14,7 +14,7 @@ describe("migrations", () => {
 
   it("is idempotent: second run applies nothing", async () => {
     const db = new PGlite();
-    expect(await applyMigrations(db)).toEqual(["0001_outbox_inbox_idempotency"]);
+    expect((await applyMigrations(db)).slice(0, 2)).toEqual(["0001_outbox_inbox_idempotency", "0002_tenancy_rls"]);
     expect(await applyMigrations(db)).toEqual([]);
     await db.close();
   });
