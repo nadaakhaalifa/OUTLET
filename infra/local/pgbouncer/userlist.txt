@@ -1,0 +1,2 @@
+"outlet_app" "app_local_only"
+"outlet_migrator" "migrator_local_only"
