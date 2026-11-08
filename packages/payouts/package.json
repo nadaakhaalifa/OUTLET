@@ -1,0 +1,29 @@
+{
+  "name": "@outlet/payouts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./testing": { "types": "./dist/testing.d.ts", "default": "./dist/testing.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@outlet/admin-access": "workspace:*",
+    "@outlet/audit-log": "workspace:*",
+    "@outlet/db": "workspace:*",
+    "@outlet/ids": "workspace:*",
+    "@outlet/ledger": "workspace:*",
+    "@outlet/money": "workspace:*",
+    "@outlet/orders": "workspace:*",
+    "@outlet/outbox": "workspace:*",
+    "@outlet/policy": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

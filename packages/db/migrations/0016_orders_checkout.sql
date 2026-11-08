@@ -290,6 +290,21 @@ GRANT SELECT, INSERT ON ledger_holds TO outlet_worker;
 GRANT UPDATE (status, captured_entry_id, settled_at) ON ledger_holds TO outlet_worker;
 -- Ledger (append-only, same as outlet_app) and inventory claim/release inside the webhook / expiry transaction.
 GRANT SELECT, INSERT ON ledger_accounts, journal_entries, postings TO outlet_worker;
+-- B4: the ledger INSERT grant is not job-agnostic. journal_entries / postings carry no RLS (the app role reads and writes them without a
+-- tenant key, and ENABLE RLS would need app-role policies the ADR-0011 audit does not allow), so the job allow-list is enforced by a
+-- BEFORE INSERT guard that applies to outlet_worker only: a worker outside the five money jobs cannot post, whatever its grants.
+CREATE OR REPLACE FUNCTION app.ledger_worker_post_guard() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF current_user = 'outlet_worker' AND (app.ctx() IS DISTINCT FROM 'worker'
+     OR app.job() IS NULL OR app.job() <> ALL (ARRAY['payments.webhook', 'checkout.expiry', 'finance.payouts', 'finance.reconcile', 'finance.refunds'])) THEN
+    RAISE EXCEPTION 'worker job % may not post to the ledger (%)', COALESCE(app.job(), '<none>'), TG_TABLE_NAME USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$fn$;
+CREATE TRIGGER journal_entries__worker_post BEFORE INSERT ON journal_entries FOR EACH ROW EXECUTE FUNCTION app.ledger_worker_post_guard();
+CREATE TRIGGER postings__worker_post BEFORE INSERT ON postings FOR EACH ROW EXECUTE FUNCTION app.ledger_worker_post_guard();
 GRANT SELECT ON reservations, inventory_units, inventory_levels TO outlet_worker;
 -- C3: UPDATE is column-limited to exactly what claim and release write (state, timestamps, counters), never keys or money-bearing identity.
 GRANT UPDATE (state, claimed_at, released_at) ON reservations TO outlet_worker;
