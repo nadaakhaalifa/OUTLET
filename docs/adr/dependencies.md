@@ -66,3 +66,21 @@ No new third-party packages. `packages/ledger` (`@outlet/ledger`) uses workspace
 
 `@outlet/ui-web` uses plain CSS Modules over the generated CSS custom properties (`@outlet/ui-tokens/tokens.css`): no CSS-in-JS runtime, no build plugin, logical properties for RTL, and it works unchanged under Next.js SSR. vanilla-extract was rejected as it adds a compiler plugin to every consumer for no benefit at this size. Dates are first publish of the package name and were not re-verified online.
 | minimatch (override to 11.0.1) | fixes GHSA-g3hv-75wg-m249 ReDoS in dev tooling transitive; pnpm override in pnpm-workspace.yaml | 2011-09 | ISC |
+
+## E-13 (apps/web shell, 2026-11-08)
+
+| Package | Purpose | Version / first published | Licence |
+|---|---|---|---|
+| next | Web framework for `apps/web` (App Router, SSR, tag revalidation). Pinned exactly: 16.4.3, released 2026-10-23 (16 days old at install; `minimumReleaseAge` enforced by pnpm). Built with `--webpack` because Turbopack cannot resolve the workspace packages' `./x.js` specifiers to `x.ts` | 16.4.3 / 2016-10 | MIT |
+| @playwright/test | Smoke e2e for `apps/web` (dev). 1.64.1 (2026-10-14); 1.65.0 was rejected by `minimumReleaseAge` | 1.64.1 / 2020-01 | Apache-2.0 |
+| IBM Plex Sans and IBM Plex Sans Arabic (4 woff2 files in `apps/web/src/fonts`, copied from `@fontsource` 5.3.0, not a dependency) | Self-hosted fonts through `next/font/local`; no Google Fonts request at build or runtime | 5.3.0 | OFL-1.1 |
+
+react, react-dom, zod, jsdom, @testing-library/* are already in the table above. `@lhci/cli` is NOT added: `apps/web/lighthouserc.json` is config only; add the dependency when the CI job is wired.
+
+## P1-04 (search-bakeoff, 2026-11-08)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @electric-sql/pglite (devDependency of packages/search-bakeoff) | In-process Postgres for the Postgres FTS adapter tests and the offline bake-off run; contrib `unaccent` and `pg_trgm` used; **tests and the bake-off CLI only** | 2022-09 | Apache-2.0 / PostgreSQL |
+
+No other npm dependencies: the Typesense, Meilisearch and OpenSearch adapters use the built-in `fetch`. Engine images (docker-compose.search.yml, dev only): `typesense/typesense:27.1` (GPL-3.0), `getmeili/meilisearch:v1.12.0` (MIT, some BUSL parts), `opensearchproject/opensearch:2.18.0` (Apache-2.0); licences are verify-register V67, tags to be confirmed before the run.
