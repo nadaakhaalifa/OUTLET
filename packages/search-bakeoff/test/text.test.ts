@@ -142,3 +142,25 @@ describe("analyzeQuery", () => {
     expect(analyzeQuery("dress dress").concepts).toEqual(["dress"]);
   });
 });
+
+describe("normalize/relevance edge branches", () => {
+  it("normalizeArabic reaches a fixed point and is idempotent for stacked decoration", () => {
+    const x = "أأأآإٱ" + "ـ".repeat(3) + "ًٌٍ" + "ةى";
+    expect(normalizeArabic(normalizeArabic(x))).toBe(normalizeArabic(x));
+  });
+  it("percentile / ndcg / isRelevant handle empty, clamped and price-capped inputs", async () => {
+    const { percentile, ndcgAtK, isRelevant } = await import("../src/relevance.js");
+    expect(percentile([], 50)).toBe(0);
+    expect(percentile([1, 2, 3], 0)).toBe(1);
+    expect(percentile([1, 2, 3], 100)).toBe(3);
+    expect(percentile([1, 2, 3], 1000)).toBe(3);
+    expect(ndcgAtK([], 0)).toBe(0);
+    expect(ndcgAtK([true, false], 1)).toBe(1);
+    const doc = { id: "1", titleAr: "فستان", titleEn: "Dress", category: "c", color: "", material: "", audience: "", brand: "", priceMinor: 500 } as never;
+    const j = { queryId: "q", patterns: ["فستان|dress"], grade: 1, source: "synthetic" } as const;
+    expect(isRelevant(doc, j)).toBe(true);
+    expect(isRelevant(doc, j, 400)).toBe(false);
+    expect(isRelevant(doc, j, 500)).toBe(true);
+    expect(isRelevant(doc, { ...j, patterns: ["shoe"] })).toBe(false);
+  });
+});

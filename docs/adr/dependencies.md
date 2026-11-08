@@ -130,3 +130,27 @@ No new third-party packages. `apps/api` now depends on the workspace package `@o
 | axe-core 4.14.0 (apps/seller, dev) | Accessibility assertions in the wizard component tests (already in the lockfile via the web toolchain) | 2015-06 | MPL-2.0 |
 
 `apps/seller` otherwise reuses the dependencies of `apps/web` (next 16.4.3, react, zod, @playwright/test, @testing-library, jsdom) and the workspace packages `@outlet/ids` (UUIDv7 Idempotency-Key in the browser), `@outlet/i18n`, `@outlet/money`, `@outlet/ui-tokens`, `@outlet/ui-web`. `apps/api` now also depends on the workspace package `@outlet/media`.
+
+## Web shopper surface (login, bag, checkout)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @simplewebauthn/browser 14.0.0 (apps/web, exact pin) | Browser half of passkey sign-in (`startAuthentication`) for `/login`; the server half stays in apps/api. Lazy-loaded only when the shopper taps the passkey button | 2021-04 | MIT |
+| axe-core 4.14.0 (apps/web, dev, exact pin) | Accessibility assertions (AR and EN) in the shopper component tests; already in the lockfile via packages/ui-web | 2015-06 | MPL-2.0 |
+
+## Auth, cart and checkout routes (apps/api, 2026-11-08)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @simplewebauthn/server 14.0.3 | WebAuthn registration and assertion ceremonies behind the `PasskeyVerifier` port (apps/api only); pinned, 14.0.3 is older than the 7-day release age | 2020-06 | MIT |
+
+Workspace-only additions to apps/api: `@outlet/cart`, `@outlet/checkout`, `@outlet/inventory`, `@outlet/money`, `@outlet/tax`, `@outlet/seller-accounts`.
+
+
+## Mutation testing (root, dev, 2026-11-08)
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @stryker-mutator/core 9.6.1 (root, dev, exact pin) | StrykerJS mutation testing, score >= 80 on money modules (A2.10); `pnpm mutation`, config `stryker.config.mjs` | 2016-02 | Apache-2.0 |
+| @stryker-mutator/vitest-runner 9.6.1 (root, dev, exact pin) | Vitest runner plugin for StrykerJS (peer of core 9.6.1) | 2019-12 | Apache-2.0 |
+
+9.6.1 (2026-04-10) is pinned instead of 10.x (10.0.0 is from 2026-08-14, under the 90-day rule). Both are dev-only and add no runtime dependency.

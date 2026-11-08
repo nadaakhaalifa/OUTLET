@@ -46,3 +46,19 @@ describe("uuidv7", () => {
     expect(uuidV7Schema.safeParse(uuidv7()).success).toBe(true);
   });
 });
+
+describe("uuidv7 with a degenerate random source", () => {
+  it("treats a missing counter seed as zero and still yields a valid id", async () => {
+    const { vi } = await import("vitest");
+    const real = crypto.getRandomValues.bind(crypto);
+    const spy = vi.spyOn(crypto, "getRandomValues").mockImplementation(((a: ArrayBufferView) =>
+      a instanceof Uint16Array ? new Uint16Array(0) : real(a as Uint8Array<ArrayBuffer>)));
+    try {
+      const id = uuidv7(2_100_000_000_000);
+      expect(uuidV7Schema.safeParse(id).success).toBe(true);
+      expect(id.split("-")[2]).toMatch(/^7[0-9a-f]{3}$/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

@@ -922,6 +922,29 @@ tables:
       - {name: "first_seen_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: device_13m, processors: ["cloud_cell"], residency: cell}
       - {name: "last_seen_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: device_13m, processors: ["cloud_cell"], residency: cell}
       - {name: "revoked_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: device_13m, processors: ["cloud_cell"], residency: cell}
+  - name: passkey_credentials
+    module: auth
+    phase: "0"
+    residency: cell
+    tenant: "user"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["shopper"]
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "credential_id", type: "text", pii_class: P2, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "WebAuthn credential id (public, base64url)"}
+      - {name: "credential_id_hash", type: "bytea", pii_class: P2, encryption: one_way_hash, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "sha256 of passkey: + credential id; pre-auth lookup key"}
+      - {name: "public_key", type: "bytea", pii_class: P2, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "COSE public key; never leaves the server"}
+      - {name: "counter", type: "bigint", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "signature counter, strictly increasing"}
+      - {name: "transports", type: "text[]", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "aaguid", type: "text", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell, note: "authenticator model id"}
+      - {name: "backed_up", type: "boolean", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "last_used_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "revoked_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["account_auth"], lawful_basis: contract, retention: account_active, processors: ["cloud_cell"], residency: cell}
   - name: session_families
     module: auth
     phase: "0"
@@ -3314,6 +3337,8 @@ tables:
       - {name: "payout_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "closed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "move_entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: payouts
     module: payouts
     phase: "1"
@@ -3346,6 +3371,14 @@ tables:
       - {name: "failure_code", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "batch_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "approved_by", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "approved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "hold_reason", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "sent_entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "settled_entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "send_attempt", type: "int", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: payout_items
     module: payouts
     phase: "1"
@@ -3383,6 +3416,7 @@ tables:
       - {name: "starts_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "released_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["wallet_ledger"], lawful_basis: contract, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "seller_order_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: credit_lots
     module: store_credit
     phase: "1"
@@ -3460,6 +3494,10 @@ tables:
       - {name: "idempotency_key", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "refund_choice", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "shopper choice original|store_credit where both legal (15.6)"}
+      - {name: "return_shipping_payer", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "serial_returner", type: "boolean", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "published serial-returner policy flag; no profiling beyond order counts"}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: return_lines
     module: returns
     phase: "1"
@@ -3478,6 +3516,26 @@ tables:
       - {name: "item_unit_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "condition_received", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "restock_decision", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: return_items
+    module: returns
+    phase: "1"
+    residency: cell
+    tenant: "store+user"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["shopper"]
+    verify: ["V7"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "return_request_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "order_line_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "qty", type: "smallint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "condition_received", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "restock_decision", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: return_evidence
     module: returns
     phase: "1"
@@ -3494,6 +3552,9 @@ tables:
       - {name: "media_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell, note: "private; may show a person or a home"}
       - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
   - name: return_inspections
     module: returns
     phase: "1"
@@ -3512,6 +3573,9 @@ tables:
       - {name: "notes", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
       - {name: "inspected_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
       - {name: "inspected_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "reason_code", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
   - name: disputes
     module: returns
     phase: "1"
@@ -3533,6 +3597,11 @@ tables:
       - {name: "resolution_note", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
       - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "reason_code", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "shopper_note", type: "text", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell, note: "free text from the shopper, max 2000 chars"}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "sla_breach_notified_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: contract, retention: returns_evidence_24m, processors: ["cloud_cell"], residency: cell}
   - name: refunds
     module: returns
     phase: "1"
@@ -3561,9 +3630,24 @@ tables:
       - {name: "due_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
       - {name: "completed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
       - {name: "approval_request_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "resolution_approval_request_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "dual-approval request for manual resolution"}
+      - {name: "manual_ref", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "bank transfer / voucher reference entered by finance"}
       - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "goods_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "delivery_fee_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "delivery_vat_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "commission_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "commission_vat_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "seller_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "seller_account", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "destinations", type: "jsonb", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell, note: "route legs: kind, amount, ledger account code; no IBAN or card data"}
+      - {name: "attempts", type: "smallint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "next_attempt_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "last_error", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
+      - {name: "initiated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell", "psp_primary"], residency: cell}
   - name: refund_allocations
     module: returns
     phase: "1"
@@ -3581,6 +3665,14 @@ tables:
       - {name: "component", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "amount_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell, note: "owner; RLS app.current_user_id"}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "qty", type: "smallint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "gross_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "discount_share_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "commission_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "commission_vat_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["returns_refunds"], lawful_basis: legal_obligation, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: refund_attempts
     module: returns
     phase: "1"
@@ -4990,3 +5082,197 @@ tables:
       - {name: "effective_from", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "assigned_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+  - name: payout_batches
+    module: payouts
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "cycle_start", type: "date", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "cycle_end", type: "date", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "payout_count", type: "int", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "total_net_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "completed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: payout_lines
+    module: payouts
+    phase: "1"
+    residency: cell
+    tenant: "store"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "payout_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "accrual_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "amount_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: psp_settlement_files
+    module: payments
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "provider", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "business_date", type: "date", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "sha256", type: "bytea", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "row_count", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "received_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: psp_settlement_lines
+    module: payments
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "file_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "provider", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "line_no", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "provider_ref", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "amount_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "fee_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "value_date", type: "date", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "intent_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "matched_entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "detail", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: cod_remittances
+    module: payments
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "courier", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "remittance_ref", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "business_date", type: "date", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "gross_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "fee_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "net_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "sha256", type: "bytea", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "matched_entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "received_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: cod_remittance_lines
+    module: payments
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "remittance_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "line_no", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "awb", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "seller_order_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "collected_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "fee_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "detail", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: reconciliation_runs
+    module: ledger
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "source", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "counterparty", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "business_date", type: "date", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "mode", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "matched_count", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "unmatched_count", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "started_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "finished_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: reconciliation_matches
+    module: ledger
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "run_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "source", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_type", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "amount_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "matched_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+  - name: reconciliation_exceptions
+    module: ledger
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "run_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "source", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "counterparty", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_type", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "entry_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "expected_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "actual_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "first_seen_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "last_seen_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "escalated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "ticket_ref", type: "text", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}

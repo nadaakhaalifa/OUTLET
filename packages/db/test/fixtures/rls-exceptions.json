@@ -18,6 +18,18 @@
     "cmd": "delete"
   },
   {
+    "table": "cod_remittance_lines",
+    "policy": "cod_remittance_lines__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "cod_remittances",
+    "policy": "cod_remittances__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "consent_records",
     "policy": "consent_records__auth_visitor",
     "role": "outlet_auth",
@@ -40,6 +52,12 @@
     "policy": "devices__auth_register",
     "role": "outlet_auth",
     "cmd": "insert"
+  },
+  {
+    "table": "disputes",
+    "policy": "disputes__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "dlq_messages",
@@ -145,6 +163,24 @@
   },
   {
     "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
     "policy": "outbox_events__worker_media_platform",
     "role": "outlet_worker",
     "cmd": "insert"
@@ -168,6 +204,18 @@
     "cmd": "insert"
   },
   {
+    "table": "passkey_credentials",
+    "policy": "passkey_credentials__auth_lookup",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_credentials",
+    "policy": "passkey_credentials__auth_use",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
     "table": "payment_events_raw",
     "policy": "payment_events_raw__worker_payments_webhook",
     "role": "outlet_worker",
@@ -187,7 +235,49 @@
   },
   {
     "table": "payment_intents",
+    "policy": "payment_intents__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payment_intents",
     "policy": "payment_intents__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payout_accruals",
+    "policy": "payout_accruals__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_batches",
+    "policy": "payout_batches__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_holds",
+    "policy": "payout_holds__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_lines",
+    "policy": "payout_lines__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_finance_reconcile",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -196,6 +286,18 @@
     "policy": "privacy_requests__worker_privacy_deletion",
     "role": "outlet_worker",
     "cmd": "select"
+  },
+  {
+    "table": "psp_settlement_files",
+    "policy": "psp_settlement_files__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "psp_settlement_lines",
+    "policy": "psp_settlement_lines__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "rate_limit_hits",
@@ -228,6 +330,24 @@
     "cmd": "select"
   },
   {
+    "table": "reconciliation_exceptions",
+    "policy": "reconciliation_exceptions__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "reconciliation_matches",
+    "policy": "reconciliation_matches__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "reconciliation_runs",
+    "policy": "reconciliation_runs__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "refresh_tokens",
     "policy": "refresh_tokens__auth_issue",
     "role": "outlet_auth",
@@ -258,10 +378,34 @@
     "cmd": "delete"
   },
   {
+    "table": "refunds",
+    "policy": "refunds__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "seller_bank_accounts",
     "policy": "seller_bank_accounts__worker_seller_kyc",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "seller_plan_assignments",

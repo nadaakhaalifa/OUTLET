@@ -167,3 +167,53 @@ describe("stateFromProduct", () => {
     expect(s.defect).toMatchObject({ typeCode: "stain", xPct: 25, yPct: 60 });
   });
 });
+
+describe("stateFromProduct edge cases", () => {
+  const minimal = (over: Record<string, unknown> = {}) =>
+    stateFromProduct({ id: "p", version: 1, status: "DRAFT", title_ar: null, description_ar: null, primary_category_id: null, condition_grade_code: null, attributes: {}, media: [], skus: [], defect_card: null, ...over });
+
+  it("an empty draft yields the empty state defaults", () => {
+    const s = minimal();
+    expect(s).toMatchObject({ condition: "newClearance", categoryId: "", name: "", description: "", notes: "", price: "", warrantyMonths: "", warrantyKind: "seller", accessories: "", sizes: EMPTY_STATE.sizes, defect: EMPTY_STATE.defect, photos: {} });
+  });
+  it("near_expiry stock reason wins over the grade; unknown grade falls back to new clearance", () => {
+    expect(minimal({ stock_reason: "near_expiry", condition_grade_code: "open_box" }).condition).toBe("nearExpiry");
+    expect(minimal({ condition_grade_code: "mystery" }).condition).toBe("newClearance");
+    expect(minimal({ condition_grade_code: "refurbished" }).condition).toBe("refurbished");
+  });
+  it("maps media roles, ignores unknown roles and keeps the first photo per slot", () => {
+    const s = minimal({ media: [
+      { role: "main", media: { media_id: "m1" } }, { role: "main", media: { media_id: "m2" } },
+      { role: "packaging", media: { media_id: "k1" } }, { role: "lifestyle", media: { media_id: "x" } },
+    ] });
+    expect(s.photos.main?.mediaId).toBe("m1");
+    expect(s.photos.packaging?.mediaId).toBe("k1");
+    expect(Object.keys(s.photos).sort()).toEqual(["main", "packaging"]);
+  });
+  it("converts scalar attributes to strings and drops objects", () => {
+    const s = minimal({ attributes: { colour: "red", organic: true, pieces: 3, nested: { a: 1 }, nothing: null } });
+    expect(s.attributes).toEqual({ colour: "red", organic: "true", pieces: "3" });
+  });
+  it("keeps only well-formed size rows and falls back to the default run when none survive", () => {
+    const ok = minimal({ attributes: { size_run: [{ label: "L", cm: 100 }, { label: 5, cm: 1 }, null, "x", { label: "S" }] } });
+    expect(ok.sizes).toEqual([{ label: "L", cm: "100" }]);
+    expect(minimal({ attributes: { size_run: [{ label: 1 }, null] } }).sizes).toEqual(EMPTY_STATE.sizes);
+    expect(minimal({ attributes: { size_run: "not-an-array" } }).attributes).toEqual({ size_run: "not-an-array" });
+  });
+  it("formats prices with and without cents and pads single-digit cents", () => {
+    const price = (v: string) => minimal({ skus: [{ id: "s", price: { amount_minor: v, currency: "EGP" } }] }).price;
+    expect(price("129900")).toBe("1299");
+    expect(price("129905")).toBe("1299.05");
+    expect(price("129950")).toBe("1299.50");
+    expect(price("5")).toBe("0.05");
+  });
+  it("warranty kinds and months; defect without hotspot keeps null coordinates", () => {
+    expect(minimal({ warranty_kind: "brand", warranty_months: 12 })).toMatchObject({ warrantyKind: "brand", warrantyMonths: "12" });
+    expect(minimal({ warranty_kind: "none", warranty_months: 0 })).toMatchObject({ warrantyKind: "none", warrantyMonths: "0" });
+    expect(minimal({ warranty_kind: "other" }).warrantyKind).toBe("seller");
+    const d = minimal({ defect_card: { summary_ar: null, items: [{ defect_type_code: "scratch", location_ar: "ظهر", severity: "major", affects_function: true, hotspot_x_bp: null }] } });
+    expect(d.defect).toMatchObject({ typeCode: "scratch", severity: "major", affectsFunction: true, xPct: null, yPct: null });
+    expect(d.notes).toBe("");
+    expect(minimal({ defect_card: { summary_ar: "x", items: [] } }).defect).toEqual(EMPTY_STATE.defect);
+  });
+});

@@ -14,10 +14,14 @@
     "privacy:check": "node tooling/privacy/check-data-inventory.mjs",
     "test": "vitest run --coverage",
     "sbom:generate": "pnpm sbom --sbom-format cyclonedx --lockfile-only --out sbom.cdx.json",
-    "prepare": "node tooling/git-hooks/install.mjs"
+    "prepare": "node tooling/git-hooks/install.mjs",
+    "test:pg": "vitest run --project db-pg",
+    "mutation": "stryker run"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.0.5",
     "dependency-cruiser": "^18.7.0",

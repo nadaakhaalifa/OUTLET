@@ -176,3 +176,11 @@ describe("createSellerApi", () => {
     });
   });
 });
+
+describe("alternateLinks x-default for a market without an Arabic locale", () => {
+  it("falls back to the market's own language segment and lists no unresolvable hreflang", () => {
+    const links = alternateLinks({ marketId: "zz", locale: "en-EG", dir: "ltr" }, "/products");
+    expect(links.languages).toEqual({ "x-default": "/zz-en/products" });
+    expect(links.canonical).toBe("/zz-en/products");
+  });
+});

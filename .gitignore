@@ -14,3 +14,7 @@ coverage/
 *.tsbuildinfo
 sbom.cdx.json
 .cache/
+
+# StrykerJS
+.stryker-tmp/
+reports/mutation/

@@ -1,7 +1,7 @@
 import type { DbRole, RoleSqlClient, UnbrandedSqlClient } from "./roles.js";
 import type { Queryable, SqlClient } from "./sql.js";
 
-export const WORKER_JOBS = ["outbox.relay", "privacy.deletion", "privacy.retention", "auth.purge", "media.platform", "seller.kyc", "payments.webhook", "checkout.expiry"] as const;
+export const WORKER_JOBS = ["outbox.relay", "privacy.deletion", "privacy.retention", "auth.purge", "media.platform", "seller.kyc", "payments.webhook", "checkout.expiry", "finance.refunds", "finance.payouts", "finance.reconcile"] as const;
 export type WorkerJob = (typeof WORKER_JOBS)[number];
 
 /** Pre-auth lookup keys, lowercase hex (bidx/hash) or uuid (deviceId). Supply only what the step needs. */
