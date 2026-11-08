@@ -16,13 +16,22 @@ export interface SessionReaderPort {
   list(userId: string, page: { readonly limit: number; readonly cursor?: string }): Promise<{ readonly items: readonly SessionRow[]; readonly nextCursor: string | null }>;
 }
 
+/**
+ * Proves a device registration comes from a genuine install (Cloudflare Turnstile on web, App Attest / Play Integrity on apps).
+ * `verify` resolves true/false; an unconfigured provider rejects with 503 so production fails CLOSED (ADR-0029).
+ */
+export interface DeviceAttestationPort {
+  verify(input: { readonly platform: "web" | "ios" | "android"; readonly installId: string; readonly token: string | undefined }): Promise<boolean>;
+}
+
 /** Everything the auth routes use for one market. Built on the outlet_auth pool (ADR-0011), except the session reader. */
 export interface AuthServices {
   readonly otp: Pick<OtpService, "request" | "verify">;
-  readonly sessions: Pick<SessionService, "issue" | "refresh" | "revoke">;
+  readonly sessions: Pick<SessionService, "issue" | "refresh" | "revoke" | "revokeByRefreshToken">;
   readonly sessionReader: SessionReaderPort;
   readonly devices: { register(input: { platform: "web" | "ios" | "android"; installId: string; now: Date }): Promise<string> };
   /** Apple/Google ID-token verification. Production: UnconfiguredOidc (fail closed). */
   readonly oidc: OidcVerifier;
+  readonly attestation: DeviceAttestationPort;
   readonly passkeys: PasskeyPort;
 }

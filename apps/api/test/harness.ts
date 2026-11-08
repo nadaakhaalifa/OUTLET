@@ -27,7 +27,8 @@ import type { Principal } from "@outlet/policy";
 import { SignJWT, generateKeyPair } from "jose";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import { createApp } from "../src/app.js";
-import { InMemoryChallengeStore, InMemoryPasskeyStore, SessionReader, WebAuthnPasskeys, UnconfiguredOidc } from "../src/modules/auth/index.js";
+import type { DeviceAttestationPort } from "../src/modules/auth/index.js";
+import { PgChallengeStore, InMemoryPasskeyStore, SessionReader, WebAuthnPasskeys, UnconfiguredOidc } from "../src/modules/auth/index.js";
 import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/index.js";
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
@@ -103,6 +104,7 @@ export interface TestApp extends ApiApp {
   readonly logs: string[];
   readonly seed: Seed;
   readonly sms: FakeSms;
+  readonly attestation: FakeDeviceAttestation;
   readonly passkeyStore: InMemoryPasskeyStore;
   readonly fakes: { provider: FakePaymentProvider; shipping: FakeShipping; risk: FakeRisk; kill: FakeKillSwitches; cod: { valid: Set<string> }; courier: FakeCourier; delivery: InMemoryBuyerDelivery };
   /** A real user row (carts and orders reference users) plus a token for it. */
@@ -189,6 +191,16 @@ const seedCatalog = async (raw: SqlClient, deps: CatalogDeps): Promise<Seed> => 
   return { storeA, storeB, slugA: "store-a", slugB: "store-b", productA: p.id, passportA: passport.passportCode, categoryId: CATEGORY, skuA: live.skus[0]?.id ?? "" };
 };
 
+/** Device attestation fake: accepts everything unless `reject` is set; records what it saw. */
+export class FakeDeviceAttestation implements DeviceAttestationPort {
+  reject = false;
+  readonly seen: { platform: string; installId: string; token: string | undefined }[] = [];
+  verify(i: { platform: "web" | "ios" | "android"; installId: string; token: string | undefined }): Promise<boolean> {
+    this.seen.push(i);
+    return Promise.resolve(!this.reject);
+  }
+}
+
 export class FakeSms implements SmsSender {
   readonly provider = "fake";
   readonly sent: { phoneE164: string; code: string }[] = [];
@@ -224,7 +236,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
 
   const { privateKey, publicKey } = await generateKeyPair("ES256", { extractable: true });
   const authClient = roleClient(raw, "outlet_auth");
-  const sessions = new SessionService(authClient, { marketId: DB_MARKET, issuer: ISSUER, audience: AUDIENCE, kid: KID, privateKey, publicKey });
+  const sessions = new SessionService(authClient, { marketId: DB_MARKET, issuer: ISSUER, audience: AUDIENCE, kid: KID, privateKey, publicKey, refreshGraceKey: new Uint8Array(32).fill(3) });
   const tokens = new SessionTokenVerifier(new Map([[DB_MARKET, { audience: AUDIENCE, verifyAccessToken: (jwt: string, now?: Date) => sessions.verifyAccessToken(jwt, now) }]]));
   const memberships = new InMemoryStoreMemberships();
   const flags = new InMemoryFlagStore();
@@ -248,6 +260,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const now = (): Date => new Date(clock.now);
   const authDeps = createAuthDeps({ hmacKey: new Uint8Array(32).fill(7), cipherKey: new Uint8Array(32).fill(9), cipher: new AesGcmFieldCipher(new Uint8Array(32).fill(9)) });
   const sms = new FakeSms();
+  const attestation = new FakeDeviceAttestation();
   const passkeyStore = new InMemoryPasskeyStore();
   const auth = {
     otp: new OtpService(authClient, authDeps, new InMemoryRateLimiter(), sms),
@@ -255,7 +268,8 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     sessionReader: new SessionReader(appClient, DB_MARKET),
     devices: { register: (i: { platform: "web" | "ios" | "android"; installId: string; now: Date }) => registerDevice(authClient, authDeps.hasher, { marketId: DB_MARKET, ...i }) },
     oidc: new UnconfiguredOidc(),
-    passkeys: new WebAuthnPasskeys({ marketId: DB_MARKET, rpName: "Outlex", rpId: RP_ID, origins: [RP_ORIGIN], challengeTtlMs: 5 * 60_000, now }, passkeyStore, new InMemoryChallengeStore()),
+    attestation,
+    passkeys: new WebAuthnPasskeys({ marketId: DB_MARKET, rpName: "Outlex", rpId: RP_ID, origins: [RP_ORIGIN], challengeTtlMs: 5 * 60_000, now }, passkeyStore, new PgChallengeStore(authClient)),
   };
   const fake = new FakePaymentProvider();
   const paymobShaped: PaymentProviderPort = {
@@ -341,6 +355,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     routes,
     sms,
     passkeyStore,
+    attestation,
     fakes,
     shopper,
     device,

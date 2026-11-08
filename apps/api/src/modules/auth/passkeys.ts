@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { uuidv7 } from "@outlet/ids";
 import type { PasskeyAssertionDto, PasskeyVerifier } from "@outlet/auth-core";
 import type { StrongAuthMethod, StrongAuthPort } from "@outlet/seller-accounts";
@@ -16,6 +17,8 @@ export interface PasskeyCredentialRecord {
   readonly transports: readonly string[];
   readonly backupEligible: boolean;
   readonly aaguid: string | null;
+  /** WebAuthn user.id: random per user, base64url (never the user UUID). */
+  readonly userHandle: string;
   readonly createdAt: Date;
   readonly lastUsedAt: Date | null;
 }
@@ -27,6 +30,8 @@ export interface PasskeyStore {
   insert(record: PasskeyCredentialRecord): Promise<void>;
   /** Persists the new signature counter. Must reject (throw) a counter that does not strictly increase (0 -> 0 is allowed for authenticators that never count). */
   recordUse(cred: PasskeyCredentialRecord, counter: number, now: Date): Promise<void>;
+  /** Owner-scoped revocation; false when the credential is not the user's (or already revoked). */
+  revoke(marketId: string, userId: string, id: string, now: Date): Promise<boolean>;
 }
 
 export type ChallengePurpose = "register" | "assert";
@@ -38,6 +43,8 @@ export interface StoredChallenge {
   readonly userId: string | null;
   readonly deviceId: string;
   readonly challenge: string;
+  /** Registration only: the WebAuthn user handle the options carried. */
+  readonly userHandle?: string | null;
   readonly expiresAt: Date;
 }
 
@@ -56,10 +63,13 @@ export interface CeremonyOptions {
 /** What the HTTP routes need. The assertion half is exactly @outlet/auth-core's PasskeyVerifier. */
 export interface PasskeyPort extends PasskeyVerifier {
   registrationOptions(input: { userId: string; deviceId: string; now: Date }): Promise<CeremonyOptions>;
-  verifyRegistration(input: { userId: string; challengeId: string; credential: RegistrationResponseJSON; now: Date }): Promise<PasskeyCredentialRecord>;
+  verifyRegistration(input: { userId: string; deviceId: string; challengeId: string; credential: RegistrationResponseJSON; now: Date }): Promise<PasskeyCredentialRecord>;
   assertionOptions(input: { deviceId: string; now: Date }): Promise<CeremonyOptions>;
   /** True when the user holds at least one registered credential (the strong-auth gate for seller and admin accounts). */
   hasCredential(userId: string): Promise<boolean>;
+  verifyAssertion(dto: PasskeyAssertionDto & { deviceId: string }): Promise<{ userId: string; credentialId: string }>;
+  list(userId: string): Promise<readonly PasskeyCredentialRecord[]>;
+  revoke(userId: string, id: string, now: Date): Promise<boolean>;
 }
 
 export interface PasskeyConfig {
@@ -69,10 +79,12 @@ export interface PasskeyConfig {
   /** Exact origins allowed to run ceremonies (web BFF origin). */
   readonly origins: readonly string[];
   readonly challengeTtlMs: number;
+  /** WebAuthn userName shown by the authenticator: a masked phone, never the user id. Default: a generic label. */
+  readonly userLabel?: (userId: string) => Promise<string>;
   readonly now: () => Date;
 }
 
-const toUserHandle = (userId: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(userId);
+const newUserHandle = (): string => randomBytes(32).toString("base64url");
 
 /**
  * WebAuthn ceremonies with @simplewebauthn/server (ES256/EdDSA/RS256, attestation "none", user verification required,
@@ -88,21 +100,31 @@ export class WebAuthnPasskeys implements PasskeyPort {
 
   async registrationOptions(input: { userId: string; deviceId: string; now: Date }): Promise<CeremonyOptions> {
     const existing = await this.store.listByUser(this.cfg.marketId, input.userId);
+    // One handle per user: a second credential must not overwrite the first resident credential on the authenticator.
+    const userHandle = existing[0]?.userHandle ?? newUserHandle();
     const options = await generateRegistrationOptions({
       rpName: this.cfg.rpName,
       rpID: this.cfg.rpId,
-      userName: input.userId,
-      userID: toUserHandle(input.userId),
+      userName: await this.label(input.userId),
+      userID: Uint8Array.from(Buffer.from(userHandle, "base64url")),
       attestationType: "none",
       excludeCredentials: existing.map((c) => ({ id: c.credentialId, transports: [...c.transports] })),
       authenticatorSelection: { residentKey: "required", userVerification: "required" },
     });
-    return this.issue("register", input.userId, input.deviceId, options.challenge, options as unknown as Record<string, unknown>, input.now);
+    return this.issue("register", input.userId, input.deviceId, options.challenge, options as unknown as Record<string, unknown>, input.now, userHandle);
   }
 
-  async verifyRegistration(input: { userId: string; challengeId: string; credential: RegistrationResponseJSON; now: Date }): Promise<PasskeyCredentialRecord> {
+  private async label(userId: string): Promise<string> {
+    try {
+      return (await this.cfg.userLabel?.(userId)) ?? "Outlex account";
+    } catch {
+      return "Outlex account";
+    }
+  }
+
+  async verifyRegistration(input: { userId: string; deviceId: string; challengeId: string; credential: RegistrationResponseJSON; now: Date }): Promise<PasskeyCredentialRecord> {
     const ch = await this.challenges.take(input.challengeId, this.cfg.marketId, input.now);
-    if (ch?.purpose !== "register" || ch.userId !== input.userId) throw Problems.unprocessable("passkey-challenge-invalid");
+    if (ch?.purpose !== "register" || ch.userId !== input.userId || ch.deviceId !== input.deviceId || ch.userHandle == null) throw Problems.unprocessable("passkey-challenge-invalid");
     let verified;
     try {
       verified = await verifyRegistrationResponse({
@@ -128,6 +150,7 @@ export class WebAuthnPasskeys implements PasskeyPort {
       counter: info.credential.counter,
       transports: info.credential.transports ?? [],
       backupEligible: info.credentialDeviceType === "multiDevice",
+      userHandle: ch.userHandle,
       aaguid: /^[0-9a-f-]{36}$/.test(info.aaguid) && info.aaguid !== "00000000-0000-0000-0000-000000000000" ? info.aaguid : null,
       createdAt: input.now,
       lastUsedAt: null,
@@ -142,10 +165,10 @@ export class WebAuthnPasskeys implements PasskeyPort {
   }
 
   /** @outlet/auth-core PasskeyVerifier: the DTO is the flattened assertion; `challengeId` names the stored challenge. */
-  async verifyAssertion(dto: PasskeyAssertionDto): Promise<{ userId: string; credentialId: string }> {
+  async verifyAssertion(dto: PasskeyAssertionDto & { deviceId: string }): Promise<{ userId: string; credentialId: string }> {
     const now = this.cfg.now();
     const ch = await this.challenges.take(dto.challengeId, this.cfg.marketId, now);
-    if (ch?.purpose !== "assert") throw Problems.unprocessable("passkey-challenge-invalid");
+    if (ch?.purpose !== "assert" || ch.deviceId !== dto.deviceId) throw Problems.unprocessable("passkey-challenge-invalid");
     const cred = await this.store.findByCredentialId(this.cfg.marketId, dto.credentialId);
     // An unknown credential and a bad signature look the same from outside.
     if (cred === null) throw Problems.unauthenticated("passkey-rejected");
@@ -178,10 +201,18 @@ export class WebAuthnPasskeys implements PasskeyPort {
     return (await this.store.listByUser(this.cfg.marketId, userId)).length > 0;
   }
 
-  private async issue(purpose: ChallengePurpose, userId: string | null, deviceId: string, challenge: string, publicKey: Record<string, unknown>, now: Date): Promise<CeremonyOptions> {
+  list(userId: string): Promise<readonly PasskeyCredentialRecord[]> {
+    return this.store.listByUser(this.cfg.marketId, userId);
+  }
+
+  revoke(userId: string, id: string, now: Date): Promise<boolean> {
+    return this.store.revoke(this.cfg.marketId, userId, id, now);
+  }
+
+  private async issue(purpose: ChallengePurpose, userId: string | null, deviceId: string, challenge: string, publicKey: Record<string, unknown>, now: Date, userHandle: string | null = null): Promise<CeremonyOptions> {
     const id = uuidv7(now.getTime());
     const expiresAt = new Date(now.getTime() + this.cfg.challengeTtlMs);
-    await this.challenges.put({ id, marketId: this.cfg.marketId, purpose, userId, deviceId, challenge, expiresAt });
+    await this.challenges.put({ id, marketId: this.cfg.marketId, purpose, userId, deviceId, challenge, userHandle, expiresAt });
     return { challengeId: id, publicKey, expiresAt };
   }
 }
@@ -225,6 +256,12 @@ export class InMemoryPasskeyStore implements PasskeyStore {
     }
     return Promise.resolve();
   }
+  revoke(marketId: string, userId: string, id: string): Promise<boolean> {
+    const i = this.rows.findIndex((r) => r.id === id && r.marketId === marketId && r.userId === userId);
+    if (i < 0) return Promise.resolve(false);
+    this.rows.splice(i, 1);
+    return Promise.resolve(true);
+  }
 }
 
 export class InMemoryChallengeStore implements ChallengeStore {
@@ -241,7 +278,7 @@ export class InMemoryChallengeStore implements ChallengeStore {
   }
 }
 
-/** Production default until the `passkey_credentials` / challenge migration exists: every ceremony answers 503, nothing is stored. */
+/** Production default until relying party and auth pool are configured: every ceremony answers 503, nothing is stored. */
 export class UnconfiguredPasskeys implements PasskeyPort {
   private fail(): never {
     throw Problems.unavailable("passkeys-unavailable");
@@ -260,5 +297,11 @@ export class UnconfiguredPasskeys implements PasskeyPort {
   }
   hasCredential(): Promise<boolean> {
     return Promise.resolve(false);
+  }
+  list(): Promise<readonly PasskeyCredentialRecord[]> {
+    return this.fail();
+  }
+  revoke(): Promise<boolean> {
+    return this.fail();
   }
 }

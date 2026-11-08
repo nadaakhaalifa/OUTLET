@@ -21,7 +21,7 @@ import { Redis } from "ioredis";
 import pg from "pg";
 import { createApp } from "./app.js";
 import { parseEnv, parseWebhookIps, trustProxyList } from "./config.js";
-import { InMemoryChallengeStore, PgPasskeyStore, SessionReader, UnconfiguredFieldCipher, UnconfiguredOidc, UnconfiguredPasskeys, UnconfiguredSms, WebAuthnPasskeys } from "./modules/auth/index.js";
+import { PgChallengeStore, PgPasskeyStore, SessionReader, UnconfiguredDeviceAttestation, UnconfiguredFieldCipher, UnconfiguredOidc, UnconfiguredPasskeys, UnconfiguredSms, WebAuthnPasskeys, pgPhoneLabel } from "./modules/auth/index.js";
 import type { AuthServices } from "./modules/auth/index.js";
 import { noSuggestions } from "./modules/cart/index.js";
 import type { CartServices } from "./modules/cart/index.js";
@@ -88,16 +88,16 @@ for (const m of listMarkets()) {
   const marketId = m.id.toUpperCase();
   const audience = `outlet:${m.id}`;
   // Token verification never touches the database; session issue/refresh (auth routes, later) use the auth pool.
-  const sessions = new SessionService(authClient, { marketId, issuer: env.JWT_ISSUER, audience, kid: env.JWT_KID, privateKey, publicKey });
+  const sessions = new SessionService(authClient, { marketId, issuer: env.JWT_ISSUER, audience, kid: env.JWT_KID, privateKey, publicKey, refreshGraceKey: authDeps.hasher.hmac("refresh-grace-key", "v1") });
   verifiers.set(marketId, { audience, verifyAccessToken: (jwt, now) => sessions.verifyAccessToken(jwt, now) });
   const hasher = authDeps.hasher;
   // Credentials persist in passkey_credentials (migration 0020) through the outlet_auth pool, so passkeys need DATABASE_URL_AUTH and a configured relying
-  // party; otherwise fail closed (503). Ceremony challenges are still process-local (single instance): a multi-instance deployment needs a shared
-  // challenge store before passkeys are switched on behind a load balancer.
+  // party; otherwise fail closed (503). Ceremony challenges live in passkey_challenges (migration 0024), shared by every instance: passkeys may be enabled only with
+  // this store (docs/compliance/verify-register.md).
   const origins = env.PASSKEY_ORIGINS.split(",").map((o) => o.trim()).filter((o) => o.length > 0);
   const passkeys =
     env.PASSKEY_RP_ID !== undefined && origins.length > 0 && authPool !== undefined
-      ? new WebAuthnPasskeys({ marketId, rpName: "Outlex", rpId: env.PASSKEY_RP_ID, origins, challengeTtlMs: 5 * 60_000, now: () => new Date() }, new PgPasskeyStore(brandClient<"outlet_auth">(authClient)), new InMemoryChallengeStore())
+      ? new WebAuthnPasskeys({ marketId, rpName: "Outlex", rpId: env.PASSKEY_RP_ID, origins, challengeTtlMs: 5 * 60_000, now: () => new Date(), userLabel: pgPhoneLabel(appClient, marketId, authDeps.cipher) }, new PgPasskeyStore(brandClient<"outlet_auth">(authClient)), new PgChallengeStore(brandClient<"outlet_auth">(authClient)))
       : new UnconfiguredPasskeys();
   auths.set(marketId, {
     otp: new OtpService(authClient, authDeps, new PgRateLimiter(authClient, marketId), new UnconfiguredSms()),
@@ -105,6 +105,8 @@ for (const m of listMarkets()) {
     sessionReader: new SessionReader(appClient, marketId),
     devices: { register: (i) => registerDevice(authClient, hasher, { marketId, platform: i.platform, installId: i.installId, now: i.now }) },
     oidc: new UnconfiguredOidc(),
+    // No Turnstile / App Attest verifier is contracted yet: device registration fails closed (503) until one is wired (ADR-0029).
+    attestation: new UnconfiguredDeviceAttestation(),
     passkeys,
   });
   carts.set(marketId, { cart: new CartService({ client: appClient, marketId, availability: pgInventoryAvailability(appClient, marketId) }), suggestions: noSuggestions });

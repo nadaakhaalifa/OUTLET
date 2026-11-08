@@ -120,6 +120,34 @@ const BASE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
       return { req: { method: "POST", url: "/v1/eg/auth/logout", headers: authedHeaders(t, s.token), payload: {} }, status: 204 };
     },
   },
+  "POST /v1/{market}/auth/logout-by-refresh": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      return { req: { method: "POST", url: "/v1/eg/auth/logout-by-refresh", headers: { "x-device-id": s.deviceId }, payload: { refresh_token: s.refresh } }, status: 204 };
+    },
+  },
+  "GET /v1/{market}/me/passkeys": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      await enrollPasskey(t, s);
+      return { req: { method: "GET", url: "/v1/eg/me/passkeys?limit=10", headers: bearer(s.token) }, status: 200 };
+    },
+  },
+  "DELETE /v1/{market}/me/passkeys/{passkey_id}": {
+    happy: async (t) => {
+      const s = await signIn(t);
+      await enrollPasskey(t, s);
+      const id = (await t.passkeyStore.listByUser("EG", s.userId))[0]?.id ?? "";
+      return { req: { method: "DELETE", url: `/v1/eg/me/passkeys/${id}`, headers: authedHeaders(t, s.token) }, status: 204 };
+    },
+    otherTenant: async (t) => {
+      const owner = await signIn(t);
+      await enrollPasskey(t, owner);
+      const intruder = await t.shopper();
+      const id = (await t.passkeyStore.listByUser("EG", owner.userId))[0]?.id ?? "";
+      return { method: "DELETE", url: `/v1/eg/me/passkeys/${id}`, headers: authedHeaders(t, intruder.token) };
+    },
+  },
   "GET /v1/{market}/me/sessions": {
     happy: async (t) => {
       const s = await t.shopper();

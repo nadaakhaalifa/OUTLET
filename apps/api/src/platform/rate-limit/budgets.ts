@@ -47,8 +47,11 @@ export const RATE_BUDGETS = {
   sellerWrite: b("seller_write", 120, MINUTE, ["store"], "closed", "default"),
   // Auth (docs/api/openapi.yaml x-rate-limit). Device keys are mandatory (X-Device-Id); the phone budget (3 / 15 min) and the
   // per-challenge attempt cap (5) live in @outlet/auth-core, which sees the phone blind index.
-  /** Pre-device: the caller has no id yet, so a fail-open budget lets the guard fall back to the IP bucket (CGNAT-aware). */
-  deviceRegister: b("device_register", 20, HOUR, ["device", "ip"], "open", "default"),
+  /** Pre-device: the caller has no id yet, so the IP and ASN buckets (CGNAT multipliers 10 and 100) carry it and it fails CLOSED. */
+  deviceRegister: b("device_register", 20, HOUR, ["device", "ip", "asn"], "closed", "default"),
+  /** Verify attempts per phone (blind-index HMAC), across challenges; the controller applies it on top of the device budget. */
+  otpVerifyPhone: b("otp_verify_phone", 10, 15 * MINUTE, ["device"], "closed", "default"),
+  authLogout: b("auth_logout", 30, MINUTE, ["device"], "closed", "default"),
   otpVerify: b("otp_verify", 20, HOUR, ["device"], "closed", "default"),
   authRefresh: b("auth_refresh", 30, MINUTE, ["device"], "closed", "default"),
   federatedSignIn: b("federated_sign_in", 10, MINUTE, ["device"], "closed", "default"),

@@ -3,7 +3,7 @@ import { pageOf } from "../../platform/pagination.js";
 
 const Iso = z.iso.datetime();
 
-export const DeviceRegisterBody = z.strictObject({ install_id: z.uuid(), platform: z.enum(["web", "ios", "android"]) });
+export const DeviceRegisterBody = z.strictObject({ install_id: z.uuid(), platform: z.enum(["web", "ios", "android"]), attestation: z.string().min(1).max(4096).optional() });
 export const DeviceRegistered = z.strictObject({ device_id: z.uuid() });
 
 export const OtpRequestBody = z.strictObject({
@@ -79,3 +79,7 @@ export const PasskeyCredential = z.strictObject({
   created_at: Iso,
   last_used_at: Iso.nullable(),
 });
+
+export const PasskeyId = z.strictObject({ passkey_id: z.uuid() });
+export const PasskeyPage = pageOf(PasskeyCredential);
+export type PasskeyPage = z.infer<typeof PasskeyPage>;

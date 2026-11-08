@@ -1,3 +1,5 @@
+import { Problems } from "../../platform/problem.js";
+import type { DeviceAttestationPort } from "./ports.js";
 import type { FieldCipher, OidcVerifier, SmsSender } from "@outlet/auth-core";
 
 /** Fail-closed production defaults (ADR-0029): no provider contract, no key management, no sending. */
@@ -21,5 +23,12 @@ export class UnconfiguredFieldCipher implements FieldCipher {
   }
   decrypt(): Promise<string> {
     return Promise.reject(new Error("field cipher is not configured"));
+  }
+}
+
+/** No Turnstile / App Attest verifier is wired: device registration answers 503 rather than trusting an unproven install. */
+export class UnconfiguredDeviceAttestation implements DeviceAttestationPort {
+  verify(): Promise<boolean> {
+    return Promise.reject(Problems.unavailable("device-attestation-unavailable"));
   }
 }

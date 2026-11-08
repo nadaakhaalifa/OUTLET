@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { Controller, Delete, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs/common";
 import type { IssuedSession } from "@outlet/auth-core";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { API_DEPS } from "../../platform/deps.js";
 import type { ApiDeps } from "../../platform/deps.js";
 import { headerValue } from "../../platform/http.js";
 import type { ApiReply, ApiRequest, RequestState } from "../../platform/http.js";
+import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { CursorQuery } from "../../platform/pagination.js";
 import { Problems } from "../../platform/problem.js";
 import { RATE_BUDGETS, } from "../../platform/rate-limit/budgets.js";
@@ -14,7 +16,7 @@ import { self } from "../../platform/resolvers.js";
 import { Body, Ctx, Params, Query } from "../../platform/validation.js";
 import {
   AssertionCredential, DeviceRegisterBody, DeviceRegistered, FederatedBody, OtpChallenge, OtpRequestBody, OtpVerifyBody, PasskeyAssertVerifyBody, PasskeyCredential, PasskeyOptions,
-  PasskeyOptionsBody, PasskeyRegisterVerifyBody, RefreshBody, SessionFamilyPage, SessionId, TokenPair,
+  PasskeyId, PasskeyOptionsBody, PasskeyPage, PasskeyRegisterVerifyBody, RefreshBody, SessionFamilyPage, SessionId, TokenPair,
 } from "./dto.js";
 import type { AuthServices } from "./ports.js";
 
@@ -60,6 +62,10 @@ const pair = (s: IssuedSession, amr: readonly string[], userId: string, isNew: b
   is_new_user: isNew,
 });
 
+const passkeyDto = (c: { id: string; aaguid: string | null; transports: readonly string[]; backupEligible: boolean; createdAt: Date; lastUsedAt: Date | null }): z.infer<typeof PasskeyCredential> => ({
+  id: c.id, aaguid: c.aaguid, transports: [...c.transports], backup_eligible: c.backupEligible, created_at: iso(c.createdAt), last_used_at: c.lastUsedAt === null ? null : iso(c.lastUsedAt),
+});
+
 /** Authentication: devices, OTP, refresh rotation, logout, sessions, passkeys and (fail-closed) Apple/Google. */
 @Controller("v1/:market")
 export class AuthController {
@@ -90,7 +96,7 @@ export class AuthController {
   @RateLimit({ budget: RATE_BUDGETS.deviceRegister })
   @Contract({
     operationId: "registerDevice",
-    summary: "Register an install and get its device id (pre-auth; the id goes in X-Device-Id)",
+    summary: "Register an install and get its device id (pre-auth, attested; budget per IP and ASN; the id goes in X-Device-Id)",
     tags: ["Auth"],
     body: DeviceRegisterBody,
     response: DeviceRegistered,
@@ -98,6 +104,8 @@ export class AuthController {
     maxQueries: 0,
   })
   async registerDevice(@Ctx() s: RequestState, @Body() b: z.infer<typeof DeviceRegisterBody>): Promise<z.infer<typeof DeviceRegistered>> {
+    // Proof of a genuine install first (Turnstile / App Attest); an unconfigured verifier answers 503 (fail closed).
+    if (!(await this.svc(s).attestation.verify({ platform: b.platform, installId: b.install_id, token: b.attestation }))) throw Problems.forbidden("attestation-failed");
     return { device_id: await this.svc(s).devices.register({ platform: b.platform, installId: b.install_id, now: this.deps.clock.now() }) };
   }
 
@@ -141,6 +149,7 @@ export class AuthController {
     maxQueries: 2,
   })
   async verifyOtp(@Ctx() s: RequestState, @Req() req: ApiRequest, @Res({ passthrough: true }) reply: ApiReply, @Body() b: z.infer<typeof OtpVerifyBody>): Promise<TokenPair> {
+    await this.phoneVerifyBudget(marketOf(s), b.phone_e164);
     const user = await this.svc(s).otp.verify({
       challengeId: b.challenge_id,
       marketId: marketOf(s),
@@ -151,6 +160,19 @@ export class AuthController {
       now: this.deps.clock.now(),
     });
     return this.issueSession(s, req, reply, user.userId, "otp", user.isNew);
+  }
+
+  /** Verify attempts per phone across challenges and devices (HMAC of market + phone: the number never reaches the limiter). */
+  private async phoneVerifyBudget(market: string, phone: string): Promise<void> {
+    const bud = RATE_BUDGETS.otpVerifyPhone;
+    const key = createHmac("sha256", this.deps.http.rateLimitKeySecret).update(`${market}:${phone}`).digest("base64url").slice(0, 22);
+    let d;
+    try {
+      d = await this.deps.rateLimiter.hit(`${bud.name}:phone:${key}`, { limit: bud.limit, periodMs: bud.periodMs });
+    } catch {
+      throw Problems.unavailable("rate-limiter-unavailable");
+    }
+    if (!d.allowed) throw Problems.rateLimited(d.retryAfterMs / 1000);
   }
 
   @Post("auth/refresh")
@@ -193,6 +215,28 @@ export class AuthController {
     const user = s.user;
     if (user === undefined) throw Problems.unauthenticated();
     await this.svc(s).sessions.revoke(user.sessionId, user.userId, this.deps.clock.now());
+    void reply.header("set-cookie", clearedCookie(s.market?.id ?? ""));
+    return undefined;
+  }
+
+  @Post("auth/logout-by-refresh")
+  @HttpCode(204)
+  @Public()
+  @NoIdempotency("revoking a session family is idempotent; no response body to replay")
+  @RateLimit({ budget: RATE_BUDGETS.authLogout })
+  @Contract({
+    operationId: "logoutByRefresh",
+    summary: "Sign out with the refresh token (body or cookie) when the access token has expired; always 204, clears the cookie",
+    tags: ["Auth"],
+    body: RefreshBody,
+    response: z.undefined(),
+    status: 204,
+    maxQueries: 2,
+  })
+  async logoutByRefresh(@Ctx() s: RequestState, @Req() req: ApiRequest, @Res({ passthrough: true }) reply: ApiReply, @Body() b: z.infer<typeof RefreshBody>): Promise<undefined> {
+    const token = b.refresh_token ?? cookieOf(req, REFRESH_COOKIE);
+    // An unknown, malformed or already-revoked token looks the same as a known one: no oracle.
+    if (token !== undefined && token.length > 0 && token.length <= 500) await this.svc(s).sessions.revokeByRefreshToken(token, deviceOf(req), this.deps.clock.now());
     void reply.header("set-cookie", clearedCookie(s.market?.id ?? ""));
     return undefined;
   }
@@ -311,16 +355,44 @@ export class AuthController {
     status: 201,
     maxQueries: 2,
   })
-  async registerVerify(@Ctx() s: RequestState, @Body() b: z.infer<typeof PasskeyRegisterVerifyBody>): Promise<z.infer<typeof PasskeyCredential>> {
+  async registerVerify(@Ctx() s: RequestState, @Req() req: ApiRequest, @Body() b: z.infer<typeof PasskeyRegisterVerifyBody>): Promise<z.infer<typeof PasskeyCredential>> {
     const user = s.user;
     if (user === undefined) throw Problems.unauthenticated();
     const c = await this.svc(s).passkeys.verifyRegistration({
       userId: user.userId,
+      deviceId: this.deviceOrNone(req),
       challengeId: b.challenge_id,
       credential: b.credential,
       now: this.deps.clock.now(),
     });
-    return { id: c.id, aaguid: c.aaguid, transports: [...c.transports], backup_eligible: c.backupEligible, created_at: iso(c.createdAt), last_used_at: c.lastUsedAt === null ? null : iso(c.lastUsedAt) };
+    return passkeyDto(c);
+  }
+
+  @Get("me/passkeys")
+  @Paginated()
+  @Authorize(ACTIONS.passkeyRead, self)
+  @RateLimit({ budget: RATE_BUDGETS.shopperRead })
+  @Contract({ operationId: "listMyPasskeys", summary: "My registered passkeys (no key material)", tags: ["Auth"], query: CursorQuery, response: PasskeyPage, maxQueries: 1 })
+  async listPasskeys(@Ctx() s: RequestState, @Query() q: CursorQuery): Promise<PasskeyPage> {
+    const user = s.user;
+    if (user === undefined) throw Problems.unauthenticated();
+    const all = await this.svc(s).passkeys.list(user.userId);
+    const from = q.cursor === undefined ? 0 : Number(decodeCursor(q.cursor, 1)[0]);
+    const items = all.slice(from, from + q.limit);
+    const next = from + q.limit;
+    return { items: items.map(passkeyDto), next_cursor: next < all.length ? encodeCursor(String(next)) : null };
+  }
+
+  @Delete("me/passkeys/:passkey_id")
+  @HttpCode(204)
+  @Authorize(ACTIONS.passkeyWrite, self)
+  @RateLimit({ budget: RATE_BUDGETS.shopperWrite })
+  @Contract({ operationId: "revokeMyPasskey", summary: "Revoke one of my passkeys (another user's passkey is 404)", tags: ["Auth"], params: PasskeyId, response: z.undefined(), status: 204, maxQueries: 2 })
+  async revokePasskey(@Ctx() s: RequestState, @Params() p: z.infer<typeof PasskeyId>): Promise<undefined> {
+    const user = s.user;
+    if (user === undefined) throw Problems.unauthenticated();
+    if (!(await this.svc(s).passkeys.revoke(user.userId, p.passkey_id, this.deps.clock.now()))) throw Problems.notFound();
+    return undefined;
   }
 
   @Post("auth/passkeys/assert/options")
@@ -363,6 +435,7 @@ export class AuthController {
       authenticatorData: c.response.authenticatorData,
       signature: c.response.signature,
       challengeId: b.challenge_id,
+      deviceId: deviceOf(req),
     });
     return this.issueSession(s, req, reply, r.userId, "passkey", false);
   }

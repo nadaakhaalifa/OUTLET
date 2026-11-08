@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { SqlClient } from "@outlet/db";
 import { createTestClient, roleClient } from "@outlet/db/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -24,7 +24,7 @@ const user = async (): Promise<string> => {
 };
 const cred = (userId: string, o: Partial<PasskeyCredentialRecord> = {}): PasskeyCredentialRecord => ({
   id: randomUUID(), marketId: "EG", userId, credentialId: `cred-${randomUUID()}`, publicKey: new Uint8Array([1, 2, 3]), counter: 0,
-  transports: ["internal"], backupEligible: true, aaguid: null, createdAt: new Date("2026-01-01T00:00:00Z"), lastUsedAt: null, ...o,
+  transports: ["internal"], backupEligible: true, aaguid: null, userHandle: randomBytes(32).toString("base64url"), createdAt: new Date("2026-01-01T00:00:00Z"), lastUsedAt: null, ...o,
 });
 
 describe("PgPasskeyStore (outlet_auth under FORCE RLS)", () => {
@@ -80,5 +80,19 @@ describe("PgPasskeyStore (outlet_auth under FORCE RLS)", () => {
     expect(await store.listByUser("EG", b)).toEqual([]);
     const auth = roleClient(admin, "outlet_auth");
     await expect(auth.query("SELECT 1 FROM passkey_credentials")).resolves.toMatchObject({ rows: [] });
+  });
+});
+
+describe("PgPasskeyStore revoke and user handle (migration 0024)", () => {
+  it("round-trips the handle; revoke is owner-only and idempotent", async () => {
+    const a = await user();
+    const b = await user();
+    const c = cred(a);
+    await store.insert(c);
+    expect((await store.listByUser("EG", a))[0]?.userHandle).toBe(c.userHandle);
+    expect(await store.revoke("EG", b, c.id, new Date())).toBe(false);
+    expect(await store.revoke("EG", a, c.id, new Date())).toBe(true);
+    expect(await store.revoke("EG", a, c.id, new Date())).toBe(false);
+    expect(await store.findByCredentialId("EG", c.credentialId)).toBeNull();
   });
 });

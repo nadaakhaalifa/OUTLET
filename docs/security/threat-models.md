@@ -62,6 +62,10 @@ All limited responses are **429 with `Retry-After`**. IETF RateLimit headers are
 | D | OTP flood on one victim | 3/15 min per phone, 10/day per device, exponential resend timer | L | AUTH-T10 |
 | E | Refresh-token replay | Rotate on every use; reuse → revoke the family + notify | L | AUTH-T11 |
 | E | Under-18 account | DOB gate; device soft-block 30 days; no PII stored on refusal | L | AUTH-T12 |
+| E | Stolen access token stays valid until expiry: the 10-min JWT is verified without a database read, so logout or family revocation does not stop it (accepted, finding 13; brief called it AUTH-T11, which is the refresh-replay row above) | Short TTL (10 min); refresh rotation + reuse detection end the family within one TTL; money, payout and admin routes re-check the session family where the policy requires it; logout works with the refresh token when the access token has expired (`logout-by-refresh`) | M (accepted) | AUTH-T13 |
+| R | Refresh race across API instances locks out a legitimate client or hides a replay | 10 s grace: a rotated token may be presented once more and returns the same pair (successor re-derived by HMAC, never stored raw); a second use or any use after 10 s is reuse and revokes the family | L | AUTH-T14 |
+| S | Device-registration storm to dodge the under-18 block and OTP budgets | Closed budget per IP/ASN (CGNAT multipliers), `DeviceAttestationPort` (Turnstile / App Attest; unconfigured fails closed), per-phone verify budget | M | AUTH-T15 |
+| S | Passkey ceremony replay or cross-device use | Challenges in Postgres, single-use, 5-min TTL, bound to device and user; WebAuthn user handle is a random per-user value, userName a masked phone | L | AUTH-T16 |
 
 ## 2. Policy / RLS (authorization core)
 

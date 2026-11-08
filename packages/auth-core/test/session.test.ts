@@ -248,3 +248,96 @@ describe("property: rotation chain", () => {
     });
   });
 });
+
+const GRACE_KEY = new Uint8Array(32).fill(5);
+
+describe("refresh grace window (finding 3)", () => {
+  it("a rotated token presented once within 10 s returns the SAME pair; no new rotation", async () => {
+    await withTestDb(async (db) => {
+      const s = await makeSessions(db, { refreshGraceKey: GRACE_KEY });
+      const { userId, deviceId } = await makeUserAndDevice(db);
+      const a = await s.issue(userId, deviceId, { now: T0 });
+      const b = await s.refresh(a.refreshToken, deviceId, at(1000));
+      const c = await s.refresh(a.refreshToken, deviceId, at(10_500));
+      expect(c.refreshToken).toBe(b.refreshToken);
+      expect(c.refreshExpiresAt).toEqual(b.refreshExpiresAt);
+      const claims = await Promise.all([s.verifyAccessToken(b.accessToken, at(2000)), s.verifyAccessToken(c.accessToken, at(2000))]);
+      expect(claims[1]).toEqual(claims[0]);
+      const n = await db.query<{ n: string }>("SELECT count(*)::text n FROM refresh_tokens WHERE family_id = $1", [a.sessionId]);
+      expect(n.rows[0]?.n).toBe("2");
+      await expect(s.refresh(b.refreshToken, deviceId, at(11_000))).resolves.toBeDefined();
+    });
+  });
+
+  it("a second grace use, a late use (> 10 s) and a missing key are reuse: the family is revoked", async () => {
+    await withTestDb(async (db) => {
+      const s = await makeSessions(db, { refreshGraceKey: GRACE_KEY });
+      const { userId, deviceId } = await makeUserAndDevice(db, 1);
+      const a = await s.issue(userId, deviceId, { now: T0 });
+      await s.refresh(a.refreshToken, deviceId, at(1000));
+      await s.refresh(a.refreshToken, deviceId, at(2000));
+      expect(await code(s.refresh(a.refreshToken, deviceId, at(3000)))).toBe("REFRESH_REUSE");
+      expect(await s.listSessions(userId)).toHaveLength(0);
+
+      const u2 = await makeUserAndDevice(db, 2);
+      const a2 = await s.issue(u2.userId, u2.deviceId, { now: T0 });
+      await s.refresh(a2.refreshToken, u2.deviceId, at(1000));
+      expect(await code(s.refresh(a2.refreshToken, u2.deviceId, at(11_001)))).toBe("REFRESH_REUSE");
+
+      const plain = await makeSessions(db);
+      const u3 = await makeUserAndDevice(db, 3);
+      const a3 = await plain.issue(u3.userId, u3.deviceId, { now: T0 });
+      await plain.refresh(a3.refreshToken, u3.deviceId, at(1000));
+      expect(await code(plain.refresh(a3.refreshToken, u3.deviceId, at(2000)))).toBe("REFRESH_REUSE");
+    });
+  });
+
+  it("race: concurrent refreshes with one token yield one rotation, one grace replay, then reuse revokes", async () => {
+    await withTestDb(async (db) => {
+      const s = await makeSessions(db, { refreshGraceKey: GRACE_KEY });
+      const { userId, deviceId } = await makeUserAndDevice(db);
+      const a = await s.issue(userId, deviceId, { now: T0 });
+      const r = await Promise.allSettled([1, 2, 3].map(() => s.refresh(a.refreshToken, deviceId, at(1000))));
+      const ok = r.filter((x) => x.status === "fulfilled");
+      expect(ok.length).toBe(2);
+      const [x, y] = ok;
+      expect(x?.status === "fulfilled" && y?.status === "fulfilled" && x.value.refreshToken === y.value.refreshToken).toBe(true);
+      expect(await s.listSessions(userId)).toHaveLength(0);
+    });
+  });
+
+  it("property: within the window a token is accepted at most twice (rotation + one grace), at any offset", async () => {
+    await withTestDb(async (db) => {
+      const s = await makeSessions(db, { refreshGraceKey: GRACE_KEY });
+      let n = 0;
+      await fc.assert(
+        fc.asyncProperty(fc.integer({ min: 0, max: 9_000 }), fc.integer({ min: 1, max: 4 }), async (gap, extra) => {
+          n += 1;
+          const { userId, deviceId } = await makeUserAndDevice(db, 100 + n);
+          const a = await s.issue(userId, deviceId, { now: T0 });
+          await s.refresh(a.refreshToken, deviceId, at(1000));
+          let accepted = 0;
+          for (let i = 0; i < extra; i++) if ((await code(s.refresh(a.refreshToken, deviceId, at(1000 + gap + i)))) === "none") accepted += 1;
+          expect(accepted).toBe(1);
+        }),
+        { numRuns: 10 },
+      );
+    });
+  });
+});
+
+describe("revokeByRefreshToken (finding 4)", () => {
+  it("revokes the family by token hash without an access token; unknown tokens change nothing", async () => {
+    await withTestDb(async (db) => {
+      const s = await makeSessions(db);
+      const { userId, deviceId } = await makeUserAndDevice(db);
+      const a = await s.issue(userId, deviceId, { now: T0 });
+      expect(await s.revokeByRefreshToken("nope", deviceId, at(1))).toBe(false);
+      expect(await s.listSessions(userId)).toHaveLength(1);
+      expect(await s.revokeByRefreshToken(a.refreshToken, deviceId, at(2))).toBe(true);
+      expect(await s.revokeByRefreshToken(a.refreshToken, deviceId, at(3))).toBe(false);
+      expect(await s.listSessions(userId)).toHaveLength(0);
+      expect(await code(s.refresh(a.refreshToken, deviceId, at(4)))).toBe("SESSION_REVOKED");
+    });
+  });
+});

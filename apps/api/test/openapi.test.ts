@@ -62,8 +62,8 @@ describe("coverage against the contract docs/api/openapi.yaml", async () => {
   const todo = Todo.parse(JSON.parse(await readFile(file("../openapi.todo.json"), "utf8"))).operations;
   const served = new Map(ops(buildOpenApi(ROUTES) as unknown as Doc));
   // Infrastructure probes, plus implementation-only operations the contract does not describe yet (it models the device inline in each auth body;
-// the API registers it once and carries the id in X-Device-Id). Listed here so they cannot grow silently.
-const global = new Set(["GET /v1/health/live", "GET /v1/health/ready", "POST /v1/{market}/auth/devices"]);
+// the API registers it once and carries the id in X-Device-Id; logout-by-refresh serves a signed-out client whose access token expired, security finding 4 - add it to docs/api/openapi.yaml and drop it here). Listed here so they cannot grow silently.
+const global = new Set(["GET /v1/health/live", "GET /v1/health/ready", "POST /v1/{market}/auth/devices", "POST /v1/{market}/auth/logout-by-refresh"]);
 
   it("every contract operation is served or listed in openapi.todo.json", () => {
     expect([...contractOps.keys()].filter((k) => !served.has(k) && !todo.includes(k))).toEqual([]);

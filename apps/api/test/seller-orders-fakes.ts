@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { SqlClient } from "@outlet/db";
 import type { BuyerDelivery, BuyerDeliveryPort } from "../src/modules/seller-orders/index.js";
-import type { Seed } from "./harness.js";
+/** Structural subset of the harness Seed (kept local to avoid a harness ↔ fakes import cycle). */
+interface Seed { readonly productA: string; readonly skuA: string }
 
 /** Test-only delivery source: an order gets the default delivery unless a test sets (or clears) one. */
 export class InMemoryBuyerDelivery implements BuyerDeliveryPort {

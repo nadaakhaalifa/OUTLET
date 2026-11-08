@@ -152,7 +152,8 @@ describe("BFF against the served API", () => {
     calls.length = 0;
     expect((await b.proxy("GET", ["cart"])).status).toBe(200);
     expect(calls).toHaveLength(1); // no second refresh
-    // Presenting the rotated-out token is reuse: the API answers 401 (and revokes the family).
+    // Presenting the rotated-out token is reuse once the 10 s refresh grace window has passed: the API answers 401 (and revokes the family).
+    t.clock.now += 11_000;
     expect((await apiRefresh(oldRt, did)).statusCode).toBe(401);
   });
 

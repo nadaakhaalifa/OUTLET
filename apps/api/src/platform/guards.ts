@@ -132,7 +132,8 @@ export class RateLimitGuard implements CanActivate {
     // Public fail-open reads (SSR, crawlers, link previews) cannot send X-Device-Id: they fall back to the IP bucket
     // (CGNAT multiplier). Fail-closed and authenticated routes keep the device key mandatory.
     const authz = meta(this.reflector, META.authz, ctx) as AuthzMeta | undefined;
-    const deviceOptional = authz?.kind === "public" && rl.budget.failMode === "open";
+    // A pre-device budget (registration) declares ip/asn next to device: a missing device id falls back to those buckets even when failing closed.
+    const deviceOptional = authz?.kind === "public" && (rl.budget.failMode === "open" || rl.keys.includes("ip"));
     const values: (readonly [RateKey, string])[] = [];
     let ipFallback = false;
     for (const k of rl.keys) {

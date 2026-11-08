@@ -135,7 +135,7 @@ paths:
   /v1/{market}/auth/devices:
     post:
       operationId: registerDevice
-      summary: Register an install and get its device id (pre-auth; the id goes in X-Device-Id)
+      summary: Register an install and get its device id (pre-auth, attested; budget per IP and ASN; the id goes in X-Device-Id)
       tags:
         - Auth
       security: []
@@ -197,6 +197,12 @@ paths:
           window_s: 3600
           layer: app
           source: default
+        - budget: device_register
+          key: asn
+          limit: 2000
+          window_s: 3600
+          layer: app
+          source: default
       x-max-queries: 0
       requestBody:
         required: true
@@ -215,6 +221,10 @@ paths:
                     - web
                     - ios
                     - android
+                attestation:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
               required:
                 - install_id
                 - platform
@@ -437,6 +447,72 @@ paths:
       x-idempotency:
         header: required
         mode: store
+  /v1/{market}/auth/logout-by-refresh:
+    post:
+      operationId: logoutByRefresh
+      summary: Sign out with the refresh token (body or cookie) when the access token has expired; always 204, clears the cookie
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "204":
+          description: OK
+          content:
+            application/json:
+              schema: {}
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: auth_logout
+          key: device
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+              additionalProperties: false
+      x-idempotency:
+        header: none
+        reason: revoking a session family is idempotent; no response body to replay
   /v1/{market}/auth/otp/request:
     post:
       operationId: requestOtp
@@ -3697,6 +3773,213 @@ paths:
       x-max-queries: 3
       x-paginated: keyset
       x-cache-control: no-store
+  /v1/{market}/me/passkeys:
+    get:
+      operationId: listMyPasskeys
+      summary: My registered passkeys (no key material)
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        aaguid:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        transports:
+                          maxItems: 10
+                          type: array
+                          items:
+                            type: string
+                            maxLength: 50
+                        backup_eligible:
+                          type: boolean
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        last_used_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                      required:
+                        - id
+                        - aaguid
+                        - transports
+                        - backup_eligible
+                        - created_at
+                        - last_used_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: passkey.manage
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
+  /v1/{market}/me/passkeys/{passkey_id}:
+    delete:
+      operationId: revokeMyPasskey
+      summary: Revoke one of my passkeys (another user's passkey is 404)
+      tags:
+        - Auth
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: passkey_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: OK
+          content:
+            application/json:
+              schema: {}
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: passkey.manage
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/me/sessions:
     get:
       operationId: listMySessions

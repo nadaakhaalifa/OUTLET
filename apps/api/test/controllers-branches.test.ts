@@ -112,7 +112,9 @@ describe("controller guards when the request state is incomplete", () => {
     expect(await problem(c.listSessions(anon, { limit: 5 }))).toEqual([401, "unauthenticated"]);
     expect(await problem(c.revokeSession(anon, { session_family_id: randomUUID() }))).toEqual([401, "unauthenticated"]);
     expect(await problem(c.registerOptions(anon, req(), { purpose: "register" }))).toEqual([401, "unauthenticated"]);
-    expect(await problem(c.registerVerify(anon, {} as never))).toEqual([401, "unauthenticated"]);
+    expect(await problem(c.registerVerify(anon, req(), {} as never))).toEqual([401, "unauthenticated"]);
+    expect(await problem(c.listPasskeys(anon, { limit: 5 }))).toEqual([401, "unauthenticated"]);
+    expect(await problem(c.revokePasskey(anon, { passkey_id: randomUUID() }))).toEqual([401, "unauthenticated"]);
     const authed = st({ user, marketId: "EG" });
     expect(await problem(c.registerOptions(authed, req(), { purpose: "sign_in" }))).toEqual([422, "purpose-invalid"]);
     expect(await problem(c.assertOptions(authed, req({ "x-device-id": randomUUID() }), { purpose: "register" }))).toEqual([422, "purpose-invalid"]);

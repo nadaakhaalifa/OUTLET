@@ -103,8 +103,8 @@ describe("purgeExpired (L5)", () => {
         [Buffer.alloc(32, 3), new Date(now.getTime() - 1000).toISOString(), iso(0), new Date(now.getTime() + 86_400_000).toISOString()],
       );
       expect(PURGE_RATE_LIMIT_MS).toBe(48 * 3_600_000);
-      expect(await purgeExpired(db, now)).toEqual({ otpChallenges: 1, rateLimitHits: 1, refreshTokens: 1, ageBlocks: 1 });
-      expect(await purgeExpired(db, now)).toEqual({ otpChallenges: 0, rateLimitHits: 0, refreshTokens: 0, ageBlocks: 0 });
+      expect(await purgeExpired(db, now)).toEqual({ otpChallenges: 1, rateLimitHits: 1, refreshTokens: 1, ageBlocks: 1, passkeyChallenges: 0 });
+      expect(await purgeExpired(db, now)).toEqual({ otpChallenges: 0, rateLimitHits: 0, refreshTokens: 0, ageBlocks: 0, passkeyChallenges: 0 });
     });
   });
 });

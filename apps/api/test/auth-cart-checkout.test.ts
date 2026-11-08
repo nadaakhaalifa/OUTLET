@@ -99,6 +99,7 @@ describe("auth: refresh, logout, sessions", () => {
     expect(first.statusCode).toBe(200);
     const next = json<{ refresh_token: string }>(first.body).refresh_token;
     expect(next).not.toBe(s.refresh);
+    t.clock.now += 11_000; // past the 10 s grace window (finding 3)
     const reuse = await refresh(s.refresh);
     expect(reuse.statusCode).toBe(401);
     expect(json<{ code: string }>(reuse.body).code).toBe("refresh-rejected");
