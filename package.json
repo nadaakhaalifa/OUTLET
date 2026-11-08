@@ -9,7 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "eslint .",
+    "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint . --cache --cache-location .cache/eslint",
     "depcruise": "depcruise packages apps tooling --config .dependency-cruiser.cjs",
     "test": "vitest run --coverage",
     "sbom:generate": "pnpm sbom --sbom-format cyclonedx --lockfile-only --out sbom.cdx.json",

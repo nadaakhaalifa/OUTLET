@@ -13,3 +13,4 @@ __pycache__/
 coverage/
 *.tsbuildinfo
 sbom.cdx.json
+.cache/
