@@ -1,8 +1,9 @@
 import "reflect-metadata";
 import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
+import { createAdminAccess } from "@outlet/admin-access";
 import { AesGcmFieldCipher, OtpService, PgRateLimiter, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
-import { CheckoutService, PgStoreCredit, WebhookProcessor } from "@outlet/checkout";
+import { CheckoutService, OrderCloseJob, PROMOTIONS_KILL_SWITCH, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
 import { brandClient } from "@outlet/db";
 import { InventoryService, ReservationService } from "@outlet/inventory";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
@@ -17,9 +18,13 @@ import { listMarkets } from "@outlet/markets-config";
 import { MediaError } from "@outlet/media";
 import { initTelemetry } from "@outlet/observability";
 import { PRICE_WATCH_KILL_SWITCH } from "@outlet/pricing-integrity";
+import { SellerOnboardingService, UnconfiguredKycCheck } from "@outlet/seller-accounts";
+import { AddressService } from "@outlet/shipping";
 import { Redis } from "ioredis";
 import pg from "pg";
 import { createApp } from "./app.js";
+import { postOrderServices } from "./post-order-production.js";
+import type { PostOrderServices } from "./post-order-production.js";
 import { parseEnv, parseWebhookIps, trustProxyList } from "./config.js";
 import { PgChallengeStore, PgPasskeyStore, SessionReader, UnconfiguredDeviceAttestation, UnconfiguredFieldCipher, UnconfiguredOidc, UnconfiguredPasskeys, UnconfiguredSms, WebAuthnPasskeys, pgPhoneLabel } from "./modules/auth/index.js";
 import type { AuthServices } from "./modules/auth/index.js";
@@ -32,6 +37,8 @@ import {
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
+import { PgApprovalReader, PgKycAdmin, PgReconciliationReader, UnconfiguredAuditPort, unconfiguredAdminServices } from "./modules/admin/index.js";
+import type { AdminServices } from "./modules/admin/index.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SellerInventoryService } from "./modules/seller-inventory/index.js";
 import type { SellerInventoryServices } from "./modules/seller-inventory/index.js";
@@ -83,6 +90,8 @@ const carts = new Map<string, CartServices>();
 const checkouts = new Map<string, CheckoutServices>();
 const sellerOrders = new Map<string, SellerOrdersServices>();
 const sellerInventories = new Map<string, SellerInventoryServices>();
+const admins = new Map<string, AdminServices>();
+const postOrder = new Map<string, PostOrderServices>();
 const killSwitches = new FlagService({ store: new PostgresFlagStore(appClient), audit: { record: () => Promise.resolve() } });
 for (const m of listMarkets()) {
   const marketId = m.id.toUpperCase();
@@ -128,6 +137,9 @@ for (const m of listMarkets()) {
     billing: new UnconfiguredBilling(),
     refunds: new UnconfiguredRefunds(),
     marketId,
+    // Promotions fail closed: a failed or killed flag read means no discount. Delivery snapshots freeze the address per seller order at placement.
+    promotions: makePromotionsPort({ client: appClient, marketId, kill: { isEnabled: () => killSwitches.isKilled(PROMOTIONS_KILL_SWITCH, { marketId }).then((k) => !k).catch(() => false) } }),
+    addressSnapshots: new AddressService({ client: appClient, marketId }, authDeps.cipher),
   };
   const workerClient = authPoolWorker === undefined ? undefined : pgSqlClient<"outlet_worker">(authPoolWorker);
   checkouts.set(marketId, {
@@ -148,6 +160,21 @@ for (const m of listMarkets()) {
     }),
   });
   sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
+  // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. The audit trail has no
+  // Postgres store yet (UnconfiguredAuditPort), so audited staff writes fail closed; dual approval is required at every amount (threshold 0) until finance sets one.
+  admins.set(marketId, workerClient === undefined
+    ? unconfiguredAdminServices
+    : {
+        access: createAdminAccess({ db: appClient, audit: new UnconfiguredAuditPort(), clock: () => new Date(), thresholdMinor: 0n }),
+        approvals: new PgApprovalReader(appClient),
+        kyc: new PgKycAdmin(workerClient, new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck())),
+        reconciliation: new PgReconciliationReader(workerClient),
+      });
+  // Addresses, returns, tracking and the seller application. Courier, return evidence, cancellation saga and KYC provider stay unconfigured and fail closed (ADR-0029).
+  postOrder.set(marketId, postOrderServices({
+    marketId, appClient, authClient: brandClient<"outlet_auth">(authClient), workerClient, cipher: authDeps.cipher, hasher: authDeps.hasher,
+    delivery: workerClient === undefined ? undefined : new OrderCloseJob({ ...ports, client: workerClient, cipher: new AesRawBodyCipher(rawKey) }),
+  }));
   const deps: CatalogDeps = { client: appClient, marketId };
   catalogs.set(marketId, {
     publicCatalog: new PublicCatalogService(deps),
@@ -162,6 +189,12 @@ for (const m of listMarkets()) {
     deals: new DealsReader({ client: appClient, marketId, now: () => new Date(), priceWatchKilled: () => killSwitches.isKilled(PRICE_WATCH_KILL_SWITCH, { marketId }).catch(() => true) }),
   });
 }
+
+const postOrderOf = (marketId: string): PostOrderServices => {
+  const c = postOrder.get(marketId);
+  if (c === undefined) throw new Error("market not configured");
+  return c;
+};
 
 const redis = env.REDIS_URL === undefined ? undefined : new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false, connectTimeout: 1_000 });
 const lifecycle = { draining: false };
@@ -200,8 +233,17 @@ const deps: ApiDeps = {
     if (c === undefined) throw new Error("market not configured");
     return c;
   },
+  addresses: (marketId) => postOrderOf(marketId).addresses,
+  returns: (marketId) => postOrderOf(marketId).returns,
+  tracking: (marketId) => postOrderOf(marketId).tracking,
+  sellerOnboarding: (marketId) => postOrderOf(marketId).sellerOnboarding,
   sellerInventory: (marketId) => {
     const c = sellerInventories.get(marketId);
+    if (c === undefined) throw new Error("market not configured");
+    return c;
+  },
+  admin: (marketId) => {
+    const c = admins.get(marketId);
     if (c === undefined) throw new Error("market not configured");
     return c;
   },

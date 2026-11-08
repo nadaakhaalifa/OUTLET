@@ -94,6 +94,11 @@ export class PolicyGuard implements CanActivate {
       if (!user.amr.some((a) => STRONG_AMR.has(a))) throw Problems.forbidden("passkey-required");
       principal = { kind: "seller_staff", userId: user.userId, marketId, storeIds: [storeId], roles: [...membership.roles], scopes: [] };
     }
+    if (authz.tenant === "admin") {
+      // Staff routes: a phishing-resistant factor in the session, then the live standing grants and approved elevations (breakGlass only with a live super_admin elevation).
+      if (!user.amr.some((a) => STRONG_AMR.has(a))) throw Problems.forbidden("passkey-required");
+      principal = await this.deps.admin(marketId).access.buildPrincipal(marketId, user.userId, this.deps.clock.now());
+    }
     if ((meta(this.reflector, META.reasonCode, ctx) as boolean | undefined) === true) {
       const reason = headerValue(req, "x-reason-code");
       if (reason === undefined || !REASON.test(reason)) throw Problems.forbidden("reason-code-required");

@@ -71,13 +71,11 @@ describe("controller guards when the request state is incomplete", () => {
     expect(await problem(stub.get(noUser, id))).toEqual([401, "unauthenticated"]);
     expect(await problem(stub.list(noUser, { limit: 5 }))).toEqual([401, "unauthenticated"]);
   });
-  it("checkout: vouchers, partial checkout and a malformed echo are refused before any service call", async () => {
+  it("checkout: partial checkout and a malformed echo are refused before any service call", async () => {
     const c = new CheckoutController(deps);
     const s = st({ user, marketId: "EG" });
     const base = { address_id: ADDRESS, payment_method: "card" } as never;
-    expect(await problem(c.quote(s, { address_id: ADDRESS, payment_method: "card", voucher_codes: ["X"] } as never))).toEqual([422, "vouchers-unsupported"]);
     expect(await problem(c.quote(s, { address_id: ADDRESS, payment_method: "card", cart_line_ids: [randomUUID()] } as never))).toEqual([422, "partial-checkout-unsupported"]);
-    expect(await problem(c.place(s, req(), { ...(base as object), voucher_codes: ["X"] } as never))).toEqual([422, "vouchers-unsupported"]);
     expect(await problem(new CheckoutController({ checkout: () => ({}) } as unknown as ApiDeps).place(s, req(), { ...(base as object), quote_echo: { nope: 1 }, quote_token: "t" } as never))).toEqual([422, "quote-token-invalid"]);
   });
   it("checkout webhook: unknown provider is 404, a missing raw body is 400, a denied source is 403", async () => {

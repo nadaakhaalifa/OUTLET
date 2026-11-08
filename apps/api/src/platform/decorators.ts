@@ -52,7 +52,7 @@ export type ResourceResolver = (c: ResolveContext) => Resource | null | Promise<
 
 export type AuthzMeta =
   | { readonly kind: "public" }
-  | { readonly kind: "authorize"; readonly action: Action; readonly resolver: ResourceResolver; readonly tenant: "user" | "store" };
+  | { readonly kind: "authorize"; readonly action: Action; readonly resolver: ResourceResolver; readonly tenant: "user" | "store" | "admin" };
 
 export type RateLimitMeta = { readonly exempt: string } | { readonly budget: RateBudget; readonly keys: readonly RateKey[] };
 
@@ -70,8 +70,9 @@ export const Public = (): MethodDecorator => SetMetadata(META.authz, { kind: "pu
 /**
  * Authenticated route decided by @outlet/policy `authorize(principal, action, resource)`.
  * tenant "store": the caller acts for the store in `X-Store-Id` (membership, passkey and role checked; RLS store context).
+ * tenant "admin": staff route; the principal is built from live role grants and elevations (@outlet/admin-access), a passkey session is required.
  */
-export const Authorize = (action: Action, resolver: ResourceResolver, opts: { tenant?: "user" | "store" } = {}): MethodDecorator =>
+export const Authorize = (action: Action, resolver: ResourceResolver, opts: { tenant?: "user" | "store" | "admin" } = {}): MethodDecorator =>
   SetMetadata(META.authz, { kind: "authorize", action, resolver, tenant: opts.tenant ?? "user" } satisfies AuthzMeta);
 
 /** The caller must send `X-Reason-Code` (required for REQUIRES_REASON_CODE actions). */

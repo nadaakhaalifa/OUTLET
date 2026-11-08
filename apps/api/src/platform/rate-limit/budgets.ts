@@ -62,6 +62,9 @@ export const RATE_BUDGETS = {
   cartWrite: b("cart_write", 60, MINUTE, ["user"], "closed", "default"),
   orderGroupRead: b("order_group_read", 60, MINUTE, ["user"], "open", "default"),
   codConfirm: b("cod_confirm", 5, HOUR, ["user"], "closed", "default"),
+  /** Admin Console (staff): keyed by the staff user; writes fail closed. */
+  adminRead: b("admin_read", 120, MINUTE, ["user"], "open", "default"),
+  adminWrite: b("admin_write", 30, MINUTE, ["user"], "closed", "default"),
   /** PSP callbacks carry no device id: authenticity is the IP allow-list + HMAC, this is only flood control (IP fallback). */
   pspWebhook: b("psp_webhook", 600, MINUTE, ["device", "ip"], "open", "default"),
 } as const satisfies Record<string, RateBudget>;

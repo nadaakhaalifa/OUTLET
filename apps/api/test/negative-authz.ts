@@ -1,4 +1,4 @@
-import { SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS, authorize } from "@outlet/policy";
+import { ADMIN_POLICY, ADMIN_ROLES, SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS, authorize } from "@outlet/policy";
 import type { Principal } from "@outlet/policy";
 import type { InjectOptions } from "fastify";
 import { expect } from "vitest";
@@ -74,6 +74,23 @@ export const negativeAuthzCases = async (t: TestApp, route: RouteDef, fx: RouteF
       cases.push({ name: "member of store A → store B's object → 404", req: await fx.otherTenant(t), status: 404 });
     }
     cases.push({ name: "missing X-Store-Id → 400", req: withHeaders(happy, without("x-store-id")), status: 400, code: "store-scope-required" });
+  } else if (authz.tenant === "admin") {
+    const wrongRole = ADMIN_ROLES.find((r) => !ADMIN_POLICY[r].includes(authz.action));
+    if (wrongRole !== undefined) {
+      const { token } = await t.admin([wrongRole]);
+      cases.push({ name: `staff with role ${wrongRole} → 403`, req: withHeaders(happy, (h) => ({ ...h, ...bearer(token), "idempotency-key": idemKey(t) })), status: 403, code: "forbidden" });
+    }
+    const allowed = ADMIN_ROLES.find((r) => r !== "super_admin" && ADMIN_POLICY[r].includes(authz.action)) ?? "ops";
+    const noPasskey = await t.admin([allowed], ["otp"]);
+    cases.push({ name: "staff without passkey → 403", req: withHeaders(happy, (h) => ({ ...h, ...bearer(noPasskey.token) })), status: 403, code: "passkey-required" });
+    const shopper = await t.mint({ amr: ["otp", "passkey"] });
+    cases.push({ name: "shopper or seller token (no staff grants) → 403", req: withHeaders(happy, (h) => ({ ...h, ...bearer(shopper) })), status: 403, code: "forbidden" });
+    const superAdmin = await t.admin(["super_admin"]);
+    cases.push({ name: "super_admin without break-glass → 403", req: withHeaders(happy, (h) => ({ ...h, ...bearer(superAdmin.token) })), status: 403, code: "forbidden" });
+    if (route.pathParams.some((p) => p !== "market")) {
+      if (fx.otherTenant === undefined) throw new Error(`${route.method} ${route.openapiPath}: admin route with ids needs an 'otherTenant' fixture (staff with the right role, an object of another market or a missing one → 404)`);
+      cases.push({ name: "object of another market → 404", req: await fx.otherTenant(t), status: 404 });
+    }
   } else {
     if (!SHOPPER_ACTIONS.includes(authz.action)) {
       const shopper = await t.mint();

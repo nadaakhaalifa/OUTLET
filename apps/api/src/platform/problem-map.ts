@@ -1,10 +1,14 @@
 import { HttpException } from "@nestjs/common";
+import { AdminAccessError } from "@outlet/admin-access";
 import { AuthError } from "@outlet/auth-core";
 import { CartError } from "@outlet/cart";
 import { CatalogError } from "@outlet/catalog";
 import { CheckoutError } from "@outlet/checkout";
 import { InventoryError } from "@outlet/inventory";
 import { MediaError } from "@outlet/media";
+import { ReturnsError } from "@outlet/returns";
+import { SellerAccountsError } from "@outlet/seller-accounts";
+import { ShippingError } from "@outlet/shipping";
 import { ZodError } from "zod";
 import { ProblemError, Problems } from "./problem.js";
 import type { ProblemViolation } from "./problem.js";
@@ -137,6 +141,89 @@ const authProblem = (e: AuthError): ProblemError => {
   }
 };
 
+const adminProblem = (e: AdminAccessError): ProblemError => {
+  switch (e.code) {
+    case "NOT_FOUND":
+      return Problems.notFound();
+    case "FORBIDDEN":
+    case "SELF_GRANT":
+      return Problems.forbidden();
+    case "SELF_APPROVAL":
+      return Problems.forbidden("self-approval");
+    case "REASON_CODE_REQUIRED":
+      return Problems.forbidden("reason-code-required");
+    case "INVALID_INPUT":
+      return Problems.unprocessable("validation-rule");
+    default:
+      // already decided / not pending / expired / tampered / elevation states: one state-conflict family, the code names it.
+      return Problems.conflict(e.code.toLowerCase().replaceAll("_", "-"));
+  }
+};
+
+const shippingProblem = (e: ShippingError): ProblemError => {
+  switch (e.code) {
+    case "not_found":
+      return Problems.notFound();
+    case "forbidden":
+      return Problems.forbidden();
+    case "INVALID_TRANSITION":
+    case "INTERNATIONAL_DISABLED":
+    case "invalid_state":
+      return Problems.conflict(e.code.toLowerCase().replaceAll("_", "-"));
+    case "COURIER_UNAVAILABLE":
+      return Problems.unavailable("courier-unavailable");
+    case "INVALID_INPUT":
+      return Problems.badRequest("webhook-malformed");
+    default:
+      // INVALID_ADDRESS, NO_COVERAGE, OVERWEIGHT: the request is well-formed but cannot be served; never a guessed fee.
+      return Problems.unprocessable(e.code.toLowerCase().replaceAll("_", "-"));
+  }
+};
+
+/** Eligibility refusals are 422 (the request cannot succeed as asked); wrong-state refusals are 409; existence of foreign objects is never revealed (404). */
+const returnsProblem = (e: ReturnsError): ProblemError => {
+  switch (e.code) {
+    case "not_found":
+      return Problems.notFound();
+    case "forbidden":
+      return Problems.forbidden();
+    case "not_delivered":
+    case "invalid_state":
+    case "inspection_not_due":
+    case "approval_required":
+    case "refund_exceeds_paid":
+    case "seller_net_negative":
+    case "bnpl_provider_only":
+      return Problems.conflict(e.code.replaceAll("_", "-"));
+    case "refunds_disabled":
+      return Problems.unavailable("refunds-disabled");
+    case "commission_base_mismatch":
+      return Problems.internal();
+    default:
+      // window_closed, disclosed_defect, non_returnable, photos_required, evidence_invalid, nothing_to_return, qty_exceeds_purchased
+      return Problems.unprocessable(`return-${e.code.replaceAll("_", "-")}`);
+  }
+};
+
+const sellerAccountsProblem = (e: SellerAccountsError): ProblemError => {
+  const errors = e.details.map((d) => ({ path: "/gaps", code: d }));
+  switch (e.code) {
+    case "not_found":
+      return Problems.notFound();
+    case "forbidden":
+      return Problems.forbidden();
+    case "passkey_required":
+      return Problems.forbidden("passkey-required");
+    case "conflict":
+    case "invalid_transition":
+    case "last_owner":
+      return Problems.conflict(e.code.replaceAll("_", "-"));
+    default:
+      // validation, kyc_incomplete (details = gap codes), signatory_under_21, reason_required
+      return Problems.unprocessable(e.code.replaceAll("_", "-"), errors);
+  }
+};
+
 /**
  * Every thrown value becomes one Problem. Unknown errors are a bare 500: their message is never sent.
  * Order matters: ProblemError first (already decided), then typed domain errors, then framework errors.
@@ -146,6 +233,10 @@ export const toProblem = (e: unknown): ProblemError => {
   if (e instanceof CatalogError) return catalogProblem(e);
   if (e instanceof MediaError) return mediaProblem(e);
   if (e instanceof AuthError) return authProblem(e);
+  if (e instanceof AdminAccessError) return adminProblem(e);
+  if (e instanceof ReturnsError) return returnsProblem(e);
+  if (e instanceof ShippingError) return shippingProblem(e);
+  if (e instanceof SellerAccountsError) return sellerAccountsProblem(e);
   if (e instanceof CartError) return cartProblem(e);
   if (e instanceof CheckoutError) return checkoutProblem(e);
   if (e instanceof InventoryError) return inventoryProblem(e);

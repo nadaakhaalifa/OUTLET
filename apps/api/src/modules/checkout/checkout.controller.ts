@@ -46,7 +46,7 @@ const actionWire = (a: ClientAction): ClientActionWire => {
   }
 };
 
-const groupWire = (g: OrderGroupDetail): OrderGroup => ({
+export const groupWire = (g: OrderGroupDetail): OrderGroup => ({
   id: g.id,
   status: g.status,
   currency: g.currency,
@@ -85,7 +85,6 @@ export class CheckoutController {
   private rejectUnsupported(b: { voucher_codes?: readonly string[] | undefined; cart_line_ids?: readonly string[] | undefined; bnpl_provider?: string | undefined; payment_method?: string | undefined }): void {
     // payment_intents has CHECK (bnpl_provider IS NULL OR method = 'bnpl'): a lender on a non-BNPL method is a client error, not a 500.
     if (b.bnpl_provider !== undefined && b.payment_method !== undefined && b.payment_method !== "bnpl") throw Problems.unprocessable("bnpl-provider-mismatch");
-    if ((b.voucher_codes?.length ?? 0) > 0) throw Problems.unprocessable("vouchers-unsupported");
     if ((b.cart_line_ids?.length ?? 0) > 0) throw Problems.unprocessable("partial-checkout-unsupported");
   }
 
@@ -110,6 +109,7 @@ export class CheckoutController {
       method: toInternalMethod(b.payment_method),
       ...(b.store_credit === undefined ? {} : { creditRequested: { amountMinor: BigInt(b.store_credit.amount_minor), currency: "EGP" } }),
       ...(b.bnpl_provider === undefined ? {} : { bnplProvider: b.bnpl_provider }),
+      ...(b.voucher_codes === undefined ? {} : { voucherCodes: b.voucher_codes }),
     });
     return QuoteResponse.parse(wireQuote(r));
   }
@@ -140,6 +140,7 @@ export class CheckoutController {
       method: toInternalMethod(b.payment_method),
       ...(b.store_credit === undefined ? {} : { creditRequested: { amountMinor: BigInt(b.store_credit.amount_minor), currency: "EGP" } }),
       ...(b.bnpl_provider === undefined ? {} : { bnplProvider: b.bnpl_provider }),
+      ...(b.voucher_codes === undefined ? {} : { voucherCodes: b.voucher_codes }),
       idempotencyKey: headerValue(req, "idempotency-key") ?? "",
       quoteToken: b.quote_token,
       quote,

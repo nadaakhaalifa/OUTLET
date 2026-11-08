@@ -4891,6 +4891,66 @@ paths:
         - "order_group.cancelled"
         - "refund.requested"
       x-phase: 1
+  "/v1/{market}/order-groups/{order_group_id}/tracking":
+    get:
+      operationId: "getOrderTracking"
+      tags:
+        - "Orders"
+      summary: "Shipments of one of my orders with their normalised status"
+      security:
+        - shopperJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "order_group_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OrderTracking"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "order.read"
+        principal: "shopper"
+        tenant: "user_id (RLS app.current_user_id, SET LOCAL per transaction)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "own scope only: another user's object -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 60
+          window_s: 60
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
   "/v1/{market}/order-groups/{order_group_id}/seller-orders/{seller_order_id}/cancel":
     post:
       operationId: "cancelSellerOrder"
@@ -5967,6 +6027,245 @@ paths:
       x-rate-limit:
         - limit: 3
           window_s: 86400
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
+    get:
+      operationId: "getSellerOnboarding"
+      tags:
+        - "Seller KYC"
+      summary: "My application: KYC state and what still blocks submission"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerOnboardingState"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "seller.onboard"
+        principal: "seller_staff"
+        tenant: "user_id (applicant)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "own scope only: another user's object -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/seller/onboarding/documents":
+    post:
+      operationId: "uploadOnboardingDocument"
+      tags:
+        - "Seller KYC"
+      summary: "Upload one KYC document (multipart: doc_type, then the PDF file; scanned before it is stored)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "multipart/form-data":
+            schema:
+              "$ref": "#/components/schemas/OnboardingDocumentForm"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OnboardingDocumentResult"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "seller.onboard"
+        principal: "seller_staff"
+        tenant: "user_id (applicant; the store does not exist before approval)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "own scope only: another user's object -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 3600
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
+  "/v1/{market}/seller/onboarding/bank-account":
+    put:
+      operationId: "setOnboardingBankAccount"
+      tags:
+        - "Seller KYC"
+      summary: "Set the payout IBAN (encrypted at rest; only the last four characters are returned)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/OnboardingBankInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/OnboardingBankResult"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "seller.onboard"
+        principal: "seller_staff"
+        tenant: "user_id (applicant)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "own scope only: another user's object -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 3600
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
+  "/v1/{market}/seller/onboarding/submit":
+    post:
+      operationId: "submitSellerOnboarding"
+      tags:
+        - "Seller KYC"
+      summary: "Submit the application for review (422 lists the gaps)"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerOnboardingState"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "seller.onboard"
+        principal: "seller_staff"
+        tenant: "user_id (applicant)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "own scope only: another user's object -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 3600
           key: "user"
           source: "default"
           layer: "app"
@@ -14256,6 +14555,9 @@ components:
       additionalProperties: false
       description: "addresses (P3 fields decrypted for the owner only; never cached; Cache-Control: private, no-store)."
       properties:
+        cod_eligible:
+          type: "boolean"
+          description: "COD needs a landmark and a map pin."
         id:
           type: "string"
           format: "uuid"
@@ -15141,7 +15443,11 @@ components:
       properties:
         reason_code:
           type: "string"
-          maxLength: 500
+          enum:
+            - "changed_mind"
+            - "ordered_by_mistake"
+            - "delivery_too_slow"
+            - "other"
         refund_preference:
           type: "string"
           enum:
@@ -20373,6 +20679,12 @@ components:
       additionalProperties: false
       description: "return_requests (windows from delivered_at, CPL 181/2018, V7/V19)."
       properties:
+        rejection_reason:
+          type:
+            - "string"
+            - "null"
+          maxLength: 500
+          description: "Seller reason code; present only once the return is rejected."
         id:
           type: "string"
           format: "uuid"
@@ -20522,6 +20834,81 @@ components:
         - "reason_code"
         - "method"
         - "resolution"
+    OrderTracking:
+      type: "object"
+      additionalProperties: false
+      description: "Shipments of one order group. Only HAUL's normalised statuses are exposed; courier raw payloads never are. latest_event is the most recent normalised event (no per-event history is stored for shoppers)."
+      required: ["order_group_id", "shipments", "server_time"]
+      properties:
+        order_group_id: { type: "string", format: "uuid" }
+        server_time: { type: "string", format: "date-time" }
+        shipments:
+          type: "array"
+          maxItems: 50
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["id", "seller_order_ids", "courier", "awb", "status", "attempts", "delivered_at", "latest_event"]
+            properties:
+              id: { type: "string", format: "uuid" }
+              seller_order_ids: { type: "array", maxItems: 50, items: { type: "string", format: "uuid" } }
+              courier: { type: "string", maxLength: 40 }
+              awb: { type: ["string", "null"], maxLength: 64 }
+              status: { type: "string", enum: ["LABEL_PENDING", "LABEL_READY", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "DELIVERY_FAILED", "RTO", "RETURNED_TO_SELLER", "CANCELLED"] }
+              attempts: { type: "integer", format: "int32" }
+              delivered_at: { type: ["string", "null"], format: "date-time" }
+              latest_event:
+                type: ["object", "null"]
+                additionalProperties: false
+                required: ["status", "occurred_at"]
+                properties:
+                  status: { type: "string", maxLength: 40 }
+                  occurred_at: { type: "string", format: "date-time" }
+    SellerOnboardingState:
+      type: "object"
+      additionalProperties: false
+      description: "The applicant's KYC case. gaps are stable codes of what still blocks submission (document:<kind>, bank_account, legal_name_ar, ...); empty means complete."
+      required: ["seller_id", "kyc_case_id", "status", "submitted_at", "decided_at", "decision_reason", "version", "gaps", "required_documents"]
+      properties:
+        seller_id: { type: "string", format: "uuid" }
+        kyc_case_id: { type: "string", format: "uuid" }
+        status: { type: "string", enum: ["DRAFT", "SUBMITTED", "AUTO_CHECKS", "APPROVED", "NEEDS_INFO", "REJECTED", "SUSPENDED"] }
+        submitted_at: { type: ["string", "null"], format: "date-time" }
+        decided_at: { type: ["string", "null"], format: "date-time" }
+        decision_reason: { type: ["string", "null"], maxLength: 100 }
+        version: { type: "integer", format: "int32" }
+        gaps: { type: "array", maxItems: 50, items: { type: "string", maxLength: 100 } }
+        required_documents: { type: "array", maxItems: 10, items: { type: "string", maxLength: 100 } }
+    OnboardingDocumentForm:
+      type: "object"
+      additionalProperties: false
+      required: ["doc_type", "file"]
+      properties:
+        doc_type: { type: "string", enum: ["commercial_register", "tax_card", "signatory_national_id", "iban_letter", "brand_authorization", "proof_of_purchase"] }
+        expires_on: { type: "string", format: "date" }
+        file: { type: "string", format: "binary", description: "PDF, up to 10 MB" }
+    OnboardingDocumentResult:
+      type: "object"
+      additionalProperties: false
+      required: ["document_id", "media_id", "doc_type"]
+      properties:
+        document_id: { type: "string", format: "uuid" }
+        media_id: { type: "string", format: "uuid" }
+        doc_type: { type: "string", maxLength: 100 }
+    OnboardingBankInput:
+      type: "object"
+      additionalProperties: false
+      description: "P3: encrypted at rest, blind-indexed, never echoed."
+      required: ["iban", "account_name"]
+      properties:
+        iban: { type: "string", minLength: 15, maxLength: 34 }
+        account_name: { type: "string", maxLength: 200 }
+    OnboardingBankResult:
+      type: "object"
+      additionalProperties: false
+      required: ["iban_last4"]
+      properties:
+        iban_last4: { type: "string", minLength: 4, maxLength: 4 }
     ReturnRequestPage:
       type: "object"
       additionalProperties: false

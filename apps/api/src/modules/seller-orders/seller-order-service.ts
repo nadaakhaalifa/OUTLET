@@ -166,7 +166,7 @@ export class SellerOrderService {
       created = await this.d.courier.createShipment({
         shipmentId: id, courier: this.d.courierCode, serviceLevel: this.d.serviceLevel,
         parcels: [{ weightG: input.declared_weight_g, ...(dims === undefined ? {} : { dimsMm: dims }) }],
-        destination: dv.address, codMinor: kind === "cod" ? BigInt(o.total_minor) : 0n,
+        destination: dv.address, recipient: { name: dv.recipientName, phone: dv.phone }, codMinor: kind === "cod" ? BigInt(o.total_minor) : 0n,
       });
     } catch (e) {
       if (e instanceof ProblemError) throw e;

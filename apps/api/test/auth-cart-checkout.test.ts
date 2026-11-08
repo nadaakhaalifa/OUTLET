@@ -285,11 +285,11 @@ describe("checkout", () => {
     expect((await t.raw.query("SELECT 1 FROM order_groups WHERE user_id = $1", [s.userId])).rows).toHaveLength(0);
   });
 
-  it("refuses vouchers and partial checkout instead of ignoring them", async () => {
+  it("reports unresolved voucher codes and refuses partial checkout instead of ignoring them", async () => {
     const s = await t.shopper();
     await addToBag(t, s.token);
     const v = await t.inject({ method: "POST", url: "/v1/eg/checkout/quote", headers: bearer(s.token), payload: { address_id: ADDRESS, payment_method: "card", voucher_codes: ["SAVE10"] } });
-    expect(json<{ code: string }>(v.body).code).toBe("vouchers-unsupported");
+    expect(json<{ invalid_voucher_codes: string[] }>(v.body).invalid_voucher_codes).toEqual(["SAVE10"]);
     const p = await t.inject({ method: "POST", url: "/v1/eg/checkout/quote", headers: bearer(s.token), payload: { address_id: ADDRESS, payment_method: "card", cart_line_ids: [randomUUID()] } });
     expect(json<{ code: string }>(p.body).code).toBe("partial-checkout-unsupported");
   });

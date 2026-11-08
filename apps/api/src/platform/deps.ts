@@ -8,9 +8,14 @@ import type { AccessTokenVerifier, StoreMembershipPort } from "./auth-ports.js";
 import type { DealsPort } from "../modules/catalog-public/deals-reader.js";
 import type { AttributeSetPort } from "../modules/seller-catalog/attribute-set-reader.js";
 import type { DiscoveryPort } from "../modules/catalog-public/discovery-reader.js";
+import type { AdminServices } from "../modules/admin/services.js";
+import type { AddressesServices } from "../modules/addresses/services.js";
 import type { AuthServices } from "../modules/auth/ports.js";
 import type { CartServices } from "../modules/cart/ports.js";
 import type { CheckoutServices, WebhookIpPolicy } from "../modules/checkout/ports.js";
+import type { ReturnsServices } from "../modules/returns/services.js";
+import type { SellerOnboardingServices } from "../modules/seller-onboarding/services.js";
+import type { TrackingServices } from "../modules/tracking/services.js";
 import type { SellerInventoryServices } from "../modules/seller-inventory/services.js";
 import type { SellerOrdersServices } from "../modules/seller-orders/services.js";
 import type { Clock } from "./http.js";
@@ -87,6 +92,16 @@ export interface ApiDeps {
   readonly sellerOrders: (marketId: string) => SellerOrdersServices;
   /** Seller Center stock levels and adjustments for one market. */
   readonly sellerInventory: (marketId: string) => SellerInventoryServices;
+  /** The shopper's address book (encrypted P3 fields) and the geo picker for one market. */
+  readonly addresses: (marketId: string) => AddressesServices;
+  /** Returns, disputes, seller inspection and order cancellation for one market. */
+  readonly returns: (marketId: string) => ReturnsServices;
+  /** Shipment tracking reads and the courier webhook processor (worker job shipping.tracking) for one market. */
+  readonly tracking: (marketId: string) => TrackingServices;
+  /** Seller application (KYC), documents, IBAN and store team for one market. */
+  readonly sellerOnboarding: (marketId: string) => SellerOnboardingServices;
+  /** Admin Console services (staff principal, approvals, KYC decisions, reconciliation) for one market. Production fails closed until the staff stores are wired. */
+  readonly admin: (marketId: string) => AdminServices;
   /** PSP source-address allow-list (first gate of the webhook route, before the HMAC). Deny-all until configured. */
   readonly webhookIps: WebhookIpPolicy;
   /** Set while the process drains (SIGTERM): readiness answers 503 so the balancer stops sending traffic. */

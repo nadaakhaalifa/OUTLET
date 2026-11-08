@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { DEVICE, RP_ID, RP_ORIGIN, bearer, idemKey } from "./harness.js";
 import { ADDRESS, addToBag, assertVerifyRequest, authedHeaders, checkoutRequest, enrollPasskey, phone, placeOrder, quote, signIn } from "./flows.js";
 import { makePng, multipartBody } from "./png.js";
+import { ADMIN_FIXTURES } from "./admin-fixtures.js";
+import { POST_ORDER_FIXTURES } from "./post-order-fixtures.js";
 import { seedSellerOrder } from "./seller-orders-fakes.js";
 import { VirtualAuthenticator } from "./webauthn.js";
 import type { TestApp } from "./harness.js";
@@ -473,7 +475,7 @@ export const SELLER_ORDER_FIXTURES: Readonly<Record<string, RouteFixture>> = {
   },
 };
 
-export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = { ...BASE_FIXTURES, ...SELLER_ORDER_FIXTURES };
+export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = { ...BASE_FIXTURES, ...SELLER_ORDER_FIXTURES, ...ADMIN_FIXTURES, ...POST_ORDER_FIXTURES };
 
 export function DEFECT_CARD() {
   return {

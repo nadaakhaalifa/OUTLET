@@ -10,7 +10,7 @@ const QuoteFields = {
   address_id: z.uuid(),
   payment_method: METHOD,
   bnpl_provider: z.string().max(500).optional(),
-  /** Promotions are not built: any code is refused (422), never silently ignored. */
+  /** Resolved server-side; codes that do not apply come back in `invalid_voucher_codes`, never silently dropped. */
   voucher_codes: z.array(z.string().max(500)).max(50).optional(),
   store_credit: MoneyDto.optional(),
 };
@@ -35,6 +35,8 @@ export const QuoteResponse = z.strictObject({
   payment_options: z.array(z.strictObject({ method: z.string().max(50), available: z.boolean(), payable: MoneyDto })).max(20),
   cod_allowed: z.boolean(),
   cod_reason_code: z.enum(["cod_disabled", "cod_above_first_order_cap", "cod_risk_declined", "cod_risk_unavailable"]).nullable(),
+  invalid_voucher_codes: z.array(z.string().max(500)).max(50),
+  discount_labels: z.array(z.strictObject({ promotion_id: z.string().max(100), kind: z.enum(["voucher", "discount"]), text_ar: z.string().max(500), text_en: z.string().max(500), amount: MoneyDto })).max(100),
   notices: z.array(z.strictObject({ code: z.literal("unavailable"), line_id: z.null() })).max(50),
   /** Opaque: send it back unchanged in POST /checkout (it is what the signed token's hash covers). */
   quote_echo: z.json(),

@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { createAdminAccess } from "@outlet/admin-access";
+import { AuditChain, InMemoryAuditStore } from "@outlet/audit-log";
+import { SellerOnboardingService, UnconfiguredKycCheck } from "@outlet/seller-accounts";
 import { AesGcmFieldCipher, InMemoryRateLimiter, OtpService, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
 import type { SmsSender } from "@outlet/auth-core";
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
-import { CheckoutService, PgStoreCredit, WebhookProcessor } from "@outlet/checkout";
+import { CheckoutService, OrderCloseJob, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
 import type { PaymentProviderPort } from "@outlet/checkout";
 import {
   FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories, HmacQuoteTokens,
@@ -10,7 +13,8 @@ import {
 } from "@outlet/checkout/testing";
 import { InventoryService, ReservationService } from "@outlet/inventory";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
-import { FakeCourier } from "@outlet/shipping/testing";
+import { AddressService } from "@outlet/shipping";
+import { FakeCipher as ShippingFakeCipher, FakeCourier } from "@outlet/shipping/testing";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { DefectService, ListingService, PublicCatalogService, StoreService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
@@ -33,11 +37,14 @@ import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/inde
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
+import { PgApprovalReader, PgKycAdmin, PgReconciliationReader } from "../src/modules/admin/index.js";
 import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
 import { InMemoryBuyerDelivery } from "./seller-orders-fakes.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "../src/modules/catalog-public/discovery-reader.js";
 import type { ApiApp, CreateAppOptions } from "../src/app.js";
+import { buildPostOrder } from "./post-order-fakes.js";
+import type { PostOrderFakes } from "./post-order-fakes.js";
 import { InMemoryStoreMemberships, SessionTokenVerifier } from "../src/platform/auth-ports.js";
 import type { SellerRole } from "../src/platform/auth-ports.js";
 import { DEFAULT_HTTP_CONFIG } from "../src/platform/deps.js";
@@ -106,8 +113,13 @@ export interface TestApp extends ApiApp {
   readonly sms: FakeSms;
   readonly attestation: FakeDeviceAttestation;
   readonly passkeyStore: InMemoryPasskeyStore;
+  /** Fakes behind addresses, returns, tracking and seller onboarding. */
+  readonly post: PostOrderFakes;
   readonly fakes: { provider: FakePaymentProvider; shipping: FakeShipping; risk: FakeRisk; kill: FakeKillSwitches; cod: { valid: Set<string> }; courier: FakeCourier; delivery: InMemoryBuyerDelivery };
   /** A real user row (carts and orders reference users) plus a token for it. */
+  /** Staff user with live standing grants for `roles` (passkey session unless amr is given); every audited admin write lands in `adminAudit`. */
+  admin(roles: readonly string[], amr?: readonly string[]): Promise<{ userId: string; token: string }>;
+  readonly adminAudit: InMemoryAuditStore;
   shopper(): Promise<{ userId: string; token: string }>;
   /** A registered device id (what X-Device-Id carries). */
   device(): Promise<string>;
@@ -285,6 +297,15 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     shipping: fakes.shipping, address: new FakeAddress(), risk: fakes.risk, commission: new FakeCommission(), taxCategories: new FakeTaxCategories(),
     taxRates: InMemoryTaxRateProvider.withMarketDefaults(["eg"]), credit: new PgStoreCredit("EGP"), tokens: new HmacQuoteTokens(), prices: new FakePrices(), killSwitches: fakes.kill,
     subMerchants: new FakeSubMerchants(), billing: new FakeBilling(), refunds: new RecordingRefunds(),
+    promotions: makePromotionsPort({ client: appClient, marketId: DB_MARKET, kill: { isEnabled: () => Promise.resolve(true) }, now }),
+    // The checkout suites address a fake ref (FakeAddress); only a real address-book row is snapshotted, so those suites keep their shape. Real addresses are covered in post-order.test.ts.
+    addressSnapshots: {
+      snapshotForOrder: async (u: string, so: string, a: string): Promise<void> => {
+        const svc = new AddressService({ client: appClient, marketId: DB_MARKET, now }, new ShippingFakeCipher());
+        const real = await svc.get(u, a).then(() => true, () => false);
+        if (real) await svc.snapshotForOrder(u, so, a);
+      },
+    },
   };
   const checkoutServices = {
     checkout: new CheckoutService({ ...common, client: appClient }),
@@ -303,13 +324,29 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const sellerInventoryServices = {
     inventory: new SellerInventoryService({ client: appClient, marketId: DB_MARKET, inventory: new InventoryService({ client: appClient, marketId: DB_MARKET, now }), newId: () => randomUUID(), now }),
   };
+  const post = buildPostOrder({
+    marketId: DB_MARKET, now, app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: roleClient(raw, "outlet_worker"), cipher: authDeps.cipher, hasher: authDeps.hasher,
+    closer: new OrderCloseJob({ ...common, client: roleClient(raw, "outlet_worker"), cipher: new FakeCipher() }), courier: fakes.courier,
+  });
+  const adminAudit = new InMemoryAuditStore();
+  const adminServices = {
+    access: createAdminAccess({ db: appClient, audit: new AuditChain(adminAudit, { now }), clock: now, thresholdMinor: 0n }),
+    approvals: new PgApprovalReader(appClient),
+    kyc: new PgKycAdmin(roleClient(raw, "outlet_worker"), new SellerOnboardingService({ app: appClient, auth: authClient, worker: roleClient(raw, "outlet_worker"), marketId: DB_MARKET, cipher: authDeps.cipher, hasher: authDeps.hasher, now }, new UnconfiguredKycCheck())),
+    reconciliation: new PgReconciliationReader(roleClient(raw, "outlet_worker")),
+  };
   const deps: ApiDeps = {
+    admin: () => adminServices,
     auth: () => auth,
     sellerOrders: () => sellerOrderServices,
     sellerInventory: () => sellerInventoryServices,
+    addresses: () => post.services.addresses,
+    returns: () => post.services.returns,
+    tracking: () => post.services.tracking,
+    sellerOnboarding: () => post.services.sellerOnboarding,
     cart: () => cartServices,
     checkout: () => checkoutServices,
-    webhookIps: staticWebhookIps({ paymob: ["127.0.0.1"] }),
+    webhookIps: staticWebhookIps({ paymob: ["127.0.0.1"], "courier:fake": ["127.0.0.1"] }),
     http: { ...DEFAULT_HTTP_CONFIG, rateLimitKeySecret: "test-secret", ...opts.http },
     clock: { now: () => new Date(clock.now) },
     logger: createLogger({ level: "debug", write: (l) => logs.push(l), now: () => new Date(clock.now) }),
@@ -343,6 +380,16 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     memberships.grant(DB_MARKET, userId, storeId, roles);
     return { userId, token: await mint({ userId, amr }) };
   };
+  const admin = async (roles: readonly string[], amr: readonly string[] = ["otp", "passkey"]): Promise<{ userId: string; token: string }> => {
+    const { userId } = await shopper();
+    for (const role of roles) {
+      await raw.query(
+        "INSERT INTO staff_role_assignments (id, staff_id, role_code, market_id, granted_by, reason, starts_at, expires_at, created_at) VALUES ($1,$2,$3,'EG',$2,'seed','2020-01-01','2100-01-01','2020-01-01')",
+        [randomUUID(), userId, role],
+      );
+    }
+    return { userId, token: await mint({ userId, amr }) };
+  };
   const shopper = async (): Promise<{ userId: string; token: string }> => {
     const userId = randomUUID();
     const ts = new Date(clock.now).toISOString();
@@ -357,7 +404,10 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     passkeyStore,
     attestation,
     fakes,
+    post: post.fakes,
     shopper,
+    admin,
+    adminAudit,
     device,
     raw,
     counter,

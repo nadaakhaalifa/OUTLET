@@ -26,6 +26,12 @@ const COMPONENTS: Obj = {
       bearerFormat: "JWT",
       description: "Same user token; seller routes also need a passkey in amr, an active store membership for X-Store-Id and a role allowed by x-authz.",
     },
+    adminPasskeySession: {
+      type: "http",
+      scheme: "bearer",
+      bearerFormat: "JWT",
+      description: "Same user token; admin routes also need a passkey in amr and a live role grant or approved elevation allowed by x-authz (super_admin only with break-glass).",
+    },
   },
   parameters: {
     Market: { name: "market", in: "path", required: true, schema: { type: "string", pattern: "^[a-z]{2}(-[a-z0-9]{2,3})?$" } },
@@ -73,6 +79,7 @@ const operation = (r: RouteDef): Obj => {
   if (c === undefined || r.authz === undefined || r.rateLimit === undefined) throw new Error(`route ${r.method} ${r.path} is not audited`);
   const isPublic = r.authz.kind === "public";
   const storeTenant = r.authz.kind === "authorize" && r.authz.tenant === "store";
+  const adminTenant = r.authz.kind === "authorize" && r.authz.tenant === "admin";
   const mutating = MUTATING_METHODS.includes(r.method) && r.noIdempotency === undefined;
   const rateKeys: readonly RateKey[] = "exempt" in r.rateLimit ? [] : r.rateLimit.keys;
   const params: Json[] = [];
@@ -109,13 +116,13 @@ const operation = (r: RouteDef): Obj => {
     operationId: c.operationId,
     summary: c.summary,
     ...(c.tags === undefined ? {} : { tags: [...c.tags] }),
-    security: isPublic ? [] : [{ [storeTenant ? "sellerJwt" : "shopperJwt"]: [] }],
+    security: isPublic ? [] : [{ [adminTenant ? "adminPasskeySession" : storeTenant ? "sellerJwt" : "shopperJwt"]: [] }],
     parameters: params,
     responses,
     "x-authz":
       r.authz.kind === "public"
         ? { principal: "anonymous", tenant: "none" }
-        : { action: r.authz.action, principal: storeTenant ? "seller_staff" : "shopper", tenant: r.authz.tenant, ...(r.reasonCode ? { reason_code: "required" } : {}) },
+        : { action: r.authz.action, principal: adminTenant ? "staff" : storeTenant ? "seller_staff" : "shopper", tenant: r.authz.tenant, ...(r.reasonCode ? { reason_code: "required" } : {}) },
     "x-rate-limit": rateLimitDoc(r),
     "x-max-queries": c.maxQueries,
   };

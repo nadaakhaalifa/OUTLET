@@ -57,7 +57,7 @@ describe("quote wire helpers", () => {
     expect(readEcho({})).toBeNull();
     expect(readEcho("x")).toBeNull();
     const m = { amountMinor: "1", currency: "EGP" };
-    const base = { stores: [], fees: [], itemsSubtotal: m, shipping: m, discount: m, vat: m, total: m, storeCredit: m, payableByMethod: [], verifiedSavings: m, hash: "a".repeat(64) };
+    const base = { stores: [], fees: [], itemsSubtotal: m, shipping: m, discount: m, vat: m, total: m, storeCredit: m, promotions: [], discountLabels: [], payableByMethod: [], verifiedSavings: m, hash: "a".repeat(64) };
     const ok = readEcho(base);
     expect(ok?.hash).toBe("a".repeat(64));
     expect(ok?.payableByMethod).toBeInstanceOf(Map);

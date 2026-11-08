@@ -15,16 +15,21 @@ const Money = moneySchema;
 const Method = z.enum(["card", "apple_pay", "meeza", "wallet", "instapay", "fawry", "bnpl", "cod", "store_credit"]);
 const QuoteLine = z.object({
   cartLineId: z.string(), skuId: z.string(), storeId: z.string(), qty: z.number().int(), unitPrice: Money, lineGross: Money, vat: Money, vatBp: z.number().int(),
+  platformDiscount: Money, sellerDiscount: Money, payable: Money,
   taxCategory: z.enum(["standard", "zero_rated", "exempt", "reduced"]), vrp: Money.nullable(), claimType: z.enum(["verified_discount", "lowest_30d", "launch_price", "plain"]), verifiedSaving: Money,
 });
 const StoreQuote = z.object({
   storeId: z.string(), lines: z.array(QuoteLine).max(50), itemsSubtotal: Money,
   shipping: z.object({ gross: Money, vat: Money, quoteRef: z.string(), etaDaysMin: z.number().int(), etaDaysMax: z.number().int() }), vat: Money, total: Money,
+  shippingDiscount: z.object({ platform: Money, seller: Money }), platformDiscount: Money, sellerDiscount: Money,
 });
+const PromotionRef = z.object({ promotionId: z.string(), version: z.number().int(), voucherId: z.string().nullable(), total: Money, platform: Money, seller: Money });
+const DiscountLabel = z.object({ promotionId: z.string(), kind: z.enum(["voucher", "discount"]), textAr: z.string(), textEn: z.string(), amount: Money });
 const EchoSchema = z.object({
   stores: z.array(StoreQuote).max(50),
   fees: z.array(z.object({ code: z.enum(["delivery", "payment_method"]), storeId: z.string().nullable(), method: Method.nullable(), amount: Money })).max(200),
   itemsSubtotal: Money, shipping: Money, discount: Money, vat: Money, total: Money, storeCredit: Money,
+  promotions: z.array(PromotionRef).max(100), discountLabels: z.array(DiscountLabel).max(100),
   payableByMethod: z.array(z.tuple([Method, Money])).max(20).transform((pairs) => new Map(pairs)),
   verifiedSavings: Money, hash: z.string().regex(/^[0-9a-f]{64}$/),
 });
@@ -62,6 +67,8 @@ export const wireQuote = (r: QuoteResult): Record<string, unknown> => {
     cod_allowed: r.cod.allowed,
     cod_reason_code: r.cod.reasonCode,
     notices: r.unavailableSkus.map(() => ({ code: "unavailable", line_id: null })),
+    invalid_voucher_codes: [...r.invalidVoucherCodes],
+    discount_labels: q.discountLabels.map((l) => ({ promotion_id: l.promotionId, kind: l.kind, text_ar: l.textAr, text_en: l.textEn, amount: wireMoney(l.amount) })),
     quote_echo: quoteEcho(q),
   };
 };

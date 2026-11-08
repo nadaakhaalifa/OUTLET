@@ -38,3 +38,7 @@ export const multipartBody = (fields: Record<string, string>, file: { name: stri
   parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`), file.data, Buffer.from(`\r\n--${boundary}--\r\n`));
   return { payload: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
 };
+
+/** A minimal valid one-page PDF (magic bytes are what the media sniffer checks). */
+export const makePdf = (): Buffer =>
+  Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n", "latin1");

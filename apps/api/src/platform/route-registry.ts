@@ -3,7 +3,7 @@ import type { Type } from "@nestjs/common";
 import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants.js";
 import { Reflector } from "@nestjs/core";
 import { isKillSwitchName } from "@outlet/flags";
-import { PUBLIC_ACTIONS, SELLER_POLICY, SHOPPER_ACTIONS, requiresReasonCode } from "@outlet/policy";
+import { ADMIN_POLICY, PUBLIC_ACTIONS, SELLER_POLICY, SHOPPER_ACTIONS, requiresReasonCode } from "@outlet/policy";
 import { z } from "zod";
 import { META } from "./decorators.js";
 import type { AuthzMeta, ContractDef, DeprecationMeta, RateLimitMeta } from "./decorators.js";
@@ -48,6 +48,7 @@ const joinPath = (...parts: readonly string[]): string =>
     .join("/")}`;
 
 const SELLER_ACTIONS: readonly string[] = [...new Set(Object.values(SELLER_POLICY).flat())];
+const ADMIN_ACTIONS: readonly string[] = [...new Set(Object.values(ADMIN_POLICY).flat())];
 
 export const routeKey = (r: Pick<RouteDef, "method" | "openapiPath">): string => `${r.method} ${r.openapiPath}`;
 
@@ -146,8 +147,9 @@ export const auditRoutes = (routes: readonly RouteDef[]): string[] => {
     if (a?.kind === "public" && c?.cacheControl === undefined && r.method === "GET") bad("public GET routes declare cacheControl");
     if (a?.kind === "authorize") {
       if (c?.cacheControl !== undefined) bad("authenticated responses are always private, no-store");
-      const knownAction = SHOPPER_ACTIONS.includes(a.action) || SELLER_ACTIONS.includes(a.action) || PUBLIC_ACTIONS.includes(a.action);
+      const knownAction = SHOPPER_ACTIONS.includes(a.action) || SELLER_ACTIONS.includes(a.action) || PUBLIC_ACTIONS.includes(a.action) || (a.tenant === "admin" && ADMIN_ACTIONS.includes(a.action));
       if (!knownAction) bad(`action ${a.action} is not grantable to shoppers or seller staff in @outlet/policy`);
+      if (a.tenant === "admin" && !ADMIN_ACTIONS.includes(a.action)) bad(`admin-tenant action ${a.action} is not an admin action`);
       if (a.tenant === "store" && !SELLER_ACTIONS.includes(a.action)) bad(`store-tenant action ${a.action} is not a seller action`);
       if (requiresReasonCode(a.action) && !r.reasonCode) bad(`action ${a.action} requires @ReasonCode()`);
     }
