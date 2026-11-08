@@ -238,6 +238,33 @@ describe("claim", () => {
     expect(await counts(w.raw, a)).toMatchObject({ claimed: 0, committed: 0, reserved: 1 });
   });
 
+  it("releaseIn frees the units inside the caller's transaction: a later failure rolls the release back, success is idempotent and keeps the context", async () => {
+    const a = await w.sku("A", 3);
+    const u = randomUUID();
+    const r = await w.res.reserve({ orderGroupRef: "ri-" + a, userId: u, items: [item(w, "A", a, 2)] });
+    if (!r.ok) throw new Error("reserve failed");
+    const { withDbContext } = await import("@outlet/db");
+    await expect(
+      withDbContext(w.app, { kind: "user", marketId: "EG", userId: u }, async (tx) => {
+        expect(await w.res.releaseIn(tx, r.reservationId)).toEqual({ state: "RELEASED" });
+        throw new Error("compensation failed");
+      }),
+    ).rejects.toThrow("compensation failed");
+    expect(await counts(w.raw, a)).toMatchObject({ reserved: 2, available: 1 });
+    const ctx = await withDbContext(w.app, { kind: "user", marketId: "EG", userId: u }, async (tx) => {
+      expect(await w.res.releaseIn(tx, r.reservationId)).toEqual({ state: "RELEASED" });
+      expect(await w.res.releaseIn(tx, r.reservationId)).toEqual({ state: "RELEASED" });
+      return (await tx.query<{ s: string; u: string; c: string }>("SELECT current_setting('app.current_store_id') s, current_setting('app.current_user_id') u, current_setting('app.ctx') c")).rows[0];
+    });
+    expect(ctx).toEqual({ s: "", u, c: "user" });
+    expect(await counts(w.raw, a)).toMatchObject({ reserved: 0, available: 3 });
+    // a claimed reservation cannot be released, and RELEASED is terminal for a late claim
+    const r2 = await w.res.reserve({ orderGroupRef: "ri2-" + a, userId: u, items: [item(w, "A", a, 1)] });
+    if (!r2.ok) throw new Error("reserve failed");
+    await w.res.claim(u, r2.reservationId);
+    await expect(withDbContext(w.app, { kind: "user", marketId: "EG", userId: u }, (tx) => w.res.releaseIn(tx, r2.reservationId))).rejects.toMatchObject({ code: "invalid_transition" });
+  });
+
   it("late payment after expiry auto-claims when stock is still there, else reports unavailable", async () => {
     const a = await w.sku("A", 2);
     const u = randomUUID();

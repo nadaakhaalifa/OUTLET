@@ -200,13 +200,21 @@ export class ReservationService {
 
   /** Explicit release (checkout cancelled or payment failed). Idempotent for RELEASED / EXPIRED; a CLAIMED reservation cannot be released. */
   async release(userId: string, reservationId: string): Promise<{ state: ReservationState }> {
-    return withDbContext(this.env.client, { kind: "user", marketId: this.env.marketId, userId: uuid.parse(userId) }, async (tx) => {
-      const res = await this.lock(tx, reservationId);
-      if (res.state === "RELEASED" || res.state === "EXPIRED") return { state: res.state };
-      const next = reservationTransition(res.state, "release");
-      await this.freeUnits(tx, res, next);
-      return { state: next };
-    });
+    return withDbContext(this.env.client, { kind: "user", marketId: this.env.marketId, userId: uuid.parse(userId) }, (tx) => this.releaseIn(tx, reservationId));
+  }
+
+  /**
+   * Release inside the CALLER's transaction (bound to the owner's user context, or a worker context narrowed to the owner), so
+   * the compensation commits atomically with the caller's state change (checkout failure path, request R1). Same semantics as
+   * `release`: idempotent for RELEASED / EXPIRED, a CLAIMED reservation throws invalid_transition. RELEASED is terminal: a late
+   * payment can no longer claim it (only an EXPIRED reservation can be late-claimed).
+   */
+  async releaseIn(tx: Queryable, reservationId: string): Promise<{ state: ReservationState }> {
+    const res = await this.lock(tx, reservationId);
+    if (res.state === "RELEASED" || res.state === "EXPIRED") return { state: res.state };
+    const next = reservationTransition(res.state, "release");
+    await this.freeUnits(tx, res, next);
+    return { state: next };
   }
 
   /**
