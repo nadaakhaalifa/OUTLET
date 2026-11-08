@@ -1,0 +1,80 @@
+# Multi-window multi-burn-rate alerts (Google SRE Workbook). Fast: 1h AND 5m burn > 14.4 (2% of a 30d budget in 1h).
+# Slow: 6h AND 30m burn > 6 (5% of budget in 6h). Burn = error ratio / budget.
+groups:
+  - name: slo-burn-rate
+    rules:
+      - alert: CheckoutBurnRateFast
+        expr: slo:checkout_error_ratio:rate1h > (14.4 * 0.005) and slo:checkout_error_ratio:rate5m > (14.4 * 0.005)
+        labels:
+          severity: page
+          slo: checkout
+        annotations:
+          summary: "Checkout error budget burning at more than 14.4x (1h and 5m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: CheckoutBurnRateSlow
+        expr: slo:checkout_error_ratio:rate6h > (6 * 0.005) and slo:checkout_error_ratio:rate30m > (6 * 0.005)
+        labels:
+          severity: ticket
+          slo: checkout
+        annotations:
+          summary: "Checkout error budget burning at more than 6x (6h and 30m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: WebhookToPaidBurnRateFast
+        expr: slo:webhook_slow_ratio:rate1h > (14.4 * 0.05) and slo:webhook_slow_ratio:rate5m > (14.4 * 0.05)
+        labels:
+          severity: page
+          slo: webhooktopaid
+        annotations:
+          summary: "WebhookToPaid error budget burning at more than 14.4x (1h and 5m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: WebhookToPaidBurnRateSlow
+        expr: slo:webhook_slow_ratio:rate6h > (6 * 0.05) and slo:webhook_slow_ratio:rate30m > (6 * 0.05)
+        labels:
+          severity: ticket
+          slo: webhooktopaid
+        annotations:
+          summary: "WebhookToPaid error budget burning at more than 6x (6h and 30m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: ApiReadBurnRateFast
+        expr: slo:api_read_slow_ratio:rate1h > (14.4 * 0.05) and slo:api_read_slow_ratio:rate5m > (14.4 * 0.05)
+        labels:
+          severity: ticket
+          slo: apiread
+        annotations:
+          summary: "ApiRead error budget burning at more than 14.4x (1h and 5m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: ApiReadBurnRateSlow
+        expr: slo:api_read_slow_ratio:rate6h > (6 * 0.05) and slo:api_read_slow_ratio:rate30m > (6 * 0.05)
+        labels:
+          severity: ticket
+          slo: apiread
+        annotations:
+          summary: "ApiRead error budget burning at more than 6x (6h and 30m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: ReserveBurnRateFast
+        expr: slo:reserve_slow_ratio:rate1h > (14.4 * 0.05) and slo:reserve_slow_ratio:rate5m > (14.4 * 0.05)
+        labels:
+          severity: page
+          slo: reserve
+        annotations:
+          summary: "Reserve error budget burning at more than 14.4x (1h and 5m windows)"
+          runbook: docs/runbooks/observability.md
+      - alert: ReserveBurnRateSlow
+        expr: slo:reserve_slow_ratio:rate6h > (6 * 0.05) and slo:reserve_slow_ratio:rate30m > (6 * 0.05)
+        labels:
+          severity: ticket
+          slo: reserve
+        annotations:
+          summary: "Reserve error budget burning at more than 6x (6h and 30m windows)"
+          runbook: docs/runbooks/observability.md
+  - name: slo-gauges
+    rules:
+      - alert: UnmatchedPspLines
+        expr: max(unmatched_psp_lines) > 0
+        for: 5m
+        labels:
+          severity: page
+          slo: reconciliation
+        annotations:
+          summary: "PSP settlement lines unmatched for more than 3 days (SLO is zero)"
+          runbook: docs/runbooks/observability.md
