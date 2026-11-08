@@ -1255,6 +1255,8 @@ tables:
       - {name: "role_title", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "verified_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "age_21_plus", type: "boolean", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "age result only; DOB is never copied here"}
+      - {name: "age_checked_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "when the 21+ result was computed"}
   - name: seller_kyc_cases
     module: sellers
     phase: "1"
@@ -1299,6 +1301,11 @@ tables:
       - {name: "verified", type: "boolean", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "expires_on", type: "date", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "media_asset_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "pointer; document contents live in media_assets"}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "checks", type: "jsonb", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "per-document check summary; no extracted text"}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
   - name: kyc_checks
     module: sellers
     phase: "1"
@@ -1410,6 +1417,15 @@ tables:
       - {name: "joined_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
       - {name: "removed_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "invitee_kind", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "invitee_bidx", type: "bytea", pii_class: P2, encryption: blind_index_hmac, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell, note: "HMAC blind index of the invitee's phone or email; cleared on accept or removal"}
+      - {name: "invite_expires_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "accepted_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "strong_auth_enrolled_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "strong_auth_method", type: "text", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["staff_access"], lawful_basis: contract, retention: staff_access, processors: ["cloud_cell"], residency: cell}
   - name: store_invites
     module: sellers
     phase: "1"
@@ -2559,6 +2575,7 @@ tables:
       - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
   - name: cart_lines
     module: cart
     phase: "1"
@@ -2584,6 +2601,11 @@ tables:
       - {name: "saved_for_later", type: "boolean", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
       - {name: "added_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "product_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_ref", type: "uuid", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell, note: "published-listing store reference"}
+      - {name: "last_state", type: "text", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["order_fulfilment"], lawful_basis: contract, retention: cart_active, processors: ["cloud_cell"], residency: cell}
   - name: wishlists
     module: cart
     phase: "1"
@@ -4772,3 +4794,104 @@ tables:
       - {name: "content_hash", type: "text", pii_class: P2, encryption: one_way_hash, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "hash of passport content (pseudonymous under the hash rule)"}
       - {name: "inspections", type: "jsonb", pii_class: P2, encryption: none, purpose: ["catalog_publishing"], lawful_basis: contract, retention: catalog_life, processors: ["cloud_cell"], residency: cell, note: "inspection notes may name the inspector; redact before publishing"}
       - {name: "issued_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["catalog_publishing"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell}
+  - name: cart_store_thresholds
+    module: cart
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "store_ref", type: "uuid", pii_class: P0, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell, note: "published-listing store reference"}
+      - {name: "market_id", type: "text", pii_class: P0, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+      - {name: "threshold_minor", type: "bigint", pii_class: P0, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell, note: "free-delivery threshold (EGP piastres), admin-edited config"}
+      - {name: "updated_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell, note: "admin user id"}
+      - {name: "updated_at", type: "timestamptz", pii_class: P0, encryption: none, purpose: ["order_fulfilment"], lawful_basis: not_personal_data, retention: config_versions, processors: ["cloud_cell"], residency: cell}
+  - name: kyc_cases
+    module: sellers
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    verify: ["V8", "V72", "V73"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "seller_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "applicant_user_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "owner of the onboarding case; RLS user isolation"}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "state", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "submitted_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "decided_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "decided_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "admin user id"}
+      - {name: "reason_code", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "reason_note", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "free text by staff; may name the applicant"}
+      - {name: "provider", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "provider_ref", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "check_results", type: "jsonb", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "automatic check outcomes per applicant; no extracted document text"}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+  - name: kyc_decisions
+    module: sellers
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    verify: ["V8", "V72", "V73"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "case_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "seller_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "from_state", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "to_state", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "actor_kind", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "actor_id", type: "uuid", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "applicant or admin user id; null for system"}
+      - {name: "reason_code", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "reason_note", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "free text by staff; may name the applicant"}
+      - {name: "occurred_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+  - name: seller_bank_accounts
+    module: sellers
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    verify: ["V8", "V72", "V73"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "seller_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "iban_ct", type: "bytea", pii_class: P3, encryption: field_envelope, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "iban_bidx", type: "bytea", pii_class: P2, encryption: blind_index_hmac, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "HMAC blind index for duplicate-IBAN detection"}
+      - {name: "iban_last4", type: "text", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell, note: "display only"}
+      - {name: "account_name_ct", type: "bytea", pii_class: P3, encryption: field_envelope, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "verified_at", type: "timestamptz", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+  - name: seller_plan_assignments
+    module: sellers
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["seller_representative"]
+    verify: ["V8", "V72", "V73"]
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "seller_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "plan_code", type: "text", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "effective_from", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "assigned_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["seller_onboarding_kyc"], lawful_basis: legal_obligation, retention: kyc_records, processors: ["cloud_cell", "kyc_provider"], residency: cell}

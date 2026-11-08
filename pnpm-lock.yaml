@@ -87,6 +87,9 @@ importers:
       '@outlet/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@outlet/pricing-integrity':
+        specifier: workspace:*
+        version: link:../../packages/pricing-integrity
       fastify:
         specifier: 5.12.6
         version: 5.12.6

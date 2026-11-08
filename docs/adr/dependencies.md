@@ -118,3 +118,6 @@ w2qp-rph6-63g4, 389g-gv7q-r4x8 ||---|---|---|---|
 w2qp-rph6-63g4, 389g-gv7q-r4x8 || @outlet/cart (workspace) | Server-side bag: groups by store, free-delivery progress, limits | n/a (workspace) | private |
 w2qp-rph6-63g4, 389g-gv7q-r4x8 |
 w2qp-rph6-63g4, 389g-gv7q-r4x8 |No third-party dependencies are added. packages/cart depends on workspace packages @outlet/db, @outlet/idempotency, @outlet/ids, @outlet/money, @outlet/outbox, @outlet/policy and zod (already present). Tests use fast-check and PGlite (already present).
+
+## apps/api shopper discovery routes (2026-11-08)
+No new third-party packages. `apps/api` now depends on the workspace package `@outlet/pricing-integrity` (pure window, VRP and display functions for the verified-discount deals read).
