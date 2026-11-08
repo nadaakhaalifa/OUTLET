@@ -15,5 +15,5 @@ export interface DiscountBandLabelProps {
 export function DiscountBandLabel({ highPercent, lowPercent, locale }: DiscountBandLabelProps) {
   const { t } = useI18n(locale);
   if (!Number.isInteger(highPercent) || !Number.isInteger(lowPercent) || BigInt(lowPercent) < MIN_CLAIM_PERCENT || highPercent < lowPercent) return null;
-  return <span className={s["band"]}>{t("shelf.band", { high: highPercent, low: lowPercent })}</span>;
+  return <span className={s.band}>{t("shelf.band", { high: highPercent, low: lowPercent })}</span>;
 }

@@ -3,10 +3,10 @@ import tseslint from "typescript-eslint";
 import districtRules from "./tooling/eslint-rules/index.mjs";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/coverage/**", "**/node_modules/**", "**/.turbo/**", "docs/**", "reports/**", "research_notes/**", "tooling/design/**", "*.cjs"] },
+  { ignores: ["**/dist/**", "**/coverage/**", "**/.next/**", "**/.cache/**", "**/node_modules/**", "**/.turbo/**", "docs/**", "reports/**", "research_notes/**", "tooling/design/**", "*.cjs"] },
   js.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["**/*.ts", "**/*.tsx"],
     extends: [tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
@@ -21,7 +21,7 @@ export default tseslint.config(
   },
   {
     // Tests may use non-null assertions; everything else stays strict.
-    files: ["**/test/**/*.ts", "**/*.test.ts"],
+    files: ["**/test/**/*.ts", "**/test/**/*.tsx", "**/*.test.ts", "**/*.test.tsx"],
     rules: { "@typescript-eslint/no-non-null-assertion": "off" },
   },
   {

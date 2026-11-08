@@ -14,10 +14,10 @@ export interface StorefrontCard3DProps {
 export function StorefrontCard3D({ storeName, category, href, image, locale }: StorefrontCard3DProps) {
   const { t } = useI18n(locale);
   return (
-    <a href={href} className={s["storefront"]} aria-label={t("storefront.open", { store: storeName, category })}>
-      <img src={image.src} alt={image.alt || storeName} loading="lazy" className={s["image"]} />
-      <span className={s["sign"]}>{storeName}</span>
-      <span className={s["muted"]}>{category}</span>
+    <a href={href} className={s.storefront} aria-label={t("storefront.open", { store: storeName, category })}>
+      <img src={image.src} alt={image.alt || storeName} loading="lazy" className={s.image} />
+      <span className={s.sign}>{storeName}</span>
+      <span className={s.muted}>{category}</span>
     </a>
   );
 }

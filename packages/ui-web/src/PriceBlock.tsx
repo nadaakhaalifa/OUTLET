@@ -1,5 +1,6 @@
 import { formatMoney, type Locale } from "@outlet/i18n";
 import type { Money } from "@outlet/money";
+import { floorPercent } from "./percent.js";
 import { useI18n } from "./i18n-context.js";
 import { Skeleton } from "./Skeleton.js";
 import { VisuallyHidden } from "./VisuallyHidden.js";
@@ -28,12 +29,15 @@ export type PriceBlockProps = PriceInput & { readonly locale?: Locale; readonly 
 export const MIN_CLAIM_PERCENT = 5n;
 
 /** floor((reference - price) * 100 / reference) on piastres, or null when no honest claim can be made. */
-export function verifiedPercent(price: Money, evidence: VerifiedEvidence): number | null {
+export function verifiedPercent(price: Money, evidence: VerifiedEvidence | undefined): number | null {
+  // Runtime guard on the evidence object itself (JS callers, casts): no evidence, no percentage.
+  const allowed: boolean = evidence?.claimAllowed ?? false;
+  const evidenceIds: readonly string[] = evidence?.evidenceIds ?? [];
+  if (!evidence || !allowed || evidenceIds.length === 0) return null;
   const ref = evidence.reference;
-  if (evidence.claimAllowed !== true || evidence.evidenceIds.length === 0) return null;
   if (ref.currency !== price.currency || ref.amountMinor <= 0n || price.amountMinor < 0n || price.amountMinor >= ref.amountMinor) return null;
-  const pct = ((ref.amountMinor - price.amountMinor) * 100n) / ref.amountMinor;
-  return pct >= MIN_CLAIM_PERCENT ? Number(pct) : null;
+  const pct = floorPercent(ref.amountMinor - price.amountMinor, ref.amountMinor);
+  return BigInt(pct) >= MIN_CLAIM_PERCENT ? pct : null;
 }
 
 export function PriceBlock(props: PriceBlockProps) {
@@ -48,31 +52,31 @@ export function PriceBlock(props: PriceBlockProps) {
   if (props.verified && percent !== null) {
     const refText = formatMoney(props.verified.reference, locale, opts);
     return (
-      <div className={s["block"]} data-verified="true">
-        <span className={s["price"]}>
+      <div className={s.block} data-verified="true">
+        <span className={s.price}>
           <VisuallyHidden>{t("price.current")} </VisuallyHidden>
           {priceText}
         </span>
-        <del className={s["reference"]}>
+        <del className={s.reference}>
           <VisuallyHidden>{t("price.reference")} </VisuallyHidden>
           {refText}
         </del>
-        <span className={s["pill"]}>{t("price.percentOff", { percent })}</span>
-        <span className={s["badge"]}>{t("price.verifiedDiscount")}</span>
-        {props.verified.lowestIn30Days === true ? <span className={s["badge"]}>{t("price.lowest30d", { days: 30 })}</span> : null}
+        <span className={s.pill}>{t("price.percentOff", { percent })}</span>
+        <span className={s.badge}>{t("price.verifiedDiscount")}</span>
+        {props.verified.lowestIn30Days === true ? <span className={s.badge}>{t("price.lowest30d", { days: 30 })}</span> : null}
       </div>
     );
   }
 
   const kind = props.verified ? "plain" : (props.priceKind ?? "plain");
   return (
-    <div className={s["block"]} data-verified="false">
-      <span className={s["price"]}>
+    <div className={s.block} data-verified="false">
+      <span className={s.price}>
         <VisuallyHidden>{t("price.current")} </VisuallyHidden>
         {priceText}
       </span>
-      {kind === "launch" ? <span className={s["label"]}>{t("price.launchPrice")}</span> : null}
-      {kind === "great" ? <span className={s["label"]}>{t("price.greatPrice")}</span> : null}
+      {kind === "launch" ? <span className={s.label}>{t("price.launchPrice")}</span> : null}
+      {kind === "great" ? <span className={s.label}>{t("price.greatPrice")}</span> : null}
     </div>
   );
 }

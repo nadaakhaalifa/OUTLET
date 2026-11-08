@@ -19,14 +19,14 @@ export function Field({ label, hint, error, locale, required, ...rest }: FieldPr
   const errorId = `${id}-error`;
   const describedBy = [hint ? hintId : "", error ? errorId : ""].filter(Boolean).join(" ") || undefined;
   return (
-    <div className={s["field"]}>
-      <label htmlFor={id} className={s["label"]}>
+    <div className={s.field}>
+      <label htmlFor={id} className={s.label}>
         {label}
-        {required ? null : <span className={s["optional"]}> ({t("common.optional")})</span>}
+        {required ? null : <span className={s.optional}> ({t("common.optional")})</span>}
       </label>
-      <input {...rest} id={id} required={required} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={s["input"]} />
-      {hint ? <p id={hintId} className={s["hint"]}>{hint}</p> : null}
-      {error ? <p id={errorId} role="alert" className={s["error"]}>{error}</p> : null}
+      <input {...rest} id={id} required={required} aria-invalid={error ? true : undefined} aria-describedby={describedBy} className={s.input} />
+      {hint ? <p id={hintId} className={s.hint}>{hint}</p> : null}
+      {error ? <p id={errorId} role="alert" className={s.error}>{error}</p> : null}
     </div>
   );
 }

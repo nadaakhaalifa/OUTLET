@@ -39,27 +39,27 @@ export function DefectCard({ grade, photos, description, location, doesNotAffect
   const titleId = useId();
   const href = safeHref(passportUrl);
   return (
-    <section className={s["card"]} aria-labelledby={titleId}>
-      <header className={s["header"]}>
-        <h3 id={titleId} className={s["title"]}>{t("defect.title")}</h3>
-        <span className={s["grade"]}>{t("defect.grade", { grade })}</span>
+    <section className={s.card} aria-labelledby={titleId}>
+      <header className={s.header}>
+        <h3 id={titleId} className={s.title}>{t("defect.title")}</h3>
+        <span className={s.grade}>{t("defect.grade", { grade })}</span>
       </header>
       {photos.length > 0 ? (
-        <ul className={s["photos"]} aria-label={t("defect.photos")}>
+        <ul className={s.photos} aria-label={t("defect.photos")}>
           {photos.map((p) => (
-            <li key={p.src}><img src={p.src} alt={p.alt} loading="lazy" className={s["photo"]} /></li>
+            <li key={p.src}><img src={p.src} alt={p.alt} loading="lazy" className={s.photo} /></li>
           ))}
         </ul>
       ) : (
-        <p className={s["muted"]}>{t("defect.noPhotos")}</p>
+        <p className={s.muted}>{t("defect.noPhotos")}</p>
       )}
-      <p className={s["description"]}>{description ?? t("defect.noDescription")}</p>
-      {location ? <p className={s["muted"]}>{t("defect.location", { location })}</p> : null}
-      {doesNotAffectOperation === true ? <p className={s["note"]}>{t("defect.doesNotAffect")}</p> : null}
+      <p className={s.description}>{description ?? t("defect.noDescription")}</p>
+      {location ? <p className={s.muted}>{t("defect.location", { location })}</p> : null}
+      {doesNotAffectOperation === true ? <p className={s.note}>{t("defect.doesNotAffect")}</p> : null}
       {href ? (
-        <div className={s["passport"]}>
+        <div className={s.passport}>
           {passportQrSrc ? <img src={passportQrSrc} alt={t("defect.passportQrAlt")} width={96} height={96} /> : null}
-          <a href={href} className={s["link"]}>{t("defect.passportLink")}</a>
+          <a href={href} className={s.link}>{t("defect.passportLink")}</a>
         </div>
       ) : null}
     </section>

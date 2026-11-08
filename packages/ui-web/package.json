@@ -19,7 +19,10 @@
     "react-dom": "^19.3.1"
   },
   "scripts": {
+    "css-types": "node scripts/css-types.mjs",
+    "pretypecheck": "node scripts/css-types.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "node scripts/css-types.mjs",
     "test": "vitest run"
   },
   "devDependencies": {

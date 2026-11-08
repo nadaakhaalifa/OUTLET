@@ -13,9 +13,9 @@ const LANG = { "ar-EG": "ar", "en-EG": "en" } as const;
 export function LocaleSwitch({ locale, onChange }: LocaleSwitchProps) {
   const { t, locale: current } = useI18n(locale);
   return (
-    <div role="group" aria-label={t("locale.label")} className={s["group"]}>
+    <div role="group" aria-label={t("locale.label")} className={s.group}>
       {LOCALES.map((l) => (
-        <button key={l} type="button" lang={LANG[l]} aria-pressed={l === current} className={s["option"]} onClick={() => { onChange(l); }}>
+        <button key={l} type="button" lang={LANG[l]} aria-pressed={l === current} className={s.option} onClick={() => { onChange(l); }}>
           {t(LABEL_KEY[l])}
         </button>
       ))}

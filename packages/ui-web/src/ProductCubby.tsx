@@ -16,13 +16,13 @@ export interface ProductCubbyProps {
 export function ProductCubby({ name, href, image, pricing, onQuickAdd, locale }: ProductCubbyProps) {
   const { t, locale: l } = useI18n(locale);
   return (
-    <div className={s["cubby"]}>
-      <a href={href} className={s["link"]}>
-        <img src={image.src} alt={image.alt || name} loading="lazy" className={s["image"]} />
-        <span className={s["name"]}>{name}</span>
+    <div className={s.cubby}>
+      <a href={href} className={s.link}>
+        <img src={image.src} alt={image.alt || name} loading="lazy" className={s.image} />
+        <span className={s.name}>{name}</span>
       </a>
       <PriceBlock {...pricing} locale={l} />
-      {onQuickAdd ? <button type="button" className={s["add"]} aria-label={t("cubby.quickAdd", { name })} onClick={onQuickAdd}>+</button> : null}
+      {onQuickAdd ? <button type="button" className={s.add} aria-label={t("cubby.quickAdd", { name })} onClick={onQuickAdd}>+</button> : null}
     </div>
   );
 }

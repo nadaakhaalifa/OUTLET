@@ -130,7 +130,7 @@ describe("Button, Field, LocaleSwitch", () => {
     fireEvent.click(b);
     expect(onClick).toHaveBeenCalledTimes(1);
     rerender(<Button onClick={onClick} loading>Go</Button>);
-    expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button").disabled).toBe(true);
     expect(screen.getByRole("button").getAttribute("aria-busy")).toBe("true");
   });
 

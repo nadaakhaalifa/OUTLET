@@ -14,7 +14,7 @@ export function Button({ variant = "primary", loading = false, disabled, classNa
     <button
       {...rest}
       type={type}
-      className={cx(s["button"], s[variant], className)}
+      className={cx(s.button, s[variant], className)}
       disabled={disabled === true || loading}
       aria-busy={loading || undefined}
       data-loading={loading || undefined}
