@@ -109,3 +109,4 @@ No new third-party packages. `@outlet/pricing-integrity` depends on workspace pa
 | @types/pg (dev) | Types for pg | 8.23.1 / 2016-05 | MIT |
 
 Already in the table: zod, jose (also used directly by the test harness to mint ES256 tokens and by `SessionTokenVerifier.decodeJwt` for the market-mismatch code), yaml (OpenAPI generation), @electric-sql/pglite (dev). First-published dates were not re-verified online. Rejected: `nestjs-zod` and `@nestjs/swagger` (Zod 4 `toJSONSchema` + our route registry do both jobs; ADR draft `apps/api/docs/http-layer.md` H2/H3), `@fastify/helmet` (eight static headers set in one hook), `supertest` (Fastify `inject`).
+| fastify (override to 5.12.5) | fixes GHSA-3m5p-2c4r-xxw2, 4mh8-r7rc-xpvc, 667r-xxjv-c9mm, 9q9j-q6p8-xq58, hwr6-493r-vm6h, p68q-wchp-6fh7, w2qp-rph6-63g4 | 2016-10 | MIT |

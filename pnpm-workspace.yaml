@@ -11,3 +11,5 @@ allowBuilds:
 overrides:
   # GHSA-g3hv-75wg-m249 (ReDoS, medium) in minimatch 10.2.6 via dev tooling; OSV gate
   "minimatch@<11.0.1": "11.0.1"
+  # 7 fastify advisories (4 high) in 5.11.3; OSV gate
+  "fastify@<5.12.5": "5.12.5"
