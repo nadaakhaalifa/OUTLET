@@ -155,3 +155,14 @@ Workspace-only additions to apps/api: `@outlet/cart`, `@outlet/checkout`, `@outl
 
 9.6.1 (2026-04-10) is pinned instead of 10.x (10.0.0 is from 2026-08-14, under the 90-day rule). Both are dev-only and add no runtime dependency.
 | qs (override to 6.16.1) | fixes GHSA-4mjr-xmp4-gh2g, 6pq8-jhm2-2vcw, q8mj-m7cp-5q26, x5fp-wj9c-mxmx (transitive) | 2014-01 | BSD-3-Clause |
+
+## Price Watch external channels (pricing-integrity, 2026-11-08)
+No new third-party packages. `@outlet/pricing-integrity` adds only workspace and already listed dependencies (`zod`, `fast-check` in tests). Migration `0026_price_watch_channels.sql` adds worker job `pricing.channels`; OAuth, DNS, robots.txt, fetch and matching stages are ports with fakes (production adapters stay Unconfigured, ADR-0029).
+
+## Promotions engine (packages/promotions, 2026-11-08)
+
+| Package | Purpose | First published | Licence |
+|---|---|---|---|
+| @outlet/promotions (workspace) | Deterministic promotions and vouchers engine: rules, stacking matrix, auto-best, funding split, voucher reservations | n/a (workspace) | private |
+
+No third-party dependencies are added. packages/promotions depends on workspace packages @outlet/db, @outlet/ids, @outlet/money, @outlet/policy, @outlet/tax and zod (already present). Tests use fast-check and PGlite (already present). It must never depend on a budget package (guard test in packages/promotions/test/guard.test.ts).

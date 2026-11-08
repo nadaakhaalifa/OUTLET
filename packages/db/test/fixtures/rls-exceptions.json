@@ -18,6 +18,18 @@
     "cmd": "delete"
   },
   {
+    "table": "channel_connections",
+    "policy": "channel_connections__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "channel_snapshots",
+    "policy": "channel_snapshots__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "cod_remittance_lines",
     "policy": "cod_remittance_lines__worker_finance_reconcile",
     "role": "outlet_worker",
@@ -34,6 +46,24 @@
     "policy": "consent_records__auth_visitor",
     "role": "outlet_auth",
     "cmd": "insert"
+  },
+  {
+    "table": "courier_events_raw",
+    "policy": "courier_events_raw__worker_shipping_tracking",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "delivery_snapshots",
+    "policy": "delivery_snapshots__worker_shipping_tracking_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "delivery_snapshots",
+    "policy": "delivery_snapshots__worker_shipping_tracking_update",
+    "role": "outlet_worker",
+    "cmd": "update"
   },
   {
     "table": "devices",
@@ -68,6 +98,18 @@
   {
     "table": "dlq_messages",
     "policy": "dlq_messages__worker_outbox_relay",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "enforcement_actions",
+    "policy": "enforcement_actions__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "external_products",
+    "policy": "external_products__worker_pricing_channels",
     "role": "outlet_worker",
     "cmd": "all"
   },
@@ -228,6 +270,48 @@
     "cmd": "insert"
   },
   {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_shipping_tracking",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_issue",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_take",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_take_delete",
+    "role": "outlet_auth",
+    "cmd": "delete"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
     "table": "passkey_credentials",
     "policy": "passkey_credentials__auth_lookup",
     "role": "outlet_auth",
@@ -306,10 +390,34 @@
     "cmd": "select"
   },
   {
+    "table": "price_appeals",
+    "policy": "price_appeals__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "price_claims",
+    "policy": "price_claims__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "price_findings",
+    "policy": "price_findings__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "privacy_requests",
     "policy": "privacy_requests__worker_privacy_deletion",
     "role": "outlet_worker",
     "cmd": "select"
+  },
+  {
+    "table": "product_matches",
+    "policy": "product_matches__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "psp_settlement_files",
@@ -501,6 +609,18 @@
     "table": "session_families",
     "policy": "session_families__auth_revoke_by_token",
     "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "shipments",
+    "policy": "shipments__worker_shipping_tracking_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "shipments",
+    "policy": "shipments__worker_shipping_tracking_update",
+    "role": "outlet_worker",
     "cmd": "update"
   },
   {

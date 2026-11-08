@@ -320,6 +320,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      api:
+        specifier: workspace:*
+        version: link:../api
       axe-core:
         specifier: 4.14.0
         version: 4.14.0
@@ -744,6 +747,27 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
+  packages/promotions:
+    dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
+      '@outlet/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@outlet/money':
+        specifier: workspace:*
+        version: link:../money
+      '@outlet/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@outlet/tax':
+        specifier: workspace:*
+        version: link:../tax
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   packages/returns:
     dependencies:
       '@outlet/admin-access':
@@ -851,6 +875,9 @@ importers:
       '@outlet/money':
         specifier: workspace:*
         version: link:../money
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../outbox
       '@outlet/policy':
         specifier: workspace:*
         version: link:../policy
