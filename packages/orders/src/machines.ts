@@ -47,7 +47,8 @@ export const ORDER_GROUP: Machine<OrderGroupState, OrderGroupEvent> = {
   initial: "PENDING_PAYMENT",
   states: ORDER_GROUP_STATES,
   events: ORDER_GROUP_EVENTS,
-  terminal: ["REFUNDED", "COMPLETED", "CANCELLED"],
+  // CANCELLED is not terminal: a PSP capture that lands after an unpaid group was cancelled is owed back (late_payment_unavailable).
+  terminal: ["REFUNDED", "COMPLETED"],
   table: {
     PENDING_PAYMENT: {
       payment_succeeded: "PAID", payment_failed: "PAYMENT_FAILED", expire: "EXPIRED",
@@ -63,7 +64,8 @@ export const ORDER_GROUP: Machine<OrderGroupState, OrderGroupEvent> = {
     PARTIALLY_FULFILLED: { fulfil_all: "COMPLETED" },
     REFUNDED: {},
     COMPLETED: {},
-    CANCELLED: {},
+    // never re-claimed: the shopper cancelled, so captured money always goes back (checkout webhook, recordLateRefund)
+    CANCELLED: { late_payment_unavailable: "REFUND_PENDING" },
   },
 };
 
