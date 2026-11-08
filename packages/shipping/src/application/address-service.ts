@@ -30,12 +30,25 @@ export interface AddressView {
 }
 export interface SnapshotView { readonly recipientName: string; readonly phoneMasked: string; readonly address: StructuredAddress; readonly accessUntil: Date | null }
 
-const AAD = { name: "addresses.recipient_name_ct", phone: "addresses.phone_ct", addr: "addresses.address_ct", pin: "addresses.pin_ct" } as const;
-const SAAD = { name: "delivery_snapshots.recipient_name_ct", phone: "delivery_snapshots.phone_ct", addr: "delivery_snapshots.address_ct", pin: "delivery_snapshots.pin_ct" } as const;
+/** AAD = column + row id (C6): a ciphertext copied to another row fails to decrypt. */
+const AAD = {
+  name: (id: string) => `addresses.recipient_name_ct:${id}`, phone: (id: string) => `addresses.phone_ct:${id}`,
+  addr: (id: string) => `addresses.address_ct:${id}`, pin: (id: string) => `addresses.pin_ct:${id}`,
+} as const;
+export const SNAPSHOT_AAD = {
+  name: (id: string) => `delivery_snapshots.recipient_name_ct:${id}`, phone: (id: string) => `delivery_snapshots.phone_ct:${id}`,
+  masked: (id: string) => `delivery_snapshots.phone_masked_ct:${id}`, addr: (id: string) => `delivery_snapshots.address_ct:${id}`, pin: (id: string) => `delivery_snapshots.pin_ct:${id}`,
+} as const;
+/** Seller access: 60 days from checkout, shortened to 30 days after DELIVERED / RTO / CANCELLED / RETURNED_TO_SELLER (B1). */
 const SNAPSHOT_ACCESS_DAYS = 30;
+const SELLER_ACCESS_INITIAL_DAYS = 60;
+const DAY_MS = 86_400_000;
 
 /** +20*******123: last three digits only. */
 export const maskPhone = (p: string): string => `${p.startsWith("+") ? p.slice(0, 3) : ""}${"*".repeat(Math.max(p.length - 3 - (p.startsWith("+") ? 3 : 0), 0))}${p.slice(-3)}`;
+
+/** C7: serialises default-address handling per user (the partial unique index would otherwise turn a race into a 500). */
+export const DEFAULT_LOCK_SQL = "SELECT pg_advisory_xact_lock(hashtext($1))";
 
 interface Row {
   id: string; label: string | null; recipient_name_ct: Uint8Array; phone_ct: Uint8Array; address_ct: Uint8Array; cod_eligible: boolean; is_default: boolean;
@@ -55,8 +68,8 @@ export class AddressService {
   }
 
   private async view(r: Row): Promise<AddressView> {
-    const doc = addressSchema.parse(JSON.parse(await this.cipher.decrypt(r.address_ct, AAD.addr)));
-    return { id: r.id, label: r.label, recipientName: await this.cipher.decrypt(r.recipient_name_ct, AAD.name), phone: await this.cipher.decrypt(r.phone_ct, AAD.phone), address: doc, codEligible: r.cod_eligible, isDefault: r.is_default };
+    const doc = addressSchema.parse(JSON.parse(await this.cipher.decrypt(r.address_ct, AAD.addr(r.id))));
+    return { id: r.id, label: r.label, recipientName: await this.cipher.decrypt(r.recipient_name_ct, AAD.name(r.id)), phone: await this.cipher.decrypt(r.phone_ct, AAD.phone(r.id)), address: doc, codEligible: r.cod_eligible, isDefault: r.is_default };
   }
 
   private parse(raw: unknown): AddressInput {
@@ -65,24 +78,25 @@ export class AddressService {
     return p.data;
   }
 
-  private async cols(userId: string, i: AddressInput) {
+  private async cols(userId: string, i: AddressInput, id: string) {
     const r = await this.validator.validate(userId, i.address);
     const ids = [...r.areaIds];
     const district = i.address.districtCode === undefined ? null : (ids.shift() ?? null);
     const city = i.address.cityCode === undefined ? null : (ids.shift() ?? null);
     return {
       governorate: r.governorateAreaId, city, district, cod: r.codEligible,
-      name: await this.cipher.encrypt(i.recipientName, AAD.name), phone: await this.cipher.encrypt(i.phone, AAD.phone), addr: await this.cipher.encrypt(JSON.stringify(i.address), AAD.addr),
-      pin: i.address.pin === undefined ? null : await this.cipher.encrypt(JSON.stringify(i.address.pin), AAD.pin),
+      name: await this.cipher.encrypt(i.recipientName, AAD.name(id)), phone: await this.cipher.encrypt(i.phone, AAD.phone(id)), addr: await this.cipher.encrypt(JSON.stringify(i.address), AAD.addr(id)),
+      pin: i.address.pin === undefined ? null : await this.cipher.encrypt(JSON.stringify(i.address.pin), AAD.pin(id)),
     };
   }
 
   async create(userId: string, raw: unknown): Promise<AddressView> {
     const i = this.parse(raw);
-    const c = await this.cols(userId, i);
     const id = uuidv7();
+    const c = await this.cols(userId, i, id);
     const now = this.env.now().toISOString();
     return this.user(userId, async (tx) => {
+      await tx.query(DEFAULT_LOCK_SQL, [userId]);
       const has = (await tx.query("SELECT 1 FROM addresses WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1", [userId])).rows.length > 0;
       const def = i.isDefault === true || !has;
       if (def) await tx.query("UPDATE addresses SET is_default = false, updated_at = $2::timestamptz WHERE user_id = $1 AND is_default", [userId, now]);
@@ -110,9 +124,10 @@ export class AddressService {
 
   async update(userId: string, id: string, raw: unknown): Promise<AddressView> {
     const i = this.parse(raw);
-    const c = await this.cols(userId, i);
+    const c = await this.cols(userId, i, id);
     const now = this.env.now().toISOString();
     const r = await this.user(userId, async (tx) => {
+      await tx.query(DEFAULT_LOCK_SQL, [userId]);
       if (i.isDefault === true) await tx.query("UPDATE addresses SET is_default = false, updated_at = $2::timestamptz WHERE user_id = $1 AND is_default AND id <> $3", [userId, now, id]);
       return (
         await tx.query<Row>(
@@ -140,24 +155,31 @@ export class AddressService {
   }
 
   /**
-   * Freezes recipient name, masked phone and address for one seller order (called at checkout place, in its own user-context
-   * transaction). Idempotent on the seller order. The seller branch of RLS ends at seller_access_until (delivery / RTO + 30 days).
+   * Freezes recipient name, the REAL phone, a masked phone and the address for one seller order (called at checkout place, in its own
+   * user-context transaction). Idempotent on the seller order. The real phone (phone_ct) is column-granted to outlet_worker only and is
+   * decrypted solely for the courier call; sellers read phone_masked_ct. Seller access starts at created_at + 60 days and is shortened to
+   * 30 days after a terminal shipment event (tracking job).
    */
   async snapshotForOrder(userId: string, sellerOrderId: string, addressId: string): Promise<void> {
     const a = await this.get(userId, addressId);
     const parts = [a.address.governorateCode, a.address.cityCode, a.address.districtCode].filter((c): c is string => c !== undefined);
-    const now = this.env.now().toISOString();
-    const [name, phone, addr] = [await this.cipher.encrypt(a.recipientName, SAAD.name), await this.cipher.encrypt(maskPhone(a.phone), SAAD.phone), await this.cipher.encrypt(JSON.stringify(a.address), SAAD.addr)];
-    const pin = a.address.pin === undefined ? null : await this.cipher.encrypt(JSON.stringify(a.address.pin), SAAD.pin);
+    const nowDate = this.env.now();
+    const now = nowDate.toISOString();
+    const until = new Date(nowDate.getTime() + SELLER_ACCESS_INITIAL_DAYS * DAY_MS).toISOString();
+    const [name, phone, masked, addr] = [
+      await this.cipher.encrypt(a.recipientName, SNAPSHOT_AAD.name(sellerOrderId)), await this.cipher.encrypt(a.phone, SNAPSHOT_AAD.phone(sellerOrderId)),
+      await this.cipher.encrypt(maskPhone(a.phone), SNAPSHOT_AAD.masked(sellerOrderId)), await this.cipher.encrypt(JSON.stringify(a.address), SNAPSHOT_AAD.addr(sellerOrderId)),
+    ];
+    const pin = a.address.pin === undefined ? null : await this.cipher.encrypt(JSON.stringify(a.address.pin), SNAPSHOT_AAD.pin(sellerOrderId));
     const ok = await this.user(userId, async (tx) => {
       const so = (await tx.query<{ order_group_id: string; store_id: string }>("SELECT order_group_id, store_id FROM seller_orders WHERE id = $1", [sellerOrderId])).rows[0];
       if (so === undefined) return false;
       const area = (await tx.query<{ id: string }>("SELECT id FROM geo_areas WHERE market_id = $1 AND code = $2", [this.env.marketId, parts[parts.length - 1]])).rows[0];
       if (area === undefined) return false;
       await tx.query(
-        `INSERT INTO delivery_snapshots (seller_order_id, order_group_id, store_id, user_id, market_id, geo_area_id, recipient_name_ct, phone_ct, address_ct, pin_ct, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz) ON CONFLICT (seller_order_id) DO NOTHING`,
-        [sellerOrderId, so.order_group_id, so.store_id, userId, this.env.marketId, area.id, name, phone, addr, pin, now],
+        `INSERT INTO delivery_snapshots (seller_order_id, order_group_id, store_id, user_id, market_id, geo_area_id, recipient_name_ct, phone_ct, phone_masked_ct, address_ct, pin_ct, seller_access_until, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13::timestamptz) ON CONFLICT (seller_order_id) DO NOTHING`,
+        [sellerOrderId, so.order_group_id, so.store_id, userId, this.env.marketId, area.id, name, phone, masked, addr, pin, until, now],
       );
       return true;
     });
@@ -167,14 +189,15 @@ export class AddressService {
   /** Seller read. RLS returns nothing once seller_access_until has passed or for another store's order. */
   async snapshotForSeller(storeId: string, sellerOrderId: string): Promise<SnapshotView | undefined> {
     const r = await withDbContext(this.env.client, { kind: "store", marketId: this.env.marketId, storeId }, async (tx) =>
-      (await tx.query<{ recipient_name_ct: Uint8Array; phone_ct: Uint8Array; address_ct: Uint8Array; seller_access_until: Date | string | null }>(
-        "SELECT recipient_name_ct, phone_ct, address_ct, seller_access_until FROM delivery_snapshots WHERE seller_order_id = $1", [sellerOrderId])).rows[0],
+      (await tx.query<{ recipient_name_ct: Uint8Array | null; phone_masked_ct: Uint8Array | null; address_ct: Uint8Array | null; seller_access_until: Date | string | null }>(
+        "SELECT recipient_name_ct, phone_masked_ct, address_ct, seller_access_until FROM delivery_snapshots WHERE seller_order_id = $1", [sellerOrderId])).rows[0],
     );
-    if (r === undefined) return undefined;
+    // A pseudonymised row has no ciphertext left: the seller sees nothing.
+    if (r?.recipient_name_ct == null || r.phone_masked_ct == null || r.address_ct == null) return undefined;
     return {
-      recipientName: await this.cipher.decrypt(r.recipient_name_ct, SAAD.name), phoneMasked: await this.cipher.decrypt(r.phone_ct, SAAD.phone),
-      address: addressSchema.parse(JSON.parse(await this.cipher.decrypt(r.address_ct, SAAD.addr))), accessUntil: r.seller_access_until === null ? null : new Date(r.seller_access_until),
+      recipientName: await this.cipher.decrypt(r.recipient_name_ct, SNAPSHOT_AAD.name(sellerOrderId)), phoneMasked: await this.cipher.decrypt(r.phone_masked_ct, SNAPSHOT_AAD.masked(sellerOrderId)),
+      address: addressSchema.parse(JSON.parse(await this.cipher.decrypt(r.address_ct, SNAPSHOT_AAD.addr(sellerOrderId)))), accessUntil: r.seller_access_until === null ? null : new Date(r.seller_access_until),
     };
   }
 }
-export { SNAPSHOT_ACCESS_DAYS };
+export { SELLER_ACCESS_INITIAL_DAYS, SNAPSHOT_ACCESS_DAYS };

@@ -1,10 +1,13 @@
 import { GENERIC_STATUS_MAP } from "./domain/tracking-map.js";
+import { WEBHOOK_TOLERANCE_MS } from "./domain/ports.js";
 import type { CourierEvent, CourierPort, CourierWebhookPort, CreateShipmentRequest, CreatedShipment, LabelStorePort, NormalisedEvent, PiiCipher, ShipmentLabelPort } from "./domain/ports.js";
 
 /** TEST ONLY. In-memory courier: idempotent by shipmentId, no network. */
 export class FakeCourier implements CourierPort, ShipmentLabelPort {
   readonly created = new Map<string, CreatedShipment>();
   readonly cancelled = new Set<string>();
+  /** Every request the courier received (what a real adapter would send). */
+  readonly requests: CreateShipmentRequest[] = [];
   failNext = false;
   private seq = 0;
 
@@ -13,6 +16,7 @@ export class FakeCourier implements CourierPort, ShipmentLabelPort {
       this.failNext = false;
       return Promise.reject(new Error("courier unavailable"));
     }
+    this.requests.push(req);
     const existing = this.created.get(req.shipmentId);
     if (existing !== undefined) return Promise.resolve(existing);
     const made = { awb: `FAKE${String(++this.seq).padStart(8, "0")}`, courier: req.courier };
@@ -39,9 +43,13 @@ export class UnconfiguredCourier implements CourierPort {
   normalise(): undefined { return undefined; }
 }
 
-/** TEST ONLY. Webhook port: signature header must equal "valid"; body is JSON `{ "events": [CourierEvent] }`. */
+/** TEST ONLY. Webhook port: x-signature must equal "valid" and x-timestamp (ISO) must be within the tolerance; body is JSON `{ "events": [CourierEvent] }`. */
 export class FakeWebhook implements CourierWebhookPort {
-  verify(_raw: string, headers: Readonly<Record<string, string>>): boolean { return headers["x-signature"] === "valid"; }
+  verify(_raw: string, headers: Readonly<Record<string, string>>, now: Date): boolean {
+    if (headers["x-signature"] !== "valid") return false;
+    const t = Date.parse(headers["x-timestamp"] ?? "");
+    return Number.isFinite(t) && Math.abs(now.getTime() - t) <= WEBHOOK_TOLERANCE_MS;
+  }
   parse(raw: string): readonly CourierEvent[] { return (JSON.parse(raw) as { events: CourierEvent[] }).events; }
 }
 /** TEST ONLY. Reversible fake cipher. */

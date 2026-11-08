@@ -3,7 +3,7 @@ import { GENERIC_STATUS_MAP, SHIPMENT_STATUSES, applyTracking } from "../src/ind
 import type { CourierEvent, ShipmentState } from "../src/index.js";
 import { FakeCourier, UnconfiguredCourier } from "../src/testing.js";
 
-const req = { shipmentId: "ship-1", courier: "fake", serviceLevel: "standard", parcels: [{ weightG: 500 }], destination: { governorateCode: "CAI", street: "s", building: "1" }, codMinor: 0n };
+const req = { shipmentId: "ship-1", courier: "fake", serviceLevel: "standard", parcels: [{ weightG: 500 }], destination: { governorateCode: "CAI", street: "s", building: "1" }, recipient: { name: "N", phone: "+201001234567" }, codMinor: 0n };
 
 describe("fake courier", () => {
   it("createShipment is idempotent by shipment id and can fail", async () => {

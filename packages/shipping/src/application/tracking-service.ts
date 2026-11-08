@@ -2,13 +2,17 @@ import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
 import { uuidv7 } from "@outlet/ids";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
+import { createHash } from "node:crypto";
 import { ShippingError } from "../domain/errors.js";
+import { MAX_WEBHOOK_BYTES } from "../domain/ports.js";
 import type { CourierEvent, CourierPort, CourierWebhookPort, DeliveryPort, PiiCipher } from "../domain/ports.js";
 import { applyTracking } from "../domain/shipment-state.js";
 import type { ShipmentStatus } from "../domain/shipment-state.js";
 
 export const STALE_AFTER_MS = 48 * 3_600_000;
 const SELLER_ACCESS_MS = 30 * 86_400_000;
+const SELLER_ACCESS_TERMINAL: ReadonlySet<string> = new Set(["DELIVERED", "RTO", "CANCELLED", "RETURNED_TO_SELLER"]);
+const isStale = (last: Date | string | null, occurredAt: string): boolean => last !== null && new Date(occurredAt).getTime() < new Date(last).getTime();
 
 export interface TrackingDeps {
   /** Connection as outlet_worker; every call binds job shipping.tracking. */
@@ -27,8 +31,8 @@ export interface TrackingDeps {
 export type EventOutcome = "applied" | "duplicate" | "ignored" | "failed";
 export interface WebhookResult { readonly accepted: boolean; readonly outcomes: readonly { eventId: string; outcome: EventOutcome }[] }
 
-interface ShipRow { id: string; store_id: string; user_id: string; seller_order_ids: string[]; status: ShipmentStatus; attempts: number; cod_amount_minor: string; courier: string; awb: string }
-const SHIP_COLS = "id, store_id, user_id, seller_order_ids, status, attempts, cod_amount_minor::text AS cod_amount_minor, courier, awb";
+interface ShipRow { id: string; store_id: string; user_id: string; seller_order_ids: string[]; status: ShipmentStatus; attempts: number; cod_amount_minor: string; courier: string; awb: string; last_event_at: Date | string | null }
+const SHIP_COLS = "id, store_id, user_id, seller_order_ids, status, attempts, cod_amount_minor::text AS cod_amount_minor, courier, awb, last_event_at";
 
 abstract class Base {
   protected readonly outbox: OutboxWriter;
@@ -54,12 +58,16 @@ abstract class Base {
  */
 export class CourierWebhookProcessor extends Base {
   async handle(rawBody: string, headers: Readonly<Record<string, string>>): Promise<WebhookResult> {
-    if (!this.d.webhook.verify(rawBody, headers)) {
-      const now = this.now().toISOString();
-      const body = await this.d.cipher.encrypt(rawBody, "courier_events_raw.body_ct");
+    const bytes = Buffer.byteLength(rawBody, "utf8");
+    // C5: oversize bodies are refused before any hashing, parsing or storage.
+    if (bytes > MAX_WEBHOOK_BYTES) throw new ShippingError("INVALID_INPUT", "webhook body too large");
+    if (!this.d.webhook.verify(rawBody, headers, this.now())) {
+      // C5: an unauthenticated body is attacker-controlled: keep only its digest and size (one row per distinct digest), never the content.
+      const sha = createHash("sha256").update(rawBody).digest("hex");
       await this.tx((tx) => tx.query(
-        `INSERT INTO courier_events_raw (id, market_id, courier_code, courier_event_id, signature_ok, body_ct, processing_status, received_at) VALUES ($1,$2,$3,$4,false,$5,'rejected',$6::timestamptz)`,
-        [this.newId(), this.d.marketId, this.d.courierCode, `invalid:${this.newId()}`, body, now]));
+        `INSERT INTO courier_events_raw (id, market_id, courier_code, courier_event_id, signature_ok, body_ct, body_sha256, body_bytes, processing_status, received_at)
+         VALUES ($1,$2,$3,$4,false,NULL,$5,$6,'rejected',$7::timestamptz) ON CONFLICT (courier_code, courier_event_id) DO NOTHING`,
+        [this.newId(), this.d.marketId, this.d.courierCode, `invalid:${sha}`, sha, bytes, this.now().toISOString()]));
       return { accepted: false, outcomes: [] };
     }
     let events: readonly CourierEvent[];
@@ -71,7 +79,7 @@ export class CourierWebhookProcessor extends Base {
 
   private async one(e: CourierEvent): Promise<EventOutcome> {
     const rawId = this.newId();
-    const body = await this.d.cipher.encrypt(JSON.stringify(e), "courier_events_raw.body_ct");
+    const body = await this.d.cipher.encrypt(JSON.stringify(e), `courier_events_raw.body_ct:${rawId}`);
     const raw = await this.tx(async (tx) => {
       await tx.query(
         `INSERT INTO courier_events_raw (id, market_id, courier_code, courier_event_id, signature_ok, body_ct, received_at) VALUES ($1,$2,$3,$4,true,$5,$6::timestamptz) ON CONFLICT (courier_code, courier_event_id) DO NOTHING`,
@@ -90,6 +98,8 @@ export class CourierWebhookProcessor extends Base {
     let pre;
     try { pre = applyTracking({ status: peek.status, attempts: peek.attempts }, norm.status); } catch { await finish("ignored", "invalid_transition", peek.id); return "ignored"; }
     if (pre.kind === "duplicate") { await finish("ignored", "same_status", peek.id); return "ignored"; }
+    // C4: an event older than the last applied one is out of order (a late delivery_failed must not trigger a premature RTO).
+    if (isStale(peek.last_event_at, norm.occurredAt)) { await finish("ignored", "stale_order", peek.id); return "ignored"; }
     const deliveredAt = new Date(norm.occurredAt);
     if (pre.state.status === "DELIVERED") {
       try { for (const so of peek.seller_order_ids) await this.d.orders.markDelivered(so, deliveredAt); } catch { await finish("failed", "mark_delivered_failed", peek.id); return "failed"; }
@@ -100,14 +110,16 @@ export class CourierWebhookProcessor extends Base {
       let r;
       try { r = applyTracking({ status: s.status, attempts: s.attempts }, norm.status); } catch { return "ignored" as const; }
       if (r.kind === "duplicate") return "ignored" as const;
+      if (isStale(s.last_event_at, norm.occurredAt)) return "stale" as const;
       const at = norm.occurredAt;
       const st = r.state.status;
       await tx.query(
         `UPDATE shipments SET status = $2, attempts = $3, delivered_at = CASE WHEN $2 = 'DELIVERED' THEN $4::timestamptz ELSE delivered_at END, last_event_at = $4::timestamptz, version = version + 1, updated_at = $5::timestamptz WHERE id = $1`,
         [s.id, st, r.state.attempts, at, this.now().toISOString()]);
       const base = { shipment_id: s.id, store_id: s.store_id, user_id: s.user_id };
-      if (st === "DELIVERED" || st === "RTO") {
-        await tx.query("UPDATE delivery_snapshots SET seller_access_until = $2::timestamptz WHERE seller_order_id = ANY($1::uuid[]) AND seller_access_until IS NULL", [s.seller_order_ids, new Date(new Date(at).getTime() + SELLER_ACCESS_MS).toISOString()]);
+      if (SELLER_ACCESS_TERMINAL.has(st)) {
+        // C3: shorten (never extend) the seller window to 30 days after the terminal event.
+        await tx.query("UPDATE delivery_snapshots SET seller_access_until = LEAST(COALESCE(seller_access_until, $2::timestamptz), $2::timestamptz) WHERE seller_order_id = ANY($1::uuid[])", [s.seller_order_ids, new Date(new Date(at).getTime() + SELLER_ACCESS_MS).toISOString()]);
       }
       if (st === "DELIVERED") {
         for (const so of s.seller_order_ids) await this.emit(tx, "seller_order.delivered", "seller_order", so, at, { seller_order_id: so, store_id: s.store_id, user_id: s.user_id });
@@ -117,6 +129,7 @@ export class CourierWebhookProcessor extends Base {
       await tx.query("UPDATE courier_events_raw SET processing_status = 'processed', shipment_id = $2, processed_at = $3::timestamptz WHERE id = $1", [raw.id, s.id, this.now().toISOString()]);
       return "applied" as const;
     });
+    if (done === "stale") { await finish("ignored", "stale_order", peek.id); return "ignored"; }
     if (done === "ignored") await finish("ignored", "invalid_transition", peek.id);
     return done;
   }
@@ -137,5 +150,18 @@ export class TrackingStaleScanner extends Base {
       }
       return rows.map((r) => r.id);
     });
+  }
+}
+
+/**
+ * Retention for delivery snapshots (C3, job shipping.tracking): once seller_access_until has passed, the five ciphertext columns are nulled
+ * and pseudonymised_at stamped. Idempotent; the owning row (ids, area, timestamps) stays for the order record.
+ */
+export class SnapshotRetention extends Base {
+  async purgeExpiredSnapshots(now: Date = this.now(), limit = 500): Promise<number> {
+    return this.tx(async (tx) => (await tx.query(
+      `UPDATE delivery_snapshots SET recipient_name_ct = NULL, phone_ct = NULL, phone_masked_ct = NULL, address_ct = NULL, pin_ct = NULL, pseudonymised_at = $1::timestamptz
+        WHERE seller_order_id IN (SELECT seller_order_id FROM delivery_snapshots WHERE market_id = $2 AND pseudonymised_at IS NULL AND seller_access_until <= $1::timestamptz ORDER BY seller_access_until LIMIT $3::int)
+        RETURNING seller_order_id`, [now.toISOString(), this.d.marketId, limit])).rows.length);
   }
 }
