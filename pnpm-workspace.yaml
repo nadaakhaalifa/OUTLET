@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# Supply chain (BUILD-PROMPT section 2): 7 days = 10080 minutes before a release can be installed.
+minimumReleaseAge: 10080
+# Lifecycle scripts are off by default; only the packages below may run build scripts.
+allowBuilds:
+  esbuild: true

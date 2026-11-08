@@ -1,0 +1,6 @@
+title = "outlex gitleaks"
+[extend]
+useDefault = true
+[allowlist]
+description = "Lockfile hashes and test fixtures are not secrets"
+paths = ['''pnpm-lock\.yaml$''', '''\.env\.example$''']
