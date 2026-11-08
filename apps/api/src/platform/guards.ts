@@ -129,8 +129,19 @@ export class RateLimitGuard implements CanActivate {
     if (rl === undefined) throw Problems.internal("rate-limit-undeclared");
     if ("exempt" in rl) return true;
     const req = reqOf(ctx);
-    const values = rl.keys.map((k) => [k, this.keyValue(k, req)] as const).filter((x): x is readonly [RateKey, string] => x[1] !== undefined);
-    if (!values.some(([k]) => k !== "ip" && k !== "asn")) throw Problems.badRequest("rate-limit-key-missing");
+    // Public fail-open reads (SSR, crawlers, link previews) cannot send X-Device-Id: they fall back to the IP bucket
+    // (CGNAT multiplier). Fail-closed and authenticated routes keep the device key mandatory.
+    const authz = meta(this.reflector, META.authz, ctx) as AuthzMeta | undefined;
+    const deviceOptional = authz?.kind === "public" && rl.budget.failMode === "open";
+    const values: (readonly [RateKey, string])[] = [];
+    let ipFallback = false;
+    for (const k of rl.keys) {
+      const v = k === "device" && deviceOptional ? this.optionalDevice(req) : this.keyValue(k, req);
+      if (v !== undefined) values.push([k, v]);
+      else if (k === "device" && deviceOptional) ipFallback = true;
+    }
+    if (ipFallback && !values.some(([k]) => k === "ip")) values.push(["ip", req.ip]);
+    if (!ipFallback && !values.some(([k]) => k !== "ip" && k !== "asn")) throw Problems.badRequest("rate-limit-key-missing");
     let decisions: RateDecision[];
     try {
       decisions = await Promise.all(
@@ -167,6 +178,11 @@ export class RateLimitGuard implements CanActivate {
         return d.toLowerCase();
       }
     }
+  }
+
+  private optionalDevice(req: ApiRequest): string | undefined {
+    const d = headerValue(req, "x-device-id");
+    return d !== undefined && UUID.safeParse(d).success ? d.toLowerCase() : undefined;
   }
 
   private hash(v: string): string {

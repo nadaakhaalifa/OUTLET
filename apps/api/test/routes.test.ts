@@ -3,7 +3,7 @@ import { CONTROLLERS } from "../src/controllers.js";
 import { auditRoutes, collectRoutes, routeKey } from "../src/platform/route-registry.js";
 import { createTestApp } from "./harness.js";
 import type { TestApp } from "./harness.js";
-import { expectNegativeAuthz, expectQueryCount } from "./negative-authz.js";
+import { expectNegativeAuthz, expectPolicyPrincipalDenials, expectQueryCount } from "./negative-authz.js";
 import { ROUTE_FIXTURES } from "./route-fixtures.js";
 
 const ROUTES = collectRoutes(CONTROLLERS);
@@ -26,7 +26,10 @@ describe("production route table", () => {
     expect(Object.keys(ROUTE_FIXTURES).filter((k) => !ROUTES.some((r) => routeKey(r) === k))).toEqual([]);
   });
 
-  it("the running app serves exactly the audited routes", () => {
+  it("the running app serves exactly the audited routes (checked against Fastify's own registrations)", () => {
+    const fastify = t.app.getHttpAdapter().getInstance();
+    for (const r of ROUTES) expect(fastify.hasRoute({ method: r.method, url: r.path }), `${routeKey(r)} not registered`).toBe(true);
+    // createApp already refused any registered route missing from the audit (onRoute), so no extras exist either.
     expect(t.routes.map(routeKey)).toEqual(ROUTES.map(routeKey));
   });
 });
@@ -37,6 +40,9 @@ describe.each(ROUTES.map((r) => [routeKey(r), r] as const))("%s", (key, route) =
     if (fx === undefined) throw new Error(`no fixture for ${key}`);
     const cases = await expectNegativeAuthz(t, route, fx);
     expect(cases.length).toBeGreaterThan(0);
+  });
+  it("admin and system principals are denied without grants (policy level)", () => {
+    expectPolicyPrincipalDenials(route);
   });
   it("query count within maxQueries", async () => {
     if (fx === undefined) throw new Error(`no fixture for ${key}`);

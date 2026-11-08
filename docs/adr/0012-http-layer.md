@@ -43,4 +43,13 @@
 
 ## Not done here (tracked)
 
-`store_members` migration + Pg adapter; admin principal (`adminPasskeySession`); audit-log write of authz decisions and reason codes; failure-only counting for the gift-card budget; ESLint rules for the four route rules (runtime audit enforces them today); idempotency lease for crashed in-flight keys (package change); `auth` pool name in `PG_PROCESS_NAMES` (package change).
+`store_members` migration + Pg adapter; admin principal (`adminPasskeySession`; admin and system denials are tested at the policy level until HTTP can mint them); audit-log write of authz decisions and reason codes; failure-only counting for the gift-card budget; ESLint rules for the four route rules (runtime audit enforces them today); request cancellation: the 10 s handler timeout stops waiting but does not abort handler DB work (statement_timeout bounds it; AbortSignal plumbing through `req.ctx` is a TODO in `TelemetryInterceptor`); a real boot smoke test of `cli.ts` (it needs Postgres and Redis; `test/boot.test.ts` covers config, Node 24 `toCryptoKey` and pool tags only).
+
+## Decision log
+
+- **2026-11-08 (chief review D1):** the route audit walks the prototype chain (inherited handlers are served by Nest). `createApp` records Fastify's own `onRoute` registrations and refuses to start when the served set differs from the audited set in either direction.
+- **2026-11-08 (D2):** `X-Device-Id` is optional on `@Public` routes whose budget fails open (SSR, crawlers, link previews): they fall back to the IP bucket (x10 CGNAT multiplier). Authenticated routes and fail-closed budgets (OTP, checkout) still answer 400 `device-id-required`.
+- **2026-11-08 (D3):** store-tenant routes with object params must ship an `otherTenant` fixture (member of store A, store B's object, 404). Admin and system principals get policy-level denial cases per route.
+- **2026-11-08 (D4):** idempotency lease. An `in_progress` key whose lease (`locked_until`, 60 s) expired is taken over by a same-hash retry (fresh again); a different hash is still 422; concurrent takeovers are serialised by the primary key and the re-checked WHERE. Uses the existing, previously unused `locked_until` column (data model: "in-flight lock"), so no migration is needed. Rows written before this change have NULL and expire as before.
+- **2026-11-08 (D5):** `auth` and `worker` added to `PG_PROCESS_NAMES`; `cli.ts` builds an `auth`-tagged pool from `DATABASE_URL_AUTH` (required in production) for auth-core.
+- **2026-11-08 (D6):** timeout does not cancel handler work; documented, TODO above.

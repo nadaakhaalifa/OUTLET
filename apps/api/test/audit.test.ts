@@ -7,7 +7,7 @@ import { CursorQuery, pageOf } from "../src/platform/pagination.js";
 import { RATE_BUDGETS } from "../src/platform/rate-limit/budgets.js";
 import type { RateBudget } from "../src/platform/rate-limit/budgets.js";
 import { activeStore, self } from "../src/platform/resolvers.js";
-import { RouteAuditError, assertRoutes, auditRoutes, collectRoutes } from "../src/platform/route-registry.js";
+import { RouteAuditError, assertRoutes, assertServedMatchesAudited, auditRoutes, collectRoutes, servedRouteKey } from "../src/platform/route-registry.js";
 
 const R = z.strictObject({ ok: z.boolean() });
 const c = (operationId: string, extra: Record<string, unknown> = {}): Parameters<typeof Contract>[0] => ({ operationId, summary: operationId, response: R, maxQueries: 0, ...extra });
@@ -184,5 +184,59 @@ describe("route audit (BUILD-PROMPT §2 route rules)", () => {
     const first = routes[0];
     if (first === undefined) throw new Error("no routes");
     expect(auditRoutes([first, first]).some((x) => x.includes("duplicate route"))).toBe(true);
+  });
+});
+
+/** A base class with an undeclared handler: Nest serves it on every subclass, so the audit must see it there. */
+class BaseWithHandler {
+  @Get("inherited")
+  inherited(): string {
+    return "x";
+  }
+}
+
+@Controller("v1/:market/child")
+class ChildInheriting extends BaseWithHandler {}
+
+class DeclaredBase {
+  @Get("inherited")
+  @Public()
+  @RateLimit({ budget: RATE_BUDGETS.publicRead })
+  @Contract(c("inheritedDeclared", { cacheControl: "no-store" }))
+  inherited(): { ok: boolean } {
+    return { ok: true };
+  }
+}
+
+@Controller("v1/:market/declared-child")
+class DeclaredChild extends DeclaredBase {}
+
+describe("inherited handlers and served-vs-audited routes", () => {
+  it("collects an inherited route under the subclass and startup refuses it unless declared", async () => {
+    const routes = collectRoutes([ChildInheriting]);
+    expect(routes.map((r) => `${r.controller}.${r.handler}`)).toEqual(["ChildInheriting.inherited"]);
+    expect(auditRoutes(routes).some((x) => x.includes("missing @Public() or @Authorize()"))).toBe(true);
+    await expect(createApp({} as never, { extraControllers: [ChildInheriting] })).rejects.toThrow(/route audit failed/);
+  });
+
+  it("an inherited route that is fully declared passes the audit", () => {
+    const routes = collectRoutes([DeclaredChild]);
+    expect(routes.map((r) => r.openapiPath)).toEqual(["/v1/{market}/declared-child/inherited"]);
+    expect(auditRoutes(routes).filter((x) => !x.includes("/v1/"))).toEqual([]);
+  });
+
+  it("refuses a served route nobody audited, and an audited route nobody serves", () => {
+    const routes = collectRoutes([DeclaredChild]);
+    const key = servedRouteKey("GET", "/v1/:market/declared-child/inherited");
+    expect(key).toBe("GET /v1/{market}/declared-child/inherited");
+    expect(() => {
+      assertServedMatchesAudited([key], routes);
+    }).not.toThrow();
+    expect(() => {
+      assertServedMatchesAudited([key, "GET /v1/{market}/shadow"], routes);
+    }).toThrow(/GET \/v1\/\{market\}\/shadow: served but not audited/);
+    expect(() => {
+      assertServedMatchesAudited([], routes);
+    }).toThrow(/audited but not served/);
   });
 });

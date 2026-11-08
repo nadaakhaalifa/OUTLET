@@ -51,6 +51,19 @@ const SELLER_ACTIONS: readonly string[] = [...new Set(Object.values(SELLER_POLIC
 
 export const routeKey = (r: Pick<RouteDef, "method" | "openapiPath">): string => `${r.method} ${r.openapiPath}`;
 
+/** Own and inherited method names, like Nest's MetadataScanner.getAllMethodNames (accessors are never invoked). */
+const methodNames = (proto: object): string[] => {
+  const names = new Set<string>();
+  for (let p: object | null = proto; p !== null && p !== Object.prototype; p = Object.getPrototypeOf(p) as object | null) {
+    for (const name of Object.getOwnPropertyNames(p)) {
+      if (name === "constructor") continue;
+      const d = Object.getOwnPropertyDescriptor(p, name);
+      if (typeof d?.value === "function") names.add(name);
+    }
+  }
+  return [...names];
+};
+
 /** Reads the route table of the given controllers from Nest's own metadata plus ours. */
 export const collectRoutes = (controllers: readonly Type[]): RouteDef[] => {
   const out: RouteDef[] = [];
@@ -58,8 +71,8 @@ export const collectRoutes = (controllers: readonly Type[]): RouteDef[] => {
     const base: unknown = reflector.get(PATH_METADATA, ctrl);
     const basePath = typeof base === "string" ? base : "";
     const proto = ctrl.prototype as Record<string, unknown>;
-    for (const name of Object.getOwnPropertyNames(proto)) {
-      if (name === "constructor") continue;
+    // Nest serves inherited handlers too (MetadataScanner walks the prototype chain), so the audit must see them.
+    for (const name of methodNames(proto)) {
       const fn = proto[name];
       if (typeof fn !== "function") continue;
       const m: unknown = reflector.get(METHOD_METADATA, fn);
@@ -171,5 +184,22 @@ export class RouteAuditError extends Error {
 
 export const assertRoutes = (routes: readonly RouteDef[]): void => {
   const v = auditRoutes(routes);
+  if (v.length > 0) throw new RouteAuditError(v);
+};
+
+/** `GET /v1/:market/x/:id` (Fastify) → the registry's `GET /v1/{market}/x/{id}` key. */
+export const servedRouteKey = (method: string, url: string): string => `${method} ${url.replace(/:([A-Za-z0-9_]+)/g, "{$1}")}`;
+
+/**
+ * Compares what the HTTP server actually registered (Fastify's onRoute) with the audited table, both ways: a route
+ * that is served but never audited (inherited handler, adapter route) or audited but not served refuses startup.
+ */
+export const assertServedMatchesAudited = (served: readonly string[], audited: readonly RouteDef[]): void => {
+  const a = new Set(audited.map(routeKey));
+  const s = new Set(served);
+  const v = [
+    ...[...s].filter((k) => !a.has(k)).map((k) => `${k}: served but not audited`),
+    ...[...a].filter((k) => !s.has(k)).map((k) => `${k}: audited but not served`),
+  ];
   if (v.length > 0) throw new RouteAuditError(v);
 };

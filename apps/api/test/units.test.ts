@@ -254,7 +254,7 @@ describe("config", () => {
     expect(() => parseEnv({ ...base, NODE_ENV: "production" })).toThrow(/REDIS_URL/);
     expect(() => parseEnv({ ...base, RATE_LIMIT_KEY_SECRET: "short-secret-value" })).toThrow(/RATE_LIMIT_KEY_SECRET \(too_small\)/);
     expect(() => parseEnv({ ...base, RATE_LIMIT_KEY_SECRET: "short-secret-value" })).not.toThrow(/short-secret-value/);
-    expect(EnvSchema.safeParse({ ...base, NODE_ENV: "production", REDIS_URL: "rediss://cache:6380" }).success).toBe(true);
+    expect(EnvSchema.safeParse({ ...base, NODE_ENV: "production", REDIS_URL: "rediss://cache:6380", DATABASE_URL_AUTH: "postgres://auth@pgbouncer:6432/outlet_auth" }).success).toBe(true);
   });
 
   it("trust proxy list", () => {
@@ -302,7 +302,7 @@ describe("pg adapter", () => {
 
   it("runInRequestContext binds the request's context, and refuses without one", async () => {
     const p = fakePool();
-    const c = pgSqlClient(p.pool);
+    const c = pgSqlClient<"outlet_app">(p.pool);
     const req = { ctx: { db: { kind: "user", marketId: "EG" } } } as unknown as ApiRequest;
     await runInRequestContext(c, req, (tx) => tx.query("SELECT 3"));
     expect(p.log[1]).toContain("set_config");

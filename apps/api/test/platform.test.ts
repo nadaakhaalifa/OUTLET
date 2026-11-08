@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { RateLimiterPort } from "../src/platform/rate-limit/port.js";
+import { collectRoutes } from "../src/platform/route-registry.js";
+import { negativeAuthzCases } from "./negative-authz.js";
 import { DEVICE, T0, bearer, createTestApp, idemKey, v7At } from "./harness.js";
 import type { TestApp } from "./harness.js";
 import { ProbeController, probeState } from "./probe.controller.js";
@@ -263,9 +265,26 @@ describe("RateLimitGuard", () => {
     t.clock.now -= 30_000;
   });
 
-  it("device-keyed budgets require X-Device-Id; IP is multiplied for CGNAT and never blocks alone", async () => {
-    const no = await t.inject({ method: "GET", url: "/v1/eg/probe/killable" });
-    expect([no.statusCode, body(no).code]).toEqual([400, "device-id-required"]);
+  it("public fail-open reads without X-Device-Id (SSR, crawlers) fall back to the CGNAT-multiplied IP bucket", async () => {
+    // TINY_OPEN allows 2 per device and 20 per IP: a header-less crawler is limited by IP, not refused.
+    for (let i = 0; i < 20; i++) expect((await t.inject({ method: "GET", url: "/v1/eg/probe/killable", remoteAddress: "10.9.9.9" })).statusCode).toBe(200);
+    const over = await t.inject({ method: "GET", url: "/v1/eg/probe/killable", remoteAddress: "10.9.9.9" });
+    expect([over.statusCode, body(over).code]).toEqual([429, "rate-limited"]);
+    // a malformed device id is treated like a missing one; another IP is unaffected
+    expect((await t.inject({ method: "GET", url: "/v1/eg/probe/killable", remoteAddress: "10.9.9.10", headers: { "x-device-id": "not-a-uuid" } })).statusCode).toBe(200);
+  });
+
+  it("the device key stays mandatory on authenticated and on fail-closed public routes", async () => {
+    const tok = await t.mint();
+    const auth = await t.inject({ method: "GET", url: "/v1/eg/probe/device-auth", headers: bearer(tok) });
+    expect([auth.statusCode, body(auth).code]).toEqual([400, "device-id-required"]);
+    expect((await t.inject({ method: "GET", url: "/v1/eg/probe/device-auth", headers: { ...bearer(tok), "x-device-id": DEVICE } })).statusCode).toBe(200);
+    const closed = await t.inject({ method: "GET", url: "/v1/eg/probe/device-closed" });
+    expect([closed.statusCode, body(closed).code]).toEqual([400, "device-id-required"]);
+    expect((await t.inject({ method: "GET", url: "/v1/eg/probe/device-closed", headers: { "x-device-id": DEVICE } })).statusCode).toBe(200);
+  });
+
+  it("device-keyed budgets: IP is multiplied for CGNAT and never blocks alone", async () => {
     const d1 = "11111111-1111-4111-8111-111111111111";
     expect((await t.inject({ method: "GET", url: "/v1/eg/probe/killable", headers: { "x-device-id": d1 } })).statusCode).toBe(200);
     expect((await t.inject({ method: "GET", url: "/v1/eg/probe/killable", headers: { "x-device-id": d1 } })).statusCode).toBe(200);
@@ -422,5 +441,35 @@ describe("degraded dependencies", () => {
     } finally {
       await b.close();
     }
+  });
+});
+
+describe("negative-authz generator: store-tenant object routes", () => {
+  const route = collectRoutes([ProbeController]).find((r) => r.openapiPath.endsWith("/store-items/{item_id}"));
+  const happy = (x: TestApp) => async () => ({
+    req: { method: "GET" as const, url: `/v1/eg/probe/store-items/${x.seed.storeA}`, headers: { ...bearer((await x.seller(x.seed.storeA, ["owner"])).token), "x-store-id": x.seed.storeA } },
+    status: 200,
+  });
+
+  it("requires an otherTenant fixture for store routes with object params", async () => {
+    if (route === undefined) throw new Error("probe route missing");
+    await expect(negativeAuthzCases(t, route, { happy: happy(t) })).rejects.toThrow(/needs an 'otherTenant' fixture/);
+  });
+
+  it("member of store A requesting store B's object gets 404, the owner gets 200", async () => {
+    if (route === undefined) throw new Error("probe route missing");
+    const fx = {
+      happy: happy(t),
+      otherTenant: async () => ({
+        method: "GET" as const,
+        url: `/v1/eg/probe/store-items/${t.seed.storeB}`,
+        headers: { ...bearer((await t.seller(t.seed.storeA, ["owner"])).token), "x-store-id": t.seed.storeA },
+      }),
+    };
+    const cases = await negativeAuthzCases(t, route, fx);
+    expect(cases.some((c) => c.name.includes("store B's object"))).toBe(true);
+    const res = await t.inject((cases.find((c) => c.name.includes("store B's object")) ?? cases[0])?.req ?? { method: "GET", url: "/" });
+    expect(res.statusCode).toBe(404);
+    expect((await t.inject((await fx.happy()).req)).statusCode).toBe(200);
   });
 });

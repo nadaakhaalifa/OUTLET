@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "@outlet/db/testing", replacement: src("../../packages/db/src/testing.ts") },
-      ...["db", "ids", "money", "outbox", "policy", "catalog", "auth-core", "flags", "idempotency", "logger", "markets-config", "observability"].map(pkg),
+      ...["db", "ids", "money", "outbox", "policy", "catalog", "auth-core", "flags", "idempotency", "logger", "markets-config", "observability", "pricing-integrity"].map(pkg),
     ],
   },
   // PGlite boots a WASM Postgres and applies every migration per app: same limits as the other PGlite suites.

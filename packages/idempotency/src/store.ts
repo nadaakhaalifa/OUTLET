@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Queryable } from "./ports.js";
 
 export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+/** How long an in-progress key blocks same-hash retries before a retry may take it over (crashed first request). */
+export const IDEMPOTENCY_LEASE_MS = 60 * 1000;
 
 export const storedResponseSchema = z.strictObject({
   status: z.number().int().min(100).max(599),
@@ -42,24 +44,30 @@ export class IdempotencyStore {
     private readonly db: Queryable,
     private readonly now: () => Date = () => new Date(),
     private readonly ttlMs: number = IDEMPOTENCY_TTL_MS,
+    private readonly leaseMs: number = IDEMPOTENCY_LEASE_MS,
   ) {}
 
   /**
    * One atomic upsert decides the race: the INSERT wins only if no live row exists (an expired row is
-   * taken over). The primary key (key, actor_id, route) makes concurrent first requests produce exactly one `fresh`.
+   * taken over), or if the row is still `in_progress` with an expired lease (`locked_until`) and the retry has the SAME
+   * request hash: the first request crashed or hung, so the retry runs fresh instead of getting 409 until the 24 h expiry.
+   * A different hash never takes over (422 stays). Two concurrent takeovers: the row lock plus the re-checked WHERE
+   * (READ COMMITTED) let exactly one win; the loser sees a fresh lease and answers in_progress. The primary key (key, actor_id, route) makes concurrent first requests produce exactly one `fresh`.
    */
   async begin(input: BeginInput): Promise<BeginResult> {
     const { key, route, actorId, requestHash } = beginInputSchema.parse(input);
     const now = this.now();
     const won = await this.db.query(
-      `INSERT INTO idempotency_keys (key, actor_id, route, request_hash, status, created_at, expires_at)
-       VALUES ($1, $2, $3, $4, 'in_progress', $5, $6)
+      `INSERT INTO idempotency_keys (key, actor_id, route, request_hash, status, created_at, expires_at, locked_until)
+       VALUES ($1, $2, $3, $4, 'in_progress', $5, $6, $7)
        ON CONFLICT (key, actor_id, route) DO UPDATE
          SET request_hash = EXCLUDED.request_hash, status = 'in_progress', response_status = NULL, response_body = NULL,
-             created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at
+             created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at, locked_until = EXCLUDED.locked_until
          WHERE idempotency_keys.expires_at <= $5
+            OR (idempotency_keys.status = 'in_progress' AND idempotency_keys.locked_until <= $5
+                AND idempotency_keys.request_hash = EXCLUDED.request_hash)
        RETURNING key`,
-      [key, actorId, route, requestHash, now.toISOString(), new Date(now.getTime() + this.ttlMs).toISOString()],
+      [key, actorId, route, requestHash, now.toISOString(), new Date(now.getTime() + this.ttlMs).toISOString(), new Date(now.getTime() + this.leaseMs).toISOString()],
     );
     if (won.rows.length > 0) return { kind: "fresh" };
 
@@ -79,7 +87,7 @@ export class IdempotencyStore {
     const { key, route, actorId } = keySchema.parse(input);
     const res = storedResponseSchema.parse(response);
     const r = await this.db.query(
-      `UPDATE idempotency_keys SET status='completed', response_status=$4, response_body=$5::jsonb
+      `UPDATE idempotency_keys SET status='completed', response_status=$4, response_body=$5::jsonb, locked_until=NULL
         WHERE key=$1 AND actor_id=$2 AND route=$3 AND status='in_progress' RETURNING key`,
       [key, actorId, route, res.status, JSON.stringify(res.body)],
     );

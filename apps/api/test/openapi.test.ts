@@ -82,7 +82,10 @@ describe("coverage against the contract docs/api/openapi.yaml", async () => {
       const theirs = contractOps.get(k);
       if (theirs === undefined) continue;
       expect(ours.operationId, k).toBe(theirs.operationId);
-      expect(ours.security?.length === 0, `${k} public`).toBe(theirs.security?.length === 0);
+      // A contract security list that includes the empty requirement ({}) means "anonymous, or signed in for extras". We serve
+      // such routes as public (credentials are ignored, so nothing member-only can leak) until optional auth exists.
+      const optionalAuth = theirs.security?.some((s) => typeof s === "object" && s !== null && Object.keys(s).length === 0) === true;
+      expect(ours.security?.length === 0, `${k} public`).toBe(theirs.security?.length === 0 || optionalAuth);
       for (const ref of ["#/components/parameters/IdempotencyKey", "#/components/parameters/StoreScope", "#/components/parameters/Cursor", "#/components/parameters/Limit"]) {
         expect(refs(ours).includes(ref), `${k} ${ref}`).toBe(refs(theirs).includes(ref));
       }

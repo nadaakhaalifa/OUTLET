@@ -31,6 +31,19 @@ export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
   "GET /v1/health/ready": {
     happy: () => Promise.resolve({ req: { method: "GET", url: "/v1/health/ready" }, status: 200, warmup: true }),
   },
+  "GET /v1/{market}/stores": {
+    happy: () => Promise.resolve({ req: { method: "GET", url: "/v1/eg/stores?limit=10", headers: device }, status: 200 }),
+  },
+  "GET /v1/{market}/categories": {
+    happy: () => Promise.resolve({ req: { method: "GET", url: "/v1/eg/categories?limit=50", headers: device }, status: 200 }),
+  },
+  "GET /v1/{market}/deals": {
+    happy: () => Promise.resolve({ req: { method: "GET", url: "/v1/eg/deals?band=59_50&limit=10", headers: device }, status: 200 }),
+  },
+  "GET /v1/{market}/products/{product_id}": {
+    happy: (t) => Promise.resolve({ req: { method: "GET", url: `/v1/eg/products/${t.seed.productA}`, headers: device }, status: 200 }),
+    missing: () => ({ method: "GET", url: "/v1/eg/products/00000000-0000-4000-8000-00000000dead", headers: device }),
+  },
   "GET /v1/{market}/stores/{store_slug}": {
     happy: (t) => Promise.resolve({ req: { method: "GET", url: `/v1/eg/stores/${t.seed.slugA}`, headers: device }, status: 200 }),
     missing: () => ({ method: "GET", url: "/v1/eg/stores/no-such-store", headers: device }),

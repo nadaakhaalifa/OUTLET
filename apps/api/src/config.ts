@@ -10,6 +10,8 @@ export const EnvSchema = z
     PORT: z.coerce.number().int().min(1).max(65_535).default(8080),
     /** outlet_app through PgBouncer (transaction mode), pool alias outlet_catalog (ADR-0011). */
     DATABASE_URL_APP: z.url({ protocol: /^postgres(ql)?$/ }),
+    /** outlet_auth through PgBouncer (alias outlet_auth, application_name `auth`): session and auth-core paths (ADR-0011). */
+    DATABASE_URL_AUTH: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
     PG_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     JWT_ISSUER: z.url(),
     JWT_KID: z.string().min(1).max(64),
@@ -24,6 +26,10 @@ export const EnvSchema = z
     OTEL_EXPORTER: z.enum(["otlp", "none"]).default("none"),
     /** How long readiness reports "draining" before the server closes (lets the balancer stop routing). */
     DRAIN_MS: z.coerce.number().int().min(0).max(60_000).default(5_000),
+  })
+  .refine((e) => e.NODE_ENV !== "production" || e.DATABASE_URL_AUTH !== undefined, {
+    message: "DATABASE_URL_AUTH is required in production: auth paths use the outlet_auth pool, not outlet_app",
+    path: ["DATABASE_URL_AUTH"],
   })
   .refine((e) => e.NODE_ENV !== "production" || e.REDIS_URL !== undefined, {
     message: "REDIS_URL is required in production: an in-memory limiter gives every instance its own budget",

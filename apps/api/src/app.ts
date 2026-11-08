@@ -12,7 +12,7 @@ import { AccessTokenGuard, KillSwitchGuard, PolicyGuard, RateLimitGuard } from "
 import { registerHooks } from "./platform/hooks.js";
 import { IdempotencyInterceptor, SerializeInterceptor, TelemetryInterceptor } from "./platform/interceptors.js";
 import { ProblemFilter } from "./platform/problem.filter.js";
-import { assertRoutes, collectRoutes } from "./platform/route-registry.js";
+import { assertRoutes, assertServedMatchesAudited, collectRoutes, servedRouteKey } from "./platform/route-registry.js";
 import type { RouteDef } from "./platform/route-registry.js";
 
 // Nest needs a class to hang the dynamic module on; all configuration is in buildModule.
@@ -69,9 +69,20 @@ export const createApp = async (deps: ApiDeps, opts: CreateAppOptions = {}): Pro
     bodyParser: false,
     abortOnError: false,
   });
-  registerHooks(app.getHttpAdapter().getInstance(), deps.logger, () => deps.clock.now().getTime());
+  const fastify = app.getHttpAdapter().getInstance();
+  registerHooks(fastify, deps.logger, () => deps.clock.now().getTime());
+  const served: string[] = [];
+  fastify.addHook("onRoute", (r) => {
+    for (const m of [r.method].flat()) if (m !== "HEAD" && m !== "OPTIONS") served.push(servedRouteKey(m, r.url));
+  });
   app.useGlobalFilters(new ProblemFilter(deps.logger));
   await app.init();
-  await app.getHttpAdapter().getInstance().ready();
+  await fastify.ready();
+  try {
+    assertServedMatchesAudited(served, routes);
+  } catch (e) {
+    await app.close();
+    throw e;
+  }
   return { app, routes };
 };

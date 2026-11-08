@@ -2,7 +2,7 @@ import { uuidv7 } from "@outlet/ids";
 import { withTestDb } from "@outlet/db/testing";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { IDEMPOTENCY_TTL_MS, IdempotencyStore, requestHash } from "../src/index.js";
+import { IDEMPOTENCY_LEASE_MS, IDEMPOTENCY_TTL_MS, IdempotencyStore, requestHash } from "../src/index.js";
 
 const actorId = "0197c0de-0000-7000-8000-0000000000aa";
 const route = "POST /v1/checkout";
@@ -62,6 +62,37 @@ describe("IdempotencyStore", () => {
     await withTestDb(async (db) => {
       const s = new IdempotencyStore(db);
       const req = mk();
+      const results = await Promise.all(Array.from({ length: 10 }, () => s.begin(req)));
+      expect(results.filter((r) => r.kind === "fresh")).toHaveLength(1);
+      expect(results.filter((r) => r.kind === "in_progress")).toHaveLength(9);
+    });
+  });
+
+  it("an in-progress key whose lease expired is taken over by a same-hash retry; a different hash still conflicts", async () => {
+    await withTestDb(async (db) => {
+      let t = Date.parse("2026-11-08T00:00:00Z");
+      const s = new IdempotencyStore(db, () => new Date(t));
+      const req = mk();
+      expect(await s.begin(req)).toEqual({ kind: "fresh" });
+      t += IDEMPOTENCY_LEASE_MS - 1;
+      expect(await s.begin(req)).toEqual({ kind: "in_progress" });
+      t += 1;
+      expect(await s.begin({ ...req, requestHash: requestHash({ a: 2 }) })).toEqual({ kind: "conflict" });
+      expect(await s.begin(req)).toEqual({ kind: "fresh" }); // taken over, with a new lease
+      expect(await s.begin(req)).toEqual({ kind: "in_progress" });
+      await s.complete(req, { status: 201, body: { ok: true } });
+      t += IDEMPOTENCY_LEASE_MS * 10; // completed rows never expire by lease: replay, not takeover
+      expect(await s.begin(req)).toEqual({ kind: "replay", response: { status: 201, body: { ok: true } } });
+    });
+  });
+
+  it("concurrent takeovers of an expired lease produce exactly one fresh", async () => {
+    await withTestDb(async (db) => {
+      let t = Date.parse("2026-11-08T00:00:00Z");
+      const s = new IdempotencyStore(db, () => new Date(t));
+      const req = mk();
+      await s.begin(req);
+      t += IDEMPOTENCY_LEASE_MS;
       const results = await Promise.all(Array.from({ length: 10 }, () => s.begin(req)));
       expect(results.filter((r) => r.kind === "fresh")).toHaveLength(1);
       expect(results.filter((r) => r.kind === "in_progress")).toHaveLength(9);

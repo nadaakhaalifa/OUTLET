@@ -5,6 +5,10 @@ export const PG_PROCESS_NAMES = [
   "catalog.read",
   "analytics",
   "worker.outbox",
+  /** Pre-auth endpoints on the outlet_auth pool (ADR-0011). */
+  "auth",
+  /** Background jobs on the outlet_worker pool (ADR-0011). */
+  "worker",
   "migrator",
 ] as const;
 export type PgProcessName = (typeof PG_PROCESS_NAMES)[number];

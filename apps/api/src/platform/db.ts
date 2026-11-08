@@ -1,5 +1,5 @@
 import { brandClient, withDbContext } from "@outlet/db";
-import type { Queryable, RoleSqlClient } from "@outlet/db";
+import type { DbRole, Queryable, RoleSqlClient } from "@outlet/db";
 import { pgConnectionTag } from "@outlet/observability";
 import type { PgProcessName } from "@outlet/observability";
 import type { ApiRequest } from "./http.js";
@@ -26,7 +26,7 @@ export const pgPoolOptions = (connectionString: string, process: PgProcessName, 
 });
 
 /** SqlClient over a pg pool; `transaction` is BEGIN/COMMIT on one connection, ROLLBACK on throw. */
-export const pgSqlClient = <R extends "outlet_app">(pool: PoolLike): RoleSqlClient<R> =>
+export const pgSqlClient = <R extends DbRole>(pool: PoolLike): RoleSqlClient<R> =>
   brandClient<R>({
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- matches the Queryable port signature
     query: async <Row extends object>(sql: string, params?: readonly unknown[]) => ({ rows: (await pool.query(sql, params ? [...params] : [])).rows as Row[] }),

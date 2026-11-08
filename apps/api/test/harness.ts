@@ -6,12 +6,15 @@ import { brandClient } from "@outlet/db";
 import type { Queryable, RoleSqlClient, SqlClient } from "@outlet/db";
 import { createTestClient, roleClient } from "@outlet/db/testing";
 import { FlagService, InMemoryFlagStore } from "@outlet/flags";
+import { PRICE_WATCH_KILL_SWITCH } from "@outlet/pricing-integrity";
 import { IdempotencyStore } from "@outlet/idempotency";
 import { createLogger } from "@outlet/logger";
 import type { Principal } from "@outlet/policy";
 import { SignJWT, generateKeyPair } from "jose";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import { createApp } from "../src/app.js";
+import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
+import { DiscoveryReader } from "../src/modules/catalog-public/discovery-reader.js";
 import type { ApiApp, CreateAppOptions } from "../src/app.js";
 import { InMemoryStoreMemberships, SessionTokenVerifier } from "../src/platform/auth-ports.js";
 import type { SellerRole } from "../src/platform/auth-ports.js";
@@ -173,7 +176,18 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const flags = new InMemoryFlagStore();
   const flagService = new FlagService({ store: flags, audit: { record: () => Promise.resolve() }, now: () => clock.now });
   const logs: string[] = [];
-  const services: CatalogServices = { publicCatalog: new PublicCatalogService(catalogDeps), defects: new DefectService(catalogDeps), listings: new ListingService(catalogDeps) };
+  const services: CatalogServices = {
+    publicCatalog: new PublicCatalogService(catalogDeps),
+    defects: new DefectService(catalogDeps),
+    listings: new ListingService(catalogDeps),
+    discovery: new DiscoveryReader({ client: appClient, marketId: DB_MARKET }),
+    deals: new DealsReader({
+      client: appClient,
+      marketId: DB_MARKET,
+      now: () => new Date(clock.now),
+      priceWatchKilled: () => (opts.killSwitches ?? flagService).isKilled(PRICE_WATCH_KILL_SWITCH, { marketId: DB_MARKET }).catch(() => true),
+    }),
+  };
   const deps: ApiDeps = {
     http: { ...DEFAULT_HTTP_CONFIG, rateLimitKeySecret: "test-secret", ...opts.http },
     clock: { now: () => new Date(clock.now) },

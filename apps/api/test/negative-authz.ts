@@ -1,4 +1,5 @@
-import { SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS } from "@outlet/policy";
+import { SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS, authorize } from "@outlet/policy";
+import type { Principal } from "@outlet/policy";
 import type { InjectOptions } from "fastify";
 import { expect } from "vitest";
 import type { RouteDef } from "../src/platform/route-registry.js";
@@ -68,6 +69,10 @@ export const negativeAuthzCases = async (t: TestApp, route: RouteDef, fx: RouteF
     cases.push({ name: "X-Store-Id of a store the caller is not a member of → 404", req: withHeaders(happy, (h) => ({ ...h, ...bearer(otherStore.token), "x-store-id": t.seed.storeB })), status: 404 });
     const shopper = await t.mint({ amr: ["otp", "passkey"] });
     cases.push({ name: "shopper (no membership) → 404", req: withHeaders(happy, (h) => ({ ...h, ...bearer(shopper) })), status: 404 });
+    if (route.pathParams.some((p) => p !== "market")) {
+      if (fx.otherTenant === undefined) throw new Error(`${route.method} ${route.openapiPath}: store-tenant route with ids needs an 'otherTenant' fixture (store A member → store B's object)`);
+      cases.push({ name: "member of store A → store B's object → 404", req: await fx.otherTenant(t), status: 404 });
+    }
     cases.push({ name: "missing X-Store-Id → 400", req: withHeaders(happy, without("x-store-id")), status: 400, code: "store-scope-required" });
   } else {
     if (!SHOPPER_ACTIONS.includes(authz.action)) {
@@ -104,4 +109,28 @@ export const expectQueryCount = async (t: TestApp, route: RouteDef, fx: RouteFix
   const max = route.contract?.maxQueries ?? 0;
   expect(t.counter.count, `${route.method} ${route.openapiPath} ran ${String(t.counter.count)} statements (max ${String(max)}):\n${t.counter.statements.join("\n---\n")}`).toBeLessThanOrEqual(max);
   return t.counter.count;
+};
+
+/**
+ * Admin and system principals cannot be minted over HTTP yet (tokens verify as shoppers; the admin session is a tracked
+ * TODO in ADR-0012), so their negative cases run against the same pure policy the PolicyGuard calls: a system principal
+ * needs the exact scope, an admin needs a granting role, and super_admin grants nothing without break-glass.
+ * Returns the number of cases checked.
+ */
+export const expectPolicyPrincipalDenials = (route: RouteDef): number => {
+  const authz = route.authz;
+  if (authz?.kind !== "authorize") return 0;
+  const marketId = "EG";
+  const resource = { type: "probe", marketId, storeId: "00000000-0000-4000-8000-0000000000a1", ownerUserId: "00000000-0000-4000-8000-0000000000b1" };
+  const deny = (name: string, p: Principal, reason: "forbidden"): void => {
+    const d = authorize(p, authz.action, resource);
+    expect.soft(d, `${route.method} ${route.openapiPath}: ${name}`).toEqual({ effect: "deny", reason });
+  };
+  deny("system without the action scope → 403", { kind: "system", marketId, roles: [], scopes: [] }, "forbidden");
+  deny("system with another scope → 403", { kind: "system", marketId, roles: [], scopes: ["unrelated.action"] }, "forbidden");
+  deny("admin without roles → 403", { kind: "admin", userId: "a", marketId, roles: [], scopes: [] }, "forbidden");
+  deny("super_admin without break-glass → 403", { kind: "admin", userId: "a", marketId, roles: ["super_admin"], scopes: [] }, "forbidden");
+  const wrongMarket = authorize({ kind: "system", marketId: "ZZ", roles: [], scopes: [authz.action] }, authz.action, resource);
+  expect.soft(wrongMarket, "system principal of another market → 404").toEqual({ effect: "deny", reason: "not_found" });
+  return 5;
 };

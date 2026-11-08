@@ -5,6 +5,362 @@ info:
   version: 0.1.0
   summary: Generated from apps/api route metadata. Do not edit; run pnpm --filter api openapi.
 paths:
+  /v1/{market}/categories:
+    get:
+      operationId: listCategories
+      summary: Category tree for the market (path order; parent_id walks one level)
+      tags:
+        - Village
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: parent_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        parent_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        code:
+                          type: string
+                        path:
+                          type: string
+                        depth:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        vertical:
+                          type: string
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        name_ar:
+                          type: string
+                        name_en:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - id
+                        - parent_id
+                        - code
+                        - path
+                        - depth
+                        - vertical
+                        - name
+                        - slug
+                        - name_ar
+                        - name_en
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: public_read
+          key: device
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+        - budget: public_read
+          key: ip
+          limit: 1200
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
+      x-cache-control: public, max-age=60, stale-while-revalidate=300
+  /v1/{market}/deals:
+    get:
+      operationId: listDeals
+      summary: "Discover deals: products in one verified-discount band"
+      tags:
+        - Village
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: band
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - 70_60
+              - 59_50
+              - 49_40
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sku_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_slug:
+                          type: string
+                          maxLength: 500
+                        title_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        title_en:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        image:
+                          anyOf:
+                            - type: object
+                              properties:
+                                media_id:
+                                  type: string
+                                url:
+                                  type: string
+                                width:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                height:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                blurhash:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_ar:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_en:
+                                  type:
+                                    - string
+                                    - "null"
+                              required:
+                                - media_id
+                                - url
+                              additionalProperties: false
+                            - type: "null"
+                        condition_grade_code:
+                          type: string
+                          maxLength: 500
+                        defect_count:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        price:
+                          type: object
+                          properties:
+                            current_price:
+                              type: object
+                              properties:
+                                amount_minor:
+                                  type: string
+                                  pattern: ^-?[0-9]{1,19}$
+                                currency:
+                                  type: string
+                                  pattern: ^[A-Z]{3}$
+                              required:
+                                - amount_minor
+                                - currency
+                              additionalProperties: false
+                            claim_type:
+                              type: string
+                              enum:
+                                - verified_discount
+                                - lowest_30d
+                                - launch_price
+                                - plain
+                            reference_price:
+                              type: object
+                              properties:
+                                amount_minor:
+                                  type: string
+                                  pattern: ^-?[0-9]{1,19}$
+                                currency:
+                                  type: string
+                                  pattern: ^[A-Z]{3}$
+                              required:
+                                - amount_minor
+                                - currency
+                              additionalProperties: false
+                            display_discount_bp:
+                              type: integer
+                              minimum: 0
+                              maximum: 10000
+                            member_discount_bp:
+                              type: integer
+                              minimum: 0
+                              maximum: 10000
+                            evidence_checked_at:
+                              type: string
+                            price_proof_path:
+                              type: string
+                          required:
+                            - current_price
+                            - claim_type
+                            - price_proof_path
+                          additionalProperties: false
+                        availability:
+                          type: string
+                          enum:
+                            - in_stock
+                            - low_stock
+                            - out_of_stock
+                        canonical_path:
+                          type: string
+                          maxLength: 500
+                      required:
+                        - product_id
+                        - sku_id
+                        - store_id
+                        - store_slug
+                        - title_ar
+                        - image
+                        - condition_grade_code
+                        - defect_count
+                        - price
+                        - canonical_path
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: public_read
+          key: device
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+        - budget: public_read
+          key: ip
+          limit: 1200
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+      x-paginated: keyset
+      x-cache-control: no-store
   /v1/{market}/passports/{passport_code}:
     get:
       operationId: getDefectPassport
@@ -347,6 +703,555 @@ paths:
           source: default
       x-max-queries: 1
       x-cache-control: public, max-age=300
+  /v1/{market}/products/{product_id}:
+    get:
+      operationId: getProduct
+      summary: Product page model
+      tags:
+        - Catalog
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  store:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      slug:
+                        type: string
+                        maxLength: 500
+                      display_name_ar:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                      display_name_en:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      tagline_ar:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      tagline_en:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      kind:
+                        type: string
+                        enum:
+                          - local
+                          - global
+                      status:
+                        type: string
+                        enum:
+                          - ACTIVE
+                          - VACATION
+                      verified_badge:
+                        type: boolean
+                      price_trust_score:
+                        anyOf:
+                          - type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          - type: "null"
+                      followers_count:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                      ships_from_country:
+                        type: string
+                        pattern: ^[A-Z]{2}$
+                      storefront:
+                        type: object
+                        properties:
+                          template_code:
+                            type: string
+                          palette:
+                            type: object
+                            propertyNames:
+                              type: string
+                            additionalProperties: {}
+                          published_version:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                        required:
+                          - template_code
+                          - palette
+                          - published_version
+                        additionalProperties: false
+                      legal_identity:
+                        type: object
+                        properties:
+                          legal_name_ar:
+                            type: string
+                            minLength: 1
+                            maxLength: 500
+                          legal_name_en:
+                            type:
+                              - string
+                              - "null"
+                          commercial_register_no:
+                            type: string
+                            minLength: 1
+                          tax_card_no:
+                            type: string
+                            minLength: 1
+                          governorate_name_ar:
+                            type: string
+                            minLength: 1
+                            maxLength: 500
+                        required:
+                          - legal_name_ar
+                          - commercial_register_no
+                          - tax_card_no
+                          - governorate_name_ar
+                        additionalProperties: false
+                      discount_display_mode:
+                        type: string
+                        enum:
+                          - public
+                          - member_only
+                          - hidden
+                      canonical_path:
+                        type: string
+                        maxLength: 500
+                    required:
+                      - id
+                      - slug
+                      - display_name_ar
+                      - kind
+                      - status
+                      - verified_badge
+                      - followers_count
+                      - ships_from_country
+                      - storefront
+                      - legal_identity
+                      - discount_display_mode
+                      - canonical_path
+                    additionalProperties: false
+                  brand_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  brand_name:
+                    type:
+                      - string
+                      - "null"
+                  primary_category_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - PUBLISHED
+                      - SOLD_OUT
+                      - PAUSED
+                  title_ar:
+                    type: string
+                    minLength: 1
+                    maxLength: 500
+                  title_en:
+                    type:
+                      - string
+                      - "null"
+                  description_ar:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+                  description_en:
+                    type:
+                      - string
+                      - "null"
+                  condition_grade:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        maxLength: 500
+                      label_ar:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                      label_en:
+                        anyOf:
+                          - type: string
+                            maxLength: 500
+                          - type: "null"
+                      schema_org_condition:
+                        type: string
+                        maxLength: 500
+                    required:
+                      - code
+                      - label_ar
+                      - schema_org_condition
+                    additionalProperties: false
+                  stock_reason:
+                    type:
+                      - string
+                      - "null"
+                  defect_card:
+                    anyOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                          version:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          grade_code:
+                            type: string
+                            maxLength: 500
+                          stock_reason:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_ar:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          summary_en:
+                            anyOf:
+                              - type: string
+                                maxLength: 500
+                              - type: "null"
+                          affects_function:
+                            type: boolean
+                          defect_count:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                          inspected_by:
+                            type: string
+                            enum:
+                              - seller
+                              - hub
+                          inspected_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          published_at:
+                            anyOf:
+                              - type: string
+                                format: date-time
+                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                              - type: "null"
+                          items:
+                            maxItems: 50
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                defect_type_code:
+                                  type: string
+                                  maxLength: 500
+                                label_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                label_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                location_ar:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 500
+                                location_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                size_mm:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                severity:
+                                  type: string
+                                  enum:
+                                    - minor
+                                    - major
+                                affects_function:
+                                  type: boolean
+                                photo:
+                                  type: object
+                                  properties:
+                                    media_id:
+                                      type: string
+                                    url:
+                                      type: string
+                                    width:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    height:
+                                      anyOf:
+                                        - type: integer
+                                          minimum: -9007199254740991
+                                          maximum: 9007199254740991
+                                        - type: "null"
+                                    blurhash:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_ar:
+                                      type:
+                                        - string
+                                        - "null"
+                                    alt_en:
+                                      type:
+                                        - string
+                                        - "null"
+                                  required:
+                                    - media_id
+                                    - url
+                                  additionalProperties: false
+                                hotspot_x_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                hotspot_y_bp:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: 0
+                                      maximum: 10000
+                                    - type: "null"
+                                note_ar:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                note_en:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 500
+                                    - type: "null"
+                                position:
+                                  type: integer
+                                  minimum: -9007199254740991
+                                  maximum: 9007199254740991
+                              required:
+                                - id
+                                - defect_type_code
+                                - label_ar
+                                - location_ar
+                                - severity
+                                - affects_function
+                                - photo
+                                - position
+                              additionalProperties: false
+                        required:
+                          - id
+                          - version
+                          - grade_code
+                          - affects_function
+                          - defect_count
+                          - inspected_by
+                          - items
+                        additionalProperties: false
+                      - type: "null"
+                  attributes:
+                    type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  colour_code:
+                    type:
+                      - string
+                      - "null"
+                  skus:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sku_id:
+                          type: string
+                        option_values:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        size_label:
+                          type:
+                            - string
+                            - "null"
+                        price:
+                          type: object
+                          properties:
+                            current_price:
+                              type: object
+                              properties:
+                                amount_minor:
+                                  type: string
+                                  pattern: ^-?[0-9]{1,19}$
+                                currency:
+                                  type: string
+                                  pattern: ^[A-Z]{3}$
+                              required:
+                                - amount_minor
+                                - currency
+                              additionalProperties: false
+                            claim_type:
+                              type: string
+                              enum:
+                                - verified_discount
+                                - lowest_30d
+                                - launch_price
+                                - plain
+                            reference_price:
+                              type: object
+                              properties:
+                                amount_minor:
+                                  type: string
+                                  pattern: ^-?[0-9]{1,19}$
+                                currency:
+                                  type: string
+                                  pattern: ^[A-Z]{3}$
+                              required:
+                                - amount_minor
+                                - currency
+                              additionalProperties: false
+                            display_discount_bp:
+                              type: integer
+                              minimum: 0
+                              maximum: 10000
+                            member_discount_bp:
+                              type: integer
+                              minimum: 0
+                              maximum: 10000
+                            evidence_checked_at:
+                              type: string
+                            price_proof_path:
+                              type: string
+                          required:
+                            - current_price
+                            - claim_type
+                            - price_proof_path
+                          additionalProperties: false
+                        availability:
+                          type: string
+                          enum:
+                            - in_stock
+                            - low_stock
+                            - out_of_stock
+                        low_stock_qty:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - sku_id
+                        - option_values
+                        - price
+                      additionalProperties: false
+                  canonical_path:
+                    type: string
+                    maxLength: 500
+                  published_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                required:
+                  - id
+                  - store
+                  - primary_category_id
+                  - status
+                  - title_ar
+                  - description_ar
+                  - condition_grade
+                  - attributes
+                  - skus
+                  - canonical_path
+                  - published_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: public_read
+          key: device
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+        - budget: public_read
+          key: ip
+          limit: 1200
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-cache-control: no-store
   /v1/{market}/seller/products:
     post:
       operationId: createProductDraft
@@ -857,6 +1762,226 @@ paths:
       x-idempotency:
         header: required
         mode: store
+  /v1/{market}/stores:
+    get:
+      operationId: listStores
+      summary: Store carousel / directory (slug order, keyset)
+      tags:
+        - Village
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: world
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - local
+              - global
+              - both
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        slug:
+                          type: string
+                          maxLength: 500
+                        display_name_ar:
+                          type: string
+                          minLength: 1
+                          maxLength: 500
+                        display_name_en:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        tagline_ar:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        tagline_en:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        kind:
+                          type: string
+                          enum:
+                            - local
+                            - global
+                        verified_badge:
+                          type: boolean
+                        storefront:
+                          type: object
+                          properties:
+                            template_code:
+                              type: string
+                            palette:
+                              type: object
+                              propertyNames:
+                                type: string
+                              additionalProperties: {}
+                            published_version:
+                              type: integer
+                              minimum: -9007199254740991
+                              maximum: 9007199254740991
+                          required:
+                            - template_code
+                            - palette
+                            - published_version
+                          additionalProperties: false
+                        live_drop:
+                          type: boolean
+                        followers_count:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        discount_display_mode:
+                          type: string
+                          enum:
+                            - public
+                            - member_only
+                            - hidden
+                        art:
+                          anyOf:
+                            - type: object
+                              properties:
+                                media_id:
+                                  type: string
+                                url:
+                                  type: string
+                                width:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                height:
+                                  anyOf:
+                                    - type: integer
+                                      minimum: -9007199254740991
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                                blurhash:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_ar:
+                                  type:
+                                    - string
+                                    - "null"
+                                alt_en:
+                                  type:
+                                    - string
+                                    - "null"
+                              required:
+                                - media_id
+                                - url
+                              additionalProperties: false
+                            - type: "null"
+                        canonical_path:
+                          type: string
+                      required:
+                        - id
+                        - slug
+                        - display_name_ar
+                        - display_name_en
+                        - tagline_ar
+                        - tagline_en
+                        - kind
+                        - verified_badge
+                        - storefront
+                        - live_drop
+                        - followers_count
+                        - discount_display_mode
+                        - art
+                        - canonical_path
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        principal: anonymous
+        tenant: none
+      x-rate-limit:
+        - budget: public_read
+          key: device
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+        - budget: public_read
+          key: ip
+          limit: 1200
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 1
+      x-paginated: keyset
+      x-cache-control: public, max-age=60, stale-while-revalidate=300
   /v1/{market}/stores/{store_slug}:
     get:
       operationId: getStore
@@ -1046,7 +2171,7 @@ paths:
   /v1/{market}/stores/{store_slug}/products:
     get:
       operationId: listStoreProducts
-      summary: Products of a store, newest first (keyset)
+      summary: Products of a store, newest first (keyset), with quick-view fields
       tags:
         - Village
       security: []
@@ -1205,6 +2330,18 @@ paths:
                         canonical_path:
                           type: string
                           maxLength: 500
+                        condition_label_ar:
+                          type:
+                            - string
+                            - "null"
+                        condition_label_en:
+                          type:
+                            - string
+                            - "null"
+                        colour_code:
+                          type:
+                            - string
+                            - "null"
                       required:
                         - product_id
                         - sku_id
@@ -1216,6 +2353,9 @@ paths:
                         - defect_count
                         - price
                         - canonical_path
+                        - condition_label_ar
+                        - condition_label_en
+                        - colour_code
                       additionalProperties: false
                   next_cursor:
                     anyOf:
@@ -1268,7 +2408,7 @@ paths:
           source: default
       x-max-queries: 2
       x-paginated: keyset
-      x-cache-control: public, max-age=30, stale-while-revalidate=60
+      x-cache-control: no-store
   /v1/health/live:
     get:
       operationId: getLiveness

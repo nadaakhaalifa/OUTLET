@@ -13,6 +13,10 @@ import { Body, Ctx, Query } from "../src/platform/validation.js";
 export const TINY: RateBudget = { name: "probe_tiny", limit: 2, periodMs: 60_000, keys: ["user"], failMode: "closed", source: "default" };
 export const TINY_OPEN: RateBudget = { name: "probe_tiny_open", limit: 2, periodMs: 60_000, keys: ["device", "ip"], failMode: "open", source: "default" };
 
+/** Authenticated route keyed on user + device (device stays mandatory) and a fail-closed public route keyed on device only. */
+export const USER_DEVICE: RateBudget = { name: "probe_user_device", limit: 50, periodMs: 60_000, keys: ["user", "device"], failMode: "closed", source: "default" };
+export const DEVICE_CLOSED: RateBudget = { name: "probe_device_closed", limit: 50, periodMs: 60_000, keys: ["device"], failMode: "closed", source: "default" };
+
 const Me = z.strictObject({ user_id: z.string(), db: z.string(), market_id: z.string() });
 const N = z.strictObject({ n: z.number().int() });
 const Calls = z.strictObject({ n: z.number().int(), calls: z.number().int() });
@@ -93,6 +97,22 @@ export class ProbeController {
     return { ok: true };
   }
 
+  @Get("device-auth")
+  @Authorize("cart.read", self)
+  @RateLimit({ budget: USER_DEVICE })
+  @Contract({ operationId: "probeDeviceAuth", summary: "authenticated device key", response: Any, maxQueries: 0 })
+  deviceAuth(): z.infer<typeof Any> {
+    return { ok: true };
+  }
+
+  @Get("device-closed")
+  @Public()
+  @RateLimit({ budget: DEVICE_CLOSED })
+  @Contract({ operationId: "probeDeviceClosed", summary: "fail-closed public device key", response: Any, cacheControl: "no-store", maxQueries: 0 })
+  deviceClosed(): z.infer<typeof Any> {
+    return { ok: true };
+  }
+
   @Get("asn")
   @Public()
   @RateLimit({ budget: TINY_OPEN, keys: ["device", "asn"] })
@@ -136,6 +156,15 @@ export class ProbeController {
   @Contract({ operationId: "probeStore", summary: "store tenant", response: Store, maxQueries: 0 })
   store(@Ctx() s: RequestState): z.infer<typeof Store> {
     return { store_id: s.storeId ?? "", db: s.db?.kind ?? "none", roles: [...(s.principal?.roles ?? [])] };
+  }
+
+  /** Store-tenant object route: the object "belongs" to the store whose id equals item_id (anything else is 404). */
+  @Get("store-items/:item_id")
+  @Authorize("listing.read", (c) => (c.req.params !== undefined && (c.req.params as { item_id?: string }).item_id === c.storeId && c.storeId !== undefined ? { type: "listing", id: c.storeId, storeId: c.storeId, marketId: c.marketId } : null), { tenant: "store" })
+  @RateLimit({ budget: RATE_BUDGETS.sellerRead })
+  @Contract({ operationId: "probeStoreItem", summary: "store tenant object", params: z.strictObject({ item_id: z.uuid() }), response: Any, maxQueries: 0 })
+  storeItem(): z.infer<typeof Any> {
+    return { ok: true };
   }
 
   @Get("list")

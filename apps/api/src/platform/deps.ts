@@ -4,6 +4,8 @@ import type { KillSwitchName } from "@outlet/flags";
 import type { BeginInput, BeginResult, StoredResponse } from "@outlet/idempotency";
 import type { Logger } from "@outlet/logger";
 import type { AccessTokenVerifier, StoreMembershipPort } from "./auth-ports.js";
+import type { DealsPort } from "../modules/catalog-public/deals-reader.js";
+import type { DiscoveryPort } from "../modules/catalog-public/discovery-reader.js";
 import type { Clock } from "./http.js";
 import type { RateLimiterPort } from "./rate-limit/port.js";
 
@@ -41,7 +43,11 @@ export const DEFAULT_HTTP_CONFIG: HttpConfig = Object.freeze({
 });
 
 export interface CatalogServices {
-  readonly publicCatalog: Pick<PublicCatalogService, "getStoreBySlug" | "getStorePage">;
+  readonly publicCatalog: Pick<PublicCatalogService, "getStoreBySlug" | "getListing">;
+  /** Store directory, category tree and the store shelf with quick-view fields (published read model only). */
+  readonly discovery: DiscoveryPort;
+  /** Verified-discount bands (Price Watch evidence; empty until history exists). */
+  readonly deals: DealsPort;
   readonly defects: Pick<DefectService, "lookupPassport">;
   readonly listings: Pick<ListingService, "createDraft">;
 }

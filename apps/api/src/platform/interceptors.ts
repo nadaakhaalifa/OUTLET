@@ -22,6 +22,11 @@ const routeTemplate = (req: ApiRequest): string => req.routeOptions.url ?? "unkn
 /**
  * Outermost: response headers that must also be on replays and errors' happy siblings (Cache-Control, deprecation),
  * OTel span + market baggage, and the 10 s handler timeout (503 `timeout`).
+ *
+ * LIMITATION: the timeout only stops waiting; it does NOT cancel the handler. A handler's database work keeps running
+ * until the 10 s pool `statement_timeout` ends it, and a started write may still commit after the client got 503
+ * (idempotent writes make the retry safe). TODO(abort-signal): create an AbortController per request here, expose its
+ * signal on `req.ctx`, abort it on timeout, and pass it to pg queries and outbound calls (platform/outbound withTimeout).
  */
 @Injectable()
 export class TelemetryInterceptor implements NestInterceptor {
