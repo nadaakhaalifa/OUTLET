@@ -47,7 +47,7 @@ export class VoucherService {
     let tail: string | null = null;
     if (input.kind === "public_code") {
       code = (input.codeDisplay ?? "").trim().toUpperCase();
-      if (!/^[A-Z0-9]{3,32}$/.test(code)) throw new PromotionError("CODE_INVALID", "public code must be 3-32 letters or digits");
+      if (!/^[A-Z0-9]{8,32}$/.test(code)) throw new PromotionError("CODE_INVALID", "public code must be 8-32 letters or digits");
     } else {
       code = generateCode();
       hash = hashCode(this.deps.hmacKey ?? new Uint8Array(), code);
@@ -73,7 +73,8 @@ export class VoucherService {
   }
 
   /** Resolves an entered code to (voucher, promotion row) for this shopper. Unknown, void, assigned-to-someone-else and exhausted all read as null. */
-  async resolveCode(tx: Queryable, userId: string, raw: string): Promise<{ voucherId: string; promotion: PromotionRow } | null> {
+  async resolveCode(tx: Queryable, userId: string, raw: string, opts: { deviceId?: string } = {}): Promise<{ voucherId: string; promotion: PromotionRow } | null> {
+    if (this.deps.codeBudget !== undefined && !(await this.deps.codeBudget.consume({ userId, deviceId: opts.deviceId ?? null }))) throw new PromotionError("ABUSE_BLOCKED", "too many code attempts");
     const display = raw.trim().toUpperCase();
     const hash = this.deps.hmacKey === undefined ? null : hashCode(this.deps.hmacKey, normaliseCode(raw));
     const v = await tx.query<{ id: string; promotion_id: string; max_uses: number | null; uses: number; assigned_user_id: string | null; status: string }>(
@@ -103,17 +104,25 @@ export class VoucherService {
     return this.asUser(userId, async (tx) => {
       let reserved = 0;
       let replayed = 0;
+      // Serialise this shopper's reservations (velocity) and then each (shopper, promotion) pair (per-user limit), always in the same order, so
+      // concurrent order groups cannot both read "under the limit" and both insert. Released automatically at commit/rollback.
+      await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`velocity:${userId}`]);
       const sorted = [...applied].sort((a, b) => (a.promotionId < b.promotionId ? -1 : 1));
       for (const a of sorted) {
+        await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${userId}${a.promotionId}`]);
         const existing = await tx.query("SELECT 1 FROM voucher_redemptions WHERE order_group_id = $1 AND promotion_id = $2 AND kind = 'reserved'", [orderGroupId, a.promotionId]);
         if (existing.rows.length > 0) { replayed++; continue; }
         const p = await tx.query<PromotionRow>(`SELECT ${PROMOTION_COLS} FROM promotions WHERE id = $1 AND market_id = $2`, [a.promotionId, this.deps.marketId]);
         const prom = p.rows[0];
         if (prom?.status !== "ACTIVE" || prom.version !== a.version) throw new PromotionError("CAP_EXCEEDED", `promotion ${a.promotionId} is no longer active at version ${String(a.version)}`);
+        // Trust nothing from the caller: the voucher must belong to this promotion and the discount cannot exceed max_discount.
         if (a.voucherId !== null) {
-          const vr = await tx.query<{ status: string }>("SELECT status FROM vouchers WHERE id = $1", [a.voucherId]);
-          if (vr.rows[0]?.status !== "active") throw new PromotionError("CODE_INVALID", "voucher is not usable");
+          const vr = await tx.query<{ status: string; promotion_id: string }>("SELECT status, promotion_id FROM vouchers WHERE id = $1", [a.voucherId]);
+          const v = vr.rows[0];
+          if (v?.status !== "active") throw new PromotionError("CODE_INVALID", "voucher is not usable");
+          if (v.promotion_id !== a.promotionId) throw new PromotionError("CODE_INVALID", "voucher does not belong to this promotion");
         }
+        if (prom.max_discount_minor !== null && a.total.amountMinor > BigInt(prom.max_discount_minor)) throw new PromotionError("CAP_EXCEEDED", "discount exceeds max_discount");
         if (prom.per_user_limit !== null) {
           const n = await tx.query<{ n: string | number }>(`SELECT count(*) AS n FROM voucher_redemptions r WHERE r.promotion_id = $1 AND r.user_id = $2 AND ${ACTIVE_RESERVATION}`, [a.promotionId, userId]);
           if (Number(n.rows[0]?.n ?? 0) >= prom.per_user_limit) throw new PromotionError("CAP_EXCEEDED", "per-user limit reached");
@@ -131,17 +140,10 @@ export class VoucherService {
           [rid, a.voucherId, a.promotionId, a.version, userId, this.deps.marketId, orderGroupId, a.total.amountMinor.toString(), a.platform.amountMinor.toString(), a.seller.amountMinor.toString(), a.total.currency, this.now().toISOString()],
         );
         if (ins.rows.length === 0) { replayed++; continue; }
-        const bump = await tx.query(
-          `UPDATE promotion_usage u SET used_minor = u.used_minor + $2, used_count = u.used_count + 1 FROM promotions p
-            WHERE u.promotion_id = $1 AND p.id = u.promotion_id
-              AND (p.budget_minor IS NULL OR u.used_minor + $2 <= p.budget_minor) AND (p.total_limit IS NULL OR u.used_count < p.total_limit) RETURNING u.promotion_id`,
-          [a.promotionId, a.total.amountMinor.toString()],
-        );
-        if (bump.rows.length === 0) throw new PromotionError("CAP_EXCEEDED", "budget or total limit reached");
-        if (a.voucherId !== null) {
-          const used = await tx.query("UPDATE vouchers SET uses = uses + 1 WHERE id = $1 AND status = 'active' AND (max_uses IS NULL OR uses < max_uses) RETURNING id", [a.voucherId]);
-          if (used.rows.length === 0) throw new PromotionError("CAP_EXCEEDED", "voucher already used");
-        }
+        const bump = await tx.query<{ r: string }>("SELECT promotion_usage_bump($1, $2, $3) AS r", [a.promotionId, a.total.amountMinor.toString(), a.voucherId]);
+        const outcome = bump.rows[0]?.r;
+        if (outcome === "voucher_cap") throw new PromotionError("CAP_EXCEEDED", "voucher already used");
+        if (outcome !== "ok") throw new PromotionError("CAP_EXCEEDED", `budget, total limit or max discount reached (${String(outcome)})`);
         reserved++;
       }
       return { reserved, replayed };
@@ -174,8 +176,7 @@ export class VoucherService {
   }
 
   private async giveBack(tx: Queryable, row: ResRow): Promise<void> {
-    await tx.query("UPDATE promotion_usage SET used_minor = used_minor - $2, used_count = used_count - 1 WHERE promotion_id = $1", [row.promotion_id, row.amount_minor.toString()]);
-    if (row.voucher_id !== null) await tx.query("UPDATE vouchers SET uses = uses - 1 WHERE id = $1 AND uses > 0", [row.voucher_id]);
+    await tx.query("SELECT promotion_usage_giveback($1, $2, $3)", [row.promotion_id, row.amount_minor.toString(), row.voucher_id]);
   }
 
   /** Payment succeeded: marks every live reservation of the group confirmed (idempotent). */

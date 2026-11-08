@@ -154,6 +154,11 @@ export class PromotionService {
     const row = await this.findScope(actor, id, storeId);
     this.authorizeWrite(actor, row.owner_type, row.store_id);
     assertTransition(row.status, to);
+    if (to === "ACTIVE") {
+      const t = this.now().getTime();
+      if (t < new Date(row.starts_at).getTime()) throw new PromotionError("INVALID_TRANSITION", "promotion has not started yet; schedule it instead");
+      if (t >= new Date(row.ends_at).getTime()) throw new PromotionError("INVALID_TRANSITION", "promotion window has ended");
+    }
     await this.ctxFor(actor, row.store_id, async (tx) => {
       const r = await tx.query("UPDATE promotions SET status=$3, updated_at=$4 WHERE id=$1 AND status=$2 RETURNING id", [id, row.status, to, this.now().toISOString()]);
       if (r.rows.length === 0) throw new PromotionError("INVALID_TRANSITION", "status changed concurrently");

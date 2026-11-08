@@ -6,7 +6,8 @@ import type { Principal } from "@outlet/policy";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PromotionError, PromotionEvaluator, PromotionService, VoucherService, autoBest, evaluate } from "../src/index.js";
 import type { AppliedPromotion, PromotionInput } from "../src/index.js";
-import { FakeAbuse, FakeAudit, FakeKill, FakeOrderFacts } from "../src/testing.js";
+import { FakeAbuse, FakeAudit, FakeCodeBudget, FakeKill, FakeOrderFacts } from "../src/testing.js";
+import fc from "fast-check";
 import { A, B, bag, ctx } from "./fixtures.js";
 
 const NOW = new Date("2030-06-01T12:00:00.000Z");
@@ -23,8 +24,8 @@ const abuse = new FakeAbuse();
 const facts = new FakeOrderFacts();
 const audit = new FakeAudit();
 let clock = NOW.getTime();
-const mk = (o: { velocity?: number; noAudit?: boolean; noKey?: boolean; noFacts?: boolean } = {}) => {
-  const deps = { client: app, marketId: "EG", kill, abuse, ...(o.noFacts === true ? {} : { orderFacts: facts }), ...(o.noAudit === true ? {} : { audit }), ...(o.noKey === true ? {} : { hmacKey: KEY }), now: () => new Date(clock), ...(o.velocity === undefined ? {} : { velocityPerHour: o.velocity }) };
+const mk = (o: { velocity?: number; noAudit?: boolean; noKey?: boolean; noFacts?: boolean; budget?: FakeCodeBudget; client?: RoleSqlClient<"outlet_app"> } = {}) => {
+  const deps = { client: o.client ?? app, ...(o.budget === undefined ? {} : { codeBudget: o.budget }), marketId: "EG", kill, abuse, ...(o.noFacts === true ? {} : { orderFacts: facts }), ...(o.noAudit === true ? {} : { audit }), ...(o.noKey === true ? {} : { hmacKey: KEY }), now: () => new Date(clock), ...(o.velocity === undefined ? {} : { velocityPerHour: o.velocity }) };
   return { promos: new PromotionService(deps), vouchers: new VoucherService(deps), evaluator: new PromotionEvaluator(deps) };
 };
 const svc = (): ReturnType<typeof mk> => mk({ velocity: 1000 });
@@ -180,20 +181,21 @@ describe("VoucherService: issue and resolve", () => {
     const { id } = await s.promos.create(a, storeInput(storeA));
     const { id: autoId } = await s.promos.create(a, storeInput(storeA, { stackingClass: "auto", rules: { level: "order", discount: { kind: "percent", bps: 100 } } }));
     expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "bad code" }))).toBe("CODE_INVALID");
-    expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "eid50" }))).toBe("ok");
-    expect(await code(s.vouchers.issue(a, { promotionId: autoId, storeId: storeA, kind: "public_code", codeDisplay: "AUTO1" }))).toBe("CODE_INVALID");
-    expect(await code(s.vouchers.issue(seller(storeB), { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "XYZ99" }))).toBe("NOT_FOUND");
-    expect(await code(s.vouchers.issue(seller(storeB), { promotionId: id, storeId: storeB, kind: "public_code", codeDisplay: "XYZ98" }))).toBe("NOT_FOUND");
-    expect(await code(s.vouchers.issue(a, { promotionId: randomUUID(), storeId: storeA, kind: "public_code", codeDisplay: "XYZ97" }))).toBe("NOT_FOUND");
+    expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "SHORT7X" }))).toBe("CODE_INVALID"); // 7 chars: below the 8-char floor
+    expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "eid50sale" }))).toBe("ok");
+    expect(await code(s.vouchers.issue(a, { promotionId: autoId, storeId: storeA, kind: "public_code", codeDisplay: "AUTOCODE1" }))).toBe("CODE_INVALID");
+    expect(await code(s.vouchers.issue(seller(storeB), { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "XYZ00099" }))).toBe("NOT_FOUND");
+    expect(await code(s.vouchers.issue(seller(storeB), { promotionId: id, storeId: storeB, kind: "public_code", codeDisplay: "XYZ00098" }))).toBe("NOT_FOUND");
+    expect(await code(s.vouchers.issue(a, { promotionId: randomUUID(), storeId: storeA, kind: "public_code", codeDisplay: "XYZ00097" }))).toBe("NOT_FOUND");
     expect(await code(mk({ noKey: true }).vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "unique_code" }))).toBe("CODE_INVALID");
-    expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: null, kind: "public_code", codeDisplay: "NOSTORE" }))).toBe("NOT_FOUND");
+    expect(await code(s.vouchers.issue(a, { promotionId: id, storeId: null, kind: "public_code", codeDisplay: "NOSTORE01" }))).toBe("NOT_FOUND");
     const plat = await s.promos.create(admin(), input({ stackingClass: "platform_code" }));
-    expect(await code(s.vouchers.issue(seller(storeA), { promotionId: plat.id, storeId: storeA, kind: "public_code", codeDisplay: "PLAT1" }))).toBe("NOT_FOUND");
-    expect(await code(s.vouchers.issue(admin(), { promotionId: plat.id, storeId: null, kind: "public_code", codeDisplay: "PLAT2" }))).toBe("ok");
+    expect(await code(s.vouchers.issue(seller(storeA), { promotionId: plat.id, storeId: storeA, kind: "public_code", codeDisplay: "PLATFORM1" }))).toBe("NOT_FOUND");
+    expect(await code(s.vouchers.issue(admin(), { promotionId: plat.id, storeId: null, kind: "public_code", codeDisplay: "PLATFORM2" }))).toBe("ok");
     const co = await s.promos.create(admin(), input({ ownerType: "co_funded", storeId: storeA, fundingPlatformBp: 5000, fundingSellerBp: 5000, stackingClass: "store_voucher", rules: { level: "store", discount: { kind: "percent", bps: 500 } } }));
-    expect(await code(s.vouchers.issue(a, { promotionId: co.id, storeId: storeA, kind: "public_code", codeDisplay: "COFUND1" }))).toBe("FORBIDDEN");
-    expect(await code(s.vouchers.issue(admin(), { promotionId: co.id, storeId: storeA, kind: "public_code", codeDisplay: "COFUND2" }))).toBe("ok");
-    const dupe = await code(s.vouchers.issue(admin(), { promotionId: plat.id, storeId: null, kind: "public_code", codeDisplay: "PLAT2" }));
+    expect(await code(s.vouchers.issue(a, { promotionId: co.id, storeId: storeA, kind: "public_code", codeDisplay: "COFUND001" }))).toBe("FORBIDDEN");
+    expect(await code(s.vouchers.issue(admin(), { promotionId: co.id, storeId: storeA, kind: "public_code", codeDisplay: "COFUND002" }))).toBe("ok");
+    const dupe = await code(s.vouchers.issue(admin(), { promotionId: plat.id, storeId: null, kind: "public_code", codeDisplay: "PLATFORM2" }));
     expect(dupe).toMatch(/other/);
   });
 
@@ -423,8 +425,8 @@ describe("optional fields and row mapping", () => {
     const u = await s.promos.get(a, id, storeA);
     expect([u.perUserLimit, u.totalLimit, u.minOrderMinor, u.maxDiscountMinor, u.budgetMinor, u.version]).toEqual([3, 60, 2000n, 8000n, 90_000n, 2]);
     await s.promos.transition(a, id, storeA, "ACTIVE");
-    const v = await s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "NOUSER1" });
-    expect(v.code).toBe("NOUSER1");
+    const v = await s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "public_code", codeDisplay: "NOUSER001" });
+    expect(v.code).toBe("NOUSER001");
     const adm: Principal = { kind: "admin", marketId: "EG", roles: ["marketing"], scopes: [] };
     const plat = await s.promos.create(adm, input());
     expect(plat.id).toBeTruthy();
@@ -439,5 +441,116 @@ describe("optional fields and row mapping", () => {
       starts_at: "2030-01-01T00:00:00Z", ends_at: new Date("2031-01-01T00:00:00Z"), status: "ACTIVE", version: 1,
     });
     expect([c.minOrderMinor, c.maxDiscountMinor, c.startsAt.getUTCFullYear()]).toEqual([5n, 6n, 2030]);
+  });
+});
+
+describe("hardening: locks, voucher binding, code budget, definer functions, lifecycle", () => {
+  const promo = async (s: ReturnType<typeof mk>, o: Partial<PromotionInput> = {}): Promise<{ id: string; a: Principal }> => {
+    const a = seller(storeA);
+    const { id } = await s.promos.create(a, storeInput(storeA, o));
+    await activate(s, a, id, storeA);
+    return { id, a };
+  };
+  const newUser = async (): Promise<string> => { const y = randomUUID(); await raw.query("INSERT INTO users (id, market_id, created_at, updated_at) VALUES ($1,'EG',$2,$2)", [y, NOW.toISOString()]); return y; };
+  const userCtx = (u: string): ContextFor<"outlet_app"> => ({ kind: "user", marketId: "EG", userId: u });
+
+  it("B1: reserve takes the per-user and per-(user,promotion) advisory locks, in a fixed order", async () => {
+    const seen: string[] = [];
+    const spy = brandClient<"outlet_app">({
+      query: (sql, params) => app.query(sql, params),
+      transaction: (fn) => app.transaction((tx: Queryable) => fn({ query: (sql: string, params?: unknown[]) => { if (sql.includes("pg_advisory_xact_lock")) seen.push(String(params?.[0])); return tx.query(sql, params); } })),
+    });
+    const s = mk({ velocity: 1000, client: spy });
+    const { id } = await promo(s);
+    const u = await newUser();
+    await s.vouchers.reserve(u, randomUUID(), [applied(id, 5n)]);
+    expect(seen).toEqual([`velocity:${u}`, `${u}${id}`]);
+  });
+
+  it("B1: concurrent order groups cannot exceed per_user_limit or the velocity rule (property)", async () => {
+    const s = mk({ velocity: 1000 });
+    await fc.assert(fc.asyncProperty(fc.integer({ min: 2, max: 5 }), fc.integer({ min: 1, max: 3 }), async (n, limit) => {
+      const { id } = await promo(s, { perUserLimit: limit });
+      const u = await newUser();
+      const res = await Promise.all(Array.from({ length: n }, () => code(s.vouchers.reserve(u, randomUUID(), [applied(id, 1n)]))));
+      expect(res.filter((r) => r === "ok").length).toBe(Math.min(n, limit));
+      expect(res.filter((r) => r !== "ok").every((r) => r === "CAP_EXCEEDED")).toBe(true);
+    }), { numRuns: 8 });
+    const fast = mk({ velocity: 2 });
+    const { id } = await promo(fast);
+    const u = await newUser();
+    const res = await Promise.all(Array.from({ length: 5 }, () => code(fast.vouchers.reserve(u, randomUUID(), [applied(id, 1n)]))));
+    expect(res.filter((r) => r === "ok").length).toBe(2);
+  });
+
+  it("B2: reserve rejects a voucher of another promotion and a total above max_discount", async () => {
+    const s = svc();
+    const p1 = await promo(s, { maxDiscountMinor: 500n });
+    const p2 = await promo(s);
+    const v2 = await s.vouchers.issue(p2.a, { promotionId: p2.id, storeId: storeA, kind: "unique_code" });
+    expect(await code(s.vouchers.reserve(u1, randomUUID(), [applied(p1.id, 10n, v2.voucherId)]))).toBe("CODE_INVALID");
+    expect(await code(s.vouchers.reserve(u1, randomUUID(), [applied(p1.id, 501n)]))).toBe("CAP_EXCEEDED");
+    expect(await code(s.vouchers.reserve(u1, randomUUID(), [applied(p1.id, 500n)]))).toBe("ok");
+    expect((await raw.query("SELECT 1 FROM voucher_redemptions WHERE promotion_id = $1 AND amount_minor > 500", [p1.id])).rows).toEqual([]);
+  });
+
+  it("B3: public codes need 8+ chars (service and CHECK); the code budget is consulted by resolveCode", async () => {
+    await expect(raw.query("INSERT INTO vouchers (id, market_id, promotion_id, kind, code_display) SELECT $1,'EG',id,'public_code','ABC1234' FROM promotions LIMIT 1", [randomUUID()])).rejects.toThrow(/check/i);
+    const budget = new FakeCodeBudget(2);
+    const s = mk({ budget, velocity: 1000 });
+    const attempt = (dev: string) => withDbContext(app, userCtx(u1), (tx) => s.vouchers.resolveCode(tx, u1, "NOPE0000", { deviceId: dev }));
+    expect(await code(attempt("d1"))).toBe("ok");
+    expect(await code(attempt("d1"))).toBe("ok");
+    expect(await code(attempt("d1"))).toBe("ABUSE_BLOCKED");
+    expect(await code(attempt("d2"))).toBe("ok"); // budget is per (user, device)
+    const noDev = withDbContext(app, userCtx(u1), (tx) => mk({ budget: new FakeCodeBudget(0) }).vouchers.resolveCode(tx, u1, "NOPE0000"));
+    expect(await code(noDev)).toBe("ABUSE_BLOCKED");
+  });
+
+  it("B5: outlet_app cannot UPDATE the counters directly; the definer functions enforce the caps", async () => {
+    const s = svc();
+    const { id, a } = await promo(s, { totalLimit: 1, maxDiscountMinor: 100n });
+    const v = await s.vouchers.issue(a, { promotionId: id, storeId: storeA, kind: "unique_code", maxUses: 1 });
+    const usage0 = async (): Promise<{ used_count: number }> => (await raw.query<{ used_count: number }>("SELECT used_count FROM promotion_usage WHERE promotion_id = $1", [id])).rows[0]!;
+    const ctxU = userCtx(u1);
+    await expect(rowsAs(ctxU, "UPDATE promotion_usage SET used_count = 0 WHERE promotion_id = $1", [id])).rejects.toThrow(/permission denied/);
+    await expect(rowsAs(ctxU, "UPDATE vouchers SET uses = 0 WHERE id = $1", [v.voucherId])).rejects.toThrow(/permission denied/);
+    const bump = async (amount: number, voucher: string | null, ctxArg: ContextFor<"outlet_app"> = ctxU): Promise<string | undefined> =>
+      (await rowsAs<{ r: string }>(ctxArg, "SELECT promotion_usage_bump($1, $2, $3) AS r", [id, amount, voucher]))[0]?.r;
+    expect(await bump(101, null)).toBe("max_discount");
+    expect(await bump(10, randomUUID())).toBe("voucher_cap");
+    expect((await usage0()).used_count).toBe(0); // a refused bump (max_discount, voucher) writes nothing
+    await expect(rowsAs({ kind: "store", marketId: "EG", storeId: storeA }, "SELECT promotion_usage_bump($1, 1, NULL)", [id])).rejects.toThrow(/requires ctx user/);
+    await expect(rowsAs(ctxU, "SELECT promotion_usage_bump($1, -1, NULL)", [id])).rejects.toThrow(/invalid amount/);
+    expect(await rowsAs<{ r: string }>(ctxU, "SELECT promotion_usage_bump($1, 1, NULL) AS r", [randomUUID()]).then((r) => r[0]?.r)).toBe("inactive");
+    await expect(rowsAs({ kind: "store", marketId: "EG", storeId: storeA }, "SELECT promotion_usage_giveback($1, 1, NULL)", [id])).rejects.toThrow(/requires ctx user/);
+    await expect(rowsAs(ctxU, "SELECT promotion_usage_giveback($1, -1, NULL)", [id])).rejects.toThrow(/invalid amount/);
+    // a bump that fails after counting is rolled back by the service (no partial counters)
+    expect(await code(s.vouchers.reserve(u1, randomUUID(), [applied(id, 10n, v.voucherId)]))).toBe("ok");
+    expect(await code(s.vouchers.reserve(u2, randomUUID(), [applied(id, 10n)]))).toBe("CAP_EXCEEDED");
+    expect(Number((await raw.query<{ n: number }>("SELECT used_count AS n FROM promotion_usage WHERE promotion_id = $1", [id])).rows[0]?.n)).toBe(1);
+  });
+
+  it("B6: ACTIVE respects starts_at/ends_at; EXHAUSTED is set automatically at the cap and a release re-opens it", async () => {
+    const s = svc();
+    const a = seller(storeA);
+    const future = await s.promos.create(a, storeInput(storeA, { startsAt: new Date(NOW.getTime() + 86_400_000), endsAt: new Date(NOW.getTime() + 2 * 86_400_000) }));
+    expect(await code(s.promos.transition(a, future.id, storeA, "ACTIVE"))).toBe("INVALID_TRANSITION");
+    await s.promos.transition(a, future.id, storeA, "SCHEDULED");
+    expect(await code(s.promos.transition(a, future.id, storeA, "ACTIVE"))).toBe("INVALID_TRANSITION");
+    const past = await s.promos.create(a, storeInput(storeA, { startsAt: new Date(NOW.getTime() - 2 * 86_400_000), endsAt: new Date(NOW.getTime() - 86_400_000) }));
+    expect(await code(s.promos.transition(a, past.id, storeA, "ACTIVE"))).toBe("INVALID_TRANSITION");
+
+    const { id } = await promo(s, { totalLimit: 1 });
+    const status = async (): Promise<string | undefined> => (await raw.query<{ status: string }>("SELECT status FROM promotions WHERE id = $1", [id])).rows[0]?.status;
+    const g = randomUUID();
+    await s.vouchers.reserve(u1, g, [applied(id, 10n)]);
+    expect(await status()).toBe("EXHAUSTED");
+    expect(await code(s.vouchers.reserve(u2, randomUUID(), [applied(id, 10n)]))).toBe("CAP_EXCEEDED");
+    await s.vouchers.release(u1, g);
+    expect(await status()).toBe("ACTIVE");
+    const bud = await promo(s, { budgetMinor: 100n });
+    await s.vouchers.reserve(u1, randomUUID(), [applied(bud.id, 100n)]);
+    expect((await raw.query<{ status: string }>("SELECT status FROM promotions WHERE id = $1", [bud.id])).rows[0]?.status).toBe("EXHAUSTED");
   });
 });

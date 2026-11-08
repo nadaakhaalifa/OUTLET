@@ -104,4 +104,26 @@ describe("properties", () => {
       expect(tax.payableTotal.amountMinor).toBe(r.totals.goodsGross.amountMinor - r.totals.goodsDiscount.amountMinor);
     }), RUNS);
   });
+
+  it("bogo and bundle: one rounding of the raw total, and the line discounts sum to it exactly", () => {
+    const rawArb = fc.oneof(
+      fc.record({ buyQty: fc.constant(1), getQty: fc.constant(1), getBps: fc.integer({ min: 1, max: 9_999 }) }).map((r) => ({ kind: "bogo" as const, ...r })),
+      fc.integer({ min: 1, max: 9_999 }).map((bps) => ({ kind: "bundle" as const, productIds: ["p0", "p1"], bps })),
+    );
+    fc.assert(fc.property(bagArb, rawArb, (bag, d) => {
+      const c = cand({ id: "x", type: d.kind, rules: { level: "item", discount: d } });
+      const r = evaluate(bag, ctx(), [c]);
+      const a = r.applied[0];
+      if (a === undefined) return;
+      expect(a.lines.reduce((x, l) => x + l.amount.amountMinor, 0n)).toBe(a.total.amountMinor);
+      if (d.kind !== "bogo") return; // bundle: which unit of a split product is matched depends on line order, so only the exact-sum invariant is asserted
+      // single rounding: within half a piastre of free-unit value x bps (bogo picks the cheapest units, independent of line order)
+      const units = bag.stores.flatMap((st) => st.lines).flatMap((l) => Array.from({ length: l.qty }, () => l.unitMinor)).sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      const value = units.slice(0, Math.floor(units.length / 2)).reduce((n, u) => n + u, 0n);
+      const t = a.total.amountMinor;
+      const bps = BigInt(d.getBps);
+      const diff = t * 10_000n - value * bps;
+      expect(diff <= 5_000n && diff >= -5_000n).toBe(true);
+    }), RUNS);
+  });
 });

@@ -102,10 +102,11 @@ const rawLineDiscount = (c: PromotionCandidate, lines: readonly EvalLine[], st: 
     case "bogo": {
       const units = lines.flatMap((l) => Array.from({ length: l.qty }, () => l)).sort((a, b) => (a.unitMinor < b.unitMinor ? -1 : a.unitMinor > b.unitMinor ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
       const free = Math.floor(units.length / (d.buyQty + d.getQty)) * d.getQty;
+      // Weights are the undiscounted value of the free units per line; the percentage is applied ONCE to their sum (one rounding), then spread.
       const per = new Map<string, bigint>();
-      for (const u of units.slice(0, free)) per.set(u.id, (per.get(u.id) ?? 0n) + percentOf(money(u.unitMinor, "EGP"), BigInt(d.getBps)).amountMinor);
+      for (const u of units.slice(0, free)) per.set(u.id, (per.get(u.id) ?? 0n) + u.unitMinor);
       const weights = lines.map((l) => [l.id, minB(per.get(l.id) ?? 0n, rem(l))] as const);
-      return { total: weights.reduce((a, [, w]) => a + w, 0n), weights };
+      return { total: percentOf(money(weights.reduce((a, [, w]) => a + w, 0n), "EGP"), BigInt(d.getBps)).amountMinor, weights };
     }
     case "bundle": {
       const perProduct = d.productIds.map((p) => lines.filter((l) => l.productId === p));
@@ -117,11 +118,11 @@ const rawLineDiscount = (c: PromotionCandidate, lines: readonly EvalLine[], st: 
         for (const l of ls) {
           const take = Math.min(need, l.qty);
           need -= take;
-          per.set(l.id, (per.get(l.id) ?? 0n) + percentOf(money(lineGrossMinor({ unitMinor: l.unitMinor, qty: take }), "EGP"), BigInt(d.bps)).amountMinor);
+          per.set(l.id, (per.get(l.id) ?? 0n) + lineGrossMinor({ unitMinor: l.unitMinor, qty: take }));
         }
       }
       const weights = lines.map((l) => [l.id, minB(per.get(l.id) ?? 0n, rem(l))] as const);
-      return { total: weights.reduce((a, [, w]) => a + w, 0n), weights };
+      return { total: percentOf(money(weights.reduce((a, [, w]) => a + w, 0n), "EGP"), BigInt(d.bps)).amountMinor, weights };
     }
     case "free_shipping":
       return { total: 0n, weights: [] };

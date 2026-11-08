@@ -9,6 +9,15 @@ export interface AbuseSignalsPort {
   assess(input: { readonly userId: string; readonly deviceId: string | null; readonly promotionId: string }): Promise<AbuseVerdict>;
 }
 
+/**
+ * Attempt budget for entered voucher codes (per user and per device), consulted by VoucherService.resolveCode before any lookup.
+ * `consume` returns false once the caller is over budget. The API layer MUST also rate-limit the code-entry route (Redis token bucket, per user,
+ * device and IP): this port is the in-package second line, not the only one. Backed by the rate limiter in the composition root.
+ */
+export interface CodeResolutionBudget {
+  consume(input: { readonly userId: string; readonly deviceId: string | null }): Promise<boolean>;
+}
+
 /** Orders module fact for reinstatement: every seller order of the group is CANCELLED and none had shipped. */
 export interface OrderFactsPort { wholeOrderCancelledBeforeShipping(orderGroupId: string): Promise<boolean> }
 
@@ -27,6 +36,7 @@ export interface PromotionsDeps {
   readonly audit?: AuditPort;
   readonly abuse?: AbuseSignalsPort;
   readonly orderFacts?: OrderFactsPort;
+  readonly codeBudget?: CodeResolutionBudget;
   /** HMAC key for unique voucher codes (from the secret store) */
   readonly hmacKey?: Uint8Array;
   readonly now?: () => Date;
