@@ -49,9 +49,21 @@
   },
   {
     "table": "kyc_cases",
-    "policy": "kyc_cases__worker_seller_kyc",
+    "policy": "kyc_cases__worker_seller_kyc_insert",
     "role": "outlet_worker",
-    "cmd": "all"
+    "cmd": "insert"
+  },
+  {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc_update",
+    "role": "outlet_worker",
+    "cmd": "update"
   },
   {
     "table": "kyc_decisions",
@@ -70,6 +82,12 @@
     "policy": "media_assets__worker_platform",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "order_groups",
+    "policy": "order_groups__worker_checkout_expiry",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "otp_challenges",
@@ -115,6 +133,12 @@
   },
   {
     "table": "outbox_events",
+    "policy": "outbox_events__worker_checkout_expiry",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
     "policy": "outbox_events__worker_emit",
     "role": "outlet_worker",
     "cmd": "insert"
@@ -136,6 +160,36 @@
     "policy": "outbox_events__worker_outbox_relay_update",
     "role": "outlet_worker",
     "cmd": "update"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_privacy_retention_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "payment_intents",
+    "policy": "payment_intents__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "privacy_requests",
@@ -217,9 +271,21 @@
   },
   {
     "table": "seller_signatories",
-    "policy": "seller_signatories__worker_seller_kyc",
+    "policy": "seller_signatories__worker_seller_kyc_insert",
     "role": "outlet_worker",
-    "cmd": "all"
+    "cmd": "insert"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc_update",
+    "role": "outlet_worker",
+    "cmd": "update"
   },
   {
     "table": "session_families",
@@ -255,7 +321,25 @@
     "table": "store_members",
     "policy": "store_members__worker_seller_kyc",
     "role": "outlet_worker",
-    "cmd": "all"
+    "cmd": "insert"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc_accept",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "users",

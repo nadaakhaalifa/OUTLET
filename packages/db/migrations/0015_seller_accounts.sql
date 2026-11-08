@@ -236,10 +236,18 @@ GRANT UPDATE (iban_ct, iban_bidx, iban_last4, account_name_ct, updated_at) ON se
 -- Seller creation, applicant edits of legal identity, KYC state transitions, admin decisions and the first-owner bootstrap
 -- run as outlet_worker with app.job() = 'seller.kyc' (market pinned). Applicant-driven calls also bind the narrowed
 -- app.current_user_id(), admin and system calls do not. outlet_app keeps its read and document/IBAN-payload write paths.
-CREATE POLICY kyc_cases__worker_seller_kyc ON kyc_cases FOR ALL TO outlet_worker
+-- B2: the applicant is pinned on INSERT (a case, and through it the seller, can only be created for the narrowed user; a job with no
+-- narrowed user, or one narrowed to somebody else, is refused). Admin/system paths read and update; UPDATE is column-limited so a
+-- case can never be re-pointed at another applicant or seller.
+CREATE POLICY kyc_cases__worker_seller_kyc_insert ON kyc_cases FOR INSERT TO outlet_worker
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND applicant_user_id = app.current_user_id());
+CREATE POLICY kyc_cases__worker_seller_kyc_read ON kyc_cases FOR SELECT TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
+CREATE POLICY kyc_cases__worker_seller_kyc_update ON kyc_cases FOR UPDATE TO outlet_worker
   USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id())
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
-GRANT SELECT, INSERT, UPDATE ON kyc_cases TO outlet_worker;
+GRANT SELECT, INSERT ON kyc_cases TO outlet_worker;
+GRANT UPDATE (state, version, updated_at, submitted_at, decided_at, decided_by, reason_code, reason_note, provider, provider_ref, check_results) ON kyc_cases TO outlet_worker;
 
 CREATE POLICY kyc_decisions__worker_seller_kyc ON kyc_decisions FOR ALL TO outlet_worker
   USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id())
@@ -258,26 +266,46 @@ CREATE POLICY seller_bank_accounts__worker_seller_kyc ON seller_bank_accounts FO
 GRANT SELECT, UPDATE ON seller_bank_accounts TO outlet_worker;
 
 -- The 21+ result is written at submission by the platform from the applicant's own record, in the applicant's narrowed context.
-CREATE POLICY seller_signatories__worker_seller_kyc ON seller_signatories FOR ALL TO outlet_worker
-  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id())
-  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
-GRANT SELECT, INSERT, UPDATE ON seller_signatories TO outlet_worker;
+-- B2: the signatory row is pinned to the narrowed user on INSERT; reads and updates stay on the job (ON CONFLICT refresh at resubmission).
+CREATE POLICY seller_signatories__worker_seller_kyc_insert ON seller_signatories FOR INSERT TO outlet_worker
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND user_id = app.current_user_id());
+CREATE POLICY seller_signatories__worker_seller_kyc_read ON seller_signatories FOR SELECT TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
+CREATE POLICY seller_signatories__worker_seller_kyc_update ON seller_signatories FOR UPDATE TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND user_id = app.current_user_id())
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND user_id = app.current_user_id());
+GRANT SELECT, INSERT ON seller_signatories TO outlet_worker;
+GRANT UPDATE (age_21_plus, age_checked_at) ON seller_signatories TO outlet_worker;
 
 CREATE POLICY seller_plan_assignments__worker_seller_kyc ON seller_plan_assignments FOR ALL TO outlet_worker
   USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id())
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
 GRANT SELECT, INSERT ON seller_plan_assignments TO outlet_worker;
 
--- First owner only: an ACTIVE owner row for the narrowed user, who must own an APPROVED onboarding case. (A "store has no
--- members" subquery on store_members itself would make the policy recurse; the service checks it and the partial unique
--- index store_members_store_user_uidx stops a duplicate for the same user.) SELECT is the same predicate; no UPDATE/DELETE grant.
-CREATE POLICY store_members__worker_seller_kyc ON store_members FOR ALL TO outlet_worker
-  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id())
+-- First owner only: an ACTIVE owner row for the narrowed user, who must own an APPROVED onboarding case AND whose seller owns THIS store
+-- (B1: the case is tied to the store through stores.seller_id, so an approved applicant of seller X cannot become owner of seller Y's
+-- store). The service checks "store has no members" in the same job transaction; the partial unique index
+-- store_members_store_user_uidx stops a duplicate for the same user.
+CREATE POLICY store_members__worker_seller_kyc_read ON store_members FOR SELECT TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
+CREATE POLICY store_members__worker_seller_kyc ON store_members FOR INSERT TO outlet_worker
   WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id()
               AND role_code = 'owner' AND status = 'active' AND user_id = app.current_user_id()
               AND EXISTS (SELECT 1 FROM kyc_cases c WHERE c.applicant_user_id = store_members.user_id AND c.market_id = store_members.market_id
-                                                       AND c.kind = 'onboarding' AND c.state = 'APPROVED'));
+                                                       AND c.kind = 'onboarding' AND c.state = 'APPROVED'
+                                                       AND EXISTS (SELECT 1 FROM stores s WHERE s.id = store_members.store_id AND s.seller_id = c.seller_id)));
+-- B3: invitation acceptance runs as the narrowed seller.kyc job, never as outlet_app bound to a store the caller does not belong to.
+-- It may only turn an INVITED row into the narrowed user's ACTIVE row; role_code, store_id and market_id are not updatable (column grant).
+CREATE POLICY store_members__worker_seller_kyc_accept ON store_members FOR UPDATE TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND status = 'invited')
+  WITH CHECK (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id() AND status = 'active' AND user_id = app.current_user_id());
 GRANT SELECT, INSERT ON store_members TO outlet_worker;
+GRANT UPDATE (user_id, status, accepted_at, invitee_bidx, invitee_kind, invite_expires_at, version, updated_at) ON store_members TO outlet_worker;
+
+-- B1: the bootstrap check reads the store's seller (id, seller_id, market_id only).
+CREATE POLICY stores__worker_seller_kyc ON stores FOR SELECT TO outlet_worker
+  USING (app.ctx() = 'worker' AND app.job() = 'seller.kyc' AND market_id = app.current_market_id());
+GRANT SELECT (id, seller_id, market_id) ON stores TO outlet_worker;
 
 -- sellers has no store_id/user_id (no RLS, ADR-0010); outlet_app is read-only on it, so the job holds the writes.
 GRANT SELECT, INSERT, UPDATE ON sellers TO outlet_worker;

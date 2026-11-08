@@ -57,7 +57,6 @@ const one = <T>(rows: readonly T[]): T => {
   if (r === undefined) throw new SellerAccountsError("conflict", "expected one row");
   return r;
 };
-const same = (a: Uint8Array, b: Uint8Array): boolean => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
 
 /**
  * Store staff membership. Implements the apps/api `StoreMembershipPort` (`find`) so UnconfiguredStoreMemberships can be
@@ -108,24 +107,22 @@ export class StoreMembershipService {
 
   /**
    * First owner of a store: the applicant of the store's seller, once that seller's KYC is APPROVED, and only while the
-   * store has no members. No store membership exists yet to authorize against, so the checks read under the applicant's
-   * own store+user context (outlet_app) and the INSERT runs as the 'seller.kyc' worker job (store_members__worker_seller_kyc).
+   * store has no members. The caller has no membership yet, so NO store context is bound for them: the whole check and the
+   * INSERT run in one 'seller.kyc' job transaction narrowed to the user; the WITH CHECK ties the owner row to this store's seller.
    */
   async bootstrapOwner(userId: string, storeId: string): Promise<StoreMemberView> {
     const id = this.env.newId();
     const at = this.env.now();
-    await this.storeCtx(storeId, userId, async (tx) => {
-      const ok = await tx.query(
-        `SELECT 1 FROM stores s JOIN kyc_cases c ON c.seller_id = s.seller_id AND c.kind = 'onboarding'
-          WHERE s.id = $1 AND s.market_id = $2 AND c.applicant_user_id = $3 AND c.state = 'APPROVED'`,
-        [storeId, this.env.marketId, userId],
-      );
-      if (ok.rows.length === 0) throw notFound("store");
-      const any = await tx.query("SELECT 1 FROM store_members WHERE store_id = $1 AND status <> 'removed' LIMIT 1", [storeId]);
-      if (any.rows.length > 0) throw conflict("store already has members");
-    });
     try {
       return await kycJob(this.env, userId, async (tx) => {
+        const ok = await tx.query(
+          `SELECT 1 FROM stores s JOIN kyc_cases c ON c.seller_id = s.seller_id AND c.kind = 'onboarding'
+            WHERE s.id = $1 AND s.market_id = $2 AND c.applicant_user_id = $3 AND c.state = 'APPROVED'`,
+          [storeId, this.env.marketId, userId],
+        );
+        if (ok.rows.length === 0) throw notFound("store");
+        const any = await tx.query("SELECT 1 FROM store_members WHERE store_id = $1 AND status <> 'removed' LIMIT 1", [storeId]);
+        if (any.rows.length > 0) throw conflict("store already has members");
         const r = await tx.query<MemberRow>(
           `INSERT INTO store_members (id, store_id, market_id, user_id, role_code, status, accepted_at, created_at, updated_at)
            VALUES ($1,$2,$3,$4,'owner','active',$5,$5,$5) RETURNING ${COLS}`,
@@ -164,18 +161,28 @@ export class StoreMembershipService {
     }
   }
 
-  /** The invitee proves they are the invited person by holding the phone/email whose blind index the invite carries. */
+  /**
+   * The invitee proves they are the invited person by holding the phone/email whose blind index the invite carries.
+   * No store context is bound for the (non-member) caller: their own blind indexes are read under their user context, then a
+   * 'seller.kyc' job transaction narrowed to the user matches the invite by id, store and blind index inside SQL (the invite's
+   * bidx is never selected) and flips exactly that INVITED row to the user's ACTIVE row.
+   */
   async accept(userId: string, storeId: string, memberId: string): Promise<StoreMemberView> {
     const at = this.env.now();
-    return this.storeCtx(storeId, userId, async (tx) => {
-      const m = await this.loadMember(tx, storeId, memberId).catch(() => {
-        throw notFound("invitation");
-      });
-      const u = (await tx.query<{ phone_bidx: Uint8Array | null; email_bidx: Uint8Array | null }>("SELECT phone_bidx, email_bidx FROM users WHERE id = $1", [userId])).rows[0];
-      const mine = m.invitee_kind === "phone" ? u?.phone_bidx : m.invitee_kind === "email" ? u?.email_bidx : null;
-      const expires = m.invite_expires_at === null ? null : new Date(m.invite_expires_at);
-      if (m.status !== "invited" || m.invitee_bidx === null || mine == null || !same(m.invitee_bidx, mine) || expires === null || expires.getTime() < at.getTime()) throw notFound("invitation");
-      try {
+    const u = (await withDbContext(this.env.app, { kind: "user", marketId: this.env.marketId, userId }, (tx) =>
+      tx.query<{ phone_bidx: Uint8Array | null; email_bidx: Uint8Array | null }>("SELECT phone_bidx, email_bidx FROM users WHERE id = $1 AND market_id = $2", [userId, this.env.marketId]),
+    )).rows[0];
+    if (u === undefined || (u.phone_bidx == null && u.email_bidx == null)) throw notFound("invitation");
+    try {
+      return await kycJob(this.env, userId, async (tx) => {
+        const m = (await tx.query<MemberRow>(
+          `SELECT ${COLS} FROM store_members
+            WHERE id = $1 AND store_id = $2 AND status = 'invited' AND invite_expires_at >= $5
+              AND invitee_bidx = CASE invitee_kind WHEN 'phone' THEN $3::bytea WHEN 'email' THEN $4::bytea END
+            FOR UPDATE`,
+          [memberId, storeId, u.phone_bidx ?? null, u.email_bidx ?? null, at],
+        )).rows[0];
+        if (m === undefined) throw notFound("invitation");
         const r = await tx.query<MemberRow>(
           `UPDATE store_members SET user_id = $2, status = 'active', accepted_at = $3, invitee_bidx = NULL, invitee_kind = NULL, invite_expires_at = NULL, version = version + 1, updated_at = $3
             WHERE id = $1 RETURNING ${COLS}`,
@@ -183,11 +190,11 @@ export class StoreMembershipService {
         );
         await emit(this.env, tx, "store_member.accepted", "store_member", memberId, { storeId, role: m.role_code });
         return toView(one(r.rows));
-      } catch (e) {
-        if (isUniqueViolation(e)) throw conflict("already a member of this store");
-        throw e;
-      }
-    });
+      });
+    } catch (e) {
+      if (isUniqueViolation(e)) throw conflict("already a member of this store");
+      throw e;
+    }
   }
 
   private async mutate(
@@ -268,7 +275,8 @@ export class StoreMembershipService {
 
   /** Throws passkey_required (step-up) unless the user is an active member of the store with passkey/TOTP enrolled; not a member: not_found. */
   async requireStrongAuth(userId: string, storeId: string): Promise<void> {
-    const r = await this.storeCtx(storeId, userId, (tx) =>
+    // outlet_auth, own ACTIVE rows only (store_members__auth_my_memberships): no store context is bound for a possible non-member.
+    const r = await withDbContext(this.env.auth, { kind: "auth", marketId: this.env.marketId, userId }, (tx) =>
       tx.query<{ strong_auth_enrolled_at: Date | string | null }>("SELECT strong_auth_enrolled_at FROM store_members WHERE store_id = $1 AND user_id = $2 AND status = 'active'", [storeId, userId]),
     );
     const row = r.rows[0];
@@ -279,7 +287,7 @@ export class StoreMembershipService {
   /** apps/api StoreMembershipPort. Active memberships only; a different market than this cell's: null. */
   async find(marketId: string, userId: string, storeId: string): Promise<{ readonly roles: readonly SellerRole[] } | null> {
     if (marketId !== this.env.marketId) return null;
-    const r = await this.storeCtx(storeId, userId, (tx) =>
+    const r = await withDbContext(this.env.auth, { kind: "auth", marketId: this.env.marketId, userId }, (tx) =>
       tx.query<{ role_code: string }>("SELECT role_code FROM store_members WHERE store_id = $1 AND user_id = $2 AND status = 'active'", [storeId, userId]),
     );
     const role = r.rows[0]?.role_code;

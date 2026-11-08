@@ -35,14 +35,13 @@ const LIVE_ORDER_STATES: readonly string[] = [
   "PAID", "CONFIRMED_COD", "ACCEPTED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERY_FAILED",
   "RETURN_REQUESTED", "RETURN_PICKUP_SCHEDULED", "RETURN_IN_TRANSIT", "RETURN_RECEIVED", "RETURN_INSPECTED", "DISPUTED",
 ];
-const BUYER_PII_TAIL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Buyer PII (name, phone, address) is visible to seller staff only while the order is live, and for 30 days after
- * delivery or return closure (master prompt B1). `settledAt` is delivered_at or the return closure time.
+ * delivery or return closure (master prompt B1). `sellerAccessUntil` is the DB value (delivered_at / return closure + 30 days, stored on the order); the 30-day rule lives where it is written, not here.
  */
-export const buyerPiiVisible = (input: { readonly orderState: string; readonly settledAt?: Date; readonly now: Date }): boolean => {
+export const buyerPiiVisible = (input: { readonly orderState: string; readonly sellerAccessUntil?: Date | null; readonly now: Date }): boolean => {
   if (LIVE_ORDER_STATES.includes(input.orderState)) return true;
-  if (input.settledAt === undefined) return false;
-  return input.now.getTime() - input.settledAt.getTime() <= BUYER_PII_TAIL_MS;
+  if (input.sellerAccessUntil == null) return false;
+  return input.now.getTime() <= input.sellerAccessUntil.getTime();
 };

@@ -1,6 +1,6 @@
 import { SELLER_ROLES } from "@outlet/policy";
 import { describe, expect, it } from "vitest";
-import { KYC_EVENTS, KYC_STATES, KycTransitionError, buyerPiiVisible, canKyc, isValidIban, kycGaps, nextKycState, requiredRoleFor, requiredRoleForFeature, roleCan } from "../src/index.js";
+import { KYC_EVENTS, KYC_STATES, KycTransitionError, buyerPiiVisible, canKyc, isKycEditable, isKycOpen, isValidIban, kycGaps, nextKycState, requiredRoleFor, requiredRoleForFeature, roleCan } from "../src/index.js";
 import { IBAN } from "./fixtures.js";
 
 describe("KYC state machine", () => {
@@ -63,11 +63,19 @@ describe("role helpers (delegate to @outlet/policy)", () => {
     expect(roleCan("support", "team.manage")).toBe(false);
     for (const r of SELLER_ROLES) expect(roleCan(r, "order.read") || r === "catalog").toBe(true);
   });
-  it("shows buyer PII only while the order is live or within 30 days of settlement", () => {
+  it("shows buyer PII only while the order is live or until the stored seller_access_until", () => {
     const now = new Date("2030-02-01T00:00:00Z");
     expect(buyerPiiVisible({ orderState: "SHIPPED", now })).toBe(true);
     expect(buyerPiiVisible({ orderState: "CANCELLED", now })).toBe(false);
-    expect(buyerPiiVisible({ orderState: "DELIVERED", settledAt: new Date("2030-01-10T00:00:00Z"), now })).toBe(true);
-    expect(buyerPiiVisible({ orderState: "CLOSED", settledAt: new Date("2029-12-01T00:00:00Z"), now })).toBe(false);
+    expect(buyerPiiVisible({ orderState: "DELIVERED", sellerAccessUntil: new Date("2030-02-09T00:00:00Z"), now })).toBe(true);
+    expect(buyerPiiVisible({ orderState: "CLOSED", sellerAccessUntil: new Date("2029-12-31T00:00:00Z"), now })).toBe(false);
+    expect(buyerPiiVisible({ orderState: "CLOSED", sellerAccessUntil: null, now })).toBe(false);
+  });
+});
+
+describe("KYC state predicates", () => {
+  it("isKycEditable is true only for DRAFT and NEEDS_INFO; isKycOpen only for the ops-queue states", () => {
+    expect(KYC_STATES.filter((s) => isKycEditable(s))).toEqual(["DRAFT", "NEEDS_INFO"]);
+    expect(KYC_STATES.filter((s) => isKycOpen(s))).toEqual(["SUBMITTED", "AUTO_CHECKS", "NEEDS_INFO"]);
   });
 });

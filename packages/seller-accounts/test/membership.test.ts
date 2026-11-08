@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { withDbContext } from "@outlet/db";
 import type { Principal } from "@outlet/policy";
 import { MARKET, staff } from "./fixtures.js";
 import type { World } from "./fixtures.js";
@@ -41,6 +42,44 @@ describe("bootstrap and invitations", () => {
     await expect(w.members.bootstrapOwner(owner, randomUUID())).rejects.toMatchObject({ code: "not_found" });
     expect((await w.members.bootstrapOwner(owner, storeId)).role).toBe("owner");
     await expect(w.members.bootstrapOwner(owner, storeId)).rejects.toMatchObject({ code: "conflict" });
+  });
+
+  it("B1: an approved applicant of seller X cannot become owner of seller Y's store, even by inserting directly as the worker job", async () => {
+    const x = await w.user();
+    await w.approvedSeller(x);
+    const y = await w.user();
+    const { storeId: yStore } = await w.approvedSeller(y);
+    await expect(w.members.bootstrapOwner(x, yStore)).rejects.toMatchObject({ code: "not_found" });
+    await expect(
+      withDbContext(w.deps.worker, { kind: "worker", marketId: MARKET, job: "seller.kyc", userId: x }, (tx) =>
+        tx.query("INSERT INTO store_members (id, store_id, market_id, user_id, role_code, status, accepted_at) VALUES ($1,$2,'EG',$3,'owner','active',now())", [randomUUID(), yStore, x]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+    expect((await w.raw.query("SELECT 1 FROM store_members WHERE store_id = $1", [yStore])).rows).toHaveLength(0);
+  });
+
+  it("B3: a non-member cannot read other members, and accept/find bind no store context for them", async () => {
+    const s = await storeWithOwner();
+    const stranger = await w.user();
+    const inv = await w.members.invite(s.ownerP, s.storeId, { contact: { kind: "phone", value: "+201099999999" }, role: "support" });
+    // outlet_app with a user context (what the stranger would hold) sees no store_members row; there is no invite-read policy for outlet_app.
+    const seen = await withDbContext(w.deps.app, { kind: "user", marketId: MARKET, userId: stranger }, (tx) => tx.query("SELECT id FROM store_members"));
+    expect(seen.rows).toHaveLength(0);
+    // The stranger cannot accept someone else's invite, and the invite is untouched.
+    await expect(w.members.accept(stranger, s.storeId, inv.id)).rejects.toMatchObject({ code: "not_found" });
+    expect((await w.raw.query<{ status: string }>("SELECT status FROM store_members WHERE id = $1", [inv.id])).rows[0]?.status).toBe("invited");
+    // The job may flip an invite only to the narrowed user's own active row.
+    await expect(
+      withDbContext(w.deps.worker, { kind: "worker", marketId: MARKET, job: "seller.kyc", userId: stranger }, (tx) =>
+        tx.query("UPDATE store_members SET status = 'active', user_id = $2, accepted_at = now() WHERE id = $1", [inv.id, s.owner]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await expect(
+      withDbContext(w.deps.worker, { kind: "worker", marketId: MARKET, job: "seller.kyc", userId: stranger }, (tx) =>
+        tx.query("UPDATE store_members SET role_code = 'owner' WHERE id = $1", [inv.id]),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    expect(await w.members.find(MARKET, stranger, s.storeId)).toBeNull();
   });
 
   it("an unapproved applicant cannot bootstrap", async () => {

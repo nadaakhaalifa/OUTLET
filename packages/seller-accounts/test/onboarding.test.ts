@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertTenantTablesProtected, listRlsExceptions } from "@outlet/db";
+import { assertTenantTablesProtected, listRlsExceptions, withDbContext } from "@outlet/db";
+import type { Queryable } from "@outlet/db";
 import { KycTransitionError } from "../src/index.js";
 import { DOB_19, IBAN, admin, buildWorld } from "./fixtures.js";
 import type { World } from "./fixtures.js";
@@ -242,13 +243,76 @@ describe("isolation and data protection", () => {
 });
 
 describe("RLS audit", () => {
-  it("passes the ADR-0011 audit and adds exactly the reviewed exception policies (one auth read, seven seller.kyc worker policies)", async () => {
+  it("passes the ADR-0011 audit and adds exactly the reviewed exception policies (one auth read, seller.kyc worker policies)", async () => {
     await expect(assertTenantTablesProtected(w.raw)).resolves.toBeDefined();
-    const mine = (await listRlsExceptions(w.raw)).filter((e) => ["store_members", "kyc_cases", "kyc_documents", "kyc_decisions", "seller_signatories", "seller_bank_accounts", "seller_plan_assignments"].includes(e.table));
-    expect(mine).toEqual([
-      ...["kyc_cases", "kyc_decisions", "kyc_documents", "seller_bank_accounts", "seller_plan_assignments", "seller_signatories"].map((table) => ({ table, policy: `${table}__worker_seller_kyc`, role: "outlet_worker", cmd: "all" })),
-      { table: "store_members", policy: "store_members__auth_my_memberships", role: "outlet_auth", cmd: "select" },
-      { table: "store_members", policy: "store_members__worker_seller_kyc", role: "outlet_worker", cmd: "all" },
+    const mine = (await listRlsExceptions(w.raw)).filter((e) => ["store_members", "stores", "kyc_cases", "kyc_documents", "kyc_decisions", "seller_signatories", "seller_bank_accounts", "seller_plan_assignments"].includes(e.table));
+    expect(mine.map((e) => `${e.table}.${e.policy}:${e.role}:${e.cmd}`)).toEqual([
+      "kyc_cases.kyc_cases__worker_seller_kyc_insert:outlet_worker:insert",
+      "kyc_cases.kyc_cases__worker_seller_kyc_read:outlet_worker:select",
+      "kyc_cases.kyc_cases__worker_seller_kyc_update:outlet_worker:update",
+      "kyc_decisions.kyc_decisions__worker_seller_kyc:outlet_worker:all",
+      "kyc_documents.kyc_documents__worker_seller_kyc:outlet_worker:all",
+      "seller_bank_accounts.seller_bank_accounts__worker_seller_kyc:outlet_worker:all",
+      "seller_plan_assignments.seller_plan_assignments__worker_seller_kyc:outlet_worker:all",
+      "seller_signatories.seller_signatories__worker_seller_kyc_insert:outlet_worker:insert",
+      "seller_signatories.seller_signatories__worker_seller_kyc_read:outlet_worker:select",
+      "seller_signatories.seller_signatories__worker_seller_kyc_update:outlet_worker:update",
+      "store_members.store_members__auth_my_memberships:outlet_auth:select",
+      "store_members.store_members__worker_seller_kyc:outlet_worker:insert",
+      "store_members.store_members__worker_seller_kyc_accept:outlet_worker:update",
+      "store_members.store_members__worker_seller_kyc_read:outlet_worker:select",
+      "stores.stores__worker_seller_kyc:outlet_worker:select",
     ]);
+  });
+});
+
+describe("seller.kyc job pinning (B2)", () => {
+  const job = <T>(userId: string | undefined, fn: (tx: Queryable) => Promise<T>): Promise<T> =>
+    withDbContext(w.deps.worker, { kind: "worker", marketId: "EG", job: "seller.kyc", ...(userId === undefined ? {} : { userId }) }, fn);
+  const insertCase = (sellerId: string, applicant: string) =>
+    (tx: Queryable) => tx.query("INSERT INTO kyc_cases (id, seller_id, market_id, applicant_user_id) VALUES ($1,$2,'EG',$3)", [randomUUID(), sellerId, applicant]);
+  const insertSeller = (tx: Queryable) => {
+    const id = randomUUID();
+    return tx.query("INSERT INTO sellers (id, home_market_id, market_id, legal_type, status) VALUES ($1,'EG','EG','company','draft')", [id]).then(() => id);
+  };
+
+  it("a job narrowed to user A cannot create a case for user B, nor a job with no narrowed user", async () => {
+    const a = await w.user();
+    const b = await w.user();
+    await expect(job(a, async (tx) => insertCase(await insertSeller(tx), b)(tx))).rejects.toThrow(/row-level security/);
+    await expect(job(undefined, async (tx) => insertCase(await insertSeller(tx), a)(tx))).rejects.toThrow(/row-level security/);
+    await expect(job(a, async (tx) => insertCase(await insertSeller(tx), a)(tx))).resolves.toBeDefined();
+  });
+
+  it("a signatory row can only be written for the narrowed user", async () => {
+    const a = await w.user();
+    const b = await w.user();
+    const { sellerId } = await draft(a);
+    const ins = (u: string) => (tx: Queryable) => tx.query("INSERT INTO seller_signatories (id, seller_id, market_id, user_id, age_21_plus, age_checked_at) VALUES ($1,$2,'EG',$3,true,now())", [randomUUID(), sellerId, u]);
+    await expect(job(a, ins(b))).rejects.toThrow(/row-level security/);
+    await expect(job(undefined, ins(a))).rejects.toThrow(/row-level security/);
+  });
+
+  it("a case cannot be re-pointed at another applicant or seller (column grant)", async () => {
+    const a = await w.user();
+    const b = await w.user();
+    const { caseId } = await draft(a);
+    await expect(job(undefined, (tx) => tx.query("UPDATE kyc_cases SET applicant_user_id = $2 WHERE id = $1", [caseId, b]))).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("KYC check atomicity (B4)", () => {
+  it("a provider failure between the two KYC transactions leaves no half-written check_results", async () => {
+    const u = await w.user();
+    const { sellerId, caseId } = await draft(u);
+    await docs(u, sellerId);
+    await w.onboarding.setBankAccount(u, sellerId, { iban: IBAN, accountName: "شركة الأمل" });
+    w.check.down = true;
+    await expect(w.onboarding.submit(u, sellerId)).rejects.toThrow("provider down");
+    const c = (await w.raw.query<{ state: string; check_results: unknown[]; provider: string | null }>("SELECT state, check_results, provider FROM kyc_cases WHERE id = $1", [caseId])).rows[0]!;
+    expect(c).toMatchObject({ state: "SUBMITTED", check_results: [], provider: null });
+    const docsChecked = (await w.raw.query<{ checks: unknown[] }>("SELECT checks FROM kyc_documents WHERE case_id = $1", [caseId])).rows;
+    expect(docsChecked.every((d) => d.checks.length === 0)).toBe(true);
+    w.check.down = false;
   });
 });
