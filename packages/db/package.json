@@ -21,9 +21,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test-pg/tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.16"
+    "@electric-sql/pglite": "^0.3.16",
+    "pg": "8.23.1",
+    "@types/pg": "8.23.1"
   }
 }

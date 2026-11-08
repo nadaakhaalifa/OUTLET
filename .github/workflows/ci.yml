@@ -6,6 +6,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -97,3 +98,85 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
+
+  postgres-integration:
+    name: real Postgres 16 (roles, RLS, concurrency)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_superuser_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: ci_superuser_only
+      DATABASE_URL_DIRECT: postgres://postgres:ci_superuser_only@127.0.0.1:5432/outlet_dev
+      DATABASE_URL_MIGRATOR: postgres://outlet_migrator:migrator_local_only@127.0.0.1:5432/outlet_dev
+      DATABASE_URL_APP: postgres://outlet_app:app_local_only@127.0.0.1:5432/outlet_dev
+      DATABASE_URL_AUTH: postgres://outlet_auth:auth_local_only@127.0.0.1:5432/outlet_dev
+      DATABASE_URL_WORKER: postgres://outlet_worker:worker_local_only@127.0.0.1:5432/outlet_dev
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create roles and database (infra/local/postgres/init/001-roles.sql)
+        run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f infra/local/postgres/init/001-roles.sql
+      - run: pnpm --filter @outlet/db build
+      - name: Apply all migrations as outlet_migrator
+        run: node tooling/ci/apply-migrations.mjs
+      - run: pnpm test:pg
+
+  stress-oversell:
+    name: oversell stress (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_superuser_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: ci_superuser_only
+      DATABASE_URL_MIGRATOR: postgres://outlet_migrator:migrator_local_only@127.0.0.1:5432/outlet_dev
+      DATABASE_URL: postgres://postgres:ci_superuser_only@127.0.0.1:5432/outlet_dev
+      APP_DATABASE_URL: postgres://outlet_app:app_local_only@127.0.0.1:5432/outlet_dev
+      UNITS: "100"
+      CONCURRENCY: "2000"
+      RUNS: "20"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f infra/local/postgres/init/001-roles.sql
+      - run: pnpm --filter @outlet/db build
+      - run: node tooling/ci/apply-migrations.mjs
+      - run: node packages/inventory/scripts/oversell-stress.mjs
