@@ -57,6 +57,11 @@ export function AccountPanel({ locale, api = browserApi(), navigate = (h) => { w
   return (
     <div className="shopStack">
       <p dir="ltr" className="hint">{t("account.phone", { phone })}</p>
+      <nav aria-label={t("account.links.title")} className="shopRow">
+        <a className="shopLink" href={`${base}/orders`}>{t("account.links.orders")}</a>
+        <a className="shopLink" href={`${base}/returns`}>{t("account.links.returns")}</a>
+        <a className="shopLink" href={`${base}/account/addresses`}>{t("account.links.addresses")}</a>
+      </nav>
       {error === null ? null : <Alert>{error}</Alert>}
       {note === null ? null : <Status>{note}</Status>}
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { createTranslator } from "@outlet/i18n";
+import { createTranslator, localeSegment } from "@outlet/i18n";
 import { OrderStatus } from "../../../../components/shop/OrderStatus";
 import { pageMetadata } from "../../../../lib/metadata";
 import { requireLocale } from "../../../../lib/segment-page";
@@ -20,6 +20,7 @@ export default async function OrderPage({ params }: { params: Params }) {
   return (
     <section aria-labelledby="order-title">
       <h1 id="order-title" className="hero">{t("checkout.order.title")}</h1>
+      <p><a className="shopLink" href={`/${localeSegment("eg", resolved.locale)}/orders`}>{t("orders.detail.back")}</a></p>
       <OrderStatus locale={resolved.locale} orderId={id} />
     </section>
   );

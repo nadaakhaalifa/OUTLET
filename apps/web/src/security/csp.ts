@@ -7,6 +7,18 @@ export interface CspOptions {
   readonly trustedTypes?: boolean;
   /** Dev only: React needs eval for stack reconstruction. Never set in production. */
   readonly dev?: boolean;
+  /** Origin of the signed-upload bucket (return and dispute photos are PUT straight to it). Only an https origin is accepted; nothing else widens connect-src. */
+  readonly uploadOrigin?: string | undefined;
+}
+
+function uploadSource(origin: string | undefined): string[] {
+  if (origin === undefined || origin === "") return [];
+  try {
+    const u = new URL(origin);
+    return u.protocol === "https:" ? [u.origin] : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Cryptographically random, base64 nonce for one response (16 bytes). Works in the edge runtime. */
@@ -26,7 +38,7 @@ export function buildCsp(nonce: string, opts: CspOptions = {}): string {
     `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' data: https:",
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src ${["'self'", ...uploadSource(opts.uploadOrigin)].join(" ")}`,
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

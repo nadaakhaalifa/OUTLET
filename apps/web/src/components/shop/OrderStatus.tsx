@@ -6,6 +6,7 @@ import { browserApi, type ShopperApi } from "../../lib/client-api";
 import { normalizeCode } from "../../lib/phone";
 import type { OrderGroup } from "../../lib/wire";
 import { isSafeRedirect } from "./CheckoutView";
+import { SellerOrders } from "./SellerOrders";
 import { Alert, isProblem, Status, useShared } from "./shared";
 
 export interface OrderStatusProps {
@@ -82,10 +83,8 @@ export function OrderStatus({ locale, orderId, api = browserApi(), pollMs = 3000
           </form>
         ) : null}
       </section>
+      <SellerOrders locale={locale} order={order} api={api} onOrder={setOrder} />
       <section className="shopCard" aria-label={t("checkout.review.title")}>
-        <ul className="shopList">
-          {order.seller_orders.map((s) => <li key={s.id} className="shopListRow"><span>{t("checkout.order.store", { store: s.store_display_name_ar })}</span><strong>{money(s.total)}</strong></li>)}
-        </ul>
         <dl className="shopSummary">
           <div><dt>{t("checkout.review.items")}</dt><dd>{money(order.items_subtotal)}</dd></div>
           <div><dt>{t("checkout.review.shipping")}</dt><dd>{money(order.shipping)}</dd></div>

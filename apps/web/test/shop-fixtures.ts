@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import type { ShopperApi } from "../src/lib/client-api";
-import { addressSchema, cartSchema, checkoutResultSchema, consentSchema, geoAreaSchema, orderGroupSchema, privacyRequestSchema, quoteSchema, sessionSchema } from "../src/lib/wire";
+import { returnRequestSchema, orderSummarySchema, addressSchema, cartSchema, checkoutResultSchema, consentSchema, geoAreaSchema, orderGroupSchema, privacyRequestSchema, quoteSchema, sessionSchema } from "../src/lib/wire";
 
 /** Real-shaped wire fixtures (docs/api/openapi.yaml), TESTS ONLY, parsed through the production schemas. */
 export const m = (minor: number | string, currency = "EGP") => ({ amount_minor: String(minor), currency });
@@ -49,7 +49,26 @@ export const privacyRequest = (over: Record<string, unknown> = {}) => privacyReq
 const unset = (name: string) => () => Promise.reject(new Error(`unexpected call: ${name}`));
 /** A ShopperApi whose every method rejects unless overridden, so a test fails loudly on an unplanned call. */
 export function stubApi(over: Partial<{ [K in keyof ShopperApi]: ShopperApi[K] }> = {}): ShopperApi {
-  const names = ["requestOtp", "verifyOtp", "passkeyOptions", "passkeyVerify", "logout", "me", "listSessions", "revokeSession", "listConsents", "patchConsents", "requestExport", "requestDelete", "cancelDelete", "listPrivacyRequests", "getCart", "setQty", "removeLine", "ackDefects", "getProductBrief", "geoAreas", "listAddresses", "createAddress", "walletBalance", "quote", "placeOrder", "getOrderGroup", "confirmCod"] as const;
+  const names = ["requestOtp", "verifyOtp", "passkeyOptions", "passkeyVerify", "logout", "me", "listSessions", "revokeSession", "listConsents", "patchConsents", "requestExport", "requestDelete", "cancelDelete", "listPrivacyRequests", "getCart", "setQty", "removeLine", "ackDefects", "getProductBrief", "geoAreas", "listAddresses", "createAddress", "updateAddress", "deleteAddress", "walletBalance", "quote", "placeOrder", "getOrderGroup", "confirmCod", "listOrders", "cancelSellerOrder", "createReturn", "listReturns", "getReturn", "cancelReturn", "openDispute", "uploadEvidence"] as const;
   const base = Object.fromEntries(names.map((n) => [n, vi.fn(unset(n))])) as unknown as ShopperApi;
   return { ...base, ...over };
 }
+
+const SO = "0b7d1f4e-0000-4000-8000-0000000000a5";
+export const ids2 = { SO, RETURN: "0b7d1f4e-0000-4000-8000-0000000000b9", ORDER_LINE: "0b7d1f4e-0000-4000-8000-0000000000c9" };
+export const wireSellerOrder = (over: Record<string, unknown> = {}) => ({
+  id: SO, store_id: STORE, store_display_name_ar: "نيل أوتليت", status: "SHIPPED", items_subtotal: m(80_000), shipping: m(6_000), vat: m(10_500), total: m(86_000),
+  lines: [{ id: ids2.ORDER_LINE, sku_id: SKU, product_id: PROD, title_ar_snapshot: "جاكيت", title_en_snapshot: "Jacket", condition_grade_snapshot: "open_box", qty: 1, unit_price: m(80_000), platform_discount: m(0), seller_discount: m(0), vat_rate_bp: 1400, vat: m(9_824), claim_type_snapshot: "plain", status: "SHIPPED" }],
+  shipment: { shipment_id: "0b7d1f4e-0000-4000-8000-0000000000aa", status: "IN_TRANSIT", courier_code: "bosta", awb: "AWB123", events: [{ normalized_status: "PICKED_UP", location_text: "Cairo hub", occurred_at: "2026-11-05T10:00:00Z" }, { normalized_status: "IN_TRANSIT", location_text: null, occurred_at: "2026-11-06T10:00:00Z" }], delivered_at: null },
+  delivered_at: null, return_window_ends_at: null, cancellable: false, returnable: false, tax_documents: [], ...over,
+});
+export const orderWith = (so: Record<string, unknown> = {}, over: Record<string, unknown> = {}) => orderGroupSchema.parse({
+  id: ids.ORDER, status: "PAID", currency: "EGP", items_subtotal: m(80_000), discount: m(0), shipping: m(6_000), vat: m(10_500), store_credit: m(0), total: m(86_000),
+  payment_method: "card", payment_status: "captured", client_action: null, seller_orders: [wireSellerOrder(so)], ...over,
+});
+export const orderSummary = (id: string, over: Record<string, unknown> = {}) => orderSummarySchema.parse({ id, status: "PAID", total: m(86_000), store_count: 1, placed_at: "2026-11-04T10:00:00Z", ...over });
+export const wireReturn = (over: Record<string, unknown> = {}) => ({
+  id: ids2.RETURN, seller_order_id: SO, status: "REQUESTED", reason_code: "too_small", fault: "none", window_basis: "no_reason", delivered_at_snapshot: "2026-11-06T10:00:00Z", window_ends_at: "2026-11-20T10:00:00Z",
+  method: "pickup", resolution: "exchange", lines: [{ id: "0b7d1f4e-0000-4000-8000-0000000000ba", order_line_id: ids2.ORDER_LINE, qty: 1 }], received_at: null, inspection_due_at: null, refund_due_at: null, created_at: "2026-11-08T09:00:00Z", ...over,
+});
+export const returnReq = (over?: Record<string, unknown>) => returnRequestSchema.parse(wireReturn(over));

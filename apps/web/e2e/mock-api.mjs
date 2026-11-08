@@ -68,7 +68,7 @@ function createShopperMock() {
   const LINE = "0b7d1f4e-0000-4000-8000-0000000000c1";
   const STORE = "0b7d1f4e-0000-4000-8000-000000000001";
   const money = (n) => ({ amount_minor: String(n), currency: "EGP" });
-  const fresh = () => ({ qty: 1, bump: false, addresses: [], orders: new Map(), consents: { analytics: false, marketing_push: false, personalization: false }, deleteRequest: null, sessions: [{ id: "s1", device_id: "d1", platform: "web", ua_family: "Chrome", amr: ["otp"], created_at: "2026-11-01T10:00:00Z", last_seen_at: "2026-11-08T09:00:00Z", current: true }, { id: "s2", device_id: "d2", platform: "ios", ua_family: null, amr: ["otp"], created_at: "2026-10-01T10:00:00Z", last_seen_at: "2026-11-02T09:00:00Z", current: false }], checkoutBodies: [] });
+  const fresh = () => ({ qty: 1, bump: false, addresses: [], orders: new Map(), consents: { analytics: false, marketing_push: false, personalization: false }, deleteRequest: null, seeded: new Map(), returns: [], uploads: new Set(), sessions: [{ id: "s1", device_id: "d1", platform: "web", ua_family: "Chrome", amr: ["otp"], created_at: "2026-11-01T10:00:00Z", last_seen_at: "2026-11-08T09:00:00Z", current: true }, { id: "s2", device_id: "d2", platform: "ios", ua_family: null, amr: ["otp"], created_at: "2026-10-01T10:00:00Z", last_seen_at: "2026-11-02T09:00:00Z", current: false }], checkoutBodies: [] });
   let st = fresh();
   const send = (res, status, body, headers = {}) => { for (const [k, v] of Object.entries(headers)) res.setHeader(k, v); res.statusCode = status; res.end(body === null ? "" : JSON.stringify(body)); return true; };
   const problem = (res, status, type, extra = {}, headers = {}) => send(res, status, { type: `urn:outlex:problem:${type}`, title: type, status, ...extra }, { "content-type": "application/problem+json", ...headers });
@@ -105,12 +105,28 @@ function createShopperMock() {
       client_action: o.method === "cod" && !o.confirmed ? { kind: "cod_confirmation" } : null, seller_orders: [{ id: "so-1", store_display_name_ar: "نيل أوتليت", status, total: q.total }],
     };
   };
+  const SEED = { cancellable: "0b7d1f4e-0000-4000-8000-0000000000e8", delivered: "0b7d1f4e-0000-4000-8000-0000000000e9" };
+  const seedOrder = (id, soId, over) => ({
+    id, status: "PAID", currency: "EGP", items_subtotal: money(80_000), discount: money(0), shipping: money(6_000), vat: money(10_500), store_credit: money(0), total: money(86_000), payment_method: "card", payment_status: "captured", client_action: null,
+    seller_orders: [{ id: soId, store_id: STORE, store_display_name_ar: "نيل أوتليت", status: "PAID", items_subtotal: money(80_000), shipping: money(6_000), vat: money(10_500), total: money(86_000),
+      lines: [{ id: `${soId.slice(0, -2)}a1`, sku_id: "sku0", product_id: "prod0", title_ar_snapshot: "جاكيت", title_en_snapshot: "Jacket", condition_grade_snapshot: "open_box", qty: 1, unit_price: money(80_000), platform_discount: money(0), seller_discount: money(0), vat_rate_bp: 1400, vat: money(9_824), claim_type_snapshot: "plain", status: "PAID" }],
+      shipment: null, delivered_at: null, return_window_ends_at: null, cancellable: false, returnable: false, tax_documents: [], ...over }],
+  });
+  const seedOrders = () => {
+    st.seeded.set(SEED.cancellable, seedOrder(SEED.cancellable, "0b7d1f4e-0000-4000-8000-0000000000a8", { cancellable: true }));
+    st.seeded.set(SEED.delivered, seedOrder(SEED.delivered, "0b7d1f4e-0000-4000-8000-0000000000a9", {
+      status: "DELIVERED", returnable: true, delivered_at: "2026-11-06T10:00:00Z", return_window_ends_at: "2026-11-20T10:00:00Z",
+      shipment: { shipment_id: "0b7d1f4e-0000-4000-8000-0000000000aa", status: "DELIVERED", courier_code: "bosta", awb: "AWB123", delivered_at: "2026-11-06T10:00:00Z", events: [{ normalized_status: "PICKED_UP", location_text: "Cairo hub", occurred_at: "2026-11-05T10:00:00Z" }, { normalized_status: "DELIVERED", location_text: null, occurred_at: "2026-11-06T10:00:00Z" }] },
+    }));
+  };
   const geo = { governorate: [{ id: "g1", parent_id: null, level: "governorate", code: "cai", name_ar: "القاهرة", name_en: "Cairo", active: true }], city: [{ id: "c1", parent_id: "g1", level: "city", code: "nc", name_ar: "مدينة نصر", name_en: "Nasr City", active: true }], district: [] };
 
   return async (req, res, url, readBody) => {
     const p = url.pathname;
     if (p === "/__test/reset") { st = fresh(); return send(res, 200, {}); }
     if (p === "/__test/bump") { st.bump = true; return send(res, 200, {}); }
+    if (p === "/__test/seed-orders") { seedOrders(); return send(res, 200, { cancellable: SEED.cancellable, delivered: SEED.delivered }); }
+    if (p === "/__test/returns") return send(res, 200, st.returns);
     if (p === "/__test/checkouts") return send(res, 200, st.checkoutBodies);
     if (!p.startsWith("/v1/eg/")) return false;
     const path = p.slice("/v1/eg/".length);
@@ -155,7 +171,63 @@ function createShopperMock() {
     if (path === "me/privacy/delete") { st.deleteRequest = null; return send(res, 204, null); }
     if (path === "me/wallet") return send(res, 200, { currency: "EGP", balances: [], total_available: money(0) });
     if (path === "me/addresses" && req.method === "GET") return send(res, 200, { items: st.addresses, next_cursor: null });
-    if (path === "me/addresses") { const a = { id: `0b7d1f4e-0000-4000-8000-00000000ad0${st.addresses.length + 1}`, country_code: "EG", recipient_name: body.recipient_name, phone_e164: body.phone_e164, fields: body.fields, geo_area_id: "c1", is_default: st.addresses.length === 0, created_at: "2026-11-08T00:00:00Z" }; st.addresses.push(a); return send(res, 201, a); }
+    if (path === "me/addresses") { const a = { id: `0b7d1f4e-0000-4000-8000-00000000ad0${st.addresses.length + 1}`, country_code: "EG", recipient_name: body.recipient_name, phone_e164: body.phone_e164, fields: body.fields, geo_area_id: "c1", is_default: st.addresses.length === 0, cod_eligible: Boolean(body.fields?.landmark), created_at: "2026-11-08T00:00:00Z" }; st.addresses.push(a); return send(res, 201, a); }
+    const ad = /^me\/addresses\/([^/]+)$/.exec(path);
+    if (ad) {
+      const a = st.addresses.find((x) => x.id === ad[1]);
+      if (!a) return problem(res, 404, "not-found");
+      if (req.method === "DELETE") { st.addresses = st.addresses.filter((x) => x.id !== a.id); if (a.is_default && st.addresses[0]) st.addresses[0].is_default = true; return send(res, 204, null); }
+      if (!strict(body, ["country_code", "label", "recipient_name", "phone_e164", "fields", "pin", "is_default"], ["country_code", "recipient_name", "phone_e164", "fields"])) return problem(res, 400, "invalid-body");
+      if (body.is_default === true) for (const x of st.addresses) x.is_default = false;
+      Object.assign(a, { recipient_name: body.recipient_name, phone_e164: body.phone_e164, fields: body.fields, cod_eligible: Boolean(body.fields.landmark), ...(body.is_default === true ? { is_default: true } : {}) });
+      return send(res, 200, a);
+    }
+    if (path === "order-groups" && req.method === "GET") {
+      const rows = [...st.seeded.values()].map((o) => ({ id: o.id, status: o.status, total: money(86_000), store_count: 1, placed_at: "2026-11-04T10:00:00Z" }));
+      const cursor = url.searchParams.get("cursor");
+      const limit = Number(url.searchParams.get("limit") ?? "20");
+      const page = rows.slice(cursor === null ? 0 : Number(cursor), (cursor === null ? 0 : Number(cursor)) + limit);
+      const next = (cursor === null ? 0 : Number(cursor)) + limit;
+      return send(res, 200, { items: page, next_cursor: next < rows.length ? String(next) : null });
+    }
+    const cancelM = /^order-groups\/([^/]+)\/seller-orders\/([^/]+)\/cancel$/.exec(path);
+    if (cancelM) {
+      const o = st.seeded.get(cancelM[1]);
+      if (!o || o.seller_orders[0].id !== cancelM[2]) return problem(res, 404, "not-found");
+      if (!strict(body, ["reason_code", "refund_preference"], ["reason_code"])) return problem(res, 400, "invalid-body");
+      if (!o.seller_orders[0].cancellable) return problem(res, 409, "not-cancellable");
+      o.status = "CANCELLED"; o.seller_orders[0] = { ...o.seller_orders[0], status: "CANCELLED", cancellable: false };
+      return send(res, 200, o);
+    }
+    const retNew = /^seller-orders\/([^/]+)\/returns$/.exec(path);
+    if (retNew && req.method === "POST") {
+      if (!strict(body, ["lines", "reason_code", "method", "resolution", "refund_preference", "evidence_media_ids"], ["lines", "reason_code", "method", "resolution"])) return problem(res, 400, "invalid-body");
+      const o = [...st.seeded.values()].find((x) => x.seller_orders[0].id === retNew[1]);
+      if (!o) return problem(res, 404, "not-found");
+      if (!o.seller_orders[0].returnable) return problem(res, 422, "return-window-closed");
+      if (["defective", "undisclosed_defect", "not_as_described"].includes(body.reason_code) && !(body.evidence_media_ids?.length > 0)) return problem(res, 422, "evidence-required");
+      if ((body.evidence_media_ids ?? []).some((id) => !st.uploads.has(id))) return problem(res, 404, "not-found");
+      const r = { id: `0b7d1f4e-0000-4000-8000-00000000ce0${st.returns.length + 1}`, seller_order_id: retNew[1], status: "REQUESTED", reason_code: body.reason_code, fault: "none", window_basis: "no_reason", delivered_at_snapshot: "2026-11-06T10:00:00Z", window_ends_at: "2026-11-20T10:00:00Z", method: body.method, resolution: body.resolution, lines: body.lines.map((l, i) => ({ id: `0b7d1f4e-0000-4000-8000-00000000cf0${i + 1}`, order_line_id: l.order_line_id, qty: l.qty })), received_at: null, inspection_due_at: null, refund_due_at: null, created_at: "2026-11-08T09:00:00Z", evidence: body.evidence_media_ids ?? [] };
+      st.returns.push(r);
+      return send(res, 201, r);
+    }
+    if (path === "returns" && req.method === "GET") return send(res, 200, { items: st.returns, next_cursor: null });
+    const retM = /^returns\/([^/]+)(\/(cancel|dispute))?$/.exec(path);
+    if (retM) {
+      const r = st.returns.find((x) => x.id === retM[1]);
+      if (!r) return problem(res, 404, "not-found");
+      if (retM[3] === "cancel") { r.status = "CANCELLED"; return send(res, 200, r); }
+      if (retM[3] === "dispute") { if (!strict(body, ["statement", "media_ids"], ["statement"]) || body.statement.length < 10) return problem(res, 400, "invalid-body"); r.status = "DISPUTED"; return send(res, 201, { id: "dsp-1", return_id: r.id, status: "OPEN" }); }
+      return send(res, 200, r);
+    }
+    if (path === "media/uploads") {
+      if (!strict(body, ["purpose", "mime", "bytes", "sha256"], ["purpose", "mime", "bytes", "sha256"]) || !/^[0-9a-f]{64}$/.test(body.sha256)) return problem(res, 400, "invalid-body");
+      const id = `0b7d1f4e-0000-4000-8000-00000000fe0${st.uploads.size + 1}`;
+      st.uploads.add(id);
+      return send(res, 201, { media_id: id, upload_url: `https://uploads.example.test/put/${id}`, upload_headers: { "content-type": body.mime }, expires_at: new Date(Date.now() + 600_000).toISOString() });
+    }
+    const mc = /^media\/([^/]+)\/complete$/.exec(path);
+    if (mc) return st.uploads.has(mc[1]) ? send(res, 200, { id: mc[1], status: "SCANNING" }) : problem(res, 404, "not-found");
     if (path === "cart") return send(res, 200, cartBody());
     if (path === `cart/lines/${LINE}` && req.method === "PATCH") { if (body.qty === 9) return problem(res, 409, "stock-shortfall"); st.qty = body.qty; return send(res, 200, cartBody()); }
     if (path === `cart/lines/${LINE}` && req.method === "DELETE") { st.qty = 0; return send(res, 200, { ...cartBody(), groups: [], items_subtotal: money(0) }); }
@@ -170,6 +242,7 @@ function createShopperMock() {
       return send(res, 201, { order_group_id: id, status: cod ? "CONFIRMED_COD" : "PENDING_PAYMENT", client_action: cod ? { kind: "cod_confirmation" } : { kind: "redirect", url: `http://localhost:3100/eg-en/orders/${id}?paid=1` }, reservation_expires_at: new Date(Date.now() + 600_000).toISOString() });
     }
     const og = /^order-groups\/([^/]+)(\/cod-confirmation)?$/.exec(path);
+    if (og && st.seeded.has(og[1])) return send(res, 200, st.seeded.get(og[1]));
     if (og) {
       const o = st.orders.get(og[1]);
       if (!o) return problem(res, 404, "not-found");

@@ -44,7 +44,7 @@ export interface BffDeps {
 const MARKET = /^[a-z]{2}(-[a-z0-9]{2,3})?$/;
 const SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID = /^[0-9a-f-]{36}$/;
-const PROXY_ROOTS = new Set(["cart", "checkout", "order-groups", "me", "geo-areas", "products", "shipping"]);
+const PROXY_ROOTS = new Set(["cart", "checkout", "order-groups", "me", "geo-areas", "products", "shipping", "seller-orders", "returns", "media"]);
 const PUBLIC_ROOTS = new Set(["geo-areas", "products"]);
 const GET_ONLY_ROOTS = new Set(["products", "geo-areas"]);
 

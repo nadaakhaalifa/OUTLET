@@ -34,18 +34,21 @@ export interface AddressFormProps {
   readonly locale: Locale;
   readonly api: ShopperApi;
   readonly onSaved: (address: Address) => void;
+  /** Edit mode: prefilled, and saved with PATCH instead of POST. */
+  readonly initial?: Address;
+  readonly onCancel?: () => void;
 }
 
 /** Governorate, then city, then street, building, floor, apartment and a landmark (the API requires one). The map pin is optional and not collected here. */
-export function AddressForm({ locale, api, onSaved }: AddressFormProps) {
+export function AddressForm({ locale, api, onSaved, initial, onCancel }: AddressFormProps) {
   const { t } = useShared(locale);
   const [govs, setGovs] = useState<readonly GeoArea[]>([]);
   const [cities, setCities] = useState<readonly GeoArea[]>([]);
   const [districts, setDistricts] = useState<readonly GeoArea[]>([]);
-  const [gov, setGov] = useState("");
+  const [gov, setGov] = useState(initial?.fields.governorate_id ?? "");
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
-  const [f, setF] = useState({ recipient: "", phone: "", street: "", building: "", floor: "", apartment: "", landmark: "" });
+  const [f, setF] = useState({ recipient: initial?.recipient_name ?? "", phone: initial?.phone_e164 ?? "", street: initial?.fields.street ?? "", building: initial?.fields.building ?? "", floor: initial?.fields.floor ?? "", apartment: initial?.fields.apartment ?? "", landmark: initial?.fields.landmark ?? "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }): void => { setF((p) => ({ ...p, [k]: e.target.value })); };
@@ -68,12 +71,13 @@ export function AddressForm({ locale, api, onSaved }: AddressFormProps) {
     if (gov === "" || city === "" || districtId === "" || f.recipient.trim() === "" || f.street.trim() === "" || f.building.trim() === "" || f.landmark.trim() === "") { setError(t("checkout.address.invalid")); return; }
     setBusy(true); setError(null);
     try {
-      onSaved(await api.createAddress({ recipientName: f.recipient.trim(), phoneE164: phone, governorateId: gov, districtId, street: f.street.trim(), building: f.building.trim(), floor: f.floor.trim(), apartment: f.apartment.trim(), landmark: f.landmark.trim() }));
+      const input = { recipientName: f.recipient.trim(), phoneE164: phone, governorateId: gov, districtId, street: f.street.trim(), building: f.building.trim(), floor: f.floor.trim(), apartment: f.apartment.trim(), landmark: f.landmark.trim() };
+      onSaved(initial === undefined ? await api.createAddress(input) : await api.updateAddress(initial.id, { ...input, isDefault: initial.is_default }));
     } catch { setError(t("checkout.address.invalid")); } finally { setBusy(false); }
   }
 
   return (
-    <form noValidate className="shopForm" onSubmit={(e) => { void submit(e); }} aria-label={t("checkout.address.new")}>
+    <form noValidate className="shopForm" onSubmit={(e) => { void submit(e); }} aria-label={t(initial === undefined ? "checkout.address.new" : "addresses.edit")}>
       <Field label={t("checkout.address.recipient")} value={f.recipient} onChange={set("recipient")} autoComplete="name" required />
       <Field label={t("checkout.address.phone")} value={f.phone} onChange={set("phone")} type="tel" inputMode="tel" autoComplete="tel" required dir="ltr" />
       <GeoSelect label={t("checkout.address.governorate")} placeholder={t("checkout.address.choose")} value={gov} options={govs} locale={locale} onChange={setGov} />
@@ -85,7 +89,10 @@ export function AddressForm({ locale, api, onSaved }: AddressFormProps) {
       <Field label={t("checkout.address.apartment")} value={f.apartment} onChange={set("apartment")} />
       <Field label={t("checkout.address.landmark")} hint={t("checkout.address.landmarkHint")} value={f.landmark} onChange={set("landmark")} required />
       {error === null ? null : <Alert>{error}</Alert>}
-      <Button type="submit" loading={busy}>{t("checkout.address.save")}</Button>
+      <div className="shopRow">
+        <Button type="submit" loading={busy}>{t("checkout.address.save")}</Button>
+        {onCancel === undefined ? null : <Button variant="ghost" disabled={busy} onClick={onCancel}>{t("addresses.cancel")}</Button>}
+      </div>
     </form>
   );
 }

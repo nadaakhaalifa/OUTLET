@@ -18,6 +18,7 @@ export function proxy(request: NextRequest): NextResponse {
   const csp = buildCsp(nonce, {
     trustedTypes: process.env.CSP_TRUSTED_TYPES === "on",
     dev: process.env.NODE_ENV !== "production",
+    uploadOrigin: process.env.UPLOAD_ORIGIN,
   });
   const headers = sanitizeRequestHeaders(request.headers);
   headers.set("x-nonce", nonce);
