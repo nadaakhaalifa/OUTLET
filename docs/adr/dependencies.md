@@ -84,3 +84,28 @@ react, react-dom, zod, jsdom, @testing-library/* are already in the table above.
 | @electric-sql/pglite (devDependency of packages/search-bakeoff) | In-process Postgres for the Postgres FTS adapter tests and the offline bake-off run; contrib `unaccent` and `pg_trgm` used; **tests and the bake-off CLI only** | 2022-09 | Apache-2.0 / PostgreSQL |
 
 No other npm dependencies: the Typesense, Meilisearch and OpenSearch adapters use the built-in `fetch`. Engine images (docker-compose.search.yml, dev only): `typesense/typesense:27.1` (GPL-3.0), `getmeili/meilisearch:v1.12.0` (MIT, some BUSL parts), `opensearchproject/opensearch:2.18.0` (Apache-2.0); licences are verify-register V67, tags to be confirmed before the run.
+
+## P1-01c (packages/media, 2026-11-08)
+
+| Package | Purpose | Version / first published | Licence |
+|---|---|---|---|
+| sharp | Decode, strip metadata, resize and re-encode (AVIF, WebP, JPEG) in the upload pipeline. Pinned exactly. **Native binary**: ships prebuilt libvips through `@img/sharp-*` optionalDependencies (no install script); the deploy image must match the build platform/libc. Decoding untrusted images is a memory/CPU risk: pixel cap `limitInputPixels` is set in code | 0.35.5 / 2013-02 | Apache-2.0 (libvips LGPL-3.0, dynamically linked prebuilt) |
+| file-type | Magic-byte content sniffing (declared MIME is never trusted). Pinned exactly | 22.0.0 / 2014-09 | MIT |
+
+## P1-03a (pricing-integrity, 2026-11-08)
+
+No new third-party packages. `@outlet/pricing-integrity` depends on workspace packages `@outlet/db`, `@outlet/ids`, `@outlet/money`, `@outlet/outbox` and the already listed `zod`; its tests use the already listed `fast-check` and `@electric-sql/pglite` (via `@outlet/db/testing`).
+
+## P1 HTTP layer (apps/api, 2026-11-08)
+
+| Package | Purpose | Version / first published | Licence |
+|---|---|---|---|
+| @nestjs/common, @nestjs/core | Modular monolith HTTP framework (DI, guards, interceptors, filters). Pinned exactly; 11.2.8 released 2026-10-23 (16 days at install). Legacy decorators only, every injection via `@Inject(token)`, so no `emitDecoratorMetadata` and no SWC | 11.2.8 / 2017-05 | MIT |
+| @nestjs/platform-fastify | Fastify adapter (`inject()` for tests, server `bodyLimit`/`requestTimeout`). Pins its own `fastify` 5.11.3 and `light-my-request` 6.6.0 | 11.2.8 / 2018-12 | MIT |
+| fastify | Direct dependency only for types and hooks; pinned to the adapter's exact version 5.11.3 so one copy is installed | 5.11.3 / 2016-10 | MIT |
+| reflect-metadata, rxjs | Required peers of NestJS | 0.2.2 / 2015-04 · 7.8.2 / 2012-03 | Apache-2.0 · Apache-2.0 |
+| ioredis | Redis client for the GCRA rate limiter (one `EVAL` per bucket, 50 ms timeout, circuit breaker). **6.0.0 is a new major (2026-10-12, 27 days)**; only `eval` is used. Not exercised against a live Redis yet | 6.0.0 / 2015-03 | MIT |
+| pg | node-postgres pool for the production `outlet_app` pool (`application_name` from `@outlet/observability`). Not exercised against a live database yet (tests use PGlite) | 8.23.1 / 2010-10 | MIT |
+| @types/pg (dev) | Types for pg | 8.23.1 / 2016-05 | MIT |
+
+Already in the table: zod, jose (also used directly by the test harness to mint ES256 tokens and by `SessionTokenVerifier.decodeJwt` for the market-mismatch code), yaml (OpenAPI generation), @electric-sql/pglite (dev). First-published dates were not re-verified online. Rejected: `nestjs-zod` and `@nestjs/swagger` (Zod 4 `toJSONSchema` + our route registry do both jobs; ADR draft `apps/api/docs/http-layer.md` H2/H3), `@fastify/helmet` (eight static headers set in one hook), `supertest` (Fastify `inject`).
