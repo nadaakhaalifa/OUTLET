@@ -28,6 +28,7 @@ export default tseslint.config(
     // User-facing strings must come from the i18n catalogs (AR required).
     files: ["packages/ui-web/src/**/*.tsx", "apps/**/src/**/*.tsx"],
     ignores: ["**/*.test.tsx", "**/examples/**"],
+    plugins: { district: districtRules },
     rules: { "district/no-hardcoded-ui-strings": "error" },
   },
   {
