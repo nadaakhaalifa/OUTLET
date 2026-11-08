@@ -1,0 +1,28 @@
+{
+  "name": "@outlet/notifications",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./testing": { "types": "./dist/testing.d.ts", "default": "./dist/testing.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@outlet/db": "workspace:*",
+    "@outlet/i18n": "workspace:*",
+    "@outlet/ids": "workspace:*",
+    "@outlet/logger": "workspace:*",
+    "@outlet/money": "workspace:*",
+    "@outlet/outbox": "workspace:*",
+    "@outlet/privacy": "workspace:*",
+    "intl-messageformat": "^12.1.4",
+    "zod": "^4.6.7"
+  }
+}
