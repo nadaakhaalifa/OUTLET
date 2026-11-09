@@ -217,6 +217,12 @@
   },
   {
     "table": "outbox_events",
+    "policy": "outbox_events__worker_checkout_settle",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
     "policy": "outbox_events__worker_emit",
     "role": "outlet_worker",
     "cmd": "insert"
