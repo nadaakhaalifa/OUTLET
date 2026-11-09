@@ -198,6 +198,25 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       return { executed: true as const, result };
     });
 
+  /**
+   * Read-only gate for executors whose effect cannot share the claim transaction (it runs under another database role, e.g. the seller.kyc worker job):
+   * the request must be APPROVED, unexecuted, unexpired and match its approved hash, and the actor must hold the action's role. Nothing is claimed;
+   * the caller applies an idempotent effect and then calls executeApproval (claim + audit) with the same request id, so a failure between the two leaves the
+   * request APPROVED and a retry converges.
+   */
+  const verifyApproved = (actor: Principal, requestId: string): Promise<ApprovalRequestRow> =>
+    run(actor, async (tx, now) => {
+      const row = await loadApproval(tx, actor, requestId);
+      must(actor, row.action);
+      if (row.status !== "APPROVED") throw new AdminAccessError("APPROVAL_NOT_APPROVED", `request is ${row.status}`);
+      if (!Buffer.from(row.payload_hash).equals(approvalHash({ action: row.action, targetType: row.target_type, targetId: row.target_id, payload: row.payload }))) {
+        throw new AdminAccessError("APPROVAL_TAMPERED", "payload does not match approved hash");
+      }
+      if (row.executed_at !== null) throw new AdminAccessError("APPROVAL_NOT_APPROVED", "request was already executed");
+      if (now.getTime() >= toDate(row.expires_at).getTime()) throw new AdminAccessError("APPROVAL_EXPIRED", "approval too old to execute");
+      return mapApproval(row);
+    });
+
   // ---- role grants --------------------------------------------------------------------------------------
 
   /** Never applies directly: always files a dual-approval request (role.grant is ALWAYS_DUAL_APPROVAL). */
@@ -378,7 +397,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
 
   return {
     requireApproval, decideApproval, approve: (a: Principal, id: string, note?: string) => decideApproval(a, id, "approve", note),
-    reject: (a: Principal, id: string, note?: string) => decideApproval(a, id, "reject", note), executeApproval,
+    reject: (a: Principal, id: string, note?: string) => decideApproval(a, id, "reject", note), executeApproval, verifyApproved,
     grantRole, applyRoleGrant, revokeRole,
     requestElevation, activateElevation, approveElevation: (a: Principal, id: string) => decideElevation(a, id, "approve"), rejectElevation: (a: Principal, id: string) => decideElevation(a, id, "reject"),
     buildPrincipal, recordPiiView,

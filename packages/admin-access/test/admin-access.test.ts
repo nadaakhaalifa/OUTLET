@@ -171,6 +171,19 @@ describe("generic dual approval (requireApproval / executeApproval)", () => {
     expect(await svc.executeApproval(f3, res.request.id, () => Promise.resolve("again"))).toEqual({ executed: false, reason: "already_executed" });
   });
 
+  it("verifyApproved: read-only gate (no claim) for effects that run under another role; pending, wrong role and executed are refused", async () => {
+    const res = await svc.requireApproval(fin, { action: "kill_switch.engage", targetType: "kill_switch", targetId: "payments.bnpl.enabled", payload: { enabled: true } });
+    if (!res.required) throw new Error("money switch needs approval");
+    expect(await code(svc.verifyApproved(fin, res.request.id))).toBe("APPROVAL_NOT_APPROVED");
+    const f2 = admin(uuidv7(), ["finance"]); const f3 = admin(uuidv7(), ["finance"]);
+    await svc.approve(f2, res.request.id); await svc.approve(f3, res.request.id);
+    expect(await code(svc.verifyApproved(sup, res.request.id))).toBe("FORBIDDEN");
+    expect(await svc.verifyApproved(f3, res.request.id)).toMatchObject({ id: res.request.id, action: "kill_switch.engage", targetId: "payments.bnpl.enabled", executedAt: null });
+    expect(await svc.verifyApproved(f3, res.request.id)).toMatchObject({ executedAt: null });
+    await svc.executeApproval(f3, res.request.id, () => Promise.resolve("ok"));
+    expect(await code(svc.verifyApproved(f3, res.request.id))).toBe("APPROVAL_NOT_APPROVED");
+  });
+
   it("detects a tampered payload and refuses stale approvals", async () => {
     const res = await svc.requireApproval(d1, { action: "data.export", targetType: "export", targetId: "e1", payload: { scope: "orders" } });
     if (!res.required) throw new Error("data.export must always need approval");
