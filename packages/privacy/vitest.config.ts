@@ -10,6 +10,8 @@ export default defineConfig({
       { find: "@outlet/db", replacement: src("../db/src/index.ts") },
       { find: "@outlet/ids", replacement: src("../ids/src/index.ts") },
       { find: "@outlet/logger", replacement: src("../logger/src/index.ts") },
+      { find: "@outlet/audit-log", replacement: src("../audit-log/src/index.ts") },
+      { find: "@outlet/policy", replacement: src("../policy/src/index.ts") },
       { find: "@outlet/outbox", replacement: src("../outbox/src/index.ts") },
     ],
   },

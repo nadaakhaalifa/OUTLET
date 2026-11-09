@@ -23,7 +23,8 @@ export {
 export type { DeletionBlocker, DeletionBlockerKind } from "./errors.js";
 export type { PrivacyDeps } from "./deps.js";
 export {
-  BREACH_SEVERITIES, BREACH_TRANSITIONS, BreachRegister, OpenBreachSchema, PDPC_DEADLINE_HOURS, SUBJECTS_DEADLINE_DAYS, UpdateBreachSchema, breachDeadlines,
+  BREACH_MANAGE_ACTION, BREACH_OPEN_ACTION, BREACH_SEVERITIES, BREACH_TRANSITIONS, BreachRegister, OpenBreachSchema, PDPC_DEADLINE_HOURS, SUBJECTS_DEADLINE_DAYS, UpdateBreachSchema, breachDeadlines,
 } from "./breach.js";
 export type { BreachSeverity, BreachStatus, BreachView, OpenBreachInput, UpdateBreachInput } from "./breach.js";
-export { BreachCloseBlockedError, BreachNotFoundError, BreachSummaryPiiError } from "./errors.js";
+export { BreachCloseBlockedError, BreachForbiddenError, BreachNotFoundError, BreachSummaryPiiError, BreachTimestampError } from "./errors.js";
+export type { AuditAppendPort } from "./deps.js";

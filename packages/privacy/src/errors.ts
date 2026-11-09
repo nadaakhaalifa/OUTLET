@@ -66,3 +66,16 @@ export class BreachCloseBlockedError extends PrivacyError {
     super("breach_close_blocked", `breach cannot be closed yet: ${missing.join(", ")}`);
   }
 }
+
+export class BreachForbiddenError extends PrivacyError {
+  constructor(action: string) {
+    super("forbidden", `not allowed to perform ${action}`);
+  }
+}
+
+/** notifiedAt must satisfy detectedAt <= notifiedAt <= now (a notice can be neither backdated before detection nor postdated). */
+export class BreachTimestampError extends PrivacyError {
+  constructor(message: string) {
+    super("breach_timestamp_invalid", message);
+  }
+}
