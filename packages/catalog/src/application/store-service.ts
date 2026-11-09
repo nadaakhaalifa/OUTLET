@@ -7,7 +7,9 @@ import { CatalogError, notFound, validation } from "../domain/errors.js";
 import { categoryUsable } from "./data.js";
 import { asPublic, asStore, isUniqueViolation, makeEnv, requireAccess, toIso } from "./env.js";
 import type { CatalogDeps, Env } from "./env.js";
-import { projectStore } from "./projection.js";
+import { emit } from "./events.js";
+import { projectListing, projectStore } from "./projection.js";
+import { authorize } from "@outlet/policy";
 
 interface Row {
   id: string;
@@ -95,6 +97,51 @@ export class StoreService {
     return await asStore(this.env, actor, "store.read", storeId, async (tx) => {
       const row = (await tx.query<Row>(`SELECT ${COLS} FROM stores WHERE id = $1`, [storeId])).rows[0];
       if (row === undefined) throw notFound("store");
+      return dto(row);
+    });
+  }
+
+  /** Admin moderation read (store.read for ops / trust_safety): the store in any status, or not_found. Runs in the store's own context like every store read. */
+  async getForAdmin(admin: Principal, storeId: string): Promise<SellerStore> {
+    this.requireAdminAction(admin, "store.read");
+    return withDbContext(this.env.client, { kind: "store", marketId: this.env.marketId, storeId, ...(admin.userId === undefined ? {} : { userId: admin.userId }) }, async (tx) => {
+      const row = (await tx.query<Row>(`SELECT ${COLS} FROM stores WHERE id = $1`, [storeId])).rows[0];
+      if (row === undefined) throw notFound("store");
+      return dto(row);
+    });
+  }
+
+  private requireAdminAction(admin: Principal, action: "store.read" | "store.suspend" | "store.reinstate"): void {
+    if (admin.kind !== "admin" || admin.userId === undefined) throw new CatalogError("forbidden", "forbidden");
+    const d = authorize(admin, action, { type: "admin_console", marketId: this.env.marketId });
+    if (d.effect === "deny") throw new CatalogError(d.reason, d.reason === "not_found" ? "not found" : "forbidden");
+  }
+
+  /**
+   * Moderation status change (SellerOnboardingService.suspend/reinstate move the seller; this moves the store and the public read model).
+   * suspend: ACTIVE or VACATION -> SUSPENDED, which deletes the store and all its listings from the published tables (projectStore).
+   * reinstate: SUSPENDED -> ACTIVE (a vacation set before the suspension is not restored; there is no column for the prior status).
+   * Idempotent: a store already in the target status is returned unchanged (an approval executor may run twice after a partial failure).
+   * Listings keep their own status; reinstatement re-projects the store's published listings (suspension deleted them from the published tables).
+   */
+  async setModerationStatus(admin: Principal, storeId: string, to: "SUSPENDED" | "ACTIVE"): Promise<SellerStore> {
+    this.requireAdminAction(admin, to === "SUSPENDED" ? "store.suspend" : "store.reinstate");
+    return withDbContext(this.env.client, { kind: "store", marketId: this.env.marketId, storeId, ...(admin.userId === undefined ? {} : { userId: admin.userId }) }, async (tx) => {
+      const cur = (await tx.query<Row>(`SELECT ${COLS} FROM stores WHERE id = $1 FOR UPDATE`, [storeId])).rows[0];
+      if (cur === undefined) throw notFound("store");
+      if (cur.status === to) return dto(cur);
+      const from: readonly Row["status"][] = to === "SUSPENDED" ? ["ACTIVE", "VACATION"] : ["SUSPENDED"];
+      if (!from.includes(cur.status)) throw new CatalogError("conflict", `store is ${cur.status}`);
+      const r = await tx.query<Row>("UPDATE stores SET status = $2, version = version + 1, updated_at = $3 WHERE id = $1 RETURNING " + COLS, [storeId, to, this.env.now()]);
+      const row = r.rows[0];
+      if (row === undefined) throw notFound("store");
+      await projectStore(this.env, tx, storeId);
+      if (to === "ACTIVE") {
+        // Bounded: a store with more published listings than this is re-projected by the next listing write.
+        const ids = await tx.query<{ id: string }>("SELECT id FROM products WHERE store_id = $1 AND published_at IS NOT NULL ORDER BY id LIMIT 5000", [storeId]);
+        for (const p of ids.rows) await projectListing(this.env, tx, p.id);
+      }
+      await emit(this.env, tx, "store.status_changed", "store", storeId, { from: cur.status, to });
       return dto(row);
     });
   }

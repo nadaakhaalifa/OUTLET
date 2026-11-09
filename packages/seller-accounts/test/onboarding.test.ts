@@ -164,6 +164,46 @@ describe("happy path and decisions", () => {
   });
 });
 
+describe("reinstatement and store-keyed moderation", () => {
+  const storeOf = async (sellerId: string): Promise<string> => {
+    const id = randomUUID();
+    await w.raw.query(`INSERT INTO stores (id, seller_id, market_id, slug, display_name_ar, kind, ships_from_country, status) VALUES ($1,$2,'EG',$3,'م','local','EG','ACTIVE')`, [id, sellerId, `m-${id.slice(0, 8)}`]);
+    return id;
+  };
+
+  it("reinstate: SUSPENDED only, needs store.reinstate, seller active again, emits seller.reinstated", async () => {
+    const u = await w.user();
+    const { sellerId } = await w.approvedSeller(u);
+    await expect(w.onboarding.reinstate(admin(["ops"]), sellerId, { reasonCode: "appeal_upheld" })).rejects.toBeInstanceOf(KycTransitionError);
+    await w.onboarding.suspend(admin(["ops"]), sellerId, { reasonCode: "price_fraud" });
+    await expect(w.onboarding.reinstate(admin(["finance"]), sellerId, { reasonCode: "appeal_upheld" })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(w.onboarding.reinstate(admin(["ops"]), sellerId, { reasonCode: "" })).rejects.toBeDefined();
+    expect((await w.onboarding.reinstate(admin(["ops"]), sellerId, { reasonCode: "appeal_upheld" })).state).toBe("APPROVED");
+    expect((await w.raw.query<{ status: string }>("SELECT status FROM sellers WHERE id = $1", [sellerId])).rows[0]?.status).toBe("active");
+    expect((await w.raw.query("SELECT 1 FROM outbox_events WHERE event_type = 'seller.reinstated' AND aggregate_id = $1", [sellerId])).rows).toHaveLength(1);
+  });
+
+  it("suspendStore / reinstateStore look the seller up from the store id, return every store of the seller and are replay-safe", async () => {
+    const u = await w.user();
+    const { sellerId, storeId: a } = await w.approvedSeller(u);
+    const b = await storeOf(sellerId);
+    const first = await w.onboarding.suspendStore(admin(["trust_safety"]), a, { reasonCode: "price_fraud" });
+    expect(first.state).toBe("SUSPENDED");
+    expect([...first.storeIds].sort()).toEqual([a, b].sort());
+    const again = await w.onboarding.suspendStore(admin(["trust_safety"]), b, { reasonCode: "price_fraud" });
+    expect(again.state).toBe("SUSPENDED");
+    expect((await w.raw.query("SELECT 1 FROM outbox_events WHERE event_type = 'seller.suspended' AND aggregate_id = $1", [sellerId])).rows).toHaveLength(1);
+    expect((await w.onboarding.reinstateStore(admin(["trust_safety"]), a, { reasonCode: "appeal_upheld" })).state).toBe("APPROVED");
+    expect((await w.onboarding.reinstateStore(admin(["trust_safety"]), a, { reasonCode: "appeal_upheld" })).state).toBe("APPROVED");
+    expect((await w.raw.query("SELECT 1 FROM outbox_events WHERE event_type = 'seller.reinstated' AND aggregate_id = $1", [sellerId])).rows).toHaveLength(1);
+  });
+
+  it("an unknown store is not_found and a wrong role is forbidden", async () => {
+    await expect(w.onboarding.suspendStore(admin(["ops"]), randomUUID(), { reasonCode: "price_fraud" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(w.onboarding.suspendStore(admin(["support"]), randomUUID(), { reasonCode: "price_fraud" })).rejects.toMatchObject({ code: "forbidden" });
+  });
+});
+
 describe("isolation and data protection", () => {
   it("another user cannot see, edit or submit someone else's application (not_found)", async () => {
     const a = await w.user();
@@ -243,7 +283,7 @@ describe("isolation and data protection", () => {
 });
 
 describe("RLS audit", () => {
-  it("passes the ADR-0011 audit and adds exactly the reviewed exception policies (one auth read, seller.kyc worker policies)", async () => {
+  it("passes the ADR-0011 audit and adds exactly the reviewed exception policies (one auth read, seller.kyc and notifications.dispatch worker policies)", async () => {
     await expect(assertTenantTablesProtected(w.raw)).resolves.toBeDefined();
     const mine = (await listRlsExceptions(w.raw)).filter((e) => ["store_members", "stores", "kyc_cases", "kyc_documents", "kyc_decisions", "seller_signatories", "seller_bank_accounts", "seller_plan_assignments"].includes(e.table));
     expect(mine.map((e) => `${e.table}.${e.policy}:${e.role}:${e.cmd}`)).toEqual([
@@ -258,9 +298,14 @@ describe("RLS audit", () => {
       "seller_signatories.seller_signatories__worker_seller_kyc_read:outlet_worker:select",
       "seller_signatories.seller_signatories__worker_seller_kyc_update:outlet_worker:update",
       "store_members.store_members__auth_my_memberships:outlet_auth:select",
+      // notifications.dispatch fan-out to store members (migration 0034): read-only, market-pinned.
+      "store_members.store_members__worker_notifications_dispatch:outlet_worker:select",
       "store_members.store_members__worker_seller_kyc:outlet_worker:insert",
       "store_members.store_members__worker_seller_kyc_accept:outlet_worker:update",
       "store_members.store_members__worker_seller_kyc_read:outlet_worker:select",
+      "stores.stores__worker_notifications_dispatch:outlet_worker:select",
+      // reporting.rollup (migration 0035): market-pinned SELECT of status and names for the admin dashboard rollup.
+      "stores.stores__worker_reporting_rollup:outlet_worker:select",
       "stores.stores__worker_seller_kyc:outlet_worker:select",
     ]);
   });

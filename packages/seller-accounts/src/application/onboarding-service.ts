@@ -386,13 +386,50 @@ export class SellerOnboardingService {
 
   /** Suspends an approved seller (needs store.suspend). Catalog and payouts react to seller.suspended. */
   async suspend(admin: Principal, sellerId: string, raw: { readonly reasonCode: string; readonly note?: string }): Promise<KycCaseView> {
-    const adminId = this.requireAdmin(admin, "store.suspend");
+    return this.moderate(admin, "store.suspend", "suspend", "seller.suspended", { sellerId }, raw);
+  }
+
+  /** Lifts a suspension (needs store.reinstate): SUSPENDED -> APPROVED, seller status back to active. Emits seller.reinstated. */
+  async reinstate(admin: Principal, sellerId: string, raw: { readonly reasonCode: string; readonly note?: string }): Promise<KycCaseView> {
+    return this.moderate(admin, "store.reinstate", "reinstate", "seller.reinstated", { sellerId }, raw);
+  }
+
+  /**
+   * Suspend keyed the way the admin contract keys (a store id): the seller is looked up inside the same transaction, and every store of
+   * that seller is returned so the caller can hide them. Replay-safe (an approval executor may run twice after a partial failure):
+   * a seller already suspended is returned unchanged and no second event is emitted.
+   */
+  suspendStore(admin: Principal, storeId: string, raw: { readonly reasonCode: string; readonly note?: string }): Promise<KycCaseView & { readonly storeIds: readonly string[] }> {
+    return this.moderate(admin, "store.suspend", "suspend", "seller.suspended", { storeId }, raw);
+  }
+
+  /** Reinstate keyed by store id; replay-safe like suspendStore. */
+  reinstateStore(admin: Principal, storeId: string, raw: { readonly reasonCode: string; readonly note?: string }): Promise<KycCaseView & { readonly storeIds: readonly string[] }> {
+    return this.moderate(admin, "store.reinstate", "reinstate", "seller.reinstated", { storeId }, raw);
+  }
+
+  private async moderate(
+    admin: Principal, action: "store.suspend" | "store.reinstate", event: "suspend" | "reinstate", emitted: string,
+    key: { readonly sellerId: string } | { readonly storeId: string }, raw: { readonly reasonCode: string; readonly note?: string },
+  ): Promise<KycCaseView & { readonly storeIds: readonly string[] }> {
+    const adminId = this.requireAdmin(admin, action);
     const reason = SellerOnboardingService.reason(z.string().regex(REASON).parse(raw.reasonCode), raw.note, true);
+    const target: KycState = event === "suspend" ? "SUSPENDED" : "APPROVED";
+    const byStore = "storeId" in key;
     return kycJob(this.env, undefined, async (tx) => {
+      let sellerId: string;
+      if (byStore) {
+        const s = (await tx.query<{ seller_id: string }>("SELECT seller_id FROM stores WHERE id = $1 AND market_id = $2", [key.storeId, this.env.marketId])).rows[0];
+        if (s === undefined) throw notFound("store");
+        sellerId = s.seller_id;
+      } else sellerId = key.sellerId;
       const c = await this.lockCase(tx, "seller_id = $2", [sellerId]);
-      const to = await this.move(tx, c, "suspend", { kind: "admin", id: adminId }, reason);
-      await emit(this.env, tx, "seller.suspended", "seller", sellerId, { caseId: c.id, reasonCode: reason.code ?? "" });
-      return { ...view(c), state: to, version: c.version + 1 };
+      const stores = (await tx.query<{ id: string }>("SELECT id FROM stores WHERE seller_id = $1 AND market_id = $2 ORDER BY id LIMIT 200", [sellerId, this.env.marketId])).rows.map((r) => r.id);
+      // Only the store-keyed (approval executor) form is replay-safe; the seller-keyed use case keeps the strict state machine.
+      if (byStore && c.state === target) return { ...view(c), storeIds: stores };
+      const to = await this.move(tx, c, event, { kind: "admin", id: adminId }, reason);
+      await emit(this.env, tx, emitted, "seller", sellerId, { caseId: c.id, reasonCode: reason.code ?? "" });
+      return { ...view(c), state: to, version: c.version + 1, storeIds: stores };
     });
   }
 }

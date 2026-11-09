@@ -3,13 +3,13 @@ import { SellerAccountsError } from "./errors.js";
 export const KYC_STATES = ["DRAFT", "SUBMITTED", "AUTO_CHECKS", "NEEDS_INFO", "APPROVED", "REJECTED", "SUSPENDED"] as const;
 export type KycState = (typeof KYC_STATES)[number];
 
-export const KYC_EVENTS = ["submit", "start_checks", "approve", "request_info", "reject", "suspend"] as const;
+export const KYC_EVENTS = ["submit", "start_checks", "approve", "request_info", "reject", "suspend", "reinstate"] as const;
 export type KycEvent = (typeof KYC_EVENTS)[number];
 
 /**
  * Master prompt 19: DRAFT -> SUBMITTED -> AUTO_CHECKS -> (APPROVED | NEEDS_INFO | REJECTED), APPROVED -> SUSPENDED.
  * NEEDS_INFO -> SUBMITTED is the resubmission loop; an admin may also reject a case that is waiting for information.
- * REJECTED and SUSPENDED are terminal here (reinstatement is not specified; it needs its own decision).
+ * REJECTED is terminal. SUSPENDED -> APPROVED is the reinstatement (a human decision under store.reinstate, dual approval at the admin layer).
  */
 const TABLE: Readonly<Record<KycState, Readonly<Partial<Record<KycEvent, KycState>>>>> = {
   DRAFT: { submit: "SUBMITTED" },
@@ -18,7 +18,7 @@ const TABLE: Readonly<Record<KycState, Readonly<Partial<Record<KycEvent, KycStat
   NEEDS_INFO: { submit: "SUBMITTED", reject: "REJECTED" },
   APPROVED: { suspend: "SUSPENDED" },
   REJECTED: {},
-  SUSPENDED: {},
+  SUSPENDED: { reinstate: "APPROVED" },
 };
 
 export class KycTransitionError extends SellerAccountsError {

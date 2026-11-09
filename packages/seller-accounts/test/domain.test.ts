@@ -12,10 +12,11 @@ describe("KYC state machine", () => {
     expect(nextKycState("AUTO_CHECKS", "reject")).toBe("REJECTED");
     expect(nextKycState("NEEDS_INFO", "submit")).toBe("SUBMITTED");
     expect(nextKycState("APPROVED", "suspend")).toBe("SUSPENDED");
+    expect(nextKycState("SUSPENDED", "reinstate")).toBe("APPROVED");
   });
 
   it("rejects every transition not in the table with a typed error", () => {
-    const allowed = new Set(["DRAFT:submit", "SUBMITTED:start_checks", "AUTO_CHECKS:approve", "AUTO_CHECKS:request_info", "AUTO_CHECKS:reject", "NEEDS_INFO:submit", "NEEDS_INFO:reject", "APPROVED:suspend"]);
+    const allowed = new Set(["DRAFT:submit", "SUBMITTED:start_checks", "AUTO_CHECKS:approve", "AUTO_CHECKS:request_info", "AUTO_CHECKS:reject", "NEEDS_INFO:submit", "NEEDS_INFO:reject", "APPROVED:suspend", "SUSPENDED:reinstate"]);
     for (const s of KYC_STATES) {
       for (const e of KYC_EVENTS) {
         if (allowed.has(`${s}:${e}`)) continue;
@@ -27,10 +28,10 @@ describe("KYC state machine", () => {
     expect(() => nextKycState("REJECTED", "submit")).toThrow(KycTransitionError);
   });
 
-  it("never leaves a dead end except REJECTED and SUSPENDED", () => {
+  it("never leaves a dead end except REJECTED", () => {
     for (const s of KYC_STATES) {
       const out = KYC_EVENTS.filter((e) => canKyc(s, e));
-      expect(out.length === 0).toBe(s === "REJECTED" || s === "SUSPENDED");
+      expect(out.length === 0).toBe(s === "REJECTED");
     }
   });
 });

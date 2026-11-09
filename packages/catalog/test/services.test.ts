@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertTenantTablesProtected, withDbContext } from "@outlet/db";
 import { OutboxWriter } from "@outlet/outbox";
+import type { Principal } from "@outlet/policy";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CatalogError, DefectPassport, ProductCardPage, ProductDetail, SellerProduct, StoreDetail } from "../src/index.js";
 import { DefectService, ListingService } from "../src/index.js";
@@ -139,6 +140,27 @@ describe("stores", () => {
     expect(await errorOf(w.stores.update(A(), w.seed.storeA, cur.version, { tagline_ar: "x" }))).toMatchObject({ code: "conflict", details: [`current=${String(next.version)}`, `expected=${String(cur.version)}`] });
     expect(await errorOf(w.stores.update(A(), w.seed.storeA, next.version, { primary_category_id: randomUUID() }))).toMatchObject({ code: "validation" });
     expect(await errorOf(w.stores.getStoreBySlug("missing"))).toMatchObject({ code: "not_found" });
+  });
+
+  it("admin moderation: suspend hides the store and its listings, reinstate brings them back, both are idempotent, audited by event", async () => {
+    const admin = (roles: string[]): Principal => ({ kind: "admin", userId: randomUUID(), marketId: "EG", roles, scopes: [] });
+    await projectStoreViaPatch(w, w.seed.storeB);
+    expect(await errorOf(w.stores.setModerationStatus(admin(["finance"]), w.seed.storeB, "SUSPENDED"))).toMatchObject({ code: "forbidden" });
+    expect(await errorOf(w.stores.setModerationStatus(A(), w.seed.storeB, "SUSPENDED"))).toMatchObject({ code: "forbidden" });
+    expect(await errorOf(w.stores.setModerationStatus(admin(["ops"]), randomUUID(), "SUSPENDED"))).toMatchObject({ code: "not_found" });
+    expect((await w.stores.getForAdmin(admin(["ops"]), w.seed.storeB)).status).toBe("ACTIVE");
+    const off = await w.stores.setModerationStatus(admin(["trust_safety"]), w.seed.storeB, "SUSPENDED");
+    expect(off.status).toBe("SUSPENDED");
+    expect(await errorOf(w.stores.getStoreBySlug("store-b"))).toMatchObject({ code: "not_found" });
+    expect((await w.raw.query("SELECT 1 FROM catalog_public_listings WHERE store_ref = $1", [w.seed.storeB])).rows).toHaveLength(0);
+    expect((await w.stores.setModerationStatus(admin(["ops"]), w.seed.storeB, "SUSPENDED")).version).toBe(off.version);
+    const on = await w.stores.setModerationStatus(admin(["ops"]), w.seed.storeB, "ACTIVE");
+    expect(on.status).toBe("ACTIVE");
+    expect((await w.stores.getStoreBySlug("store-b")).slug).toBe("store-b");
+    expect((await w.raw.query("SELECT 1 FROM outbox_events WHERE event_type = 'store.status_changed' AND aggregate_id = $1", [w.seed.storeB])).rows).toHaveLength(2);
+    await w.raw.query("UPDATE stores SET status = 'DRAFT' WHERE id = $1", [w.seed.storeB]);
+    expect(await errorOf(w.stores.setModerationStatus(admin(["ops"]), w.seed.storeB, "SUSPENDED"))).toMatchObject({ code: "conflict" });
+    await w.raw.query("UPDATE stores SET status = 'ACTIVE' WHERE id = $1", [w.seed.storeB]);
   });
 
   it("hides a store from the public model when it is no longer active", async () => {
