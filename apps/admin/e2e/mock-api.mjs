@@ -25,6 +25,64 @@ const state = {
   ],
 };
 
+const ATTN = "a7700000-0000-4000-8000-000000000001";
+const attention = [
+  { id: ATTN, kind: "refund.attention", ref_type: "refund", ref_id: "r-e2e-1", status: "OPEN", created_at: hoursFromNow(-3) },
+  { id: "a7700000-0000-4000-8000-000000000002", kind: "shipment.cancel_attention", ref_type: "shipment", ref_id: "s-e2e-2", status: "ACKED", created_at: hoursFromNow(-30), acked_at: hoursFromNow(-29) },
+];
+// E2E-only dashboard numbers: invented for Playwright, never real. The `/__control` roles decide which tiles are forbidden (finance tiles need the finance role).
+const FINANCE_ONLY = new Set(["gmv_today", "refunds_waiting", "refunds_overdue", "payouts", "recon_unmatched", "cod_unremitted", "ledger_integrity", "top_stores"]);
+const dashboard = (range) => {
+  const n = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+  const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const days = (count) => Array.from({ length: count }, (_, i) => day(i - count + 1));
+  const egp = (minor) => ({ amount_minor: minor, currency: "EGP" });
+  const ok = (key, data) => ({ key, status: "ok", as_of: new Date().toISOString(), data });
+  const isFinance = control.roles.includes("finance");
+  const gate = (key, tile) => (FINANCE_ONLY.has(key) && !isFinance ? { key, status: "forbidden" } : tile);
+  const t = {
+    orders_today: ok("orders_today", { count: 42, series_14d: days(14).map((d, i) => ({ day: d, value: i + 1 })) }),
+    gmv_today: gate("gmv_today", ok("gmv_today", { gmv: egp("12345600"), refunded: egp("50000"), gmv_7d: egp("98765400") })),
+    sales_series: ok("sales_series", { orders: days(n).map((d, i) => ({ day: d, value: i + 1 })), gmv: isFinance ? days(n).map((d, i) => ({ day: d, value: egp(String((i + 1) * 100000)) })) : null, total_orders: 777, total_gmv: isFinance ? egp("55500000") : null }),
+    orders_by_step: ok("orders_by_step", { paid_awaiting_accept: 5, accepted: 4, packed: 3, in_transit: 2, delivery_failed: 1 }),
+    top_stores: gate("top_stores", ok("top_stores", { items: [{ store_id: STORE, name_ar: "متجر النيل", name_en: "Nile Store", orders: 12, gmv: egp("900000") }], other: { stores: 3, orders: 7, gmv: egp("300000") } })),
+    verified_discount_share: ok("verified_discount_share", { verified: 30, live_skus: 120 }),
+    seller_sla_breaches: ok("seller_sla_breaches", { late_accept: 2, late_dispatch: 1, oldest_at: hoursFromNow(-20) }),
+    cod_awaiting_confirmation: ok("cod_awaiting_confirmation", { count: 6, oldest_at: null }),
+    returns_pipeline: ok("returns_pipeline", { requested: 3, in_transit: 2, awaiting_inspection: 1, inspection_overdue: 0 }),
+    disputes_open: { key: "disputes_open", status: "unavailable", reason: "read_failed" },
+    refunds_waiting: gate("refunds_waiting", ok("refunds_waiting", { count: 8, amount: egp("450000"), manual_review: 2, failed: 1, oldest_at: null })),
+    refunds_overdue: gate("refunds_overdue", ok("refunds_overdue", { count: 0, amount: egp("0"), oldest_due_at: null })),
+    payouts: gate("payouts", ok("payouts", { due_count: 9, due_net: egp("7000000"), on_hold_count: 0, on_hold_net: egp("0"), failed: 0, open_holds: 0 })),
+    recon_unmatched: gate("recon_unmatched", ok("recon_unmatched", { open: 2, escalated: 0, aged_over_3d: 0, oldest_at: null })),
+    cod_unremitted: gate("cod_unremitted", { key: "cod_unremitted", status: "unavailable", reason: "not_connected" }),
+    ledger_integrity: gate("ledger_integrity", { key: "ledger_integrity", status: "unavailable", reason: "not_connected" }),
+    kyc_queue: ok("kyc_queue", { submitted: state.kycStatus === "SUBMITTED" ? 1 : 0, needs_info: 0, oldest_at: hoursFromNow(-30) }),
+    stores_moderation: ok("stores_moderation", { pending_review: 0, suspended: 1 }),
+    price_enforcement: ok("price_enforcement", { active: 1, pending_review: 0, suspensions_awaiting_review: 0 }),
+    listings_by_status: ok("listings_by_status", { published: 100, in_review: 5, paused: 3, blocked: 1 }),
+    breaches_open: ok("breaches_open", { open: 0, next_pdpc_deadline_at: null, next_subjects_deadline_at: null }),
+    dsar_queue: ok("dsar_queue", { open: 2, due_7d: 1, overdue: 1 }),
+    attention_open: ok("attention_open", { open: attention.filter((a) => a.status === "OPEN").length, acked: attention.filter((a) => a.status === "ACKED").length, by_kind: { "refund.attention": 1 }, oldest_at: hoursFromNow(-30) }),
+    approvals_pending: ok("approvals_pending", { for_me: 0, soonest_expires_at: null }),
+    elevations_active: ok("elevations_active", { active: 0, pending: 0, scope: "market" }),
+    kill_switches: ok("kill_switches", { engaged_money: [], engaged_ui: [] }),
+  };
+  const pick = (keys) => Object.fromEntries(keys.map((k) => [k, t[k]]));
+  return {
+    market_id: "eg", range, timezone: "Africa/Cairo", today: day(0), generated_at: new Date().toISOString(),
+    sections: {
+      today: pick(["orders_today", "gmv_today"]),
+      sales: pick(["sales_series", "orders_by_step", "top_stores", "verified_discount_share"]),
+      orders: pick(["seller_sla_breaches", "cod_awaiting_confirmation", "returns_pipeline", "disputes_open"]),
+      money: pick(["refunds_waiting", "refunds_overdue", "payouts", "recon_unmatched", "cod_unremitted", "ledger_integrity"]),
+      trust: pick(["kyc_queue", "stores_moderation", "price_enforcement", "listings_by_status"]),
+      privacy: pick(["breaches_open", "dsar_queue"]),
+      platform: pick(["attention_open", "approvals_pending", "elevations_active", "kill_switches"]),
+    },
+  };
+};
+
 const send = (res, status, body, headers = {}) => {
   res.writeHead(status, { "content-type": status >= 400 ? "application/problem+json" : "application/json", ...headers });
   res.end(JSON.stringify(body));
@@ -70,6 +128,23 @@ createServer(async (req, res) => {
   if (req.headers.authorization !== `Bearer ${TOKEN}`) return problem(res, 401, "unauthenticated");
   if (rest === "auth/logout") { await readBody(req); return send(res, 204, {}); }
 
+  if (req.method === "GET" && rest === "dashboard") {
+    const range = url.searchParams.get("range") ?? "30d";
+    if (!["7d", "30d", "90d"].includes(range)) return problem(res, 400, "validation-failed");
+    return send(res, 200, dashboard(range));
+  }
+  if (req.method === "GET" && rest === "attention") return send(res, 200, page(attention.filter((a) => a.status !== "RESOLVED")));
+  const am = /^attention\/([0-9a-f-]{36})\/(ack|resolve)$/.exec(rest);
+  if (req.method === "POST" && am) {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    const item = attention.find((a) => a.id === am[1]);
+    if (!item) return problem(res, 404, "not-found");
+    if (!req.headers["idempotency-key"]) return problem(res, 400, "idempotency-key-required");
+    log.push({ method: "POST", path: `/attention-${am[2]}`, body, key: req.headers["idempotency-key"] });
+    if (item.status === "RESOLVED") return problem(res, 409, "conflict");
+    if (am[2] === "ack") { item.status = "ACKED"; item.acked_at = new Date().toISOString(); } else { item.status = "RESOLVED"; item.resolution_code = body.resolution_code; }
+    return send(res, 200, item);
+  }
   if (req.method === "GET" && rest === "kyc-cases") return send(res, 200, page([{ id: CASE, seller_id: "5e11e000-0000-4000-8000-000000000001", legal_name_ar: "متجر النيل للأزياء", status: state.kycStatus, submitted_at: hoursFromNow(-30) }].filter((c) => !url.searchParams.get("status") || c.status === url.searchParams.get("status"))));
   if (req.method === "GET" && rest === `kyc-cases/${CASE}`) {
     const reason = req.headers["x-reason-code"];

@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => { throw new Error(`REDIRECT:${to}`); },
   notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
   useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/eg-ar",
 }));
 
 import { adminGet, currentProfile } from "../src/server/admin-get";

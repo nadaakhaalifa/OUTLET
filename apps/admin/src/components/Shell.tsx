@@ -1,27 +1,14 @@
-import Link from "next/link";
 import type { Locale, MessageKey, Translator } from "@outlet/i18n";
 import type { Profile, SectionId } from "../server/session";
 import { LogoutButton } from "./LogoutButton";
+import { NavList } from "./shell/NavList";
+import { visibleGroups, type NavId } from "./shell/navigation";
 
-const ITEMS: readonly { readonly id: SectionId; readonly key: MessageKey; readonly href: string }[] = [
-  { id: "kyc", key: "admin.nav.kyc", href: "/kyc" },
-  { id: "price", key: "admin.nav.price", href: "/price-integrity" },
-  { id: "recon", key: "admin.nav.recon", href: "/reconciliation" },
-  { id: "dpo", key: "admin.nav.dpo", href: "/privacy" },
-  { id: "audit", key: "admin.nav.audit", href: "/audit" },
-  { id: "access", key: "admin.nav.access", href: "/access" },
-];
-
-/** Sidebar: only the sections the live roles allow (display filter; the API enforces authorization). */
-export function Sidebar({ t, base, sections, current }: { t: Translator; base: string; sections: readonly SectionId[]; current: string }) {
+/** Navigation only for the sections the live roles allow (display filter; the API enforces authorization). */
+export function Sidebar({ t, base, sections, current }: { t: Translator; base: string; sections: readonly SectionId[]; current: NavId }) {
   return (
     <nav className="sidebar" aria-label={t("admin.nav.label")}>
-      <ul>
-        <li><Link className="navItem" href={base} {...(current === "overview" ? { "aria-current": "page" as const } : {})}>{t("admin.nav.overview")}</Link></li>
-        {ITEMS.filter((i) => sections.includes(i.id)).map((i) => (
-          <li key={i.id}><Link className="navItem" href={`${base}${i.href}`} {...(current === i.id ? { "aria-current": "page" as const } : {})}>{t(i.key)}</Link></li>
-        ))}
-      </ul>
+      <NavList t={t} base={base} groups={visibleGroups(sections)} current={current} />
     </nav>
   );
 }

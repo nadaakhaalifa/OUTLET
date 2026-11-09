@@ -65,6 +65,7 @@ export function ElevationPanel({ locale, market, requests, canDecide, selfId }: 
         {requests.length === 0 ? <p className="empty">{t("admin.access.pending.none")}</p> : (
           <>
             {canDecide ? <label className="field"><span>{t("admin.access.decision.reason")}</span><input value={decisionReason} onChange={(e) => { setDecisionReason(e.target.value); }} maxLength={500} /></label> : null}
+            <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="el-list">
             <table className="table">
               <thead><tr><th scope="col">{t("admin.access.col.action")}</th><th scope="col">{t("admin.access.col.target")}</th><th scope="col">{t("admin.access.col.status")}</th><th scope="col">{t("admin.access.col.expires")}</th><th scope="col">{t("admin.access.col.decide")}</th></tr></thead>
               <tbody>
@@ -81,6 +82,7 @@ export function ElevationPanel({ locale, market, requests, canDecide, selfId }: 
                 ))}
               </tbody>
             </table>
+            </div>
             {rowResult !== null ? <p className={rowResult.ok ? "success" : "error"} role={rowResult.ok ? "status" : "alert"}>{t(rowResult.key)}</p> : null}
           </>
         )}

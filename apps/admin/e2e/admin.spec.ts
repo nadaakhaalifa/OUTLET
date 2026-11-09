@@ -19,7 +19,9 @@ const signIn = async (page: Page) => {
   await stubPasskey(page);
   await page.goto("/eg-ar/login");
   await page.getByRole("button", { name: t("admin.login.passkey") }).click();
-  await expect(page.getByRole("heading", { level: 1, name: t("admin.title") })).toBeVisible();
+  // Home opens with a time-of-day greeting as its h1, so wait for the console (any level-1 heading, off the login route).
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 };
 
 test.beforeEach(async () => {

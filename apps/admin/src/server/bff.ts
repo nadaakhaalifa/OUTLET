@@ -16,6 +16,9 @@ interface Route {
 const routes: readonly Route[] = [
   { pattern: /^auth\/passkey\/(options|verify)$/, methods: ["POST"], anonymous: true },
   { pattern: /^auth\/logout$/, methods: ["POST"] },
+  { pattern: /^dashboard$/, methods: ["GET"] },
+  { pattern: /^attention$/, methods: ["GET"] },
+  { pattern: new RegExp(`^attention/${ID}/(ack|resolve)$`), methods: ["POST"] },
   { pattern: /^kyc-cases$/, methods: ["GET"] },
   { pattern: new RegExp(`^kyc-cases/${ID}$`), methods: ["GET"] },
   { pattern: new RegExp(`^kyc-cases/${ID}/decision$`), methods: ["POST"] },

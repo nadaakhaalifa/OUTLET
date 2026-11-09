@@ -20,7 +20,8 @@ export function AuditView({ t, locale, market, entries, filters }: { t: Translat
       </form>
       <VerifyChain locale={locale} market={market} />
       {entries.length === 0 ? <p className="empty">{t("admin.audit.empty")}</p> : (
-        <table className="table">
+        <div className="tableWrap" tabIndex={0} role="group" aria-label={t("admin.nav.audit")}>
+<table className="table">
           <thead><tr><th scope="col">{t("admin.audit.col.when")}</th><th scope="col">{t("admin.audit.col.actor")}</th><th scope="col">{t("admin.audit.col.action")}</th><th scope="col">{t("admin.audit.col.target")}</th><th scope="col">{t("admin.audit.col.reason")}</th><th scope="col">{t("admin.audit.col.request")}</th></tr></thead>
           <tbody>
             {entries.map((e) => (
@@ -31,6 +32,7 @@ export function AuditView({ t, locale, market, entries, filters }: { t: Translat
             ))}
           </tbody>
         </table>
+</div>
       )}
     </div>
   );

@@ -23,7 +23,8 @@ export function KycQueue({ t, locale, base, items, status }: { t: Translator; lo
       {items.length === 0 ? (
         <p className="empty">{t("admin.kyc.empty")}</p>
       ) : (
-        <table className="table">
+        <div className="tableWrap" tabIndex={0} role="group" aria-label={t("admin.nav.kyc")}>
+<table className="table">
           <thead><tr><th scope="col">{t("admin.kyc.col.seller")}</th><th scope="col">{t("admin.kyc.col.status")}</th><th scope="col">{t("admin.kyc.col.submitted")}</th><th scope="col"><span className="srOnly">{t("admin.kyc.open")}</span></th></tr></thead>
           <tbody>
             {items.map((k) => (
@@ -36,6 +37,7 @@ export function KycQueue({ t, locale, base, items, status }: { t: Translator; lo
             ))}
           </tbody>
         </table>
+</div>
       )}
     </>
   );

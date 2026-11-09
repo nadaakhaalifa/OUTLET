@@ -18,6 +18,7 @@ export function PriceView({ t, locale, actions, trust, findings }: { t: Translat
       <section aria-labelledby="pi-actions" className="card">
         <h2 id="pi-actions" className="panelTitle">{t("admin.price.actions.title")}</h2>
         {actions.length === 0 ? <p className="empty">{t("admin.price.actions.empty")}</p> : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="pi-actions">
           <table className="table">
             <thead><tr>
               <th scope="col">{t("admin.price.col.action")}</th><th scope="col">{t("admin.price.col.store")}</th><th scope="col">{t("admin.price.col.starts")}</th>
@@ -33,12 +34,14 @@ export function PriceView({ t, locale, actions, trust, findings }: { t: Translat
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
       <section aria-labelledby="pi-trust" className="card">
         <h2 id="pi-trust" className="panelTitle">{t("admin.price.trust.title")}</h2>
         {trust.length === 0 ? <p className="empty">{t("admin.price.trust.empty")}</p> : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="pi-trust">
           <table className="table">
             <thead><tr><th scope="col">{t("admin.price.col.store")}</th><th scope="col">{t("admin.price.trust.score")}</th><th scope="col">{t("admin.price.trust.violations")}</th><th scope="col">{t("admin.price.trust.computed")}</th></tr></thead>
             <tbody>
@@ -47,6 +50,7 @@ export function PriceView({ t, locale, actions, trust, findings }: { t: Translat
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
@@ -65,6 +69,7 @@ export function PriceView({ t, locale, actions, trust, findings }: { t: Translat
 
 function FindingsTable({ t, locale, rows }: { t: Translator; locale: Locale; rows: readonly Finding[] }) {
   return (
+    <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="pi-findings">
     <table className="table">
       <thead><tr><th scope="col">{t("admin.price.col.rule")}</th><th scope="col">{t("admin.price.col.severity")}</th><th scope="col">{t("admin.price.col.status")}</th><th scope="col">{t("admin.price.col.store")}</th><th scope="col">{t("admin.price.col.detected")}</th></tr></thead>
       <tbody>
@@ -76,5 +81,6 @@ function FindingsTable({ t, locale, rows }: { t: Translator; locale: Locale; row
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

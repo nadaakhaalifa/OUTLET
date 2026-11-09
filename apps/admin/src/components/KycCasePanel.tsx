@@ -85,6 +85,7 @@ export function KycCasePanel({ locale, market, data, canDecide }: { locale: Loca
         {data.checks.length === 0 ? (
           <p className="empty">{t("admin.kyc.case.noChecks")}</p>
         ) : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="kyc-checks">
           <table className="table">
             <thead><tr><th scope="col">{t("admin.kyc.check.type")}</th><th scope="col">{t("admin.kyc.check.result")}</th><th scope="col">{t("admin.kyc.check.provider")}</th><th scope="col">{t("admin.kyc.check.when")}</th></tr></thead>
             <tbody>
@@ -93,6 +94,7 @@ export function KycCasePanel({ locale, market, data, canDecide }: { locale: Loca
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

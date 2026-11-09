@@ -10,6 +10,8 @@ export interface CallInit {
   readonly method?: "GET" | "POST";
   readonly body?: unknown;
   readonly reason?: string;
+  /** Client-generated key for a state-changing call (UUIDv7). Defaults to a random UUID. */
+  readonly idempotencyKey?: string;
 }
 
 export async function adminCall(market: string, path: string, init: CallInit = {}): Promise<CallResult> {
@@ -17,7 +19,7 @@ export async function adminCall(market: string, path: string, init: CallInit = {
   const headers: Record<string, string> = { accept: "application/json" };
   if (method === "POST") {
     headers["content-type"] = "application/json";
-    headers["idempotency-key"] = crypto.randomUUID();
+    headers["idempotency-key"] = init.idempotencyKey ?? crypto.randomUUID();
   }
   if (init.reason !== undefined) headers["x-reason-code"] = init.reason;
   try {

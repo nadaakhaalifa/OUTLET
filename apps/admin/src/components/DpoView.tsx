@@ -25,6 +25,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
       <section aria-labelledby="dpo-req" className="card">
         <h2 id="dpo-req" className="panelTitle">{t("admin.dpo.requests.title")}</h2>
         {requests.length === 0 ? <p className="empty">{t("admin.dpo.requests.empty")}</p> : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="dpo-req">
           <table className="table">
             <thead><tr><th scope="col">{t("admin.dpo.col.subject")}</th><th scope="col">{t("admin.dpo.col.kind")}</th><th scope="col">{t("admin.dpo.col.status")}</th><th scope="col">{t("admin.dpo.col.due")}</th><th scope="col">{t("admin.dpo.col.blocked")}</th></tr></thead>
             <tbody>
@@ -44,6 +45,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
               })}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
@@ -53,6 +55,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
         {consent === null || consent.purposes.length === 0 ? <p className="empty">{t("admin.dpo.consent.empty")}</p> : (
           <>
             <p className="hint">{t("admin.dpo.consent.asOf", { when: fmtDateTime(consent.as_of, locale) })}</p>
+            <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="dpo-consent">
             <table className="table">
               <thead><tr><th scope="col">{t("admin.dpo.consent.purpose")}</th><th scope="col">{t("admin.dpo.consent.version")}</th><th scope="col">{t("admin.dpo.consent.granted")}</th><th scope="col">{t("admin.dpo.consent.withdrawn")}</th></tr></thead>
               <tbody>
@@ -61,6 +64,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
       </section>
@@ -68,6 +72,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
       <section aria-labelledby="dpo-breach" className="card">
         <h2 id="dpo-breach" className="panelTitle">{t("admin.dpo.breach.title")}</h2>
         {breaches.length === 0 ? <p className="empty">{t("admin.dpo.breach.empty")}</p> : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="dpo-breach">
           <table className="table">
             <thead><tr><th scope="col">{t("admin.dpo.breach.col.detected")}</th><th scope="col">{t("admin.dpo.breach.col.severity")}</th><th scope="col">{t("admin.dpo.breach.col.status")}</th><th scope="col">{t("admin.dpo.breach.col.deadline")}</th><th scope="col">{t("admin.dpo.breach.col.summary")}</th></tr></thead>
             <tbody>
@@ -79,6 +84,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
               ))}
             </tbody>
           </table>
+          </div>
         )}
         <BreachStubForm locale={locale} />
       </section>
@@ -86,6 +92,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
       <section aria-labelledby="dpo-transfers" className="card">
         <h2 id="dpo-transfers" className="panelTitle">{t("admin.dpo.transfers.title")}</h2>
         {transfers.length === 0 ? <p className="empty">{t("admin.dpo.transfers.empty")}</p> : (
+          <div className="tableWrap" tabIndex={0} role="group" aria-labelledby="dpo-transfers">
           <table className="table">
             <thead><tr><th scope="col">{t("admin.dpo.transfers.processor")}</th><th scope="col">{t("admin.dpo.transfers.country")}</th><th scope="col">{t("admin.dpo.transfers.mechanism")}</th><th scope="col">{t("admin.dpo.transfers.status")}</th><th scope="col">{t("admin.dpo.transfers.until")}</th></tr></thead>
             <tbody>
@@ -94,6 +101,7 @@ export function DpoView({ t, locale, now, requests, consent, breaches, transfers
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </div>
