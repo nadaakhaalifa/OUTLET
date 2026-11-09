@@ -167,6 +167,9 @@ importers:
       '@outlet/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@outlet/ops-attention':
+        specifier: workspace:*
+        version: link:../../packages/ops-attention
       '@outlet/orders':
         specifier: workspace:*
         version: link:../../packages/orders
@@ -179,6 +182,9 @@ importers:
       '@outlet/pricing-integrity':
         specifier: workspace:*
         version: link:../../packages/pricing-integrity
+      '@outlet/reporting':
+        specifier: workspace:*
+        version: link:../../packages/reporting
       '@outlet/returns':
         specifier: workspace:*
         version: link:../../packages/returns
@@ -681,6 +687,24 @@ importers:
         specifier: ^1.44.0
         version: 1.44.0
 
+  packages/ops-attention:
+    dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
+      '@outlet/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@outlet/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../outbox
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   packages/orders: {}
 
   packages/outbox:
@@ -801,6 +825,27 @@ importers:
       '@outlet/tax':
         specifier: workspace:*
         version: link:../tax
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
+  packages/reporting:
+    dependencies:
+      '@outlet/db':
+        specifier: workspace:*
+        version: link:../db
+      '@outlet/ids':
+        specifier: workspace:*
+        version: link:../ids
+      '@outlet/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@outlet/markets-config':
+        specifier: workspace:*
+        version: link:../markets-config
+      '@outlet/outbox':
+        specifier: workspace:*
+        version: link:../outbox
       zod:
         specifier: ^4.6.7
         version: 4.6.7
