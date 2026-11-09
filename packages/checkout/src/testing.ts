@@ -4,6 +4,7 @@
  */
 import { createCipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { money } from "@outlet/money";
+import { ShippingError } from "@outlet/shipping";
 import { z } from "zod";
 import type { Currency, Money } from "@outlet/money";
 import { PAYMENT_METHODS } from "./ports.js";
@@ -140,8 +141,10 @@ export class FakeAddress implements AddressPort {
   open = true;
   /** landmark + pin present (AddressService.codEligible) for every ref */
   codEligible = true;
+  /** bump to simulate an edited address */
+  version = "v1";
   resolve(userId: string, addressRef: string): ReturnType<AddressPort["resolve"]> {
-    if (this.open || this.owners.get(addressRef) === userId) return Promise.resolve({ geoAreaId: "00000000-0000-4000-8000-0000000000aa", countryCode: "EG", codEligible: this.codEligible });
+    if (this.open || this.owners.get(addressRef) === userId) return Promise.resolve({ geoAreaId: "00000000-0000-4000-8000-0000000000aa", countryCode: "EG", codEligible: this.codEligible, version: this.version });
     return Promise.resolve(null);
   }
 }
@@ -196,6 +199,7 @@ const TOKEN_PAYLOAD = z.strictObject({
   userId: z.string().min(1),
   marketId: z.string().min(1),
   quoteHash: z.string().min(1),
+  addressVersion: z.string().min(1).optional(),
   method: z.enum(PAYMENT_METHODS),
   expiresAt: z.iso.datetime(),
 });
@@ -233,8 +237,8 @@ export class HmacQuoteTokens implements QuoteTokenPort {
     if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
     const parsed = TOKEN_PAYLOAD.safeParse(raw);
     if (!parsed.success) return null;
-    const { jti, userId, marketId, quoteHash, method, expiresAt } = parsed.data;
-    return { jti, userId, marketId, quoteHash, method, expiresAt: new Date(expiresAt) };
+    const { jti, userId, marketId, quoteHash, method, expiresAt, addressVersion } = parsed.data;
+    return { jti, userId, marketId, quoteHash, method, expiresAt: new Date(expiresAt), ...(addressVersion === undefined ? {} : { addressVersion }) };
   }
 }
 
@@ -254,6 +258,12 @@ export class FakeCipher implements RawBodyCipher {
 export class FakeAddressSnapshots implements AddressSnapshotPort {
   readonly calls: { readonly userId: string; readonly sellerOrderId: string; readonly addressId: string }[] = [];
   failWith: Error | null = null;
+  /** addresses that no longer exist: snapshotForOrderIn throws not_found for them (rolls the order back) */
+  readonly missing = new Set<string>();
+  snapshotForOrderIn(_tx: unknown, userId: string, sellerOrderId: string, addressId: string): Promise<void> {
+    if (this.missing.has(addressId)) return Promise.reject(new ShippingError("not_found", "not_found"));
+    return this.snapshotForOrder(userId, sellerOrderId, addressId);
+  }
   snapshotForOrder(userId: string, sellerOrderId: string, addressId: string): Promise<void> {
     if (this.failWith !== null) return Promise.reject(this.failWith);
     this.calls.push({ userId, sellerOrderId, addressId });

@@ -1,6 +1,7 @@
 import type { KillSwitchName } from "@outlet/flags";
 import { money } from "@outlet/money";
 import type { Currency, Money } from "@outlet/money";
+import type { VoucherSettlementPort } from "./cancellation.js";
 import { PromotionEvaluator, VoucherService, displayLabels } from "@outlet/promotions";
 import type { AppliedPromotion, EvalBag, EvalContext, PromotionsDeps, QuoteEvaluation } from "@outlet/promotions";
 import type { QuoteDiscounts, QuoteLineInput } from "../domain/types.js";
@@ -11,7 +12,7 @@ import type { Env } from "./env.js";
 export const PROMOTIONS_KILL_SWITCH = "promotions.enabled" satisfies KillSwitchName;
 
 /** PromotionsPort over the real evaluator and voucher service (one PromotionsDeps, one client). */
-export const makePromotionsPort = (deps: PromotionsDeps): PromotionsPort => {
+export const makePromotionsPort = (deps: PromotionsDeps): PromotionsPort & VoucherSettlementPort => {
   const evaluator = new PromotionEvaluator(deps);
   const vouchers = new VoucherService(deps);
   return {
@@ -19,6 +20,7 @@ export const makePromotionsPort = (deps: PromotionsDeps): PromotionsPort => {
     reserve: (userId, groupId, applied) => vouchers.reserve(userId, groupId, applied),
     confirm: (userId, groupId) => vouchers.confirm(userId, groupId),
     release: (userId, groupId) => vouchers.release(userId, groupId),
+    reinstate: (userId, groupId) => vouchers.reinstate(userId, groupId),
   };
 };
 

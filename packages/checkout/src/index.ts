@@ -23,6 +23,7 @@ export type { CloseResult } from "./application/order-close-job.js";
 export type { CodAvailability, CodReasonCode } from "./application/checkout-service.js";
 export { UnconfiguredRisk } from "./application/unconfigured.js";
 export { LateRefundConsumer } from "./application/late-refund-consumer.js";
+export { PROMOTIONS_SETTLE_CONSUMER, PROMOTIONS_SETTLE_EVENT, PromotionsSettleConsumer } from "./application/promotions-settle-consumer.js";
 export { PgStoreCredit } from "./application/pg-store-credit.js";
 export type { CheckoutDeps, WorkerDeps, CheckoutPorts } from "./application/env.js";
 export type { BillingPort, KillSwitchPort, PriceSnapshotPort, SubMerchantPort } from "./ports.js";

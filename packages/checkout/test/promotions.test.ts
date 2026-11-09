@@ -302,7 +302,7 @@ describe("promotions in place, settlement and compensation", () => {
     const promotions = real();
     const svc = w.makeSvc({}, { promotions });
     const { webhooks } = w.makeWorkers({ promotions });
-    const last = await w.seedSku(w.stores[2], 40_000n, 1);
+    const last = await w.seedSku(w.stores[2], 80_000n, 1);
     await w.fillBag(u, [{ sku: last, qty: 1 }]);
     const g = (await place(svc)).res.orderGroupId;
     const intent = await intentOf(w, g);
@@ -335,7 +335,7 @@ describe("promotions in place, settlement and compensation", () => {
 });
 
 describe("address: snapshot per seller order, geo area for shipping, COD eligibility", () => {
-  it("snapshots every seller order after the commit with the placed address; a replay repeats it idempotently; the shipping port gets the geo area", async () => {
+  it("snapshots every seller order inside the order transaction with the placed address; a replay does not repeat it; the shipping port gets the geo area", async () => {
     const snaps = new FakeAddressSnapshots();
     const svc = w.makeSvc({}, { addressSnapshots: snaps });
     await w.fillBag(u, [{ sku: skuA, qty: 1 }, { sku: skuB, qty: 1 }]);
@@ -350,10 +350,10 @@ describe("address: snapshot per seller order, geo area for shipping, COD eligibi
     const orders = (await w.raw.query<{ id: string }>("SELECT id FROM seller_orders WHERE order_group_id = $1", [res.orderGroupId])).rows.map((r) => r.id).sort();
     expect(snaps.calls.map((c) => c.sellerOrderId).sort()).toEqual(orders);
     await svc.place(u, input);
-    expect(snaps.calls).toHaveLength(4);
+    expect(snaps.calls).toHaveLength(2);
   });
 
-  it("a snapshot failure surfaces (the order exists; the same key retries)", async () => {
+  it("a snapshot failure rolls the whole order back (no order without its frozen address); the same key then places it", async () => {
     const snaps = new FakeAddressSnapshots();
     const svc = w.makeSvc({}, { addressSnapshots: snaps });
     await w.fillBag(u, [{ sku: skuB, qty: 1 }]);
@@ -361,8 +361,9 @@ describe("address: snapshot per seller order, geo area for shipping, COD eligibi
     const input = { addressRef: ADDR, method: "card" as const, idempotencyKey: uuidv7(), quoteToken: q.token, quote: q.quote };
     snaps.failWith = new Error("address gone");
     await expect(svc.place(u, input)).rejects.toThrow("address gone");
+    expect((await w.raw.query("SELECT 1 FROM order_groups WHERE idempotency_key = $1", [input.idempotencyKey])).rows).toHaveLength(0);
     snaps.failWith = null;
-    expect((await svc.place(u, input)).replayed).toBe(true);
+    expect((await svc.place(u, input)).replayed).toBe(false);
     expect(snaps.calls).toHaveLength(1);
   });
 

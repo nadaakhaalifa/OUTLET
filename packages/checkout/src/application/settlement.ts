@@ -1,3 +1,4 @@
+import { PROMOTIONS_SETTLE_EVENT } from "./promotions-settle-consumer.js";
 import { Ledger } from "@outlet/ledger";
 import type { Queryable } from "@outlet/db";
 import { money } from "@outlet/money";
@@ -28,6 +29,7 @@ export async function recordPaid(env: Env, tx: Queryable, g: GroupRow, i: Intent
   await moveSellerOrders(env, tx, g.id, opts.late ? "late_pay" : "pay", { acceptBy: new Date(now.getTime() + env.config.sellerAcceptSlaSec * 1000) });
   await setSessionStatus(env, tx, g.checkout_session_id, "completed");
   await emit(env, tx, "order_group.paid", g.id, { total_minor: BigInt(g.total_minor).toString(), currency: cur, late: opts.late, ledger_entry_id: entryId });
+  await requestVoucherSettle(env, tx, g);
   return entryId;
 }
 
@@ -37,6 +39,12 @@ export async function recordCodConfirmed(env: Env, tx: Queryable, g: GroupRow): 
   await moveSellerOrders(env, tx, g.id, "cod_confirm", { acceptBy: new Date(env.now().getTime() + env.config.sellerAcceptSlaSec * 1000) });
   await setSessionStatus(env, tx, g.checkout_session_id, "completed");
   await emit(env, tx, "order_group.confirmed_cod", g.id, { total_minor: BigInt(g.total_minor).toString(), currency: g.currency });
+  await requestVoucherSettle(env, tx, g);
+}
+
+/** Outbox event (same tx as the state change) so a failed post-commit voucher confirm is retried by PromotionsSettleConsumer instead of left `reserved`. */
+async function requestVoucherSettle(env: Env, tx: Queryable, g: GroupRow): Promise<void> {
+  if (BigInt(g.discount_minor) > 0n) await emit(env, tx, PROMOTIONS_SETTLE_EVENT, g.id, { user_id: g.user_id });
 }
 
 /**

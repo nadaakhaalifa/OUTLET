@@ -63,3 +63,12 @@ export function splitInstructions(
     };
   });
 }
+
+/**
+ * ADR-0013 (Proposed) safe default: the platform funds a discount out of commission + commission VAT only. Above that, the PSP share of
+ * the store would be below seller_net_minor (the seller would be underpaid). True when the store's platform-funded discount is over the cap.
+ */
+export function platformDiscountExceedsCap(store: StoreQuote, commissionBp: number, commissionVatBp: number): boolean {
+  const a = sellerAmounts(store, commissionBp, commissionVatBp);
+  return a.platformDiscount.amountMinor > a.commission.amountMinor + a.commissionVat.amountMinor;
+}

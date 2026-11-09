@@ -22,7 +22,9 @@ export type CheckoutErrorCode =
   | "cancel-after-shipping"
   | "order-not-cancellable"
   | "refund-preference-invalid"
-  | "payment-in-flight";
+  | "payment-in-flight"
+  | "platform-discount-cap"
+  | "discount-exceeds-total";
 
 /** `status` is the HTTP status the API layer maps to (Problem+JSON type = code). */
 const STATUS: Readonly<Record<CheckoutErrorCode, number>> = {
@@ -50,6 +52,9 @@ const STATUS: Readonly<Record<CheckoutErrorCode, number>> = {
   "refund-preference-invalid": 422,
   // the PSP reports the money already moved for an unpaid group: the webhook settles it first, then the shopper cancels the paid order
   "payment-in-flight": 409,
+  // ADR-0013 (Proposed): a platform-funded discount larger than commission + VAT would underpay the seller
+  "platform-discount-cap": 422,
+  "discount-exceeds-total": 422,
 };
 
 export interface CheckoutErrorDetails {
@@ -57,6 +62,7 @@ export interface CheckoutErrorDetails {
   readonly fresh?: Quote;
   readonly shortfalls?: readonly { readonly skuId: string; readonly locationId: string; readonly requested: number; readonly available: number }[];
   readonly riskDecision?: string;
+  readonly storeId?: string;
 }
 
 export class CheckoutError extends Error {

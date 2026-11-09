@@ -6,6 +6,7 @@ import { add, compare, fraction, money, sub } from "@outlet/money";
 import type { Money } from "@outlet/money";
 import type { PaymentMethod } from "../ports.js";
 import { allocateVatWithLineDiscounts } from "@outlet/tax";
+import { CheckoutError } from "./errors.js";
 import type { Fee, Quote, QuoteInput, QuoteLine, StoreQuote } from "./types.js";
 
 const zero = (c: Money["currency"]): Money => money(0n, c);
@@ -70,7 +71,7 @@ export function quote(input: QuoteInput, sha256Hex: (canonicalJson: string) => s
     const shipDisc = disc?.shipping.get(storeId) ?? { platform: zero(cur), seller: zero(cur) };
     const platformDiscount = add(sum(cur, lines.map((x) => x.platformDiscount)), shipDisc.platform);
     const sellerDiscount = add(sum(cur, lines.map((x) => x.sellerDiscount)), shipDisc.seller);
-    if (compare(add(platformDiscount, sellerDiscount), add(itemsSubtotal, ship.fee)) > 0) throw new Error(`quote: discounts exceed the store total for ${storeId}`);
+    if (compare(add(platformDiscount, sellerDiscount), add(itemsSubtotal, ship.fee)) > 0) throw new CheckoutError("discount-exceeds-total", "discounts exceed the store total", { storeId });
     return {
       storeId, lines, itemsSubtotal,
       shipping: { gross: ship.fee, vat: shipVat, quoteRef: ship.quoteRef, etaDaysMin: ship.etaDaysMin, etaDaysMax: ship.etaDaysMax },

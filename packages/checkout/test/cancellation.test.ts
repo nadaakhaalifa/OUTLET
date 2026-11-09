@@ -75,7 +75,7 @@ beforeAll(async () => {
   const entries: Parameters<CancellationAuditPort["append"]>[0][] = [];
   audit = { entries, append: (e) => { entries.push(e); return Promise.resolve(); } };
   rprov = new FakeProvider();
-  const admin = createAdminAccess({ db: w.app, audit: { append: () => Promise.resolve() }, clock: w.now, thresholdMinor: 50_000_000n });
+  const admin = createAdminAccess({ db: w.app, audit: { appendIn: () => Promise.resolve() }, clock: w.now, thresholdMinor: 50_000_000n });
   refunds = new RefundService({
     admin, app: w.app, worker: w.workerClient, marketId: "EG", policy: new FakePolicy(), evidence: new FakeEvidence(), restock: new FakeRestock(), provider: rprov, kill: new FakeKill(), now: w.now,
     config: { dualApproval: { thresholdMinor: 50_000_000n } },

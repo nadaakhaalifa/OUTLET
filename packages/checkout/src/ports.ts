@@ -128,7 +128,7 @@ export interface ShippingQuotePort {
 
 /** Owned-address check (body_refs_owned) and the delivery data needed for billing. not_found = 404, never 403. */
 export interface AddressPort {
-  resolve(userId: string, addressRef: string): Promise<{ readonly geoAreaId: string; readonly countryCode: string; /** landmark + map pin present (master prompt 20.7); absent is treated as not eligible */ readonly codEligible?: boolean } | null>;
+  resolve(userId: string, addressRef: string): Promise<{ readonly geoAreaId: string; readonly countryCode: string; /** landmark + map pin present (master prompt 20.7); absent is treated as not eligible */ readonly codEligible?: boolean; /** content version of the address (changes on edit); bound into the quote token */ readonly version: string } | null>;
 }
 
 export type RiskDecision = "allow" | "require_confirmation" | "require_prepayment" | "prepaid_only" | "limit_value" | "block";
@@ -164,8 +164,8 @@ export interface StoreCreditPort {
 
 /** Signs and verifies the 10-minute quote token (HMAC-SHA256, key from the secrets manager). Quote stays pure. */
 export interface QuoteTokenPort {
-  sign(payload: { readonly jti: string; readonly userId: string; readonly marketId: string; readonly quoteHash: string; readonly method: PaymentMethod; readonly expiresAt: Date }): string;
-  verify(token: string): { readonly jti: string; readonly userId: string; readonly marketId: string; readonly quoteHash: string; readonly method: PaymentMethod; readonly expiresAt: Date } | null;
+  sign(payload: { readonly jti: string; readonly userId: string; readonly marketId: string; readonly quoteHash: string; readonly method: PaymentMethod; readonly expiresAt: Date; readonly addressVersion?: string }): string;
+  verify(token: string): { readonly jti: string; readonly userId: string; readonly marketId: string; readonly quoteHash: string; readonly method: PaymentMethod; readonly expiresAt: Date; readonly addressVersion?: string } | null;
 }
 
 /** P2 raw-body encryption (same contract as auth-core FieldCipher; aad 'payment_events_raw.body_ct'). */
@@ -229,4 +229,4 @@ export interface PromotionsPort {
 }
 
 /** Freezes the delivery address for one seller order (AddressService.snapshotForOrder satisfies this). */
-export type AddressSnapshotPort = Pick<AddressService, "snapshotForOrder">;
+export type AddressSnapshotPort = Pick<AddressService, "snapshotForOrder" | "snapshotForOrderIn">;

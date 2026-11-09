@@ -143,4 +143,5 @@ export type PriceDelta =
   | { readonly kind: "method_fee"; readonly method: PaymentMethod; readonly before: Money; readonly after: Money }
   | { readonly kind: "promotions"; readonly before: readonly string[]; readonly after: readonly string[] }
   | { readonly kind: "store_credit"; readonly before: Money; readonly after: Money }
-  | { readonly kind: "total"; readonly before: Money; readonly after: Money };
+  | { readonly kind: "total"; readonly before: Money; readonly after: Money }
+  | { readonly kind: "address" };

@@ -9,7 +9,8 @@ import { CheckoutError } from "../domain/errors.js";
 import { compareLock } from "../domain/price-lock.js";
 import { KILL_SWITCH_OF, holdSecondsOf, holdWindowOf, isExternal, secondsToMs } from "../domain/methods.js";
 import { canonical, canonicalQuote, quote as buildQuote } from "../domain/quote.js";
-import { sellerAmounts, splitInstructions } from "../domain/split.js";
+import { platformDiscountExceedsCap, sellerAmounts, splitInstructions } from "../domain/split.js";
+import { ShippingError } from "@outlet/shipping";
 import type { PriceDelta, Quote, QuoteDiscounts, QuoteLineInput } from "../domain/types.js";
 import { PAYMENT_METHODS } from "../ports.js";
 import type { ClientAction, ExternalMethod, PaymentMethod, RiskDecision } from "../ports.js";
@@ -88,6 +89,7 @@ interface Prepared {
   readonly unavailable: readonly string[];
   readonly codEligible: boolean;
   readonly isFirstOrder: boolean;
+  readonly addressVersion: string;
 }
 interface Built {
   readonly quote: Quote;
@@ -97,6 +99,7 @@ interface Built {
   /** promotions to reserve at placement (empty without discounts) */
   readonly applied: readonly AppliedPromotion[];
   readonly invalidCodes: readonly string[];
+  readonly addressVersion: string;
 }
 interface Plan {
   readonly built: Built;
@@ -140,7 +143,7 @@ export class CheckoutService {
     const built = await this.build(userId, req);
     if (!built.quote.payableByMethod.has(req.method)) throw new CheckoutError("method-unavailable", "payment method is not available");
     const expiresAt = new Date(this.env.now().getTime() + secondsToMs(this.env.config.priceLockSec));
-    const token = this.env.tokens.sign({ jti: this.env.newId(), userId, marketId: this.env.marketId, quoteHash: built.quote.hash, method: req.method, expiresAt });
+    const token = this.env.tokens.sign({ jti: this.env.newId(), userId, marketId: this.env.marketId, quoteHash: built.quote.hash, method: req.method, expiresAt, addressVersion: built.addressVersion });
     return { quote: built.quote, token, expiresAt, unavailableSkus: built.unavailable, invalidVoucherCodes: built.invalidCodes, cod: await this.codAvailability(userId, req, built) };
   }
 
@@ -167,18 +170,35 @@ export class CheckoutService {
     const env = this.env;
     const p = await this.inUserTx(userId, (tx) => this.prepare(tx, userId, req));
     const bag = evalBagOf(env.currency, p.lines, p.shipping);
-    const promo = await evaluatePromotions(
-      env, bag,
-      { now: env.now(), userId, isPlus: false, isFirstOrder: p.isFirstOrder, birthdayToday: false, daysSinceLastOrder: null, followedStoreIds: [], paymentMethod: req.method, city: null, segments: [], tier: null },
-      req.voucherCodes,
-    );
+    const evalCtx = { now: env.now(), userId, isPlus: false, isFirstOrder: p.isFirstOrder, birthdayToday: false, daysSinceLastOrder: null, followedStoreIds: [], paymentMethod: req.method, city: null, segments: [], tier: null };
     const zero = money(0n, env.currency);
     const creditRequested = req.method === "store_credit" ? money(BIG, env.currency) : (req.creditRequested ?? zero);
-    const quote = buildQuote(
-      { marketId: env.marketId, currency: env.currency, lines: p.lines, shipping: p.shipping, methods: p.methods, creditAvailable: p.creditAvailable, creditRequested, shippingTaxBp: env.config.shippingTaxBp, ...(promo.discounts === null ? {} : { discounts: promo.discounts satisfies QuoteDiscounts }) },
-      sha256Hex,
-    );
-    return { quote, meta: p.meta, unavailable: p.unavailable, codEligible: p.codEligible, applied: promo.applied, invalidCodes: promo.invalidCodes };
+    const make = (promo: Awaited<ReturnType<typeof evaluatePromotions>>): Quote =>
+      buildQuote(
+        { marketId: env.marketId, currency: env.currency, lines: p.lines, shipping: p.shipping, methods: p.methods, creditAvailable: p.creditAvailable, creditRequested, shippingTaxBp: env.config.shippingTaxBp, ...(promo.discounts === null ? {} : { discounts: promo.discounts satisfies QuoteDiscounts }) },
+        sha256Hex,
+      );
+    let promo = await evaluatePromotions(env, bag, evalCtx, req.voucherCodes);
+    let quote = make(promo);
+    // ADR-0013 (Proposed): until the funds-flow decision, a platform-funded discount may not exceed commission + VAT of its store (else the PSP share underpays the seller)
+    const over = await this.storeOverPlatformCap(quote);
+    if (over !== null) {
+      // an entered code is refused honestly; an automatic promotion is simply not applied
+      if ((req.voucherCodes?.length ?? 0) > 0) throw new CheckoutError("platform-discount-cap", "voucher cannot be applied to this store", { storeId: over });
+      promo = { discounts: null, applied: [], invalidCodes: promo.invalidCodes };
+      quote = make(promo);
+    }
+    return { quote, meta: p.meta, unavailable: p.unavailable, codEligible: p.codEligible, applied: promo.applied, invalidCodes: promo.invalidCodes, addressVersion: p.addressVersion };
+  }
+
+  private async storeOverPlatformCap(q: Quote): Promise<string | null> {
+    const now = this.env.now();
+    for (const s of q.stores) {
+      if (s.platformDiscount.amountMinor === 0n) continue;
+      const rate = await this.env.commission.rateFor(s.storeId, now);
+      if (platformDiscountExceedsCap(s, rate.bp, this.env.config.commissionVatBp)) return s.storeId;
+    }
+    return null;
   }
 
   private async prepare(tx: Queryable, userId: string, req: QuoteRequest): Promise<Prepared> {
@@ -260,7 +280,7 @@ export class CheckoutService {
     const isFirstOrder =
       env.promotions !== undefined &&
       (await tx.query("SELECT 1 FROM order_groups WHERE user_id = $1 AND status NOT IN ('PENDING_PAYMENT', 'AWAITING_COD_CONFIRMATION', 'PAYMENT_FAILED', 'EXPIRED') LIMIT 1", [userId])).rows.length === 0;
-    return { lines, shipping, methods, creditAvailable, meta, unavailable: [...unavailable].sort(), codEligible: addr.codEligible === true, isFirstOrder };
+    return { lines, shipping, methods, creditAvailable, meta, unavailable: [...unavailable].sort(), codEligible: addr.codEligible === true, isFirstOrder, addressVersion: addr.version };
   }
 
   // ------------------------------------------------------------------ place
@@ -323,6 +343,8 @@ export class CheckoutService {
     if (tok.expiresAt.getTime() <= env.now().getTime()) throw new CheckoutError("quote-expired", "the quote has expired", { fresh: q });
     if (sha256Hex(canonicalQuote(input.quote)) !== tok.quoteHash) throw new CheckoutError("quote-token-invalid", "the echoed quote does not match the signed token");
     const deltas: PriceDelta[] = compareLock(input.quote, q, method);
+    // an address edited since the quote changes the delivery data the shopper agreed to
+    if (tok.addressVersion !== undefined && tok.addressVersion !== built.addressVersion) deltas.push({ kind: "address" });
     if (deltas.length > 0) throw new CheckoutError("price-changed", "prices or fees changed since the quote", { deltas, fresh: q });
 
     const fee = env.config.methodFee[method];
@@ -428,6 +450,16 @@ export class CheckoutService {
         );
       }
     }
+    // the delivery address is frozen in THIS transaction: the snapshot row exists iff the order exists (a deleted address aborts the order)
+    if (env.addressSnapshots !== undefined) {
+      const sos = (await tx.query<{ id: string }>("SELECT id FROM seller_orders WHERE order_group_id = $1 ORDER BY id", [groupId])).rows;
+      try {
+        for (const so of sos) await env.addressSnapshots.snapshotForOrderIn(tx, userId, so.id, input.addressRef);
+      } catch (e) {
+        if (e instanceof ShippingError && e.code === "not_found") throw new CheckoutError("address-not-found", "address not found");
+        throw e;
+      }
+    }
     if (credit.amountMinor > 0n) await env.credit.hold(tx, { userId, marketId: env.marketId, orderGroupId: groupId, amount: credit, expiresAt });
     await tx.query(
       `INSERT INTO payment_intents (id, order_group_id, user_id, market_id, provider, method, bnpl_provider, amount_minor, currency, status, expires_at)
@@ -460,16 +492,6 @@ export class CheckoutService {
   /** External tender: the PSP call is never inside a database transaction (README section 2). Same Idempotency-Key resumes a half-placed group. */
   private async afterPlace(userId: string, groupId: string, resume: boolean): Promise<PlaceResult> {
     const env = this.env;
-    // the delivery address is frozen per seller order after the order transaction committed (AddressService.snapshotForOrder runs in its own
-    // user transaction and needs the seller order rows); idempotent, so a replayed Idempotency-Key repeats it safely
-    if (env.addressSnapshots !== undefined) {
-      const orders = await this.inUserTx(userId, async (tx) =>
-        (await tx.query<{ id: string; address_ref: string }>(
-          "SELECT so.id, cs.address_ref FROM seller_orders so JOIN checkout_sessions cs ON cs.order_group_id = so.order_group_id WHERE so.order_group_id = $1 ORDER BY so.id", [groupId],
-        )).rows,
-      );
-      for (const so of orders) await env.addressSnapshots.snapshotForOrder(userId, so.id, so.address_ref);
-    }
     const state = await this.inUserTx(userId, async (tx) => {
       const g = await lockGroup(tx, groupId);
       const i = await lockIntentOfGroup(tx, groupId);
