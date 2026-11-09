@@ -767,12 +767,19 @@ importers:
       '@outlet/outbox':
         specifier: workspace:*
         version: link:../outbox
+      '@outlet/policy':
+        specifier: workspace:*
+        version: link:../policy
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+    devDependencies:
+      '@outlet/audit-log':
+        specifier: workspace:*
+        version: link:../audit-log
 
   packages/promotions:
     dependencies:
