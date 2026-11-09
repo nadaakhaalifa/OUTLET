@@ -15,6 +15,8 @@ import type { Template, TemplateVars } from "../domain/render.js";
 import type { Category, Channel, SuppressionReason } from "../domain/types.js";
 import { mapEvent } from "./event-map.js";
 import type { ChannelKillSwitchPort, ChannelPort, ConsentReader, SendFailureCode } from "./ports.js";
+import { pgStoreRecipients } from "./store-recipients.js";
+import type { StoreRecipientResolver } from "./store-recipients.js";
 import { loadTemplates } from "./template-store.js";
 
 export const DISPATCH_JOB = "notifications.dispatch" as const;
@@ -41,6 +43,8 @@ export interface DispatcherDeps {
   /** Builds a consent reader on a client bound to the open transaction (e.g. `(db) => new ConsentService({ db, outbox })`). */
   readonly consentFor: (db: SqlClient) => ConsentReader;
   readonly recipients?: RecipientResolver;
+  /** Store-level notices (audience `store_members`). Default: active owner, manager and warehouse members. */
+  readonly storeRecipients?: StoreRecipientResolver;
   readonly logger?: Logger;
   readonly now?: () => Date;
   readonly newId?: () => string;
@@ -79,6 +83,7 @@ interface LogRow {
 type Outcome = "processed" | "duplicate" | "ignored" | "unresolved";
 
 const txClient = (tx: Queryable): SqlClient => ({ query: (s, p) => tx.query(s, p), transaction: (fn) => fn(tx) });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isoDate = (d: Date): string => d.toISOString();
 
 /**
@@ -92,6 +97,7 @@ export class Dispatcher {
   private readonly newId: () => string;
   private readonly random: () => number;
   private readonly recipients: RecipientResolver;
+  private readonly storeRecipients: StoreRecipientResolver;
   private readonly caps: FrequencyCaps;
   private readonly chain: readonly Channel[];
   private readonly maxAttempts: number;
@@ -101,6 +107,7 @@ export class Dispatcher {
     this.newId = d.newId ?? uuidv7;
     this.random = d.random ?? Math.random;
     this.recipients = d.recipients ?? payloadRecipient;
+    this.storeRecipients = d.storeRecipients ?? pgStoreRecipients;
     this.caps = d.caps ?? DEFAULT_CAPS;
     this.chain = d.transactionalChain ?? DEFAULT_TRANSACTIONAL_CHAIN;
     this.maxAttempts = d.maxAttempts ?? 3;
@@ -116,21 +123,45 @@ export class Dispatcher {
     if (n === null) return "ignored";
     const state = { unresolved: false };
     const outcome = await new InboxProcessor(this.workerDb(event.marketId)).process(CONSUMER, event.id, async (tx) => {
-      const userId = await this.recipients.resolve(event, tx);
-      if (userId === null) {
+      const userIds = await this.resolveAudience(n.audience, event, tx);
+      if (userIds.length === 0) {
         state.unresolved = true;
         return;
       }
-      await narrowContext(tx, { userId });
-      const locale = await this.userLocale(tx, userId);
       const templates = await loadTemplates(tx, event.marketId, n.templateCode);
-      await this.plan(tx, { userId, marketId: event.marketId, code: n.templateCode, category: "transactional", dedupeBase: event.id, eventId: event.id, vars: n.vars(locale), channels: this.chain, templates });
+      const storeId = typeof event.payload.store_id === "string" ? event.payload.store_id : null;
+      for (const userId of userIds) {
+        await narrowContext(tx, { userId });
+        const locale = await this.userLocale(tx, userId);
+        const extra = n.needsStoreName === true && storeId !== null ? { store_name: await this.storeName(tx, storeId, locale) } : {};
+        // dedupe_key carries the user id, so a redelivery (or a second member) can never duplicate a row.
+        await this.plan(tx, { userId, marketId: event.marketId, code: n.templateCode, category: "transactional", dedupeBase: event.id, eventId: event.id, vars: { ...n.vars(locale), ...extra }, channels: this.chain, templates });
+      }
     });
     if (state.unresolved) {
       this.d.logger?.warn("notification recipient unresolved", { eventType: event.type, eventId: event.id });
       return "unresolved";
     }
     return outcome;
+  }
+
+  private async resolveAudience(audience: "payload_user" | "store_members", event: OutboxEvent, tx: Queryable): Promise<readonly string[]> {
+    if (audience === "payload_user") {
+      const u = await this.recipients.resolve(event, tx);
+      return u === null ? [] : [u];
+    }
+    const s = event.payload.store_id;
+    return typeof s === "string" && UUID.test(s) ? this.storeRecipients.resolve(s, event.marketId, tx) : [];
+  }
+
+  /** Store display name in the reader's language (Arabic when the English name is missing). Never fails the notice. */
+  private async storeName(tx: Queryable, storeId: string, locale: Locale): Promise<string> {
+    const fallback = locale === "en-EG" ? "the store" : "المتجر";
+    if (!UUID.test(storeId)) return fallback;
+    const r = await tx.query<{ ar: string | null; en: string | null }>("SELECT display_name_ar AS ar, display_name_en AS en FROM stores WHERE id = $1", [storeId]);
+    const row = r.rows[0];
+    const name = locale === "en-EG" ? (row?.en ?? row?.ar) : row?.ar;
+    return name !== undefined && name !== null && name.length > 0 ? name : fallback;
   }
 
   /** Marketing trigger (verified price drop, back in size ...). Consent, caps and quiet hours are applied, never skipped. */

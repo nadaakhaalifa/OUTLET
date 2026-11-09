@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { asRole } from "@outlet/db/testing";
 import { applyDbContext } from "@outlet/db";
+import { uuidv7 } from "@outlet/ids";
 import { ConsentService } from "@outlet/privacy";
 import { CHANNEL_KILL_SWITCH_NAMES, NOTIFYING_EVENT_TYPES } from "../src/index.js";
-import { event, insertUser, logRows, NOON, setupEnv } from "./helpers.js";
+import { event, insertMember, insertStore, insertUser, logRows, NOON, setupEnv } from "./helpers.js";
 import type { Env } from "./helpers.js";
 
 let env: Env;
@@ -72,7 +73,9 @@ describe("transactional dispatch", () => {
     env = await setupEnv();
     const u = await insertUser(env.client);
     const d = env.dispatcher();
-    for (const t of NOTIFYING_EVENT_TYPES) expect(await d.handle(event(t, u, { total_minor: "100", amount_minor: "100", currency: "EGP" }))).toBe("processed");
+    const store = await insertStore(env.client);
+    await insertMember(env.client, store, u, "owner");
+    for (const t of NOTIFYING_EVENT_TYPES) expect(await d.handle(event(t, u, { total_minor: "100", amount_minor: "100", currency: "EGP", store_id: store, initiator: "shopper" }))).toBe("processed");
     expect(await d.handle(event("order_group.expired", u))).toBe("ignored");
     expect(await d.handle(paid(undefined))).toBe("unresolved");
     expect(await d.runDue("EG", 100)).toBe(NOTIFYING_EVENT_TYPES.length * 2);
@@ -267,5 +270,102 @@ describe("tenancy and grants", () => {
     env = await setupEnv();
     expect(Object.values(CHANNEL_KILL_SWITCH_NAMES)).toEqual(["notifications.push.enabled", "notifications.in_app.enabled", "notifications.whatsapp.enabled", "notifications.sms.enabled", "notifications.email.enabled"]);
     expect(NOON).toBeGreaterThan(0);
+  });
+});
+
+describe("cancellation notices", () => {
+  const sellerCancelled = (shopper: string, store: string, initiator = "shopper") =>
+    event("seller_order.cancelled", shopper, { store_id: store, seller_order_id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", order_group_id: uuidv7(), reason_code: "changed_mind", initiator });
+
+  it("notifies active owner, manager and warehouse members of the store in Arabic, nobody else", async () => {
+    env = await setupEnv();
+    const shopper = await insertUser(env.client);
+    const [owner, manager, warehouse, finance, removed, en] = [await insertUser(env.client), await insertUser(env.client), await insertUser(env.client), await insertUser(env.client), await insertUser(env.client), await insertUser(env.client, "en-EG")];
+    const store = await insertStore(env.client);
+    const other = await insertStore(env.client);
+    const otherOwner = await insertUser(env.client);
+    await insertMember(env.client, store, owner, "owner");
+    await insertMember(env.client, store, manager, "manager");
+    await insertMember(env.client, store, warehouse, "warehouse");
+    await insertMember(env.client, store, en, "manager");
+    await insertMember(env.client, store, finance, "finance");
+    await insertMember(env.client, store, removed, "owner", "removed");
+    await insertMember(env.client, other, otherOwner, "owner");
+    const d = env.dispatcher();
+    const ev = sellerCancelled(shopper, store);
+    expect(await d.handle(ev)).toBe("processed");
+    expect(await d.runDue("EG", 100)).toBe(8); // four members x (in_app + push)
+    for (const u of [owner, manager, warehouse, en]) expect((await logRows(env.client, u)).map((r) => r.channel)).toEqual(["in_app", "push"]);
+    for (const u of [shopper, finance, removed, otherOwner]) expect(await logRows(env.client, u)).toHaveLength(0);
+    const ar = env.fakes.push.sent.find((m) => m.userId === owner);
+    expect(ar?.locale).toBe("ar-EG");
+    expect(ar?.title).toBe("العميل لغى الطلب");
+    expect(ar?.body).toContain("0190A1B2");
+    expect(ar?.body).not.toMatch(/\{|\}|seller_order_cancelled_by_shopper|changed_mind|ج\.م|EGP/);
+    const enMsg = env.fakes.push.sent.find((m) => m.userId === en);
+    expect(enMsg?.locale).toBe("en-EG");
+    expect(enMsg?.body).toContain("0190A1B2");
+    // replay (same event, then a fresh inbox via the same event id) adds nothing
+    expect(await d.handle(ev)).toBe("duplicate");
+    expect(await d.runDue("EG", 100)).toBe(0);
+  });
+
+  it("is quiet when the seller cancelled, with no initiator, with no members, or with a malformed store id", async () => {
+    env = await setupEnv();
+    const shopper = await insertUser(env.client);
+    const store = await insertStore(env.client);
+    const d = env.dispatcher();
+    expect(await d.handle(sellerCancelled(shopper, store, "seller"))).toBe("ignored");
+    expect(await d.handle(event("seller_order.cancelled", shopper, { store_id: store }))).toBe("ignored");
+    expect(await d.handle(sellerCancelled(shopper, store))).toBe("unresolved"); // no members
+    expect(await d.handle(sellerCancelled(shopper, "not-a-uuid"))).toBe("unresolved");
+    expect(await d.runDue("EG", 100)).toBe(0);
+  });
+
+  it("respects a member's transactional preference for a channel", async () => {
+    env = await setupEnv();
+    const shopper = await insertUser(env.client);
+    const owner = await insertUser(env.client);
+    const store = await insertStore(env.client);
+    await insertMember(env.client, store, owner, "owner");
+    await env.client.query("INSERT INTO notification_preferences (user_id, channel, category, market_id, enabled) VALUES ($1,'push','transactional','EG',false)", [owner]);
+    const d = env.dispatcher();
+    await d.handle(sellerCancelled(shopper, store));
+    await d.runDue("EG", 100);
+    expect(env.fakes.push.sent.filter((m) => m.userId === owner)).toHaveLength(0);
+    const rows = await logRows(env.client, owner);
+    expect(rows.some((r) => r.channel === "push" && r.status === "sent")).toBe(false);
+    expect(rows.find((r) => r.channel === "in_app")?.status).toBe("sent"); // the inbox copy is unaffected
+  });
+
+  it("tells the shopper, with the store name and no amount, when a seller rejects an order", async () => {
+    env = await setupEnv();
+    const shopper = await insertUser(env.client);
+    const store = await insertStore(env.client, { ar: "متجر النيل", en: "Nile Store" });
+    const d = env.dispatcher();
+    const ev = event("seller_order.rejected", shopper, { store_id: store, seller_order_id: uuidv7(), order_group_id: uuidv7(), reason_code: "out_of_stock", total_minor: "250000", currency: "EGP" });
+    expect(await d.handle(ev)).toBe("processed");
+    expect(await d.runDue("EG", 100)).toBe(2);
+    const msg = env.fakes.push.sent[0];
+    expect(msg?.title).toBe("اتلغت حاجات من طلبك");
+    expect(msg?.body).toContain("متجر النيل");
+    expect(msg?.body).toContain("المعاد القانوني");
+    expect(msg?.body).not.toMatch(/\{|\}|order_item_cancelled_by_seller|ج\.م|out_of_stock/);
+    expect(await d.handle(ev)).toBe("duplicate");
+    expect(await d.runDue("EG", 100)).toBe(0);
+  });
+
+  it("uses the English store name for an English shopper and falls back when the store is unknown", async () => {
+    env = await setupEnv();
+    const en = await insertUser(env.client, "en-EG");
+    const ar = await insertUser(env.client);
+    const store = await insertStore(env.client, { ar: "متجر النيل", en: "Nile Store" });
+    const d = env.dispatcher();
+    await d.handle(event("seller_order.rejected", en, { store_id: store }));
+    await d.handle(event("seller_order.rejected", ar, { store_id: uuidv7() }));
+    await d.handle(event("seller_order.rejected", ar, {}));
+    await d.runDue("EG", 100);
+    expect(env.fakes.push.sent.find((m) => m.userId === en)?.body).toContain("Nile Store");
+    expect(env.fakes.push.sent.filter((m) => m.userId === ar).every((m) => m.body.startsWith("المتجر"))).toBe(true);
   });
 });

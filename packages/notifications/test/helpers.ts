@@ -58,3 +58,21 @@ export const event = (type: string, userId: string | undefined, payload: Record<
 export const logRows = async (db: SqlClient, userId: string): Promise<{ channel: string; status: string; suppression_reason: string | null; provider: string | null; error_code: string | null; category: string; scheduled_for: Date; attempts: number }[]> =>
   (await db.query<{ channel: string; status: string; suppression_reason: string | null; provider: string | null; error_code: string | null; category: string; scheduled_for: Date; attempts: number }>(
     "SELECT channel, status, suppression_reason, provider, error_code, category, scheduled_for, attempts FROM notification_log WHERE user_id = $1 ORDER BY created_at, id", [userId])).rows;
+
+export const insertStore = async (db: SqlClient, name: { ar: string; en: string | null } = { ar: "متجر", en: null }): Promise<string> => {
+  const id = uuidv7();
+  const seller = uuidv7();
+  await db.query("INSERT INTO sellers (id, home_market_id, market_id, legal_type) VALUES ($1,'EG','EG','company')", [seller]);
+  await db.query(
+    "INSERT INTO stores (id, seller_id, market_id, slug, display_name_ar, display_name_en, kind, ships_from_country, status) VALUES ($1,$2,'EG',$3,$4,$5,'local','EG','ACTIVE')",
+    [id, seller, `s-${id.slice(-12)}`, name.ar, name.en],
+  );
+  return id;
+};
+
+export const insertMember = async (db: SqlClient, storeId: string, userId: string, role: string, status: "active" | "removed" = "active"): Promise<void> => {
+  await db.query(
+    "INSERT INTO store_members (id, store_id, market_id, user_id, role_code, status, accepted_at, removed_at) VALUES ($1,$2,'EG',$3,$4,$5, now(), CASE WHEN $5 = 'removed' THEN now() END)",
+    [uuidv7(), storeId, userId, role, status],
+  );
+};

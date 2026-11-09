@@ -10,6 +10,8 @@ export { CHANNEL_KILL_SWITCH_NAMES } from "./application/ports.js";
 export type { ChannelKillSwitchPort, ChannelPort, ConsentReader, OutboundMessage, SendFailureCode, SendResult } from "./application/ports.js";
 export { DEFAULT_TRANSACTIONAL_CHAIN, DISPATCH_JOB, Dispatcher, payloadRecipient } from "./application/dispatcher.js";
 export type { DispatcherDeps, MarketingRequest, RecipientResolver } from "./application/dispatcher.js";
+export { ORDER_NOTICE_ROLES, pgStoreRecipients } from "./application/store-recipients.js";
+export type { StoreRecipientResolver } from "./application/store-recipients.js";
 export { NOTIFYING_EVENT_TYPES, mapEvent } from "./application/event-map.js";
 export { MarketingChannelUnsupportedError, PreferencesService } from "./application/preferences.js";
 export type { PreferenceRow } from "./application/preferences.js";
