@@ -14,7 +14,9 @@ const RUN = "7e100000-0000-4000-8000-000000000001";
 const STORE = "5702e000-0000-4000-8000-000000000001";
 const REASON = /^[a-z_]{3,40}(:[A-Za-z0-9-]{1,40})?$/;
 const hoursFromNow = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
-const control = { roles: ["ops", "finance", "dpo", "security"] };
+// Test knobs (POST /__control): roles; tileModes {tile_key: "not_connected" | "read_failed" | "stale"}; shortSeries (3-point sales series);
+// conflict (attention writes answer 409); kycRows (how many open KYC cases the list returns); resetAttention (put the two items back).
+const control = { roles: ["ops", "finance", "dpo", "security"], tileModes: {}, shortSeries: false, conflict: false, kycRows: 1 };
 const log = [];
 const audit = [];
 const state = {
@@ -68,6 +70,14 @@ const dashboard = (range) => {
     elevations_active: ok("elevations_active", { active: 0, pending: 0, scope: "market" }),
     kill_switches: ok("kill_switches", { engaged_money: [], engaged_ui: [] }),
   };
+  if (control.shortSeries) {
+    t.sales_series = ok("sales_series", { orders: days(3).map((d, i) => ({ day: d, value: i + 1 })), gmv: isFinance ? days(3).map((d, i) => ({ day: d, value: egp(String((i + 1) * 100000)) })) : null, total_orders: 6, total_gmv: isFinance ? egp("600000") : null });
+  }
+  for (const [key, mode] of Object.entries(control.tileModes)) {
+    if (!t[key] || t[key].status === "forbidden") continue;
+    if (mode === "stale") t[key] = { ...t[key], as_of: new Date(Date.now() - 3_600_000).toISOString() };
+    else t[key] = { key, status: "unavailable", reason: mode };
+  }
   const pick = (keys) => Object.fromEntries(keys.map((k) => [k, t[k]]));
   return {
     market_id: "eg", range, timezone: "Africa/Cairo", today: day(0), generated_at: new Date().toISOString(),
@@ -111,7 +121,12 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
   const path = url.pathname;
   if (path === "/health") return send(res, 200, { ok: true });
-  if (path === "/__control") { Object.assign(control, JSON.parse((await readBody(req)).toString() || "{}")); return send(res, 200, control); }
+  if (path === "/__control") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (body.resetAttention) { state.kycStatus = "SUBMITTED"; attention[0].status = "OPEN"; delete attention[0].acked_at; attention[1].status = "ACKED"; delete body.resetAttention; log.length = 0; }
+    Object.assign(control, body);
+    return send(res, 200, control);
+  }
   if (path === "/__log") return send(res, 200, log);
   const m = /^\/v1\/eg\/admin\/(.*)$/.exec(path);
   if (!m) return problem(res, 404, "not-found");
@@ -141,11 +156,11 @@ createServer(async (req, res) => {
     if (!item) return problem(res, 404, "not-found");
     if (!req.headers["idempotency-key"]) return problem(res, 400, "idempotency-key-required");
     log.push({ method: "POST", path: `/attention-${am[2]}`, body, key: req.headers["idempotency-key"] });
-    if (item.status === "RESOLVED") return problem(res, 409, "conflict");
+    if (item.status === "RESOLVED" || control.conflict) return problem(res, 409, "conflict");
     if (am[2] === "ack") { item.status = "ACKED"; item.acked_at = new Date().toISOString(); } else { item.status = "RESOLVED"; item.resolution_code = body.resolution_code; }
     return send(res, 200, item);
   }
-  if (req.method === "GET" && rest === "kyc-cases") return send(res, 200, page([{ id: CASE, seller_id: "5e11e000-0000-4000-8000-000000000001", legal_name_ar: "متجر النيل للأزياء", status: state.kycStatus, submitted_at: hoursFromNow(-30) }].filter((c) => !url.searchParams.get("status") || c.status === url.searchParams.get("status"))));
+  if (req.method === "GET" && rest === "kyc-cases") return send(res, 200, page(Array.from({ length: control.kycRows }, (_, i) => ({ id: i === 0 ? CASE : `c0de0000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, seller_id: "5e11e000-0000-4000-8000-000000000001", legal_name_ar: `متجر النيل للأزياء ${String(i + 1)}`, status: state.kycStatus, submitted_at: hoursFromNow(-30) })).filter((c) => !url.searchParams.get("status") || c.status === url.searchParams.get("status"))));
   if (req.method === "GET" && rest === `kyc-cases/${CASE}`) {
     const reason = req.headers["x-reason-code"];
     if (reason !== undefined) { if (!REASON.test(String(reason))) return problem(res, 422, "validation-failed"); note(req, "kyc.signatory.reveal", "kyc_case", reason); }
