@@ -1,6 +1,13 @@
 export { AdminController } from "./admin.controller.js";
 export { PgApprovalReader, PgKycAdmin, PgReconciliationReader } from "./pg-readers.js";
 export { UnconfiguredAuditPort, unconfiguredAdminServices } from "./unconfigured.js";
-export type { AdminAccessPort, AdminServices, ApprovalReaderPort, KycAdminPort, ReconciliationReaderPort } from "./services.js";
-export { FlagAdmin, PgAuditReader, PgElevationReader, flagOf, flagPage } from "./ops-services.js";
-export type { AdminOpsServices, AuditAppendPort, AuditReaderPort, ElevationReaderPort, FlagAdminPort } from "./ops-services.js";
+export type { AdminAccessPort, AdminServices, ApprovalCount, ApprovalReaderPort, KycAdminPort, KycCount, ReconciliationReaderPort } from "./services.js";
+export { FlagAdmin, PgAuditReader, PgElevationReader, PgPiiAccessReader, flagOf, flagPage } from "./ops-services.js";
+export type { AdminOpsServices, AuditAppendPort, AuditReaderPort, ElevationCount, ElevationReaderPort, FlagAdminPort, PiiAccessReaderPort } from "./ops-services.js";
+export { StoreModeration } from "./store-moderation.js";
+export type { StoreModerationDeps, StoreModerationInput, StoreModerationPort, StoreModerationResult } from "./store-moderation.js";
+export { DashboardService, SNAPSHOT_TILE_ACTION, STALE_AFTER_MS } from "./dashboard.js";
+export type { DashboardDeps, DashboardReaderPort, SalesDaily, SnapshotRow, StoreTop } from "./dashboard.js";
+export { PgDashboardReader } from "./dashboard-readers.js";
+export { AttentionAdmin } from "./attention-admin.js";
+export type { AttentionAdminPort, AttentionPageDto } from "./attention-admin.js";

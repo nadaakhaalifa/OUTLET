@@ -51,6 +51,36 @@ export const seedKycCase = async (raw: SqlClient, state = "AUTO_CHECKS"): Promis
   return { caseId, sellerId };
 };
 
+/** A seller with one store in the given status (what admin store moderation acts on). */
+export const seedStore = async (raw: SqlClient, status = "ACTIVE", sellerStatus = "active"): Promise<{ storeId: string; sellerId: string; caseId: string }> => {
+  const sellerId = randomUUID();
+  const storeId = randomUUID();
+  const caseId = randomUUID();
+  const userId = randomUUID();
+  await raw.query("INSERT INTO users (id, market_id, created_at, updated_at) VALUES ($1,'EG',now(),now())", [userId]);
+  await raw.query(
+    `INSERT INTO sellers (id, home_market_id, market_id, legal_type, legal_name_ar, legal_name_en, commercial_register_no, tax_card_no, governorate_code, governorate_name_ar, status)
+     VALUES ($1,'EG','EG','company','شركة الاختبار','Test Co',$2,$3,'CAI','القاهرة',$4)`,
+    [sellerId, `CR-${sellerId.slice(0, 8)}`, `TX-${sellerId.slice(0, 8)}`, sellerStatus],
+  );
+  await raw.query("INSERT INTO kyc_cases (id, seller_id, market_id, applicant_user_id, state, submitted_at, decided_at, decided_by) VALUES ($1,$2,'EG',$3,$4,now(),now(),$3)", [caseId, sellerId, userId, sellerStatus === "suspended" ? "SUSPENDED" : "APPROVED"]);
+  await raw.query(
+    "INSERT INTO stores (id, seller_id, market_id, slug, display_name_ar, kind, ships_from_country, status) VALUES ($1,$2,'EG',$3,'متجر الاختبار','local','EG',$4)",
+    [storeId, sellerId, `mod-${storeId.slice(0, 8)}`, status],
+  );
+  return { storeId, sellerId, caseId };
+};
+
+export const seedPiiAccess = async (raw: SqlClient, o: { actorId?: string; targetType?: string; at?: string } = {}): Promise<{ id: string; actorId: string }> => {
+  const id = randomUUID();
+  const actorId = o.actorId ?? randomUUID();
+  await raw.query(
+    "INSERT INTO pii_access_log (id, market_id, actor_id, target_type, target_id, action, reason_code, request_id, occurred_at) VALUES ($1,'EG',$2,$3,$4,'seller_kyc.read','fraud_review','req-1',$5)",
+    [id, actorId, o.targetType ?? "kyc_case", randomUUID(), o.at ?? "2030-01-01T10:00:00Z"],
+  );
+  return { id, actorId };
+};
+
 export const seedRun = async (raw: SqlClient): Promise<{ runId: string; itemId: string }> => {
   const runId = randomUUID();
   const itemId = randomUUID();
@@ -79,10 +109,57 @@ export const seedElevation = async (raw: SqlClient, o: { staffId?: string; role?
   return { id, staffId };
 };
 
+/** An OPEN ops attention item of the test market. */
+export const seedAttention = async (raw: SqlClient, o: { status?: "OPEN" | "ACKED" | "RESOLVED"; kind?: string; at?: string } = {}): Promise<{ id: string }> => {
+  const id = randomUUID();
+  const status = o.status ?? "OPEN";
+  await raw.query(
+    `INSERT INTO attention_items (id, market_id, kind, ref_type, ref_id, payload, status, created_at, acked_by, acked_at, resolved_at, resolution_code)
+     VALUES ($1,'EG',$2,'refund',$3,'{"error":"REFUND_NOT_ALLOWED"}'::jsonb,$4,$5::timestamptz,$6,$7::timestamptz,$8::timestamptz,$9)`,
+    [id, o.kind ?? "refund.attention", randomUUID(), status, o.at ?? "2029-12-31T10:00:00Z", status === "OPEN" ? null : randomUUID(), status === "OPEN" ? null : "2029-12-31T11:00:00Z", status === "RESOLVED" ? "2029-12-31T12:00:00Z" : null, status === "RESOLVED" ? "NOT_AN_ISSUE" : null],
+  );
+  return { id };
+};
+
 const staffHeaders = (t: TestApp, token: string, extra: Record<string, string> = {}): Record<string, string> => ({ ...bearer(token), "idempotency-key": idemKey(t), ...extra });
 const MISSING = "00000000-0000-4000-8000-00000000dead";
 
 export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
+  "GET /v1/{market}/admin/dashboard": {
+    happy: async (t) => {
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/dashboard?range=7d", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/attention": {
+    happy: async (t) => {
+      await seedAttention(t.raw);
+      const { token } = await t.admin(["ops"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/attention?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/attention/{attention_id}/ack": {
+    happy: async (t) => {
+      const a = await seedAttention(t.raw);
+      const { token } = await t.admin(["ops"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/attention/${a.id}/ack`, headers: staffHeaders(t, token), payload: {} }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["ops"]);
+      return { method: "POST", url: `/v1/eg/admin/attention/${MISSING}/ack`, headers: staffHeaders(t, token), payload: {} };
+    },
+  },
+  "POST /v1/{market}/admin/attention/{attention_id}/resolve": {
+    happy: async (t) => {
+      const a = await seedAttention(t.raw);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/attention/${a.id}/resolve`, headers: staffHeaders(t, token), payload: { resolution_code: "FIXED_MANUALLY" } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["finance"]);
+      return { method: "POST", url: `/v1/eg/admin/attention/${MISSING}/resolve`, headers: staffHeaders(t, token), payload: { resolution_code: "FIXED_MANUALLY" } };
+    },
+  },
   "GET /v1/{market}/admin/approval-requests": {
     happy: async (t) => {
       await seedApproval(t.raw);
@@ -215,6 +292,36 @@ export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
     otherTenant: async (t) => {
       const { token } = await t.admin(["finance"]);
       return { method: "POST", url: "/v1/eg/admin/feature-flags/not.a.switch/kill-switch", headers: staffHeaders(t, token), payload: { enabled: false, reason: "incident drill" } };
+    },
+  },
+  "GET /v1/{market}/admin/privacy/pii-access-log": {
+    happy: async (t) => {
+      await seedPiiAccess(t.raw);
+      const { token } = await t.admin(["dpo"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/privacy/pii-access-log?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/stores/{store_id}/suspend": {
+    // Always dual approval: the call files the request and answers 409 dual-approval-required.
+    happy: async (t) => {
+      const s = await seedStore(t.raw);
+      const { token } = await t.admin(["trust_safety"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/stores/${s.storeId}/suspend`, headers: staffHeaders(t, token), payload: { reason_code: "price_fraud", note: "repeated inflated reference prices" } }, status: 409 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["trust_safety"]);
+      return { method: "POST", url: `/v1/eg/admin/stores/${MISSING}/suspend`, headers: staffHeaders(t, token), payload: { reason_code: "price_fraud", note: "repeated inflated reference prices" } };
+    },
+  },
+  "POST /v1/{market}/admin/stores/{store_id}/reinstate": {
+    happy: async (t) => {
+      const s = await seedStore(t.raw, "SUSPENDED", "suspended");
+      const { token } = await t.admin(["trust_safety"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/stores/${s.storeId}/reinstate`, headers: staffHeaders(t, token), payload: { reason_code: "appeal_upheld", note: "evidence re-scored, no violation" } }, status: 409 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["trust_safety"]);
+      return { method: "POST", url: `/v1/eg/admin/stores/${MISSING}/reinstate`, headers: staffHeaders(t, token), payload: { reason_code: "appeal_upheld", note: "evidence re-scored, no violation" } };
     },
   },
 };

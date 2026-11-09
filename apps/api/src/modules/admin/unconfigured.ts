@@ -15,8 +15,8 @@ export class UnconfiguredAuditPort {
 
 /** Production default while the staff stores are not wired: every admin route answers 503 (no principal can be built). */
 export const unconfiguredAdminServices: AdminServices = {
-  access: { buildPrincipal: down, approve: down, reject: down, recordPiiView: down, requireApproval: down, executeApproval: down, requestElevation: down, approveElevation: down, rejectElevation: down, activateElevation: down },
-  approvals: { list: down, get: down },
-  kyc: { list: down, decide: down, detail: down },
+  access: { buildPrincipal: down, approve: down, reject: down, recordPiiView: down, requireApproval: down, executeApproval: down, verifyApproved: down, requestElevation: down, approveElevation: down, rejectElevation: down, activateElevation: down },
+  approvals: { list: down, get: down, countPending: down },
+  kyc: { list: down, decide: down, detail: down, count: down },
   reconciliation: { listRuns: down, listItems: down },
 };

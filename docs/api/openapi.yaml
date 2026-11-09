@@ -12302,7 +12302,7 @@ paths:
       operationId: "adminSuspendStore"
       tags:
         - "Admin KYC"
-      summary: "Suspend a store (human decision)"
+      summary: "Suspend a store (human decision; always dual approval: the first call files the request and answers 409 dual-approval-required, the second approver's vote runs it)"
       security:
         - adminPasskeySession: []
       parameters:
@@ -12320,7 +12320,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/StoreStatusInput"
+              "$ref": "#/components/schemas/StoreSuspendInput"
       responses:
         "200":
           description: "OK"
@@ -12343,10 +12343,11 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "admin.store.suspend"
+        policy: "store.suspend"
         principal: "staff"
-        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        tenant: "staff market (staff_role_assignments.market_id); executor runs as the seller.kyc worker job and the store context"
         roles:
+          - "ops"
           - "trust_safety"
         not_owned: 404
         wrong_role: 403
@@ -12395,7 +12396,7 @@ paths:
         content:
           "application/json":
             schema:
-              "$ref": "#/components/schemas/StoreStatusInput"
+              "$ref": "#/components/schemas/StoreReinstateInput"
       responses:
         "200":
           description: "OK"
@@ -12418,10 +12419,11 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "admin.store.reinstate"
+        policy: "store.reinstate"
         principal: "staff"
-        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        tenant: "staff market (staff_role_assignments.market_id); executor runs as the seller.kyc worker job and the store context"
         roles:
+          - "ops"
           - "trust_safety"
         not_owned: 404
         wrong_role: 403
@@ -13783,6 +13785,12 @@ paths:
           schema:
             type: "string"
             format: "uuid"
+        - name: "target_type"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            maxLength: 200
         - name: "from"
           in: "query"
           required: false
@@ -13792,6 +13800,7 @@ paths:
         - name: "to"
           in: "query"
           required: false
+          description: "Inclusive end date."
           schema:
             type: "string"
             format: "date"
@@ -13815,9 +13824,9 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "admin.privacy.read"
+        policy: "pii_access.read"
         principal: "staff"
-        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        tenant: "staff market (staff_role_assignments.market_id); read through the SECURITY DEFINER function pii_access_log_list (outlet_app has no SELECT)"
         roles:
           - "dpo"
           - "security"
@@ -13828,6 +13837,256 @@ paths:
           wrong_role: "staff without dpo/security -> 403; shopper or seller token -> 403 wrong-principal"
       x-rate-limit:
         - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/dashboard":
+    get:
+      operationId: "adminGetDashboard"
+      tags:
+        - "Admin Dashboard"
+      summary: "Admin Home tiles (docs/api/admin-dashboard-contract.md). Each tile is authorized on its own action before it is read: forbidden = not computed; unavailable = not connected, failed or stale (never a zero)."
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - name: "range"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum: ["7d", "30d", "90d"]
+            default: "30d"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminDashboard"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "dashboard.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "ops"
+          - "finance"
+          - "trust_safety"
+          - "support"
+          - "marketing"
+          - "dpo"
+          - "security"
+          - "super_admin (break-glass only)"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "staff of another market -> 401 market-mismatch; unknown market -> 404"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/attention":
+    get:
+      operationId: "adminListAttention"
+      tags:
+        - "Admin Attention"
+      summary: "Open and acknowledged ops attention items, newest first (ids and short codes only)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AttentionItemPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "attention.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "ops"
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "staff of another market -> 401 market-mismatch"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/attention/{attention_id}/ack":
+    post:
+      operationId: "adminAckAttention"
+      tags:
+        - "Admin Attention"
+      summary: "Acknowledge an attention item (OPEN to ACKED, audited in the same transaction; acking again is an unchanged success; a resolved item is 409)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "attention_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: "object"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AttentionItem"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "attention.write"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "ops"
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "item of another market -> 404"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/attention/{attention_id}/resolve":
+    post:
+      operationId: "adminResolveAttention"
+      tags:
+        - "Admin Attention"
+      summary: "Resolve an attention item with a fixed code (audited in the same transaction; the same code again is an unchanged success, another code is 409)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "attention_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/AttentionResolveInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AttentionItem"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "attention.write"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "ops"
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "item of another market -> 404"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
           window_s: 60
           key: "staff"
           source: "default"
@@ -19470,48 +19729,303 @@ components:
     PiiAccessLogEntry:
       type: "object"
       additionalProperties: false
+      description: "One row of pii_access_log: ids and the reason code only, never the data that was viewed (the row is written before the data leaves)."
       properties:
         id:
           type: "string"
           format: "uuid"
         staff_id:
           type: "string"
-          format: "uuid"
-        subject_ref:
+          maxLength: 500
+        action:
           type: "string"
           maxLength: 500
-        resource_type:
+        target_type:
           type: "string"
           maxLength: 500
-        resource_id:
+        target_id:
           type: "string"
           maxLength: 500
-        fields:
-          type: "array"
-          items:
-            type: "string"
-            maxLength: 500
-          maxItems: 50
         reason_code:
           type: "string"
           maxLength: 500
-        ticket_ref:
+        request_id:
           type:
             - "string"
             - "null"
           maxLength: 500
-        accessed_at:
+        occurred_at:
           type: "string"
           format: "date-time"
       required:
         - "id"
         - "staff_id"
-        - "subject_ref"
-        - "resource_type"
-        - "resource_id"
-        - "fields"
+        - "action"
+        - "target_type"
+        - "target_id"
         - "reason_code"
-        - "accessed_at"
+        - "request_id"
+        - "occurred_at"
+    DashboardTile:
+      type: "object"
+      additionalProperties: false
+      description: "One tile envelope. ok carries as_of and data (the per-tile data shapes are in docs/api/admin-dashboard-contract.md section 3 and validated server-side by the same Zod schemas); forbidden carries nothing; unavailable carries a reason. Money is {amount_minor: decimal string, currency}."
+      properties:
+        key:
+          type: "string"
+          pattern: "^[a-z_0-9](1, 60)$"
+        status:
+          type: "string"
+          enum: ["ok", "forbidden", "unavailable"]
+        reason:
+          type: "string"
+          enum: ["not_connected", "read_failed", "stale"]
+        as_of:
+          type: "string"
+          format: "date-time"
+        data:
+          type: "object"
+          additionalProperties: true
+      required:
+        - "key"
+        - "status"
+    AdminDashboard:
+      type: "object"
+      additionalProperties: false
+      description: "Every tile key is always present (stable shape). Series hold one point per rolled-up market day, oldest first; days before the first rollup run are absent."
+      properties:
+        market_id:
+          type: "string"
+        range:
+          type: "string"
+          enum: ["7d", "30d", "90d"]
+        timezone:
+          type: "string"
+        today:
+          type: "string"
+          format: "date"
+        generated_at:
+          type: "string"
+          format: "date-time"
+        sections:
+          type: "object"
+          additionalProperties: false
+          properties:
+            today:
+              type: "object"
+              additionalProperties: false
+              properties:
+                orders_today:
+                  "$ref": "#/components/schemas/DashboardTile"
+                gmv_today:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "orders_today"
+                - "gmv_today"
+            sales:
+              type: "object"
+              additionalProperties: false
+              properties:
+                sales_series:
+                  "$ref": "#/components/schemas/DashboardTile"
+                orders_by_step:
+                  "$ref": "#/components/schemas/DashboardTile"
+                top_stores:
+                  "$ref": "#/components/schemas/DashboardTile"
+                verified_discount_share:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "sales_series"
+                - "orders_by_step"
+                - "top_stores"
+                - "verified_discount_share"
+            orders:
+              type: "object"
+              additionalProperties: false
+              properties:
+                seller_sla_breaches:
+                  "$ref": "#/components/schemas/DashboardTile"
+                cod_awaiting_confirmation:
+                  "$ref": "#/components/schemas/DashboardTile"
+                returns_pipeline:
+                  "$ref": "#/components/schemas/DashboardTile"
+                disputes_open:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "seller_sla_breaches"
+                - "cod_awaiting_confirmation"
+                - "returns_pipeline"
+                - "disputes_open"
+            money:
+              type: "object"
+              additionalProperties: false
+              properties:
+                refunds_waiting:
+                  "$ref": "#/components/schemas/DashboardTile"
+                refunds_overdue:
+                  "$ref": "#/components/schemas/DashboardTile"
+                payouts:
+                  "$ref": "#/components/schemas/DashboardTile"
+                recon_unmatched:
+                  "$ref": "#/components/schemas/DashboardTile"
+                cod_unremitted:
+                  "$ref": "#/components/schemas/DashboardTile"
+                ledger_integrity:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "refunds_waiting"
+                - "refunds_overdue"
+                - "payouts"
+                - "recon_unmatched"
+                - "cod_unremitted"
+                - "ledger_integrity"
+            trust:
+              type: "object"
+              additionalProperties: false
+              properties:
+                kyc_queue:
+                  "$ref": "#/components/schemas/DashboardTile"
+                stores_moderation:
+                  "$ref": "#/components/schemas/DashboardTile"
+                price_enforcement:
+                  "$ref": "#/components/schemas/DashboardTile"
+                listings_by_status:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "kyc_queue"
+                - "stores_moderation"
+                - "price_enforcement"
+                - "listings_by_status"
+            privacy:
+              type: "object"
+              additionalProperties: false
+              properties:
+                breaches_open:
+                  "$ref": "#/components/schemas/DashboardTile"
+                dsar_queue:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "breaches_open"
+                - "dsar_queue"
+            platform:
+              type: "object"
+              additionalProperties: false
+              properties:
+                attention_open:
+                  "$ref": "#/components/schemas/DashboardTile"
+                approvals_pending:
+                  "$ref": "#/components/schemas/DashboardTile"
+                elevations_active:
+                  "$ref": "#/components/schemas/DashboardTile"
+                kill_switches:
+                  "$ref": "#/components/schemas/DashboardTile"
+              required:
+                - "attention_open"
+                - "approvals_pending"
+                - "elevations_active"
+                - "kill_switches"
+          required:
+            - "today"
+            - "sales"
+            - "orders"
+            - "money"
+            - "trust"
+            - "privacy"
+            - "platform"
+      required:
+        - "market_id"
+        - "range"
+        - "timezone"
+        - "today"
+        - "generated_at"
+        - "sections"
+    AttentionItem:
+      type: "object"
+      additionalProperties: false
+      description: "Ids and short code tokens only; no names, contact data or amounts."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        kind:
+          type: "string"
+          enum: ["refund.attention", "promotions.settle_attention", "shipment.cancel_attention"]
+        ref_type:
+          type: "string"
+          enum: ["refund", "order_group", "shipment", "event"]
+        ref_id:
+          type: "string"
+          maxLength: 200
+        payload:
+          type: "object"
+          additionalProperties:
+            type: "string"
+            maxLength: 200
+        status:
+          type: "string"
+          enum: ["OPEN", "ACKED", "RESOLVED"]
+        created_at:
+          type: "string"
+          format: "date-time"
+        acked_by:
+          type:
+            - "string"
+            - "null"
+          format: "uuid"
+        acked_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        resolved_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        resolution_code:
+          type:
+            - "string"
+            - "null"
+          enum: ["FIXED_MANUALLY", "REFUNDED_OFFLINE", "RETRIED_OK", "NOT_AN_ISSUE", "DUPLICATE", "ESCALATED", null]
+      required:
+        - "id"
+        - "kind"
+        - "ref_type"
+        - "ref_id"
+        - "payload"
+        - "status"
+        - "created_at"
+        - "acked_by"
+        - "acked_at"
+        - "resolved_at"
+        - "resolution_code"
+    AttentionItemPage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/AttentionItem"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+      required:
+        - "items"
+        - "next_cursor"
+    AttentionResolveInput:
+      type: "object"
+      additionalProperties: false
+      properties:
+        resolution_code:
+          type: "string"
+          enum: ["FIXED_MANUALLY", "REFUNDED_OFFLINE", "RETRIED_OK", "NOT_AN_ISSUE", "DUPLICATE", "ESCALATED"]
+      required:
+        - "resolution_code"
     PiiAccessLogEntryPage:
       type: "object"
       additionalProperties: false
@@ -24196,16 +24710,41 @@ components:
         preferred_courier:
           type: "string"
           maxLength: 500
-    StoreStatusInput:
+    StoreReinstateInput:
       type: "object"
       additionalProperties: false
       description: "Strict allow-list DTO (Zod .strict()): unknown or server-computed fields are rejected with 400 (API3)."
       properties:
         reason_code:
           type: "string"
-          maxLength: 500
+          enum:
+            - "appeal_upheld"
+            - "issue_resolved"
+            - "error_corrected"
         note:
           type: "string"
+          minLength: 3
+          maxLength: 2000
+      required:
+        - "reason_code"
+        - "note"
+    StoreSuspendInput:
+      type: "object"
+      additionalProperties: false
+      description: "Strict allow-list DTO (Zod .strict()): unknown or server-computed fields are rejected with 400 (API3)."
+      properties:
+        reason_code:
+          type: "string"
+          enum:
+            - "price_fraud"
+            - "counterfeit"
+            - "kyc_failure"
+            - "policy_violation"
+            - "customer_safety"
+            - "legal_order"
+        note:
+          type: "string"
+          minLength: 3
           maxLength: 2000
         finding_id:
           type: "string"

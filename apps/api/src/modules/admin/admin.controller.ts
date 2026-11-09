@@ -1,6 +1,8 @@
 import { Controller, Get, HttpCode, Inject, Post } from "@nestjs/common";
+import { SellerStore } from "@outlet/catalog";
 import { KILL_SWITCHES, isKillSwitchName } from "@outlet/flags";
 import type { KillSwitchName } from "@outlet/flags";
+import { getMarket } from "@outlet/markets-config";
 import { authorize } from "@outlet/policy";
 import type { Principal } from "@outlet/policy";
 import { Authorize, Contract, Paginated, RateLimit, ReasonCode } from "../../platform/decorators.js";
@@ -17,10 +19,16 @@ import {
 } from "./dto.js";
 import {
   AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDecisionInput, ElevationDto, ElevationIdParams, ElevationPage, ElevationRequestInput, ElevationsQuery,
-   FeatureFlagDto, FeatureFlagPage, FlagKeyParams, FlagsQuery, KillSwitchInput } from "./dto-ops.js";
+   FeatureFlagDto, FeatureFlagPage, FlagKeyParams, FlagsQuery, KillSwitchInput, PiiAccessLogEntryPage, PiiAccessLogQuery, StoreIdParams, StoreReinstateInput, StoreSuspendInput } from "./dto-ops.js";
+import { DashboardService } from "./dashboard.js";
+import {
+  AttentionAckInput, AttentionIdParams, AttentionItemDto, AttentionItemPage, AttentionQuery, AttentionResolveInput, DashboardQuery, DashboardResponse,
+} from "./dto-dashboard.js";
+import type { AttentionAdminPort } from "./attention-admin.js";
 import { flagOf, flagPage } from "./ops-services.js";
 import { rolePage } from "./roles.js";
 import type { AdminOpsServices, ElevationReaderPort } from "./ops-services.js";
+import type { StoreModerationPort } from "./store-moderation.js";
 import type { AdminServices } from "./services.js";
 
 /** Admin routes act on the staff's market as a whole; there is no object-level resolver (ids are checked against the market by the services: foreign id = 404). */
@@ -31,6 +39,14 @@ const approvalResource: ResourceResolver = (c) => ({ type: "approval_request", m
 
 const ELEVATION_ACTION = "elevation.approve";
 const KILL_RELEASE_ACTION = "kill_switch.engage";
+const STORE_SUSPEND_ACTION = "store.suspend";
+const STORE_REINSTATE_ACTION = "store.reinstate";
+/** The reason and note the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
+const moderationPayload = (payload: Readonly<Record<string, unknown>>): { reasonCode: string; note: string } => {
+  const { reasonCode, note } = payload;
+  if (typeof reasonCode !== "string" || typeof note !== "string") throw Problems.unprocessable("invalid-approval-payload");
+  return { reasonCode, note };
+};
 const releaseReason = (payload: Readonly<Record<string, unknown>>): string => (typeof payload.reason === "string" && payload.reason.length >= 3 ? payload.reason : "approved release");
 
 interface Staff { readonly principal: Principal; readonly marketId: string; readonly svc: AdminServices }
@@ -52,6 +68,75 @@ export class AdminController {
   private ops(t: Staff): AdminOpsServices {
     if (t.svc.ops === undefined) throw Problems.unavailable("admin-unavailable");
     return t.svc.ops;
+  }
+
+  private stores(t: Staff): StoreModerationPort {
+    const s = this.ops(t).stores;
+    if (s === undefined) throw Problems.unavailable("admin-unavailable");
+    return s;
+  }
+
+  private attention(t: Staff): AttentionAdminPort {
+    const a = this.ops(t).attention;
+    if (a === undefined) throw Problems.unavailable("admin-unavailable");
+    return a;
+  }
+
+  // ---------------------------------------------------------------- dashboard (Home)
+
+  @Get("dashboard")
+  @Authorize("dashboard.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminDashboard })
+  @Contract({
+    operationId: "adminGetDashboard",
+    summary: "Admin Home: today, sales, orders, money, trust, privacy and platform tiles. Each tile is authorized on its own action before it is read (forbidden = not computed); a failed or unconnected read is unavailable, never zero",
+    tags: ["Admin Dashboard"],
+    query: DashboardQuery,
+    response: DashboardResponse,
+    maxQueries: 10,
+  })
+  getDashboard(@Ctx() s: RequestState, @Query() q: DashboardQuery): Promise<DashboardResponse> {
+    const t = this.staff(s);
+    const svc = new DashboardService(t.svc, {
+      now: () => this.deps.clock.now(), logger: this.deps.logger,
+      market: (id) => {
+        const m = getMarket(id.toLowerCase());
+        return { timezone: m.timezone, currency: m.currency };
+      },
+    });
+    return svc.build(t.principal, t.marketId, q);
+  }
+
+  // ---------------------------------------------------------------- ops attention queue (money / cancellation work parked for a human)
+
+  @Get("attention")
+  @Paginated()
+  @Authorize("attention.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListAttention", summary: "Open and acknowledged attention items, newest first (ids and short codes only)", tags: ["Admin Attention"], query: AttentionQuery, response: AttentionItemPage, maxQueries: 3 })
+  listAttention(@Ctx() s: RequestState, @Query() q: AttentionQuery): Promise<AttentionItemPage> {
+    const t = this.staff(s);
+    return this.attention(t).list(t.principal, q);
+  }
+
+  @Post("attention/:attention_id/ack")
+  @HttpCode(200)
+  @Authorize("attention.write", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({ operationId: "adminAckAttention", summary: "Acknowledge an attention item (OPEN to ACKED; audited in the same transaction; acking again is an unchanged success, a resolved item is 409)", tags: ["Admin Attention"], params: AttentionIdParams, body: AttentionAckInput, response: AttentionItemDto, maxQueries: 8 })
+  ackAttention(@Ctx() s: RequestState, @Params() p: AttentionIdParams): Promise<AttentionItemDto> {
+    const t = this.staff(s);
+    return this.attention(t).ack(t.principal, p.attention_id);
+  }
+
+  @Post("attention/:attention_id/resolve")
+  @HttpCode(200)
+  @Authorize("attention.write", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({ operationId: "adminResolveAttention", summary: "Resolve an attention item with a fixed code (audited in the same transaction; the same code again is an unchanged success, another code is 409)", tags: ["Admin Attention"], params: AttentionIdParams, body: AttentionResolveInput, response: AttentionItemDto, maxQueries: 8 })
+  resolveAttention(@Ctx() s: RequestState, @Params() p: AttentionIdParams, @Body() body: AttentionResolveInput): Promise<AttentionItemDto> {
+    const t = this.staff(s);
+    return this.attention(t).resolve(t.principal, p.attention_id, body.resolution_code);
   }
 
   // ---------------------------------------------------------------- approval requests (dual approval queue)
@@ -95,6 +180,15 @@ export class AdminController {
       await t.svc.access.executeApproval(t.principal, decided.id, async (req, tx) => {
         if (!isKillSwitchName(req.targetId)) throw Problems.unprocessable("unknown-kill-switch");
         await this.ops(t).flags.set(t.principal, req.targetId, true, releaseReason(req.payload), tx);
+      });
+    } else if (decided.action === STORE_SUSPEND_ACTION || decided.action === STORE_REINSTATE_ACTION) {
+      const stores = this.stores(t);
+      // The effects run under other database roles, so they cannot share the claim transaction: prove the request first, apply the idempotent effects, then claim + audit.
+      const req = await t.svc.access.verifyApproved(t.principal, decided.id);
+      const to = decided.action === STORE_SUSPEND_ACTION ? "SUSPENDED" : "ACTIVE";
+      const applied = await stores.apply(t.principal, req.targetId, to, { ...moderationPayload(req.payload), approvalRequestId: req.id });
+      await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
+        await stores.record(t.principal, tx, applied);
       });
     } else if (decided.action === ELEVATION_ACTION) {
       // The executor is the last approver, never the requester.
@@ -167,6 +261,65 @@ export class AdminController {
   decideKyc(@Ctx() s: RequestState, @Params() p: KycCaseIdParams, @Body() body: KycDecisionInput): Promise<KycDecisionResult> {
     const t = this.staff(s);
     return t.svc.kyc.decide(t.principal, p.kyc_case_id, body);
+  }
+
+  // ---------------------------------------------------------------- store moderation (always dual approval)
+
+  /** Both routes only file the dual-approval request (409 dual-approval-required, request id in `detail`); the effect runs when the second approver votes. */
+  private async fileStoreRequest(t: Staff, storeId: string, action: string, payload: Record<string, unknown>, from: readonly string[]): Promise<never> {
+    const store = await this.stores(t).get(t.principal, storeId);
+    if (!from.includes(store.status)) throw new ProblemError(409, "invalid-transition", `The store is ${store.status}`);
+    const r = await t.svc.access.requireApproval(t.principal, { action, targetType: "store", targetId: storeId, payload });
+    if (!r.required) throw Problems.internal("dual-approval-expected");
+    throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
+  }
+
+  @Post("stores/:store_id/suspend")
+  @HttpCode(200)
+  @Authorize("store.suspend", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminSuspendStore",
+    summary: "Suspend a store (human decision; always dual approval: this files the request, the second approver's vote runs it and hides the seller's stores)",
+    tags: ["Admin KYC"],
+    params: StoreIdParams,
+    body: StoreSuspendInput,
+    response: SellerStore,
+    maxQueries: 8,
+  })
+  suspendStore(@Ctx() s: RequestState, @Params() p: StoreIdParams, @Body() body: StoreSuspendInput): Promise<SellerStore> {
+    return this.fileStoreRequest(this.staff(s), p.store_id, STORE_SUSPEND_ACTION, { reasonCode: body.reason_code, note: body.note, ...(body.finding_id === undefined ? {} : { findingId: body.finding_id }) }, ["ACTIVE", "VACATION"]);
+  }
+
+  @Post("stores/:store_id/reinstate")
+  @HttpCode(200)
+  @Authorize("store.reinstate", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminReinstateStore",
+    summary: "Reinstate a suspended store (always dual approval, like suspend)",
+    tags: ["Admin KYC"],
+    params: StoreIdParams,
+    body: StoreReinstateInput,
+    response: SellerStore,
+    maxQueries: 8,
+  })
+  reinstateStore(@Ctx() s: RequestState, @Params() p: StoreIdParams, @Body() body: StoreReinstateInput): Promise<SellerStore> {
+    return this.fileStoreRequest(this.staff(s), p.store_id, STORE_REINSTATE_ACTION, { reasonCode: body.reason_code, note: body.note }, ["SUSPENDED"]);
+  }
+
+  // ---------------------------------------------------------------- PII access log (DPO / security)
+
+  @Get("privacy/pii-access-log")
+  @Paginated()
+  @Authorize("pii_access.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListPiiAccessLog", summary: "Who viewed personal data and why (ids and reason codes only; reading it is not itself a PII view)", tags: ["Admin DPO"], query: PiiAccessLogQuery, response: PiiAccessLogEntryPage, maxQueries: 3 })
+  listPiiAccess(@Ctx() s: RequestState, @Query() q: PiiAccessLogQuery): Promise<PiiAccessLogEntryPage> {
+    const t = this.staff(s);
+    const reader = this.ops(t).piiAccess;
+    if (reader === undefined) throw Problems.unavailable("admin-unavailable");
+    return reader.list(t.principal, q);
   }
 
   // ---------------------------------------------------------------- reconciliation (finance, reason code, audited read)

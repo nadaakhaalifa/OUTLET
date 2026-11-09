@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
+import { authorize } from "@outlet/policy";
 import type { Principal } from "@outlet/policy";
 import { REQUIRED_DOCUMENTS, SellerAccountsError } from "@outlet/seller-accounts";
 import type { SellerOnboardingService } from "@outlet/seller-accounts";
@@ -10,7 +11,7 @@ import type {
   AdminKycCase, ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemDto, ReconciliationItemPage,
   ReconciliationRunDto, ReconciliationRunPage, RunsQuery,
 } from "./dto.js";
-import type { ApprovalReaderPort, KycAdminPort, ReconciliationReaderPort } from "./services.js";
+import type { ApprovalCount, ApprovalReaderPort, KycAdminPort, KycCount, ReconciliationReaderPort } from "./services.js";
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
 const isoOrNull = (v: Date | string | null): string | null => (v === null ? null : iso(v));
@@ -18,7 +19,34 @@ const DAY_MS = 86_400_000;
 
 /** Approval requests of the staff's market (policy approval_requests_user_isolation: market only). */
 export class PgApprovalReader implements ApprovalReaderPort {
-  constructor(private readonly db: RoleSqlClient<"outlet_app">) {}
+  constructor(private readonly db: RoleSqlClient<"outlet_app">, private readonly now: () => Date = () => new Date()) {}
+
+  /**
+   * Dashboard tile: PENDING, unexpired requests the caller may still decide: not their own, not already voted by them, and of an action their roles can
+   * decide (the same rule AdminAccess applies when a vote is cast; elevation.approve is decided by role.grant holders). One grouped statement, counted per action in code.
+   */
+  async countPending(p: Principal): Promise<ApprovalCount> {
+    if (p.userId === undefined) return { forMe: 0, soonestExpiresAt: null };
+    const at = this.now().toISOString();
+    const rows = await withDbContext(this.db, { kind: "user", marketId: p.marketId, userId: p.userId }, (tx) =>
+      tx.query<{ action: string; n: number; soonest: Date | string }>(
+        `SELECT r.action, count(*)::int AS n, min(r.expires_at) AS soonest FROM approval_requests r
+          WHERE r.market_id = $1 AND r.status = 'PENDING' AND r.expires_at > $2::timestamptz AND r.requested_by <> $3::uuid
+            AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.approval_request_id = r.id AND d.approver_id = $3::uuid)
+          GROUP BY r.action`,
+        [p.marketId, at, p.userId],
+      ),
+    );
+    let forMe = 0;
+    let soonest: string | null = null;
+    for (const r of rows.rows) {
+      if (authorize(p, r.action === "elevation.approve" ? "role.grant" : r.action, { type: "admin_access", marketId: p.marketId }).effect !== "allow") continue;
+      forMe += r.n;
+      const e = iso(r.soonest);
+      if (soonest === null || e < soonest) soonest = e;
+    }
+    return { forMe, soonestExpiresAt: soonest };
+  }
 
   private static map(r: Row): ApprovalRequestDto {
     const executed = r.status === "APPROVED" && r.executed_at !== null;
@@ -119,6 +147,19 @@ export class PgKycAdmin implements KycAdminPort {
       items: page.map((c) => ({ id: c.id, seller_id: c.seller_id, legal_name_ar: c.legal_name_ar ?? "", status: c.state, submitted_at: isoOrNull(c.submitted_at) })),
       next_cursor: r.rows.length > q.limit && last?.submitted_at != null ? encodeCursor(iso(last.submitted_at), last.id) : null,
     };
+  }
+
+  /** Dashboard tile: cases waiting for staff (SUBMITTED / AUTO_CHECKS) and waiting for the applicant (NEEDS_INFO), one statement on the queue index. */
+  async count(marketId: string): Promise<KycCount> {
+    const r = await withDbContext(this.worker, { kind: "worker", marketId, job: "seller.kyc" }, (tx: Queryable) =>
+      tx.query<{ submitted: number; needs_info: number; oldest: Date | string | null }>(
+        `SELECT count(*) FILTER (WHERE state IN ('SUBMITTED', 'AUTO_CHECKS'))::int AS submitted, count(*) FILTER (WHERE state = 'NEEDS_INFO')::int AS needs_info, min(submitted_at) AS oldest
+           FROM kyc_cases WHERE market_id = $1 AND kind = 'onboarding' AND submitted_at IS NOT NULL AND state IN ('SUBMITTED', 'AUTO_CHECKS', 'NEEDS_INFO')`,
+        [marketId],
+      ),
+    );
+    const row = r.rows[0];
+    return { submitted: row?.submitted ?? 0, needsInfo: row?.needs_info ?? 0, oldestAt: row?.oldest == null ? null : iso(row.oldest) };
   }
 
   async detail(marketId: string, caseId: string): Promise<AdminKycCase | null> {

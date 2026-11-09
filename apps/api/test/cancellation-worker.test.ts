@@ -1,7 +1,7 @@
 import { SELLER_ORDER_CANCELLED_EVENT, SELLER_ORDER_REJECTED_EVENT } from "@outlet/checkout";
 import { brandClient } from "@outlet/db";
 import { describe, expect, it } from "vitest";
-import { financeRefundHandlers, promotionsSettleHandlers } from "../src/worker-consumers.js";
+import { attentionHandlers, financeRefundHandlers, promotionsSettleHandlers } from "../src/worker-consumers.js";
 
 const worker = brandClient<"outlet_worker">({ query: () => Promise.reject(new Error("db")), transaction: () => Promise.reject(new Error("db")) });
 
@@ -51,5 +51,22 @@ describe("promotionsSettleHandlers", () => {
     expect(confirmed).toEqual([]);
     expect(calls.some((c) => c.sql.startsWith("INSERT INTO inbox_processed"))).toBe(true);
     expect(calls.some((c) => c.sql.includes("outbox_events") && c.params.includes("promotions.settle_attention"))).toBe(true);
+  });
+});
+
+describe("attentionHandlers (ops.attention)", () => {
+  it("routes the three attention events to one consumer and binds the ops.attention worker context", async () => {
+    const calls: { sql: string; params: readonly unknown[] }[] = [];
+    const q = (sql: string, params: readonly unknown[] = []) => {
+      calls.push({ sql, params });
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    };
+    const w = brandClient<"outlet_worker">({ query: q, transaction: (fn: (tx: { query: typeof q }) => Promise<unknown>) => fn({ query: q }) } as never);
+    const h = attentionHandlers(w, "eg");
+    expect([...h.keys()].sort()).toEqual(["promotions.settle_attention", "refund.attention", "shipment.cancel_attention"]);
+    // the inbox lookup finds nothing and the insert returns no row: the consumer reports a duplicate without touching attention_items
+    expect(await h.get("refund.attention")?.({ id: "e1", type: "refund.attention", payload: {} })).toBe("duplicate");
+    expect(calls.some((c) => c.params.includes("ops.attention"))).toBe(true);
+    expect(calls.some((c) => c.sql.includes("attention_items"))).toBe(false);
   });
 });

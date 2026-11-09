@@ -100,3 +100,35 @@ export const ElevationDto = z.strictObject({
 export type ElevationDto = z.infer<typeof ElevationDto>;
 export const ElevationPage = pageOf(ElevationDto);
 export type ElevationPage = z.infer<typeof ElevationPage>;
+
+// ---- PII access log (docs/api/openapi.yaml adminListPiiAccessLog): ids and reason codes only, never the data that was viewed
+export const PiiAccessLogQuery = CursorQuery.extend({
+  staff_id: z.uuid().optional(),
+  target_type: z.string().min(1).max(200).optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+});
+export type PiiAccessLogQuery = z.infer<typeof PiiAccessLogQuery>;
+export const PiiAccessLogEntryDto = z.strictObject({
+  id: z.uuid(),
+  staff_id: z.string().max(500),
+  action: z.string().max(500),
+  target_type: z.string().max(500),
+  target_id: z.string().max(500),
+  reason_code: z.string().max(500),
+  request_id: z.string().max(500).nullable(),
+  occurred_at: Iso,
+});
+export type PiiAccessLogEntryDto = z.infer<typeof PiiAccessLogEntryDto>;
+export const PiiAccessLogEntryPage = pageOf(PiiAccessLogEntryDto);
+export type PiiAccessLogEntryPage = z.infer<typeof PiiAccessLogEntryPage>;
+
+// ---- store moderation (adminSuspendStore, adminReinstateStore): always dual approval, so the first call files the request (409 dual-approval-required)
+export const STORE_SUSPEND_REASONS = ["price_fraud", "counterfeit", "kyc_failure", "policy_violation", "customer_safety", "legal_order"] as const;
+export const STORE_REINSTATE_REASONS = ["appeal_upheld", "issue_resolved", "error_corrected"] as const;
+export const StoreIdParams = z.strictObject({ store_id: z.uuid() });
+export type StoreIdParams = z.infer<typeof StoreIdParams>;
+export const StoreSuspendInput = z.strictObject({ reason_code: z.enum(STORE_SUSPEND_REASONS), note: z.string().trim().min(3).max(2000), finding_id: z.uuid().optional() });
+export type StoreSuspendInput = z.infer<typeof StoreSuspendInput>;
+export const StoreReinstateInput = z.strictObject({ reason_code: z.enum(STORE_REINSTATE_REASONS), note: z.string().trim().min(3).max(2000) });
+export type StoreReinstateInput = z.infer<typeof StoreReinstateInput>;

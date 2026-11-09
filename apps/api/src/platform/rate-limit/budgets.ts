@@ -65,6 +65,8 @@ export const RATE_BUDGETS = {
   /** Admin Console (staff): keyed by the staff user; writes fail closed. */
   adminRead: b("admin_read", 120, MINUTE, ["user"], "open", "default"),
   adminWrite: b("admin_write", 30, MINUTE, ["user"], "closed", "default"),
+  /** Home dashboard: one call per page load plus the range switch; reads rollups and a few indexed counts, so 30 per minute per staff user. */
+  adminDashboard: b("admin_dashboard", 30, MINUTE, ["user"], "open", "default"),
   /** Full-chain integrity scans (audit-log/verify): each call re-hashes the whole market chain, so few per minute per staff user. */
   adminVerify: b("admin_verify", 6, MINUTE, ["user"], "closed", "default"),
   /** PSP callbacks carry no device id: authenticity is the IP allow-list + HMAC, this is only flood control (IP fallback). */

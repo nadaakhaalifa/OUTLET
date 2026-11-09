@@ -37,7 +37,7 @@ import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/inde
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
-import { FlagAdmin, PgApprovalReader, PgAuditReader, PgElevationReader, PgKycAdmin, PgReconciliationReader } from "../src/modules/admin/index.js";
+import { AttentionAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration } from "../src/modules/admin/index.js";
 import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
 import { InMemoryBuyerDelivery } from "./seller-orders-fakes.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
@@ -344,12 +344,14 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   // In-memory chain for the console tests; it cannot roll back with the transaction (the Postgres store is covered in admin-ops-tx.test.ts).
   const adminChain = new AuditChain(adminAudit, { now });
   const chainAudit = { appendIn: (_tx: unknown, input: Parameters<AuditChain["append"]>[0]) => adminChain.append(input) };
+  const kycOnboarding = new SellerOnboardingService({ app: appClient, auth: authClient, worker: roleClient(raw, "outlet_worker"), marketId: DB_MARKET, cipher: authDeps.cipher, hasher: authDeps.hasher, now }, new UnconfiguredKycCheck());
   const adminServices = {
     access: createAdminAccess({ db: appClient, audit: chainAudit, clock: now, thresholdMinor: 0n }),
     approvals: new PgApprovalReader(appClient),
-    kyc: new PgKycAdmin(roleClient(raw, "outlet_worker"), new SellerOnboardingService({ app: appClient, auth: authClient, worker: roleClient(raw, "outlet_worker"), marketId: DB_MARKET, cipher: authDeps.cipher, hasher: authDeps.hasher, now }, new UnconfiguredKycCheck())),
+    kyc: new PgKycAdmin(roleClient(raw, "outlet_worker"), kycOnboarding),
     reconciliation: new PgReconciliationReader(roleClient(raw, "outlet_worker")),
-    ...(opts.adminOps === false ? {} : { ops: { flags: new FlagAdmin(appClient, chainAudit), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient, now) } }),
+    dashboard: new PgDashboardReader(roleClient(raw, "outlet_worker")),
+    ...(opts.adminOps === false ? {} : { ops: { flags: new FlagAdmin(appClient, chainAudit), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient, now), piiAccess: new PgPiiAccessReader(appClient), attention: new AttentionAdmin(appClient, chainAudit, now), stores: new StoreModeration({ stores: new StoreService({ ...catalogDeps, now }), sellers: kycOnboarding, audit: chainAudit }) } }),
   };
   const deps: ApiDeps = {
     admin: () => adminServices,

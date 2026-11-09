@@ -10,7 +10,7 @@ import { InventoryService, ReservationService } from "@outlet/inventory";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
 import { uuidv7 } from "@outlet/ids";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
-import { DefectService, ListingService, PublicCatalogService, VariantService } from "@outlet/catalog";
+import { DefectService, ListingService, PublicCatalogService, StoreService, VariantService } from "@outlet/catalog";
 import type { CatalogDeps } from "@outlet/catalog";
 import { FlagService, PostgresFlagStore } from "@outlet/flags";
 import { IdempotencyStore } from "@outlet/idempotency";
@@ -38,7 +38,7 @@ import {
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
-import { FlagAdmin, PgApprovalReader, PgAuditReader, PgElevationReader, PgKycAdmin, PgReconciliationReader, unconfiguredAdminServices } from "./modules/admin/index.js";
+import { AttentionAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration, unconfiguredAdminServices } from "./modules/admin/index.js";
 import type { AdminServices } from "./modules/admin/index.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SellerInventoryService } from "./modules/seller-inventory/index.js";
@@ -164,13 +164,22 @@ for (const m of listMarkets()) {
   sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
   // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. Audited staff writes append to the Postgres hash chain (outlet_app, same transaction); dual approval is required at every amount (threshold 0) until finance sets one.
   const auditPort = new PgAuditStore(appClient);
-  admins.set(marketId, workerClient === undefined
+  const kycOnboarding = workerClient === undefined ? undefined : new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck());
+  admins.set(marketId, workerClient === undefined || kycOnboarding === undefined
     ? unconfiguredAdminServices
     : {
         access: createAdminAccess({ db: appClient, audit: auditPort, clock: () => new Date(), thresholdMinor: 0n }),
-        ops: { flags: new FlagAdmin(appClient, auditPort), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient) },
+        // Store suspend / reinstate need the seller.kyc worker job (seller and KYC case) and the store context (stores + public read model); without DATABASE_URL_WORKER the whole console is 503.
+        ops: {
+          flags: new FlagAdmin(appClient, auditPort), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient), piiAccess: new PgPiiAccessReader(appClient),
+          stores: new StoreModeration({ stores: new StoreService({ client: appClient, marketId }), sellers: kycOnboarding, audit: auditPort }),
+          // Attention queue (outlet_app, user context; every write audits in its own transaction). The Home dashboard reads the rollups as the admin.dashboard worker job; until the
+          // reporting.rollup job has run, snapshot and sales tiles answer unavailable/not_connected (never zero), and cod_unremitted / ledger_integrity stay not connected.
+          attention: new AttentionAdmin(appClient, auditPort),
+        },
+        dashboard: new PgDashboardReader(workerClient),
         approvals: new PgApprovalReader(appClient),
-        kyc: new PgKycAdmin(workerClient, new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck())),
+        kyc: new PgKycAdmin(workerClient, kycOnboarding),
         reconciliation: new PgReconciliationReader(workerClient),
       });
   // Addresses, returns, tracking and the seller application. Courier, return evidence, cancellation saga and KYC provider stay unconfigured and fail closed (ADR-0029).

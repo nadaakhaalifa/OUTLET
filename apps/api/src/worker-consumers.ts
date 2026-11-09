@@ -1,6 +1,8 @@
 import { CancellationRefundConsumer, PROMOTIONS_SETTLE_EVENT, PromotionsSettleConsumer, SELLER_ORDER_CANCELLED_EVENT, SELLER_ORDER_REJECTED_EVENT } from "@outlet/checkout";
 import type { CancellationRefundPort, PromotionsPort } from "@outlet/checkout";
 import type { RoleSqlClient } from "@outlet/db";
+import { ATTENTION_KINDS, AttentionConsumer } from "@outlet/ops-attention";
+import { RollupConsumer, RollupService, ROLLUP_REQUESTED_EVENT } from "@outlet/reporting";
 import { SHIPMENT_CANCEL_REQUIRED_EVENT, ShipmentCancelConsumer } from "@outlet/shipping";
 import type { CourierPort } from "@outlet/shipping";
 import type { InboxOutcome } from "@outlet/outbox";
@@ -34,4 +36,19 @@ export const promotionsSettleHandlers = (worker: RoleSqlClient<"outlet_worker">,
 export const shipmentCancelHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, courier: Pick<CourierPort, "cancelShipment">): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
   const c = new ShipmentCancelConsumer({ client: worker, marketId, courier });
   return new Map([[SHIPMENT_CANCEL_REQUIRED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
+};
+
+/** ops.attention job: queues the `*.attention` events the money and cancellation workers park (refund, voucher settlement, shipment cancel) for ops (migration 0033). */
+export const attentionHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const c = new AttentionConsumer(worker, marketId);
+  return new Map(ATTENTION_KINDS.map((t) => [t, (e: OutboxEventIn) => c.handle(e)]));
+};
+
+/**
+ * reporting.rollup job: a scheduler tick (`reporting.rollup_requested`, scope sales | nightly | snapshots) recomputes the admin dashboard rollups of this market
+ * (migration 0035): sales every 5 minutes (last 3 days), snapshots every 60 seconds, nightly 90 days. Idempotent and inbox-deduplicated; the tick source (cron) is composed with the worker process.
+ */
+export const reportingRollupHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date()): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const c = new RollupConsumer(worker, marketId, new RollupService({ client: worker, now }));
+  return new Map([[ROLLUP_REQUESTED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
 };

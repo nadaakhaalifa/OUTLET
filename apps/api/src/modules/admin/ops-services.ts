@@ -6,9 +6,11 @@ import type { Queryable, RoleSqlClient, SqlClient } from "@outlet/db";
 import { FlagService, KILL_SWITCHES, PostgresFlagStore, isKillSwitchName } from "@outlet/flags";
 import type { FlagRecord, KillSwitchName } from "@outlet/flags";
 import type { Principal } from "@outlet/policy";
+import type { AttentionAdminPort } from "./attention-admin.js";
+import type { StoreModerationPort } from "./store-moderation.js";
 import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { Problems } from "../../platform/problem.js";
-import type { AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDto, ElevationPage, ElevationsQuery, FeatureFlagDto, FeatureFlagPage, FlagsQuery } from "./dto-ops.js";
+import type { AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDto, ElevationPage, ElevationsQuery, FeatureFlagDto, FeatureFlagPage, FlagsQuery, PiiAccessLogEntryPage, PiiAccessLogQuery } from "./dto-ops.js";
 
 /** Appends one hash-chained audit entry. AuditChain satisfies it; production stays Unconfigured (503) until the Postgres chain is composed. */
 export interface AuditAppendPort {
@@ -30,11 +32,20 @@ export interface AuditReaderPort {
   verify(p: Principal, q: AuditVerifyQuery): Promise<AuditVerifyResult>;
 }
 
+export interface ElevationCount { readonly active: number; readonly pending: number }
+
 export interface ElevationReaderPort {
+  /** Dashboard: APPROVED and live now, PENDING and undecided; `all` = the whole market (approvers), otherwise only the caller's own. */
+  countActive(p: Principal, all: boolean): Promise<ElevationCount>;
   /** `all`: every elevation of the market (approvers); otherwise only the caller's own. */
   list(p: Principal, q: ElevationsQuery, all: boolean): Promise<ElevationPage>;
   /** 404 when it is not in the market, or is someone else's and `all` is false. */
   get(p: Principal, id: string, all: boolean): Promise<ElevationDto>;
+}
+
+export interface PiiAccessReaderPort {
+  /** Market-pinned keyset page of pii_access_log (newest first). Ids and reason codes only. */
+  list(p: Principal, q: PiiAccessLogQuery): Promise<PiiAccessLogEntryPage>;
 }
 
 /** The Admin Console operations on flags and the audit trail. Optional on AdminServices: absent means 503 (not composed). */
@@ -43,6 +54,12 @@ export interface AdminOpsServices {
   readonly audit: AuditReaderPort;
   /** Absent until composed: the elevation routes answer 503. */
   readonly elevations?: ElevationReaderPort;
+  /** Absent until composed: the PII access log route answers 503. */
+  readonly piiAccess?: PiiAccessReaderPort;
+  /** Absent until composed: the store suspend / reinstate routes answer 503. */
+  readonly stores?: StoreModerationPort;
+  /** Absent until composed: the attention routes answer 503 and the dashboard tile reads `not_connected`. */
+  readonly attention?: AttentionAdminPort;
 }
 
 const noopAudit = { record: (): Promise<void> => Promise.resolve() };
@@ -209,10 +226,57 @@ export class PgElevationReader implements ElevationReaderPort {
     return { items: page.map((r) => mapElev(r, now)), next_cursor: rows.rows.length > q.limit && last !== undefined ? encodeCursor(iso(last.created_at), last.id) : null };
   }
 
+  async countActive(p: Principal, all: boolean): Promise<ElevationCount> {
+    if (!all && p.userId === undefined) return { active: 0, pending: 0 };
+    const at = this.now().toISOString();
+    const r = await withDbContext(this.db, this.ctx(p), (tx) =>
+      tx.query<{ active: number; pending: number }>(
+        `SELECT count(*) FILTER (WHERE status = 'APPROVED' AND starts_at <= $2::timestamptz AND expires_at > $2::timestamptz)::int AS active,
+                count(*) FILTER (WHERE status = 'PENDING' AND pending_until > $2::timestamptz)::int AS pending
+           FROM elevation_requests WHERE market_id = $1 AND status IN ('APPROVED', 'PENDING') AND ($3::boolean OR staff_id = $4::uuid)`,
+        [p.marketId, at, all, p.userId ?? null],
+      ),
+    );
+    return { active: r.rows[0]?.active ?? 0, pending: r.rows[0]?.pending ?? 0 };
+  }
+
   async get(p: Principal, id: string, all: boolean): Promise<ElevationDto> {
     const r = await withDbContext(this.db, this.ctx(p), (tx) => tx.query<ElevRow>(`${ELEV_SELECT} WHERE e.id = $1 AND e.market_id = $2`, [id, p.marketId]));
     const row = r.rows[0];
     if (row === undefined || (!all && row.staff_id !== p.userId)) throw Problems.notFound();
     return mapElev(row, this.now());
+  }
+}
+
+interface PiiRow { id: string; actor_id: string; target_type: string; target_id: string; action: string; reason_code: string; request_id: string | null; occurred_at: Date | string }
+
+/**
+ * pii_access_log reads through the SECURITY DEFINER function pii_access_log_list (0032), like the audit log: outlet_app has no SELECT on the table.
+ * The table holds ids and reason codes only, so reading it is not itself a PII view (no reason code, no new log row); policy action pii_access.read.
+ */
+export class PgPiiAccessReader implements PiiAccessReaderPort {
+  constructor(private readonly db: RoleSqlClient<"outlet_app">) {}
+
+  async list(p: Principal, q: PiiAccessLogQuery): Promise<PiiAccessLogEntryPage> {
+    let at: string | null = null;
+    let id: string | null = null;
+    if (q.cursor !== undefined) {
+      const [a, i] = decodeCursor(q.cursor, 2);
+      if (a === undefined || i === undefined || Number.isNaN(Date.parse(a)) || !UUID.test(i)) throw Problems.badRequest("cursor-invalid");
+      at = a;
+      id = i;
+    }
+    const from = q.from === undefined ? null : `${q.from}T00:00:00Z`;
+    const until = q.to === undefined ? null : new Date(Date.parse(`${q.to}T00:00:00Z`) + DAY_MS).toISOString();
+    const rows = await withDbContext(this.db, { kind: "user", marketId: p.marketId, ...(p.userId === undefined ? {} : { userId: p.userId }) }, (tx) =>
+      tx.query<PiiRow>("SELECT id, actor_id, target_type, target_id, action, reason_code, request_id, occurred_at FROM pii_access_log_list($1::timestamptz, $2::uuid, $3::int, $4::text, $5::text, $6::timestamptz, $7::timestamptz)",
+        [at, id, q.limit + 1, q.staff_id ?? null, q.target_type ?? null, from, until]),
+    );
+    const page = rows.rows.slice(0, q.limit);
+    const last = page[page.length - 1];
+    return {
+      items: page.map((r) => ({ id: r.id, staff_id: r.actor_id, action: r.action, target_type: r.target_type, target_id: r.target_id, reason_code: r.reason_code, request_id: r.request_id, occurred_at: iso(r.occurred_at) })),
+      next_cursor: rows.rows.length > q.limit && last !== undefined ? encodeCursor(iso(last.occurred_at), last.id) : null,
+    };
   }
 }
