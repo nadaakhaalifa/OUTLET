@@ -57,6 +57,17 @@ describe("transactional dispatch", () => {
     expect(await logRows(env.client, u)).toHaveLength(2);
   });
 
+  it("renders the Arabic cancellation notice for order_group.cancelled without placeholders", async () => {
+    env = await setupEnv();
+    const u = await insertUser(env.client);
+    const d = env.dispatcher();
+    expect(await d.handle(event("order_group.cancelled", u, { reason_code: "changed_mind", refund_expected: true, currency: "EGP" }))).toBe("processed");
+    expect(await d.runDue("EG")).toBe(2);
+    const msg = env.fakes.push.sent[0];
+    expect(msg?.title).toBe("اتلغى طلبك");
+    expect(msg?.body).not.toMatch(/\{|order_cancelled/);
+  });
+
   it("maps every notifying event type and ignores the rest or an unresolved recipient", async () => {
     env = await setupEnv();
     const u = await insertUser(env.client);

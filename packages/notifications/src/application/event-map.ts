@@ -27,6 +27,8 @@ export const mapEvent = (e: OutboxEvent): EventNotification | null => {
       return { templateCode: "order_placed", vars: (l) => amountVars(e.payload, "total_minor", l) };
     case "order_group.paid":
       return { templateCode: "order_paid", vars: (l) => amountVars(e.payload, "total_minor", l) };
+    case "order_group.cancelled":
+      return { templateCode: "order_cancelled", vars: () => ({}) };
     case "seller_order.shipped":
       return { templateCode: "order_shipped", vars: () => ({}) };
     case "seller_order.delivered":
@@ -43,6 +45,7 @@ export const mapEvent = (e: OutboxEvent): EventNotification | null => {
 export const NOTIFYING_EVENT_TYPES = [
   "order_group.placed",
   "order_group.paid",
+  "order_group.cancelled",
   "seller_order.shipped",
   "seller_order.delivered",
   "refund.completed",
