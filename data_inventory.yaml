@@ -1197,6 +1197,8 @@ tables:
       - {name: "pdpc_notified_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "subjects_deadline_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "subjects_notified_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "pdpc_recorded_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+      - {name: "subjects_recorded_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "closed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "postmortem_ref", type: "text", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["privacy_rights"], lawful_basis: not_personal_data, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
