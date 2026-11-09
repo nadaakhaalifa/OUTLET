@@ -89,7 +89,7 @@ export const buildWorld = async (): Promise<World> => {
   const fakes = { policy: new FakePolicy(), evidence: new FakeEvidence(), restock: new FakeRestock(), provider: new FakeProvider(), kill: new FakeKill() };
   let lastAdmin: AdminAccess | undefined;
   const make: World["make"] = (config, realRestock = false) => {
-    const adminAccess = createAdminAccess({ db: app, audit: { append: () => Promise.resolve() }, clock: now, thresholdMinor: config?.dualApproval?.thresholdMinor ?? 500_000n });
+    const adminAccess = createAdminAccess({ db: app, audit: { appendIn: () => Promise.resolve() }, clock: now, thresholdMinor: config?.dualApproval?.thresholdMinor ?? 500_000n });
     lastAdmin = adminAccess;
     const deps = { admin: adminAccess, app, worker: workerClient, marketId: "EG", policy: fakes.policy, evidence: fakes.evidence, restock: realRestock ? new InventoryRestock(app, "EG") : fakes.restock, provider: fakes.provider, kill: fakes.kill, now, ...(config === undefined ? {} : { config }) };
     return { returns: new ReturnService(deps), refunds: new RefundService(deps) };

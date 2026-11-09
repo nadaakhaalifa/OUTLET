@@ -10,6 +10,7 @@ export type ReturnsErrorCode =
   | "nothing_to_return"
   | "qty_exceeds_purchased"
   | "bnpl_provider_only"
+  | "request_bnpl_provider_only"
   | "refunds_disabled"
   | "refund_exceeds_paid"
   | "commission_base_mismatch"

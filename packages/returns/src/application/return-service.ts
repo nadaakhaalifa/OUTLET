@@ -142,6 +142,12 @@ export class ReturnService {
       if (first === undefined || lines.some((l) => l.seller_order_id !== first.seller_order_id)) throw new ReturnsError("not_found");
       if (first.so_status !== "DELIVERED" && first.so_status !== "CLOSED") throw new ReturnsError("not_delivered");
 
+      // BNPL money goes back through the provider only (B3): refuse the credit preference now, not at refund time
+      if (input.refundChoice === "store_credit") {
+        const pm = (await tx.query<{ payment_method: string }>("SELECT payment_method FROM order_groups WHERE id = $1", [first.order_group_id])).rows[0]?.payment_method;
+        if (pm === "bnpl") throw new ReturnsError("request_bnpl_provider_only", "BNPL refunds go back through the provider only");
+      }
+
       const nonReturnable = await env.policy.nonReturnable(lines.map((l) => l.sku_id));
       const eligibility = checkEligibility({
         reason: input.reason, deliveredAt: first.delivered_at === null ? null : new Date(first.delivered_at), now,

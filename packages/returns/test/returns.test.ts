@@ -191,11 +191,9 @@ describe("router branches end to end", () => {
     expect(e.get("bnpl_clearing:EG:EGP:valu")).toBe(-10_000n);
     expect([...e.keys()].some((k) => k.startsWith("store_credit"))).toBe(false);
     const o2 = await w.order({ userId: u, storeId: a, lines: [{ price: 10_000n }], method: "bnpl", bnplProvider: "valu", deliveredDaysAgo: 1 });
-    const r2 = await req(u, o2, "changed_mind", { refundChoice: "store_credit" });
-    const s = w.seller(a);
-    await w.returns.receive(s, a, r2.id);
-    await w.returns.inspect(s, a, r2.id, { result: "accepted" });
-    expect(await errCode(w.refunds.createForReturn(r2.id))).toBe("bnpl_provider_only");
+    // refused at REQUEST time (422), not at refund time; the original-method choice still works
+    expect(await errCode(req(u, o2, "changed_mind", { refundChoice: "store_credit" }))).toBe("request_bnpl_provider_only");
+    expect((await req(u, o2, "changed_mind", { refundChoice: "original" })).status).toBe("APPROVED");
   });
   it("COD: instant store credit by default (no provider call), completes with the ledger entry", async () => {
     const [a] = w.stores;
