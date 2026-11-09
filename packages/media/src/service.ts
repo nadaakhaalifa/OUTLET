@@ -61,8 +61,14 @@ export class MediaService {
     return contextClient(this.deps.app, { kind: "store", marketId: this.deps.marketId, storeId, ...userId });
   }
 
-  private authorizeIngest(actor: Principal, storeId: string | undefined): void {
+  private authorizeIngest(actor: Principal, storeId: string | undefined, kind: MediaKind): void {
     if (storeId === undefined) {
+      // An applicant uploads their own KYC document as themselves (no store exists yet): policy action seller.onboard on their own application.
+      if (kind === "document" && actor.kind === "shopper" && actor.userId !== undefined) {
+        const d = authorize(actor, "seller.onboard", { type: "seller_application", ownerUserId: actor.userId, marketId: this.deps.marketId });
+        if (d.effect === "deny") throw new MediaError("not_found");
+        return;
+      }
       if (actor.kind !== "system" || !actor.scopes.includes("media.platform_write") || actor.marketId !== this.deps.marketId) throw new MediaError("not_found");
       return;
     }
@@ -77,7 +83,7 @@ export class MediaService {
    */
   async ingest(input: IngestInput): Promise<MediaAsset> {
     const { bytes, kind, actor, storeId } = input;
-    this.authorizeIngest(actor, storeId);
+    this.authorizeIngest(actor, storeId, kind);
     const mime = await sniff(bytes, input.declaredMime, kind);
     const id = uuidv7();
     const prefix = `${this.deps.marketId}/${storeId ?? "platform"}/${id}`;

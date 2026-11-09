@@ -144,6 +144,14 @@ describe("ingest + scan + outbox", () => {
       "SELECT count(*)::text n FROM media_assets m WHERE m.status = 'ready' AND NOT EXISTS (SELECT 1 FROM outbox_events e WHERE e.aggregate_id = m.id)");
     expect(orphan.rows[0]?.n).toBe("0");
   });
+  it("an applicant uploads a KYC document as themselves; nothing else platform-owned, and not across markets or as anonymous", async () => {
+    const shopper: Principal = { kind: "shopper", userId: randomUUID(), marketId: "EG", roles: [], scopes: [] };
+    const d = await mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: shopper });
+    expect(d.storeId).toBeNull();
+    await expect(mk().ingest({ bytes: await small(400), declaredMime: "image/png", kind: "brand_logo", actor: shopper })).rejects.toMatchObject({ code: "not_found" });
+    await expect(mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: { ...shopper, marketId: "FR" } })).rejects.toMatchObject({ code: "not_found" });
+    await expect(mk().ingest({ bytes: pdf, declaredMime: "application/pdf", kind: "document", actor: { kind: "anonymous", marketId: "EG", roles: [], scopes: [] } })).rejects.toMatchObject({ code: "not_found" });
+  });
   it("authorization: other store staff and anonymous cannot ingest; platform needs system scope", async () => {
     await expect(mk().ingest({ bytes: photo, declaredMime: "image/jpeg", kind: "product", actor: staff([storeB]), storeId: storeA })).rejects.toMatchObject({ code: "not_found" });
     await expect(mk().ingest({ bytes: photo, declaredMime: "image/jpeg", kind: "product", actor: staff([storeA], ["support"]), storeId: storeA })).rejects.toMatchObject({ code: "forbidden" });
