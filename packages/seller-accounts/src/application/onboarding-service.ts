@@ -138,8 +138,8 @@ export class SellerOnboardingService {
 
   /**
    * Any verified, active login may start a seller application; it becomes the applicant (and later first owner). Runs entirely under the
-   * applicant's own outlet_app context (no worker job): the seller row goes through create_seller_draft(), the case through the
-   * kyc_cases_user_isolation policy. One live case per applicant (409 onboarding_exists); a REJECTED case allows a fresh draft.
+   * applicant's own outlet_app context (no worker job): the seller row and the kyc_cases row are both written by create_seller_draft()
+   * (SECURITY DEFINER, user context only, applicant and seller_id forced server-side). One live case per applicant (409 onboarding_exists); a REJECTED case allows a fresh draft.
    */
   async createDraft(userId: string, raw: SellerDraftInput): Promise<{ sellerId: string; caseId: string }> {
     const input = SellerDraftInput.parse(raw);
@@ -152,11 +152,10 @@ export class SellerOnboardingService {
         if (u.rows[0]?.status !== "active") throw notFound("user");
         const existing = await this.liveCase(tx);
         if (existing !== undefined) throw new OnboardingExistsError(existing.sellerId, existing.caseId);
-        await tx.query("SELECT create_seller_draft($1,$2,$3,$4,$5,$6,$7,$8,$9)", [
-          sellerId, input.legal_type, input.legal_name_ar ?? null, input.legal_name_en ?? null, input.commercial_register_no ?? null,
+        await tx.query("SELECT create_seller_draft($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [
+          sellerId, caseId, input.legal_type, input.legal_name_ar ?? null, input.legal_name_en ?? null, input.commercial_register_no ?? null,
           input.tax_card_no ?? null, input.governorate_code ?? null, input.governorate_name_ar ?? null, at,
         ]);
-        await tx.query("INSERT INTO kyc_cases (id, seller_id, market_id, applicant_user_id, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)", [caseId, sellerId, this.env.marketId, userId, at]);
         await emit(this.env, tx, "seller.created", "seller", sellerId, { caseId });
       });
     } catch (e) {
