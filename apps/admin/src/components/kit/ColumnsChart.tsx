@@ -17,11 +17,12 @@ export interface ColumnPoint {
  * colour). Digits sit in `bdi`. The table view lists every value. `rtl` mirrors the time axis.
  * Renders exactly the points it is given.
  */
-export function ColumnsChart({ points, rtl, title, note, format, axisFormat, valueHeader, labelHeader, tableLabel, emptyText, highestLabel, latestLabel, size = "md" }: {
+export function ColumnsChart({ points, rtl, title, note, summary, format, axisFormat, valueHeader, labelHeader, tableLabel, emptyText, highestLabel, latestLabel, size = "md" }: {
   points: readonly ColumnPoint[];
   rtl: boolean;
   title: string;
   note?: string;
+  summary?: string;
   format: FormatSpec;
   axisFormat: FormatSpec;
   valueHeader: string;
@@ -67,7 +68,7 @@ export function ColumnsChart({ points, rtl, title, note, format, axisFormat, val
   );
   const table = <DataTable caption={title} table={{ head: [labelHeader, valueHeader], rows: points.map((p) => [p.label, formatWith(format, p.value)]) }} />;
   return (
-    <ChartFrame title={title} note={note} size={size}>
+    <ChartFrame title={title} note={note} summary={summary} size={size}>
       {m.empty && points.length === 0 ? <p className="colsEmpty">{emptyText}</p> : <ChartTableToggle chart={chart} table={table} label={tableLabel} />}
     </ChartFrame>
   );

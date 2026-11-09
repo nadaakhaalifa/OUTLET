@@ -205,6 +205,23 @@ g[data-newest="true"] .colsBar { fill: var(--color-action-primary-bg); }
 @media (min-width: 48rem) { .todayGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 80rem) { .todayGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .tileNoteLine { display: block; }
+.tileCard { padding: 0; }
+.tileCardLink { display: flex; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: var(--space-3); color: inherit; text-decoration: none; border-radius: inherit; }
+a.tileCardLink:hover { background: var(--color-bg-subtle); }
+.tileCardText { display: grid; flex: 1; min-inline-size: 0; gap: 2px; }
+.tileCard .tileLabel { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); margin: 0; }
+.tileCard .tileNote { font-size: var(--font-size-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tileCard .tileNoteLine { display: none; }
+.tileCard .tileNoteLine:first-child { display: block; overflow: hidden; text-overflow: ellipsis; }
+.tileCard .tileValue { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); line-height: var(--font-line-height-tight); flex: none; }
+.tileChevron { display: inline-grid; flex: none; color: var(--color-text-secondary); transform: rotate(-90deg); }
+.tileChevron:dir(rtl) { transform: rotate(90deg); }
+.tileCard .spark { flex: none; inline-size: 4.5rem; margin: 0; }
+.tileCard[data-tone="alert"] { border-inline-start: 4px solid var(--color-critical-text); }
+.tileGrid > .tile:not(.tileCard) { grid-template-rows: auto auto 1fr auto; }
+.chartSummary { margin: 0; font-weight: var(--font-weight-semibold); }
+.attention { max-inline-size: 56rem; justify-self: start; inline-size: 100%; }
+.attentionList li[data-urgent] { border-inline-start: 4px solid var(--color-critical-text); }
 .rangePills { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .rangePill { display: inline-flex; align-items: center; justify-content: center; min-block-size: 44px; min-inline-size: 44px; padding-inline: var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--color-border-input); color: var(--color-text-primary); text-decoration: none; font-weight: var(--font-weight-semibold); background: var(--color-bg-surface); }
 .rangePill[aria-current="true"] { background: var(--color-action-primary-bg); color: var(--color-action-primary-text); border-color: transparent; }

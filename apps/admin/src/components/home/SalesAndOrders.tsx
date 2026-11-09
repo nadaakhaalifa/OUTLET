@@ -3,6 +3,8 @@ import type { Locale, MessageKey, Translator } from "@outlet/i18n";
 import { bucketSeries, flattenTiles, permille, RANGES, tileState, type DashboardResponse, type Range, type SeriesPoint, type TileKey, type Tiles } from "../../lib/dashboard";
 import { fmtMoney, fmtNumber } from "../../lib/fmt";
 import { BarList, type BarListItem } from "../kit/BarList";
+import { ChartTableToggle } from "../kit/ChartTableToggle";
+import { DataTable } from "../kit/ChartFrame";
 import { ColumnsChart } from "../kit/ColumnsChart";
 import { KpiCard } from "../kit/KpiCard";
 import { shortDay } from "./HomeTile";
@@ -50,12 +52,12 @@ export function SalesAndOrders({ resp, range, now, t, locale, base, rtl }: { res
       const weekly = pts.length > 14;
       const total = money && d.total_gmv !== null ? t("admin.home.sales.summaryGmv", { total: fmtMoney(d.total_gmv, locale) }) : d.total_orders !== null ? t("admin.home.sales.summaryOrders", { total: fmtNumber(d.total_orders, locale) }) : "";
       chart = (
-        <div className="stack">
-          <ColumnsChart
+        <ColumnsChart
             points={buckets.map((b) => ({ label: shortDay(b.from, locale), value: Number(b.value) }))}
             rtl={rtl}
             title={t(money ? (weekly ? "admin.home.sales.gmvTitleWeek" : "admin.home.sales.gmvTitle") : weekly ? "admin.home.sales.ordersTitleWeek" : "admin.home.sales.ordersTitle")}
             note={t(money ? "admin.home.sales.gmvNote" : "admin.home.sales.ordersNote")}
+            {...(total !== "" ? { summary: total } : {})}
             format={{ kind: money ? "money" : "number", locale }}
             axisFormat={{ kind: money ? "moneyCompact" : "compact", locale }}
             valueHeader={t(money ? "admin.home.sales.colSales" : "admin.home.sales.colOrders")}
@@ -65,8 +67,6 @@ export function SalesAndOrders({ resp, range, now, t, locale, base, rtl }: { res
             highestLabel={t("admin.kit.highest")}
             latestLabel={t("admin.kit.latest")}
           />
-          {total !== "" ? <p className="hint" data-testid="sales-summary">{total}</p> : null}
-        </div>
       );
     }
   }
@@ -87,7 +87,7 @@ export function SalesAndOrders({ resp, range, now, t, locale, base, rtl }: { res
       {steps.kind !== "hidden" ? (
         <div className="card" data-panel="steps">
           <h3 className="chartFrameTitle">{t("admin.home.steps.title")}</h3>
-          {steps.kind === "unavailable" ? <p className="hint">{t(`admin.home.unavailable.${steps.reason}`)}</p> : <BarList items={stepItems} emptyText={t("admin.kit.chartEmpty")} />}
+          {steps.kind === "unavailable" ? <p className="hint">{t(`admin.home.unavailable.${steps.reason}`)}</p> : stepItems.length === 0 ? <BarList items={stepItems} emptyText={t("admin.kit.chartEmpty")} /> : <ChartTableToggle chart={<BarList items={stepItems} emptyText={t("admin.kit.chartEmpty")} />} table={<DataTable caption={t("admin.home.steps.title")} table={{ head: [t("admin.home.steps.colStep"), t("admin.home.sales.colOrders")], rows: STEPS.map((k) => [t(`admin.home.steps.${k}` as MessageKey), fmtNumber(steps.data[k], locale)]) }} />} label={t("admin.kit.tableView")} />}
         </div>
       ) : null}
       {top.kind !== "hidden" ? (

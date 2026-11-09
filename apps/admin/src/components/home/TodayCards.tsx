@@ -13,7 +13,7 @@ export function TodayCards({ tiles, now, t, locale, base, rtl }: { tiles: Tiles;
         {visible.map((c) => {
           const raw = tiles[c.tile];
           const spark = c.tile === "orders_today" && raw.status === "ok" && "series_14d" in raw.data ? raw.data.series_14d : undefined;
-          return <HomeTile key={c.slug} tileKey={c.tile} tiles={tiles} now={now} t={t} locale={locale} base={base} rtl={rtl} href={`${base}/today/${c.slug}`} {...(spark ? { spark } : {})} />;
+          return <HomeTile key={c.slug} tileKey={c.tile} tiles={tiles} now={now} t={t} locale={locale} base={base} rtl={rtl} card href={`${base}/today/${c.slug}`} {...(spark ? { spark } : {})} />;
         })}
       </ul>
     </section>

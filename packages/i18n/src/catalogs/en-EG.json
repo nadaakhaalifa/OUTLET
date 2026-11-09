@@ -1431,6 +1431,7 @@
   "admin.home.sales.colOrders": "Orders",
   "admin.home.sales.noSeries": "No sales figures for your role.",
   "admin.home.steps.title": "Open orders by step",
+  "admin.home.steps.colStep": "Step",
   "admin.home.steps.paid_awaiting_accept": "Paid, waiting for the seller",
   "admin.home.steps.accepted": "Accepted",
   "admin.home.steps.packed": "Packed",

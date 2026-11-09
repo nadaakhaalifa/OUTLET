@@ -15,7 +15,7 @@ export const shortDay = (day: string, locale: Locale): string => {
  * One tile from the dashboard response. forbidden -> nothing is rendered. unavailable -> the reason in words (never a zero).
  * ok -> the figure, its notes and when it was computed; a figure older than its refresh window also says "Stale since".
  */
-export function HomeTile({ tileKey, tiles, now, t, locale, base, rtl, href, spark }: {
+export function HomeTile({ tileKey, tiles, now, t, locale, base, rtl, href, spark, card = false }: {
   tileKey: TileKey;
   tiles: Tiles;
   now: Date;
@@ -25,6 +25,7 @@ export function HomeTile({ tileKey, tiles, now, t, locale, base, rtl, href, spar
   rtl: boolean;
   /** Overrides the destination (Today cards open their pop page). */
   href?: string | null;
+  card?: boolean;
   spark?: readonly { readonly day: string; readonly value: number }[];
 }) {
   const s = tileState(tileKey, tiles[tileKey], now);
@@ -41,8 +42,9 @@ export function HomeTile({ tileKey, tiles, now, t, locale, base, rtl, href, spar
       tileKey={tileKey}
       icon={b.icon}
       label={label}
+      card={card}
       {...(b.value !== undefined ? { value: b.value } : {})}
-      note={<>{notes.map((x, i) => <span key={i} className="tileNoteLine">{x}</span>)}</>}
+      note={<>{(card ? (s.staleSince !== null ? notes.slice(-1) : notes.slice(0, 1)) : notes).map((x, i) => <span key={i} className="tileNoteLine">{x}</span>)}</>}
       {...(dest !== null ? { href: dest, linkLabel: t("admin.kit.attention.open") } : {})}
       {...(b.alert === undefined ? {} : { status: b.alert ? ("alert" as const) : ("ok" as const), statusLabel: t(b.alert ? "admin.kit.statusAlert" : "admin.kit.statusOk") })}
     >

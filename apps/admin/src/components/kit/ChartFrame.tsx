@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import type { TableData } from "../../lib/charts/models";
 
 /** Card around a chart: title, note, the plot at a fixed height (same when empty, so nothing jumps) and an optional footer. */
-export function ChartFrame({ title, note, size = "md", children, footer }: { title: ReactNode; note?: ReactNode; size?: "sm" | "md" | "lg"; children: ReactNode; footer?: ReactNode }) {
+export function ChartFrame({ title, note, summary, size = "md", children, footer }: { title: ReactNode; note?: ReactNode; summary?: ReactNode; size?: "sm" | "md" | "lg"; children: ReactNode; footer?: ReactNode }) {
   return (
     <figure className="chartFrame">
       <div className="chartFrameHead">
         <h3 className="chartFrameTitle">{title}</h3>
+        {summary ? <p className="chartSummary" data-testid="sales-summary">{summary}</p> : null}
         {note ? <p className="hint">{note}</p> : null}
       </div>
       <div className="chartPlot" data-size={size}>{children}</div>

@@ -110,7 +110,7 @@ describe.each<Locale>(["ar-EG", "en-EG"])("Home (%s)", (locale) => {
 
   it("table toggle shows every column's value; bars have no link where no list page exists", () => {
     view({}, "7d");
-    const toggle = screen.getByTestId("chart-table-toggle");
+    const toggle = screen.getAllByTestId("chart-table-toggle")[0]!;
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
@@ -118,11 +118,21 @@ describe.each<Locale>(["ar-EG", "en-EG"])("Home (%s)", (locale) => {
     const steps = document.querySelector<HTMLElement>("[data-panel=steps]")!;
     expect(steps.querySelectorAll("li")).toHaveLength(5);
     expect(steps.querySelectorAll("a")).toHaveLength(0);
+    fireEvent.click(within(steps).getByTestId("chart-table-toggle"));
+    expect(steps.querySelectorAll(".chartTable tbody tr")).toHaveLength(5);
+  });
+
+  it("every Open link and Today card link names its tile", () => {
+    view({}, "7d");
+    const today = document.querySelector<HTMLElement>("[data-section=today]")!;
+    for (const a of Array.from(today.querySelectorAll("a"))) expect(a.textContent.length).toBeGreaterThan(8);
+    expect(today.textContent).not.toMatch(/\bOpen\b/);
+    for (const a of Array.from(document.querySelectorAll("[data-attention-panel] a, [data-section=checks] a"))) expect(a.querySelector(".srOnly")).not.toBeNull();
   });
 
   it("falls back to order columns without finance access and groups 30 days weekly", () => {
     view({ gmv_today: forbidden("gmv_today"), sales_series: { key: "sales_series", status: "ok", as_of: "2026-11-10T08:59:30Z", data: { orders: Array.from({ length: 30 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, "0")}`, value: 1 })), gmv: null, total_orders: 30, total_gmv: null } } });
-    fireEvent.click(screen.getByTestId("chart-table-toggle"));
+    fireEvent.click(screen.getAllByTestId("chart-table-toggle")[0]!);
     expect(document.querySelectorAll(".chartTable tbody tr")).toHaveLength(5);
     expect(screen.getByTestId("sales-summary")).toBeTruthy();
   });

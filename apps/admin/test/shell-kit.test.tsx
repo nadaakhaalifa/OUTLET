@@ -134,7 +134,7 @@ describe.each<Locale>(["ar-EG", "en-EG"])("kit (%s)", (locale) => {
     </>);
     expect(screen.getByTestId("tile-value").textContent).toBe("12");
     expect(screen.getByText(t("admin.kit.statusAlert"))).toBeTruthy();
-    expect(screen.getByRole("link", { name: t("admin.kit.attention.open") }).getAttribute("href")).toBe("/eg-ar/kyc");
+    expect(screen.getByRole("link", { name: /Fake tile/ }).getAttribute("href")).toBe("/eg-ar/kyc");
     expect(screen.getByText(t("admin.kit.noComparison"))).toBeTruthy();
     expect(await clean()).toEqual([]);
   });

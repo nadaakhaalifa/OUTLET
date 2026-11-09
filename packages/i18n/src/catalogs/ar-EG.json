@@ -1431,6 +1431,7 @@
   "admin.home.sales.colOrders": "الطلبات",
   "admin.home.sales.noSeries": "لا توجد أرقام مبيعات لدورك.",
   "admin.home.steps.title": "الطلبات المفتوحة حسب المرحلة",
+  "admin.home.steps.colStep": "المرحلة",
   "admin.home.steps.paid_awaiting_accept": "مدفوعة وتنتظر البائع",
   "admin.home.steps.accepted": "مقبولة",
   "admin.home.steps.packed": "مجهّزة",

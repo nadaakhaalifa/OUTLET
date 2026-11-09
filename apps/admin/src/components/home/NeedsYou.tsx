@@ -25,7 +25,7 @@ export function NeedsYou({ needs, t, locale, base }: { needs: Needs; t: Translat
                 <span className="attentionIcon"><Icon name={r.urgent ? "alert" : "info"} /></span>
                 <span className="attentionText"><span className="attentionTitle">{title(t, r.id)}</span><span className="hint">{hint(t, r.id)}</span></span>
                 <span className="attentionCount"><bdi>{fmtNumber(r.count, locale)}</bdi></span>
-                {r.href !== null ? <span className="attentionGo">{t("admin.kit.attention.open")}</span> : null}
+                {r.href !== null ? <span className="attentionGo">{t("admin.kit.attention.open")}<span className="srOnly"> {title(t, r.id)}</span></span> : null}
               </>
             );
             return (
