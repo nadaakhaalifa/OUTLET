@@ -6,3 +6,5 @@ export { OutboxRelay } from "./relay.js";
 export type { RelayOptions, RelayResult } from "./relay.js";
 export { InboxProcessor } from "./inbox.js";
 export type { InboxOutcome } from "./inbox.js";
+export { OutboxDispatchRelay, defaultBackoffMs, errorCode } from "./dispatch.js";
+export type { DispatchRelayOptions, DispatchResult, DispatchRunOptions, PendingByType } from "./dispatch.js";

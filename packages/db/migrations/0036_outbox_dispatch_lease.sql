@@ -1,0 +1,13 @@
+-- migration: 0036_outbox_dispatch_lease
+-- phase: expand (one nullable column, no policy or grant change)
+-- Source: docs/adr/0016-worker-process.md (worker process, in-process dispatch). ADR-0011 (outbox.relay job).
+-- The worker dispatches each outbox event to its in-process inbox consumer in THREE short transactions (claim, handler, ack) instead of
+-- holding the claim's row locks while the handler runs on a second connection. `lease_until` is the claim: the relay (job outbox.relay) sets
+-- it with FOR UPDATE SKIP LOCKED, so concurrent replicas claim disjoint rows; a crash before the ack leaves the lease to expire and the event is
+-- redelivered (at-least-once; every consumer deduplicates through inbox_processed). A failed handler pushes lease_until forward (per-row
+-- exponential backoff) until attempts reach the dead-letter limit. NULL = never claimed or released.
+-- Grants: outlet_worker already has table-level SELECT and UPDATE on outbox_events (0007) under outbox_events__worker_outbox_relay(_update)
+-- (ctx worker, job outbox.relay, market pin); outlet_app and outlet_auth stay INSERT-only and never write this column.
+-- Index: the unpublished partial index (outbox_events_unpublished_idx, on id) still drives the claim scan; lease_until is a residual filter on
+-- that small hot set, so no new index.
+ALTER TABLE outbox_events ADD COLUMN lease_until timestamptz;

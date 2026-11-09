@@ -426,6 +426,7 @@ tables:
       - {name: "attempts", type: "smallint", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
       - {name: "last_error", type: "text", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell, note: "error text may echo event payload fields; redact before write"}
       - {name: "dead_lettered_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "lease_until", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: outbox_60d, processors: ["cloud_cell"], residency: cell, note: "worker dispatch claim and retry backoff (migration 0036)"}
   - name: inbox_processed
     module: kernel
     phase: "0"
