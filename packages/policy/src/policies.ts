@@ -1,7 +1,7 @@
 import type { Action } from "./types.js";
 
 /** Bump on any change to the tables below; recorded in audit entries. */
-export const POLICY_VERSION = 5;
+export const POLICY_VERSION = 7;
 
 export const SELLER_ROLES = ["owner", "manager", "catalog", "warehouse", "finance", "support"] as const;
 export const ADMIN_ROLES = ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"] as const;
@@ -37,24 +37,26 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
   ops: [
     "store.read", "store.suspend", "store.reinstate", "store.threshold.write", "listing.read", "order.read", "return.read", "return.decide",
     "seller_kyc.review", "seller_kyc.read", "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
+    "dashboard.read", "attention.read", "attention.write",
   ],
   finance: [
     "order.read", "store.threshold.write", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read",
     "kill_switch.read", "kill_switch.engage", "reconciliation.read", "reconciliation.resolve", "price_integrity.read", "tax.read", "approval.read", "approval.decide", "elevation.request",
+    "dashboard.read", "finance.summary.read", "attention.read", "attention.write",
   ],
   trust_safety: [
     "store.read", "store.suspend", "store.reinstate", "listing.read", "listing.takedown", "return.read", "dispute.decide", "seller_kyc.review", "seller_kyc.read",
-    "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
+    "price_integrity.read", "approval.read", "approval.decide", "elevation.request", "dashboard.read",
   ],
-  support: ["order.read", "return.read", "user.read", "customer_message.read", "customer_message.write", "approval.read", "approval.decide", "elevation.request"],
-  marketing: ["promotion.write", "catalog.read", "plan.price.change", "approval.read", "approval.decide", "elevation.request"],
-  dpo: ["user.read", "privacy.export", "privacy.delete", "data.export", "breach.manage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request"],
+  support: ["order.read", "return.read", "user.read", "customer_message.read", "customer_message.write", "approval.read", "approval.decide", "elevation.request", "dashboard.read"],
+  marketing: ["promotion.write", "catalog.read", "plan.price.change", "approval.read", "approval.decide", "elevation.request", "dashboard.read"],
+  dpo: ["user.read", "privacy.export", "privacy.delete", "data.export", "breach.manage", "privacy.breach.open", "pii_access.read", "approval.read", "approval.decide", "elevation.request", "dashboard.read"],
   security: [
-    "audit.read", "rbac.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve",
+    "audit.read", "rbac.read", "pii_access.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read",
   ],
   super_admin: [
-    "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "rbac.read", "kill_switch.read", "kill_switch.engage",
-    "approval.read", "approval.decide", "elevation.request", "elevation.approve",
+    "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "rbac.read", "pii_access.read", "kill_switch.read", "kill_switch.engage",
+    "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "finance.summary.read",
   ],
 };
 

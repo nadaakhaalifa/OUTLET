@@ -248,8 +248,8 @@ describe("dual approval for admin console actions", () => {
 });
 
 describe("policy v5: admin KYC detail and RBAC read", () => {
-  it("version is 5", () => {
-    expect(POLICY_VERSION).toBe(5);
+  it("version is 6", () => {
+    expect(POLICY_VERSION).toBe(7);
   });
   it("seller_kyc.read (PII reveal, reason code required) is ops and trust_safety only", () => {
     expect(requiresReasonCode("seller_kyc.read")).toBe(true);
@@ -260,5 +260,44 @@ describe("policy v5: admin KYC detail and RBAC read", () => {
     for (const role of ["ops", "finance", "trust_safety", "support", "marketing", "dpo"]) expect(reason(authorize(admin(role), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("forbidden");
     expect(reason(authorize(admin("super_admin"), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("forbidden");
     expect(reason(authorize(admin("super_admin", true), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("allow");
+  });
+});
+
+describe("policy v6: pii_access.read", () => {
+  it("dpo and security read the PII access log; super_admin only in break-glass; nobody else", () => {
+    const res = { type: "admin_console", marketId: "EG" };
+    for (const role of ADMIN_ROLES) {
+      const direct = reason(authorize(admin(role), "pii_access.read", res));
+      expect(direct).toBe(["dpo", "security"].includes(role) ? "allow" : "forbidden");
+    }
+    expect(reason(authorize({ ...admin("super_admin"), breakGlass: true }, "pii_access.read", res))).toBe("allow");
+  });
+  it("reading the log is not itself a PII reveal (no reason code) and is not dual gated", () => {
+    expect(requiresReasonCode("pii_access.read")).toBe(false);
+    expect(dualApprovalRequired("pii_access.read", { thresholdMinor: 0n }, 0n)).toBe(false);
+  });
+});
+
+describe("policy v7: admin dashboard actions", () => {
+  const res = { type: "admin_console", marketId: "EG" };
+  const allowedFor = (action: string, breakGlass: boolean): string[] => ADMIN_ROLES.filter((r) => reason(authorize({ ...admin(r), breakGlass }, action, res)) === "allow").sort();
+  it("dashboard.read: every admin role (super_admin only in break-glass); shoppers and sellers never", () => {
+    expect(allowedFor("dashboard.read", true)).toEqual([...ADMIN_ROLES].sort());
+    expect(allowedFor("dashboard.read", false)).toEqual(ADMIN_ROLES.filter((r) => r !== "super_admin").sort());
+    expect(reason(authorize({ ...base, kind: "shopper", userId: "u1" }, "dashboard.read", res))).not.toBe("allow");
+    expect(reason(authorize(seller("owner"), "dashboard.read", res))).not.toBe("allow");
+  });
+  it("finance.summary.read: finance, and super_admin only in break-glass", () => {
+    expect(allowedFor("finance.summary.read", false)).toEqual(["finance"]);
+    expect(allowedFor("finance.summary.read", true)).toEqual(["finance", "super_admin"]);
+  });
+  it("attention.read and attention.write: ops and finance only (super_admin gets neither)", () => {
+    for (const a of ["attention.read", "attention.write"]) expect(allowedFor(a, true)).toEqual(["finance", "ops"]);
+  });
+  it("none of them needs a reason code or a second approver (totals and counts only)", () => {
+    for (const a of ["dashboard.read", "finance.summary.read", "attention.read"]) {
+      expect(requiresReasonCode(a)).toBe(false);
+      expect(dualApprovalRequired(a, { thresholdMinor: 0n }, 0n)).toBe(false);
+    }
   });
 });
