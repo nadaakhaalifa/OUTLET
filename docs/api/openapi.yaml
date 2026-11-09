@@ -1738,6 +1738,73 @@ paths:
         header: "required"
         mode: "store"
       x-phase: 1
+  "/v1/{market}/me/addresses/{address_id}/default":
+    post:
+      operationId: "makeMyAddressDefault"
+      tags:
+        - "Me"
+      summary: "Make an address the default"
+      security:
+        - shopperJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "address_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              type: "object"
+              additionalProperties: false
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/Address"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "address.update_own"
+        principal: "shopper"
+        tenant: "user_id (RLS app.current_user_id, SET LOCAL per transaction)"
+        roles:
+          - "any"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "user B's addresses id -> 404, no side effect"
+          wrong_role: "staff session token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "user"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
   "/v1/{market}/me/privacy/consents":
     get:
       operationId: "listMyConsents"
@@ -14215,6 +14282,263 @@ paths:
         param: "market"
         binding: "token market must equal path market"
       x-phase: 1
+  "/v1/{market}/admin/audit-log/verify":
+    get:
+      operationId: "adminVerifyAuditLog"
+      tags:
+        - "Admin RBAC"
+      summary: "Re-hash the market's audit chain (a broken chain is ok:false with the first bad seq, not an error)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - name: "from_seq"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            minimum: 1
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AuditVerifyResult"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "admin.audit.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        roles:
+          - "security"
+          - "super_admin"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "staff of another market -> 401 market-mismatch"
+          wrong_role: "staff without security/super_admin -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 6
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/elevations":
+    get:
+      operationId: "adminListElevations"
+      tags:
+        - "Admin RBAC"
+      summary: "Just-in-time elevations (own; all of the market for approvers)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "APPROVED"
+              - "REJECTED"
+              - "EXPIRED"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ElevationPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "admin.elevation.request"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        roles:
+          - "every staff role"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "staff of another market -> 401 market-mismatch"
+          wrong_role: "shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+    post:
+      operationId: "adminRequestElevation"
+      tags:
+        - "Admin RBAC"
+      summary: "Ask for a role for 1 to 60 minutes (super_admin also files its dual-approval request)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ElevationRequestInput"
+      responses:
+        "201":
+          description: "Created"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/Elevation"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "admin.elevation.request"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        roles:
+          - "every staff role"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "staff of another market -> 401 market-mismatch"
+          wrong_role: "shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
+  "/v1/{market}/admin/elevations/{elevation_id}/decision":
+    post:
+      operationId: "adminDecideElevation"
+      tags:
+        - "Admin RBAC"
+      summary: "Approve or reject a pending elevation (never your own; super_admin needs two approvers through its approval request)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "elevation_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/ElevationDecisionInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/Elevation"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "admin.elevation.approve"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        roles:
+          - "security"
+          - "super_admin"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "object of another market -> 404"
+          wrong_role: "staff without security/super_admin -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-phase: 1
   "/v1/{market}/admin/feature-flags":
     get:
       operationId: "adminListFeatureFlags"
@@ -15214,6 +15538,134 @@ components:
       required:
         - "items"
         - "next_cursor"
+    AuditVerifyResult:
+      type: "object"
+      additionalProperties: false
+      description: "A broken chain is a successful answer: ok=false with the first bad seq and why."
+      properties:
+        ok:
+          type: "boolean"
+        checked:
+          type: "integer"
+          minimum: 0
+        head_seq:
+          type:
+            - "integer"
+            - "null"
+          minimum: 1
+        broken_seq:
+          type:
+            - "integer"
+            - "null"
+          minimum: 1
+        reason:
+          type:
+            - "string"
+            - "null"
+          enum:
+            - "hash"
+            - "link"
+            - "gap"
+            - "market"
+            - null
+      required:
+        - "ok"
+        - "checked"
+        - "head_seq"
+        - "broken_seq"
+        - "reason"
+    ElevationRequestInput:
+      type: "object"
+      additionalProperties: false
+      properties:
+        role:
+          type: "string"
+          enum: ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"]
+        reason:
+          type: "string"
+          minLength: 3
+          maxLength: 500
+        ttl_minutes:
+          type: "integer"
+          minimum: 1
+          maximum: 60
+      required:
+        - "role"
+        - "reason"
+        - "ttl_minutes"
+    ElevationDecisionInput:
+      type: "object"
+      additionalProperties: false
+      properties:
+        decision:
+          type: "string"
+          enum: ["approve", "reject"]
+      required:
+        - "decision"
+    Elevation:
+      type: "object"
+      additionalProperties: false
+      description: "super_admin has no single-approver path: approve answers 409 dual-approval-required; it activates through approval_request_id."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        staff_id:
+          type: "string"
+          format: "uuid"
+        role:
+          type: "string"
+          enum: ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"]
+        reason:
+          type: "string"
+          maxLength: 500
+        ttl_minutes:
+          type: "integer"
+          minimum: 1
+          maximum: 60
+        status:
+          type: "string"
+          enum: ["PENDING", "APPROVED", "REJECTED", "EXPIRED"]
+        created_at:
+          type: "string"
+          format: "date-time"
+        pending_until:
+          type: "string"
+          format: "date-time"
+        decided_at:
+          type: ["string", "null"]
+          format: "date-time"
+        starts_at:
+          type: ["string", "null"]
+          format: "date-time"
+        expires_at:
+          type: ["string", "null"]
+          format: "date-time"
+        approved_by:
+          type: ["string", "null"]
+          format: "uuid"
+        approval_request_id:
+          type: ["string", "null"]
+          format: "uuid"
+      required: ["id", "staff_id", "role", "reason", "ttl_minutes", "status", "created_at", "pending_until", "decided_at", "starts_at", "expires_at", "approved_by", "approval_request_id"]
+    ElevationPage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/Elevation"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+      required:
+        - "items"
+        - "next_cursor"
     BreachCreateInput:
       type: "object"
       additionalProperties: false
@@ -15453,6 +15905,14 @@ components:
           enum:
             - "original"
             - "store_credit"
+        seller_order_ids:
+          type: "array"
+          minItems: 1
+          maxItems: 50
+          description: "Partial cancel: only these seller orders (stores that have not shipped). Absent = every live seller order of the group."
+          items:
+            type: "string"
+            format: "uuid"
       required:
         - "reason_code"
     Cart:
@@ -15847,8 +16307,8 @@ components:
           type: "array"
           items:
             type: "string"
-            maxLength: 500
-          maxItems: 50
+            maxLength: 32
+          maxItems: 5
         store_credit:
           "$ref": "#/components/schemas/Money"
         client_total:
@@ -20173,8 +20633,8 @@ components:
           type: "array"
           items:
             type: "string"
-            maxLength: 500
-          maxItems: 50
+            maxLength: 32
+          maxItems: 5
         store_credit:
           "$ref": "#/components/schemas/Money"
         cart_line_ids:
