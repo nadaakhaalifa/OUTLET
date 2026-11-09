@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 import districtRules from "./tooling/eslint-rules/index.mjs";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/coverage/**", "**/.next/**", "**/.cache/**", "**/node_modules/**", "**/.turbo/**", "docs/**", "reports/**", "research_notes/**", "tooling/design/**", "*.cjs"] },
+  { ignores: ["**/dist/**", "**/coverage/**", "**/.next/**", "**/.cache/**", "**/node_modules/**", "**/.turbo/**", "**/.stryker-tmp/**", "docs/**", "reports/**", "research_notes/**", "tooling/design/**", "*.cjs"] },
   js.configs.recommended,
   {
     files: ["**/*.ts", "**/*.tsx"],
