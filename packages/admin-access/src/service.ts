@@ -129,11 +129,12 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
    * Decides via policy.dualApprovalRequired. Not required: the caller may act directly. Required: a PENDING request
    * is stored (payload must be JSON; money as decimal strings) and the action must be executed via executeApproval.
    */
-  const requireApproval = async (actor: Principal, input: { action: string; targetType: string; targetId: string; payload: Record<string, unknown>; amountMinor?: bigint }): Promise<RequireApprovalResult> => {
+  const requireApproval = async (actor: Principal, input: { action: string; targetType: string; targetId: string; payload: Record<string, unknown>; amountMinor?: bigint; /** kill_switch.engage only: false opts a non-money switch out; omitted = money (fail safe, policy decides). */ moneySwitch?: boolean }): Promise<RequireApprovalResult> => {
     must(actor, input.action);
-    if (!dualApprovalRequired(input.action, { thresholdMinor: deps.thresholdMinor }, input.amountMinor, actor)) return Promise.resolve({ required: false });
+    if (!dualApprovalRequired(input.action, { thresholdMinor: deps.thresholdMinor }, input.amountMinor, actor, input.moneySwitch === undefined ? undefined : { moneySwitch: input.moneySwitch })) return Promise.resolve({ required: false });
     const payload = input.amountMinor === undefined ? input.payload : { ...input.payload, amountMinor: input.amountMinor.toString() };
-    return run(actor, async (tx, now) => ({ required: true as const, request: await createApproval(tx, actor, now, { ...input, payload }) }));
+    const { moneySwitch: _ignored, ...rest } = input;
+    return run(actor, async (tx, now) => ({ required: true as const, request: await createApproval(tx, actor, now, { ...rest, payload }) }));
   };
 
   const loadApproval = async (tx: Queryable, p: Principal, id: string): Promise<ApprovalDb> => {

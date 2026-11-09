@@ -154,6 +154,23 @@ describe("generic dual approval (requireApproval / executeApproval)", () => {
     expect(runs).toBe(2);
   });
 
+  it("kill-switch release: policy decides; omitted or true is dual approval, only an explicit non-money opt-out is direct", async () => {
+    const act = { action: "kill_switch.engage", targetType: "kill_switch", targetId: "x", payload: { enabled: true } };
+    expect((await svc.requireApproval(fin, act)).required).toBe(true);
+    expect((await svc.requireApproval(fin, { ...act, moneySwitch: true })).required).toBe(true);
+    expect(await svc.requireApproval(fin, { ...act, moneySwitch: false })).toEqual({ required: false });
+  });
+
+  it("recovery: a failed execution leaves the request APPROVED and unclaimed, and a retry executes it once (POST approval-requests/{id}/execute)", async () => {
+    const res = await svc.requireApproval(fin, { action: "kill_switch.engage", targetType: "kill_switch", targetId: "payments.cod.enabled", payload: { enabled: true } });
+    if (!res.required) throw new Error("money switch needs approval");
+    const f2 = admin(uuidv7(), ["finance"]); const f3 = admin(uuidv7(), ["finance"]);
+    await svc.approve(f2, res.request.id); await svc.approve(f3, res.request.id);
+    await expect(svc.executeApproval(f2, res.request.id, () => Promise.reject(new Error("crash after vote")))).rejects.toThrow("crash");
+    expect(await svc.executeApproval(f3, res.request.id, () => Promise.resolve("released"))).toEqual({ executed: true, result: "released" });
+    expect(await svc.executeApproval(f3, res.request.id, () => Promise.resolve("again"))).toEqual({ executed: false, reason: "already_executed" });
+  });
+
   it("detects a tampered payload and refuses stale approvals", async () => {
     const res = await svc.requireApproval(d1, { action: "data.export", targetType: "export", targetId: "e1", payload: { scope: "orders" } });
     if (!res.required) throw new Error("data.export must always need approval");
