@@ -116,7 +116,7 @@ export class AdminController {
     response: ApprovalRequestDto,
     maxQueries: 12,
   })
-  async executeApproval(@Ctx() s: RequestState, @Params() p: ApprovalIdParams, @Body() _body: ApprovalExecuteInput): Promise<ApprovalRequestDto> {
+  async executeApproval(@Ctx() s: RequestState, @Params() p: ApprovalIdParams): Promise<ApprovalRequestDto> {
     const t = this.staff(s);
     const req = await t.svc.approvals.get(t.principal, p.approval_request_id);
     if (req.status !== "APPROVED") throw new ProblemError(409, "approval-not-approved", "The request is not approved or was already executed");

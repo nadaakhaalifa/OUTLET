@@ -116,7 +116,7 @@ describe("createSellerApi", () => {
   });
   it("cancelOrder POSTs the fixed reason code only, with an idempotency key", async () => {
     let seen: { url: string; init: RequestInit } | undefined;
-    const api = createSellerApi("eg", (url, init) => { seen = { url: String(url), init: init ?? {} }; return Promise.resolve(new Response(JSON.stringify({ id: "o", status: "CANCELLED", available_actions: [], total: { amount_minor: "1", currency: "EGP" } }), { status: 200 })); });
+    const api = createSellerApi("eg", (url, init) => { seen = { url: url instanceof Request ? url.url : url.toString(), init: init ?? {} }; return Promise.resolve(new Response(JSON.stringify({ id: "o", status: "CANCELLED", available_actions: [], total: { amount_minor: "1", currency: "EGP" } }), { status: 200 })); });
     expect((await api.cancelOrder("o", "out_of_stock")).ok).toBe(true);
     expect(seen?.url).toBe("/api/seller/eg/orders/o/cancel");
     expect(seen?.init.body).toBe(JSON.stringify({ reason_code: "out_of_stock" }));
