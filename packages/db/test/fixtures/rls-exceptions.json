@@ -1,5 +1,17 @@
 [
   {
+    "table": "admin_dashboard_snapshots",
+    "policy": "admin_dashboard_snapshots__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "admin_dashboard_snapshots",
+    "policy": "admin_dashboard_snapshots__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "age_blocks",
     "policy": "age_blocks__auth_device",
     "role": "outlet_auth",
@@ -16,6 +28,12 @@
     "policy": "age_blocks__worker_auth_purge_delete",
     "role": "outlet_worker",
     "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_ops_attention",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "audit_log",
@@ -102,6 +120,12 @@
     "cmd": "select"
   },
   {
+    "table": "disputes",
+    "policy": "disputes__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "dlq_messages",
     "policy": "dlq_messages__worker_outbox_relay",
     "role": "outlet_worker",
@@ -112,6 +136,12 @@
     "policy": "enforcement_actions__worker_pricing_channels",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "enforcement_actions",
+    "policy": "enforcement_actions__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "external_products",
@@ -150,6 +180,18 @@
     "cmd": "all"
   },
   {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
     "table": "media_assets",
     "policy": "media_assets__worker_platform",
     "role": "outlet_worker",
@@ -164,6 +206,12 @@
   {
     "table": "order_groups",
     "policy": "order_groups__worker_checkout_expiry",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "order_groups",
+    "policy": "order_groups__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -254,6 +302,12 @@
   {
     "table": "outbox_events",
     "policy": "outbox_events__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_ops_attention",
     "role": "outlet_worker",
     "cmd": "insert"
   },
@@ -384,6 +438,12 @@
     "cmd": "all"
   },
   {
+    "table": "payout_holds",
+    "policy": "payout_holds__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "payout_lines",
     "policy": "payout_lines__worker_finance_payouts",
     "role": "outlet_worker",
@@ -398,6 +458,12 @@
   {
     "table": "payouts",
     "policy": "payouts__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -420,6 +486,12 @@
     "cmd": "all"
   },
   {
+    "table": "price_claims",
+    "policy": "price_claims__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "price_findings",
     "policy": "price_findings__worker_pricing_channels",
     "role": "outlet_worker",
@@ -432,10 +504,22 @@
     "cmd": "select"
   },
   {
+    "table": "privacy_requests",
+    "policy": "privacy_requests__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "product_matches",
     "policy": "product_matches__worker_pricing_channels",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "products",
+    "policy": "products__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "psp_settlement_files",
@@ -484,6 +568,12 @@
     "policy": "reconciliation_exceptions__worker_finance_reconcile",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "reconciliation_exceptions",
+    "policy": "reconciliation_exceptions__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "reconciliation_matches",
@@ -540,6 +630,12 @@
     "cmd": "select"
   },
   {
+    "table": "refunds",
+    "policy": "refunds__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "return_requests",
     "policy": "return_requests__worker_finance_refunds",
     "role": "outlet_worker",
@@ -548,6 +644,12 @@
   {
     "table": "return_requests",
     "policy": "return_requests__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -580,6 +682,12 @@
     "policy": "seller_orders__worker_orders_close_update",
     "role": "outlet_worker",
     "cmd": "update"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "seller_plan_assignments",
@@ -648,9 +756,21 @@
     "cmd": "all"
   },
   {
+    "table": "skus",
+    "policy": "skus__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "store_members",
     "policy": "store_members__auth_my_memberships",
     "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_notifications_dispatch",
+    "role": "outlet_worker",
     "cmd": "select"
   },
   {
@@ -668,6 +788,30 @@
   {
     "table": "store_members",
     "policy": "store_members__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "select"
   },

@@ -64,6 +64,7 @@ purposes:
   staff_access: {title: "Staff access control", description: "Admin staff accounts, roles, just-in-time grants and dual approval."}
   platform_reliability: {title: "Reliability plumbing", description: "Outbox, inbox, idempotency keys, sagas and dedup records that stop duplicate side effects."}
   platform_config: {title: "Platform configuration", description: "Markets, cells, versioned config, feature flags, taxonomies and rate cards."}
+  admin_reporting: {title: "Admin dashboard reporting", description: "Market-wide sales rollups and queue counts for the Admin Console Home. Aggregates only, no person."}
   ai_assist: {title: "AI assistance metering", description: "Listing copilot and NL search usage metering; only public catalog data is sent to models."}
 retention_rules:
   account_active: {rule: "Life of the account; erase or pseudonymise 14 days after a deletion request (cooling period)", verify: []}
@@ -100,6 +101,9 @@ retention_rules:
   price_evidence_7y: {rule: "7 years (evidence for consumer-protection inquiries; proposed)", verify: ["V20", "V71"]}
   catalog_life: {rule: "Life of the listing plus 24 months after archive (proposed)", verify: []}
   config_versions: {rule: "Life of the platform; versions kept while referenced", verify: []}
+  sales_rollup_25m: {rule: "25 months after the day (daily sales aggregates; proposed, no purge job yet)", verify: []}
+  dashboard_snapshot_overwrite: {rule: "Overwritten on every rollup; only the latest snapshot per tile is kept", verify: []}
+  ops_attention_24m: {rule: "24 months after creation (ops attention items about money and cancellations; proposed)", verify: []}
   llm_meter_13m: {rule: "13 months", verify: []}
 processors:
   cloud_cell:
@@ -536,6 +540,28 @@ tables:
       - {name: "occurred_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "prev_hash", type: "text", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
       - {name: "hash", type: "text", pii_class: P1, encryption: none, purpose: ["security_audit"], lawful_basis: legal_obligation, retention: audit_7y, processors: ["cloud_cell"], residency: cell}
+  - name: attention_items
+    module: ops-attention
+    phase: "0"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: true
+    data_subjects: ["admin_staff"]
+    verify: []
+    columns:
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "kind", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_type", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "ref_id", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "payload", type: "jsonb", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell, note: "ids and short codes only, whitelisted by the consumer; no names, contact data or amounts"}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "acked_by", type: "uuid", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell, note: "staff account id of the admin who acknowledged"}
+      - {name: "acked_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
+      - {name: "resolution_code", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: legitimate_interest, retention: ops_attention_24m, processors: ["cloud_cell"], residency: cell}
   - name: audit_seals
     module: kernel
     phase: "0"
@@ -5434,3 +5460,54 @@ tables:
       - {name: "scheduled_for", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
       - {name: "sent_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
       - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["transactional_comms", "marketing_comms"], lawful_basis: contract, retention: notification_12m, processors: ["cloud_cell"], residency: cell}
+  - name: market_sales_daily
+    module: reporting
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "day", type: "date", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "orders_paid", type: "int", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "gmv_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "VAT-inclusive order total, not net of refunds"}
+      - {name: "refunded_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "refreshed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+  - name: store_sales_daily
+    module: reporting
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "day", type: "date", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "orders_paid", type: "int", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "gmv_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "store_name_ar", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "public store name (P0 at source), copied at rollup time"}
+      - {name: "store_name_en", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "public store name (P0 at source), copied at rollup time"}
+      - {name: "refreshed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+  - name: admin_dashboard_snapshots
+    module: reporting
+    phase: "1"
+    residency: cell
+    tenant: "none"
+    partitioning: null
+    personal_data: false
+    data_subjects: []
+    verify: []
+    columns:
+      - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: dashboard_snapshot_overwrite, processors: ["cloud_cell"], residency: cell}
+      - {name: "tile_key", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: dashboard_snapshot_overwrite, processors: ["cloud_cell"], residency: cell}
+      - {name: "as_of", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: dashboard_snapshot_overwrite, processors: ["cloud_cell"], residency: cell}
+      - {name: "payload", type: "jsonb", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: dashboard_snapshot_overwrite, processors: ["cloud_cell"], residency: cell, note: "counts, oldest timestamps and amounts only; Zod-validated on read; no ids of people or orders"}
+      - {name: "version", type: "int", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: dashboard_snapshot_overwrite, processors: ["cloud_cell"], residency: cell}
