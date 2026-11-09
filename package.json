@@ -9,7 +9,8 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --cache --cache-location .cache/eslint",
+    "lint": "node tooling/ci/lint-sharded.mjs",
+    "lint:all": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --cache --cache-location .cache/eslint",
     "depcruise": "depcruise packages apps tooling --config .dependency-cruiser.cjs",
     "privacy:check": "node tooling/privacy/check-data-inventory.mjs",
     "test": "vitest run --coverage",
