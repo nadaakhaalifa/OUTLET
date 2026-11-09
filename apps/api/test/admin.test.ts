@@ -177,8 +177,53 @@ describe("reconciliation reads need a reason code and are audited", () => {
   });
 });
 
+describe("KYC case detail and roles catalogue", () => {
+  it("detail needs a reason code; with one it returns documents, checks and the legal identity, and logs one pii_access_log row (ids and code only)", async () => {
+    const k = await seedKycCase(t.raw);
+    const { userId, token } = await t.admin(["ops"]);
+    const url = `/v1/eg/admin/kyc-cases/${k.caseId}`;
+    const before = t.adminAudit.entries.length;
+    const none = await t.inject({ method: "GET", url, headers: bearer(token) });
+    expect(none.statusCode).toBe(403);
+    expect(json<{ code: string }>(none.body).code).toBe("reason-code-required");
+    expect(t.adminAudit.entries.length).toBe(before);
+    const res = await t.inject({ method: "GET", url, headers: { ...bearer(token), "x-reason-code": "fraud_review" } });
+    expect(res.statusCode).toBe(200);
+    const body = json<{ case: { id: string; status: string; signatory: null; required_documents: string[] }; seller_legal: { legal_name_ar: string }; checks: unknown[] }>(res.body);
+    expect(body.case).toMatchObject({ id: k.caseId, status: "AUTO_CHECKS", signatory: null });
+    expect(body.case.required_documents).toContain("tax_card");
+    expect(body.seller_legal.legal_name_ar).toBe("شركة الاختبار");
+    expect(body).not.toHaveProperty("signatory_revealed");
+    const logged = await t.raw.query<{ action: string; reason_code: string; target_type: string; target_id: string }>("SELECT action, reason_code, target_type, target_id FROM pii_access_log WHERE actor_id = $1", [userId]);
+    expect(logged.rows).toEqual([{ action: "seller_kyc.read", reason_code: "fraud_review", target_type: "kyc_case", target_id: k.caseId }]);
+    expect(t.adminAudit.entries.slice(before).map((e) => e.action)).toEqual(["pii.viewed"]);
+  });
+
+  it("finance cannot read a case (403, nothing logged); an unknown case is 404", async () => {
+    const k = await seedKycCase(t.raw);
+    const fin = await t.admin(["finance"]);
+    const h = { ...bearer(fin.token), "x-reason-code": "fraud_review" };
+    expect((await t.inject({ method: "GET", url: `/v1/eg/admin/kyc-cases/${k.caseId}`, headers: h })).statusCode).toBe(403);
+    const ops = await t.admin(["ops"]);
+    expect((await t.inject({ method: "GET", url: "/v1/eg/admin/kyc-cases/00000000-0000-4000-8000-00000000dead", headers: { ...bearer(ops.token), "x-reason-code": "fraud_review" } })).statusCode).toBe(404);
+  });
+
+  it("roles: security lists admin roles then seller roles with deduplicated permissions and pages by cursor; ops gets 403", async () => {
+    const { token } = await t.admin(["security"]);
+    const p1 = json<{ items: { code: string; scope: string; permissions: string[] }[]; next_cursor: string | null }>((await t.inject({ method: "GET", url: "/v1/eg/admin/roles?limit=9", headers: bearer(token) })).body);
+    expect(p1.items.map((r) => r.code).slice(0, 3)).toEqual(["ops", "finance", "trust_safety"]);
+    expect(p1.items[8]).toMatchObject({ code: "owner", scope: "seller" });
+    expect(new Set(p1.items[7]?.permissions).size).toBe(p1.items[7]?.permissions.length);
+    const p2 = json<{ items: { code: string }[]; next_cursor: string | null }>((await t.inject({ method: "GET", url: `/v1/eg/admin/roles?limit=50&cursor=${p1.next_cursor ?? ""}`, headers: bearer(token) })).body);
+    expect(p2.items.map((r) => r.code)).toEqual(["manager", "catalog", "warehouse", "finance", "support"]);
+    expect(p2.next_cursor).toBeNull();
+    const ops = await t.admin(["ops"]);
+    expect((await t.inject({ method: "GET", url: "/v1/eg/admin/roles", headers: bearer(ops.token) })).statusCode).toBe(403);
+  });
+});
+
 describe("coverage", () => {
   it("has a fixture for every admin route (routes.test.ts runs the matrix)", () => {
-    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(13);
+    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(16);
   });
 });

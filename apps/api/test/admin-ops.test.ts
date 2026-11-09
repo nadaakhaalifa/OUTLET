@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bearer, createTestApp, idemKey } from "./harness.js";
 import type { TestApp } from "./harness.js";
-import { seedApproval, seedElevation } from "./admin-fixtures.js";
+import { seedApproval, seedApprovedUnexecuted, seedElevation } from "./admin-fixtures.js";
 import { flagPage } from "../src/modules/admin/index.js";
 import { PgAuditReader } from "../src/modules/admin/index.js";
 
@@ -114,6 +114,24 @@ describe("feature flags", () => {
     expect(json<{ code: string }>(res.body).code).toBe("unknown-kill-switch");
     const row = await t.raw.query<{ executed_at: string | null }>("SELECT executed_at FROM approval_requests WHERE id = $1", [a.id]);
     expect(row.rows[0]?.executed_at).toBeNull();
+  });
+
+  it("recovery: an APPROVED release that never executed is run once by POST approval-requests/{id}/execute; a replay is 409, the requester is 403, a pending one is 409", async () => {
+    const a = await seedApprovedUnexecuted(t.raw);
+    const url = `/v1/eg/admin/approval-requests/${a.id}/execute`;
+    const fin = await t.admin(["finance"]);
+    const done = await post(fin.token, url, {});
+    expect(done.statusCode).toBe(200);
+    expect(json<{ status: string }>(done.body).status).toBe("EXECUTED");
+    expect(t.adminAudit.entries.map((e) => e.action)).toEqual(expect.arrayContaining(["approval.executed", "kill_switch.released"]));
+    const again = await post(fin.token, url, {});
+    expect(again.statusCode).toBe(409);
+    expect(json<{ code: string }>(again.body).code).toBe("approval-not-approved");
+    const own = await t.admin(["finance"]);
+    const mine = await seedApprovedUnexecuted(t.raw, { requestedBy: own.userId });
+    expect((await post(own.token, `/v1/eg/admin/approval-requests/${mine.id}/execute`, {})).statusCode).toBe(403);
+    const pending = await seedApproval(t.raw, { action: "kill_switch.engage" });
+    expect((await post(fin.token, `/v1/eg/admin/approval-requests/${pending.id}/execute`, {})).statusCode).toBe(409);
   });
 
   it("flagPage pages stored non-switch flags too and tolerates unknown keys", () => {

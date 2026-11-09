@@ -17,6 +17,6 @@ export class UnconfiguredAuditPort {
 export const unconfiguredAdminServices: AdminServices = {
   access: { buildPrincipal: down, approve: down, reject: down, recordPiiView: down, requireApproval: down, executeApproval: down, requestElevation: down, approveElevation: down, rejectElevation: down, activateElevation: down },
   approvals: { list: down, get: down },
-  kyc: { list: down, decide: down },
+  kyc: { list: down, decide: down, detail: down },
   reconciliation: { listRuns: down, listItems: down },
 };

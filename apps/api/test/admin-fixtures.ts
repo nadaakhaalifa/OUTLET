@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { SqlClient } from "@outlet/db";
 import { bearer, idemKey } from "./harness.js";
 import type { TestApp } from "./harness.js";
 import type { RouteFixture } from "./route-fixture-types.js";
 
 const FINANCE_REASON = { "x-reason-code": "finance_reconciliation" };
+const KYC_REASON = { "x-reason-code": "fraud_review" };
 
 /** A PENDING approval request filed by someone else (so the test staff may vote). */
 export const seedApproval = async (raw: SqlClient, o: { requestedBy?: string; action?: string; status?: string } = {}): Promise<{ id: string; requestedBy: string }> => {
@@ -14,6 +15,23 @@ export const seedApproval = async (raw: SqlClient, o: { requestedBy?: string; ac
     `INSERT INTO approval_requests (id, market_id, action, target_type, target_id, payload, payload_hash, requested_by, status, expires_at, created_at)
      VALUES ($1,'EG',$2,'staff',$3,'{}'::jsonb,decode(repeat('00',32),'hex'),$4,$5,'2100-01-01','2030-01-01')`,
     [id, o.action ?? "role.grant", randomUUID(), requestedBy, o.status ?? "PENDING"],
+  );
+  return { id, requestedBy };
+};
+
+
+/**
+ * A fully APPROVED kill-switch release that was never executed (what a crash between the last vote and the execution leaves behind).
+ * payload_hash is the same sha256 over the canonical JSON (keys sorted) that the service checks before executing.
+ */
+export const seedApprovedUnexecuted = async (raw: SqlClient, o: { requestedBy?: string } = {}): Promise<{ id: string; requestedBy: string }> => {
+  const id = randomUUID();
+  const requestedBy = o.requestedBy ?? randomUUID();
+  const hash = createHash("sha256").update('{"action":"kill_switch.engage","payload":{},"targetId":"payments.cod.enabled","targetType":"kill_switch"}').digest("hex");
+  await raw.query(
+    `INSERT INTO approval_requests (id, market_id, action, target_type, target_id, payload, payload_hash, requested_by, status, expires_at, created_at, decided_at, decided_by)
+     VALUES ($1,'EG','kill_switch.engage','kill_switch','payments.cod.enabled','{}'::jsonb,decode($2,'hex'),$3,'APPROVED','2100-01-01','2030-01-01','2030-01-01',$4)`,
+    [id, hash, requestedBy, randomUUID()],
   );
   return { id, requestedBy };
 };
@@ -83,11 +101,39 @@ export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
       return { method: "POST", url: `/v1/eg/admin/approval-requests/${MISSING}/decision`, headers: staffHeaders(t, token), payload: { decision: "approve", reason: "checked the request" } };
     },
   },
+  "POST /v1/{market}/admin/approval-requests/{approval_request_id}/execute": {
+    happy: async (t) => {
+      const a = await seedApprovedUnexecuted(t.raw);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/approval-requests/${a.id}/execute`, headers: staffHeaders(t, token), payload: {} }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["finance"]);
+      return { method: "POST", url: `/v1/eg/admin/approval-requests/${MISSING}/execute`, headers: staffHeaders(t, token), payload: {} };
+    },
+  },
   "GET /v1/{market}/admin/kyc-cases": {
     happy: async (t) => {
       await seedKycCase(t.raw);
       const { token } = await t.admin(["ops"]);
       return { req: { method: "GET", url: "/v1/eg/admin/kyc-cases?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/kyc-cases/{kyc_case_id}": {
+    happy: async (t) => {
+      const k = await seedKycCase(t.raw);
+      const { token } = await t.admin(["trust_safety"]);
+      return { req: { method: "GET", url: `/v1/eg/admin/kyc-cases/${k.caseId}`, headers: { ...bearer(token), ...KYC_REASON } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["ops"]);
+      return { method: "GET", url: `/v1/eg/admin/kyc-cases/${MISSING}`, headers: { ...bearer(token), ...KYC_REASON } };
+    },
+  },
+  "GET /v1/{market}/admin/roles": {
+    happy: async (t) => {
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/roles?limit=50", headers: bearer(token) }, status: 200 };
     },
   },
   "POST /v1/{market}/admin/kyc-cases/{kyc_case_id}/decision": {

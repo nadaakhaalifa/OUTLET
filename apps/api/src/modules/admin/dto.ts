@@ -12,6 +12,9 @@ export const ApprovalsQuery = CursorQuery.extend({ status: z.enum(APPROVAL_STATU
 export type ApprovalsQuery = z.infer<typeof ApprovalsQuery>;
 export const ApprovalDecisionInput = z.strictObject({ decision: z.enum(["approve", "reject"]), reason: z.string().trim().min(3).max(2000) });
 export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionInput>;
+/** Execute takes no fields; an empty object keeps the mutating-route body rule. */
+export const ApprovalExecuteInput = z.strictObject({});
+export type ApprovalExecuteInput = z.infer<typeof ApprovalExecuteInput>;
 export const ApprovalRequestDto = z.strictObject({
   id: z.uuid(),
   action: z.string().max(500),
@@ -101,3 +104,60 @@ export const ReconciliationItemDto = z.strictObject({
 export type ReconciliationItemDto = z.infer<typeof ReconciliationItemDto>;
 export const ReconciliationItemPage = pageOf(ReconciliationItemDto);
 export type ReconciliationItemPage = z.infer<typeof ReconciliationItemPage>;
+
+// ---- KYC case detail (docs/api/openapi.yaml AdminKycCase). The signatory is stored as the 21+ result only (seller_signatories keeps no name, id or DOB),
+// so `signatory` is null and `signatory_revealed` is never present: the reason-coded read is still logged in pii_access_log (it exposes bank-verification state and document pointers).
+export const KYC_DOC_TYPES = ["commercial_register", "tax_card", "signatory_national_id", "iban_letter", "brand_authorization", "proof_of_purchase"] as const;
+export const KycDocumentDto = z.strictObject({
+  id: z.uuid(),
+  doc_type: z.enum(KYC_DOC_TYPES),
+  media_id: z.uuid(),
+  verified: z.boolean(),
+  expires_on: z.iso.date().nullable(),
+  created_at: Iso,
+});
+export const KycCaseDetailDto = z.strictObject({
+  id: z.uuid(),
+  seller_id: z.uuid(),
+  kind: z.string().max(500),
+  status: z.enum(KYC_STATUSES),
+  submitted_at: Iso.nullable(),
+  decided_at: Iso.nullable(),
+  decision_reason: z.string().max(500).nullable(),
+  version: z.number().int().min(1),
+  documents: z.array(KycDocumentDto).max(50),
+  required_documents: z.array(z.string().max(500)).max(50),
+  signatory: z.null(),
+});
+export const KycCheckDto = z.strictObject({
+  check_type: z.string().max(500),
+  result: z.string().max(500),
+  score_bp: z.number().int().min(0).max(10000).nullable(),
+  provider: z.string().max(500).nullable(),
+  checked_at: Iso,
+});
+export const AdminKycCase = z.strictObject({
+  case: KycCaseDetailDto,
+  seller_legal: z.strictObject({
+    legal_name_ar: z.string().min(1).max(500),
+    legal_name_en: z.string().max(500).nullable(),
+    commercial_register_no: z.string().max(500),
+    tax_card_no: z.string().max(500),
+    governorate_name_ar: z.string().min(1).max(500),
+  }),
+  checks: z.array(KycCheckDto).max(50),
+});
+export type AdminKycCase = z.infer<typeof AdminKycCase>;
+
+// ---- roles (admin.rbac.read)
+export const RolesQuery = CursorQuery;
+export type RolesQuery = z.infer<typeof RolesQuery>;
+export const RoleDto = z.strictObject({
+  code: z.string().max(500),
+  scope: z.enum(["admin", "seller"]),
+  description: z.string().max(500),
+  permissions: z.array(z.string().max(500)).max(50),
+});
+export type RoleDto = z.infer<typeof RoleDto>;
+export const RolePage = pageOf(RoleDto);
+export type RolePage = z.infer<typeof RolePage>;

@@ -12,13 +12,14 @@ import { RATE_BUDGETS } from "../../platform/rate-limit/budgets.js";
 import type { ResourceResolver } from "../../platform/decorators.js";
 import { Body, Ctx, Params, Query } from "../../platform/validation.js";
 import {
-  ApprovalDecisionInput, ApprovalIdParams, ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseIdParams, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput,
-  KycDecisionResult, ReconciliationItemPage, ReconciliationRunPage, RunIdParams, RunsQuery,
+  AdminKycCase, ApprovalDecisionInput, ApprovalExecuteInput, ApprovalIdParams, ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseIdParams, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput,
+  KycDecisionResult, ReconciliationItemPage, ReconciliationRunPage, RolePage, RolesQuery, RunIdParams, RunsQuery,
 } from "./dto.js";
 import {
   AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDecisionInput, ElevationDto, ElevationIdParams, ElevationPage, ElevationRequestInput, ElevationsQuery,
    FeatureFlagDto, FeatureFlagPage, FlagKeyParams, FlagsQuery, KillSwitchInput } from "./dto-ops.js";
 import { flagOf, flagPage } from "./ops-services.js";
+import { rolePage } from "./roles.js";
 import type { AdminOpsServices, ElevationReaderPort } from "./ops-services.js";
 import type { AdminServices } from "./services.js";
 
@@ -83,20 +84,45 @@ export class AdminController {
     if (body.decision === "approve") await t.svc.access.approve(t.principal, p.approval_request_id, body.reason);
     else await t.svc.access.reject(t.principal, p.approval_request_id, body.reason);
     const decided = await t.svc.approvals.get(t.principal, p.approval_request_id);
-    // A fully approved money-switch release applies right away (executed once: the approval claim and the flag write share the request).
-    if (decided.status === "APPROVED" && decided.action === KILL_RELEASE_ACTION) {
+    // A fully approved request applies right away; if that step fails the request stays APPROVED (executed_at NULL) and POST approval-requests/{id}/execute retries it.
+    if (decided.status === "APPROVED") await this.applyApproved(t, decided);
+    return t.svc.approvals.get(t.principal, p.approval_request_id);
+  }
+
+  /** Runs the action of an APPROVED request exactly once (the executed_at claim and the effect share one tx, so a failure releases the claim and a replay is a no-op). */
+  private async applyApproved(t: Staff, decided: ApprovalRequestDto): Promise<boolean> {
+    if (decided.action === KILL_RELEASE_ACTION) {
       await t.svc.access.executeApproval(t.principal, decided.id, async (req, tx) => {
         if (!isKillSwitchName(req.targetId)) throw Problems.unprocessable("unknown-kill-switch");
         await this.ops(t).flags.set(t.principal, req.targetId, true, releaseReason(req.payload), tx);
       });
-      return t.svc.approvals.get(t.principal, p.approval_request_id);
-    }
-    // A fully approved break-glass elevation (super_admin) activates right away; the executor is the last approver, never the requester.
-    if (decided.status === "APPROVED" && decided.action === ELEVATION_ACTION) {
+    } else if (decided.action === ELEVATION_ACTION) {
+      // The executor is the last approver, never the requester.
       await t.svc.access.activateElevation(t.principal, decided.id);
-      return t.svc.approvals.get(t.principal, p.approval_request_id);
-    }
-    return decided;
+    } else return false;
+    return true;
+  }
+
+  @Post("approval-requests/:approval_request_id/execute")
+  @HttpCode(200)
+  @Authorize("approval.decide", approvalResource, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminExecuteApprovalRequest",
+    summary: "Run an APPROVED request that was not executed (recovery after a failure between the last vote and execution); idempotent, requester excluded, the action's own role re-checked",
+    tags: ["Admin Approvals"],
+    params: ApprovalIdParams,
+    body: ApprovalExecuteInput,
+    response: ApprovalRequestDto,
+    maxQueries: 12,
+  })
+  async executeApproval(@Ctx() s: RequestState, @Params() p: ApprovalIdParams, @Body() _body: ApprovalExecuteInput): Promise<ApprovalRequestDto> {
+    const t = this.staff(s);
+    const req = await t.svc.approvals.get(t.principal, p.approval_request_id);
+    if (req.status !== "APPROVED") throw new ProblemError(409, "approval-not-approved", "The request is not approved or was already executed");
+    if (req.requested_by === t.principal.userId) throw Problems.forbidden();
+    if (!(await this.applyApproved(t, req))) throw Problems.unprocessable("no-executor-for-action");
+    return t.svc.approvals.get(t.principal, p.approval_request_id);
   }
 
   // ---------------------------------------------------------------- seller KYC
@@ -109,6 +135,20 @@ export class AdminController {
   listKyc(@Ctx() s: RequestState, @Query() q: KycCasesQuery): Promise<KycCaseSummaryPage> {
     const t = this.staff(s);
     return t.svc.kyc.list(t.marketId, q);
+  }
+
+  @Get("kyc-cases/:kyc_case_id")
+  @ReasonCode()
+  @Authorize("seller_kyc.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminGetKycCase", summary: "One KYC case with documents, checks and the seller's legal identity (reason code required; every read is logged in pii_access_log)", tags: ["Admin KYC"], params: KycCaseIdParams, response: AdminKycCase, maxQueries: 4 })
+  async getKyc(@Ctx() s: RequestState, @Params() p: KycCaseIdParams): Promise<AdminKycCase> {
+    const t = this.staff(s);
+    // Logged before any data leaves (the entry carries ids and the code, never the data viewed).
+    await t.svc.access.recordPiiView(t.principal, { action: "seller_kyc.read", targetType: "kyc_case", targetId: p.kyc_case_id }, s.reasonCode);
+    const detail = await t.svc.kyc.detail(t.marketId, p.kyc_case_id);
+    if (detail === null) throw Problems.notFound();
+    return detail;
   }
 
   @Post("kyc-cases/:kyc_case_id/decision")
@@ -155,6 +195,18 @@ export class AdminController {
     const page = await t.svc.reconciliation.listItems(t.marketId, p.reconciliation_run_id, q, this.deps.clock.now());
     if (page === null) throw Problems.notFound();
     return page;
+  }
+
+  // ---------------------------------------------------------------- roles catalogue
+
+  @Get("roles")
+  @Paginated()
+  @Authorize("rbac.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListRoles", summary: "Roles and their permissions (admin, then seller), straight from @outlet/policy", tags: ["Admin RBAC"], query: RolesQuery, response: RolePage, maxQueries: 3 })
+  listRoles(@Ctx() s: RequestState, @Query() q: RolesQuery): RolePage {
+    this.staff(s);
+    return rolePage(q);
   }
 
   // ---------------------------------------------------------------- audit log
@@ -273,8 +325,9 @@ export class AdminController {
     // Only registered kill switches are toggled here (an ordinary flag or an unknown key is a 404, never created).
     if (!isKillSwitchName(p.flag_key)) throw Problems.notFound();
     const name: KillSwitchName = p.flag_key;
-    if (body.enabled && KILL_SWITCHES[name].class === "money") {
-      const r = await t.svc.access.requireApproval(t.principal, { action: KILL_RELEASE_ACTION, targetType: "kill_switch", targetId: name, payload: { marketId: t.marketId, enabled: true, reason: body.reason } });
+    if (body.enabled) {
+      // Policy decides (dualApprovalRequired): only a switch explicitly registered as "ui" opts out; a missing or unknown class counts as money.
+      const r = await t.svc.access.requireApproval(t.principal, { action: KILL_RELEASE_ACTION, targetType: "kill_switch", targetId: name, payload: { marketId: t.marketId, enabled: true, reason: body.reason }, moneySwitch: KILL_SWITCHES[name].class !== "ui" });
       if (r.required) throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
     }
     await ops.flags.set(t.principal, name, body.enabled, body.reason);

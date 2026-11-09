@@ -1,12 +1,13 @@
+import { z } from "zod";
 import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
 import type { Principal } from "@outlet/policy";
-import { SellerAccountsError } from "@outlet/seller-accounts";
+import { REQUIRED_DOCUMENTS, SellerAccountsError } from "@outlet/seller-accounts";
 import type { SellerOnboardingService } from "@outlet/seller-accounts";
 import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { Problems } from "../../platform/problem.js";
 import type {
-  ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemDto, ReconciliationItemPage,
+  AdminKycCase, ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemDto, ReconciliationItemPage,
   ReconciliationRunDto, ReconciliationRunPage, RunsQuery,
 } from "./dto.js";
 import type { ApprovalReaderPort, KycAdminPort, ReconciliationReaderPort } from "./services.js";
@@ -65,6 +66,14 @@ interface Row {
 }
 const COLS = "id, action, target_type, target_id, requested_by, status, created_at, expires_at, decided_by, decided_at, reason, executed_at";
 
+interface DetailRow {
+  id: string; seller_id: string; kind: string; state: AdminKycCase["case"]["status"]; submitted_at: Date | string | null; decided_at: Date | string | null; reason_note: string | null; version: number;
+  provider: string | null; check_results: unknown; legal_name_ar: string | null; legal_name_en: string | null; commercial_register_no: string | null; tax_card_no: string | null; governorate_name_ar: string | null;
+}
+interface DocRow { id: string; kind: AdminKycCase["case"]["documents"][number]["doc_type"]; media_asset_id: string; status: string; expires_on: Date | string | null; created_at: Date | string }
+const CheckStored = z.array(z.object({ type: z.string(), result: z.string(), scoreBp: z.number().int().min(0).max(10000).optional(), checkedAt: z.string() }));
+const dateOnly = (v: Date | string | null): string | null => (v === null ? null : (v instanceof Date ? v.toISOString() : v).slice(0, 10));
+
 const kycProblem = (e: unknown): unknown => {
   if (!(e instanceof SellerAccountsError)) return e;
   switch (e.code) {
@@ -110,6 +119,33 @@ export class PgKycAdmin implements KycAdminPort {
       items: page.map((c) => ({ id: c.id, seller_id: c.seller_id, legal_name_ar: c.legal_name_ar ?? "", status: c.state, submitted_at: isoOrNull(c.submitted_at) })),
       next_cursor: r.rows.length > q.limit && last?.submitted_at != null ? encodeCursor(iso(last.submitted_at), last.id) : null,
     };
+  }
+
+  async detail(marketId: string, caseId: string): Promise<AdminKycCase | null> {
+    return withDbContext(this.worker, { kind: "worker", marketId, job: "seller.kyc" }, async (tx: Queryable) => {
+      const c = (await tx.query<DetailRow>(
+        `SELECT c.id, c.seller_id, c.kind, c.state, c.submitted_at, c.decided_at, c.reason_note, c.version, c.provider, c.check_results,
+                s.legal_name_ar, s.legal_name_en, s.commercial_register_no, s.tax_card_no, s.governorate_name_ar
+           FROM kyc_cases c JOIN sellers s ON s.id = c.seller_id WHERE c.id = $1 AND c.market_id = $2`,
+        [caseId, marketId],
+      )).rows[0];
+      if (c === undefined) return null;
+      const docs = await tx.query<DocRow>(
+        "SELECT id, kind, media_asset_id, status, expires_on, created_at FROM kyc_documents WHERE case_id = $1 AND market_id = $2 AND status <> 'superseded' ORDER BY created_at, id LIMIT 50", [c.id, marketId]);
+      const stored = CheckStored.safeParse(c.check_results);
+      const checks = (stored.success ? stored.data : []).slice(0, 50).map((k) => ({ check_type: k.type, result: k.result, score_bp: k.scoreBp ?? null, provider: c.provider, checked_at: iso(k.checkedAt) }));
+      return {
+        case: {
+          id: c.id, seller_id: c.seller_id, kind: c.kind, status: c.state, submitted_at: isoOrNull(c.submitted_at), decided_at: isoOrNull(c.decided_at), decision_reason: c.reason_note === null ? null : c.reason_note.slice(0, 500),
+          version: c.version, required_documents: [...REQUIRED_DOCUMENTS], signatory: null,
+          documents: docs.rows.map((d) => ({ id: d.id, doc_type: d.kind, media_id: d.media_asset_id, verified: d.status === "verified", expires_on: dateOnly(d.expires_on), created_at: iso(d.created_at) })),
+        },
+        seller_legal: {
+          legal_name_ar: c.legal_name_ar ?? "", legal_name_en: c.legal_name_en, commercial_register_no: c.commercial_register_no ?? "", tax_card_no: c.tax_card_no ?? "", governorate_name_ar: c.governorate_name_ar ?? "",
+        },
+        checks,
+      };
+    });
   }
 
   async decide(p: Principal, caseId: string, input: KycDecisionInput): Promise<KycDecisionResult> {

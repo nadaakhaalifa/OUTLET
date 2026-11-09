@@ -1,7 +1,7 @@
 import type { AdminAccess } from "@outlet/admin-access";
 import type { Principal } from "@outlet/policy";
 import type {
-  ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemPage,
+  AdminKycCase, ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemPage,
   ReconciliationRunPage, RunsQuery,
 } from "./dto.js";
 import type { AdminOpsServices } from "./ops-services.js";
@@ -17,6 +17,8 @@ export interface ApprovalReaderPort {
 export interface KycAdminPort {
   list(marketId: string, q: KycCasesQuery): Promise<KycCaseSummaryPage>;
   decide(p: Principal, caseId: string, input: KycDecisionInput): Promise<KycDecisionResult>;
+  /** Null when the case is not in the market (404). */
+  detail(marketId: string, caseId: string): Promise<AdminKycCase | null>;
 }
 
 export interface ReconciliationReaderPort {
