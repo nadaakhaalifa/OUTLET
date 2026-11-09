@@ -2,7 +2,7 @@ import type { KillSwitchName } from "@outlet/flags";
 import { money } from "@outlet/money";
 import type { Currency, Money } from "@outlet/money";
 import type { VoucherSettlementPort } from "./cancellation.js";
-import { PromotionEvaluator, VoucherService, displayLabels } from "@outlet/promotions";
+import { PgOrderFacts, PromotionEvaluator, VoucherService, displayLabels } from "@outlet/promotions";
 import type { AppliedPromotion, EvalBag, EvalContext, PromotionsDeps, QuoteEvaluation } from "@outlet/promotions";
 import type { QuoteDiscounts, QuoteLineInput } from "../domain/types.js";
 import type { PromotionsPort } from "../ports.js";
@@ -11,8 +11,13 @@ import type { Env } from "./env.js";
 /** Typed against the flags registry: renaming the switch there breaks this line at compile time. */
 export const PROMOTIONS_KILL_SWITCH = "promotions.enabled" satisfies KillSwitchName;
 
-/** PromotionsPort over the real evaluator and voucher service (one PromotionsDeps, one client). */
-export const makePromotionsPort = (deps: PromotionsDeps): PromotionsPort & VoucherSettlementPort => {
+/**
+ * PromotionsPort over the real evaluator and voucher service (one PromotionsDeps, one client). Without an explicit `orderFacts` the
+ * reinstate gate reads the shopper's own seller orders on the same app pool and user context (PgOrderFacts.forShopper): a composition that
+ * forgets it no longer turns every cancellation reinstate into REINSTATE_NOT_ALLOWED (chief review H, waves 9-10).
+ */
+export const makePromotionsPort = (input: PromotionsDeps): PromotionsPort & VoucherSettlementPort => {
+  const deps: PromotionsDeps = input.orderFacts === undefined ? { ...input, orderFacts: PgOrderFacts.forShopper(input.client, input.marketId) } : input;
   const evaluator = new PromotionEvaluator(deps);
   const vouchers = new VoucherService(deps);
   return {

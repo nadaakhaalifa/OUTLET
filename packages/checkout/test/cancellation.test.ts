@@ -14,14 +14,14 @@ import { RefundService } from "@outlet/returns";
 import { FakeEvidence, FakeKill, FakePolicy, FakeProvider, FakeRestock } from "@outlet/returns/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  CancellationRefundConsumer, INVENTORY_RELEASE_REQUIRED_EVENT, REFUND_ATTENTION_EVENT, ORDER_GROUP_CANCELLED_EVENT, OrderCancellation, PgStoreCredit, SELLER_ORDER_CANCELLED_EVENT, makePromotionsPort,
+  CancellationRefundConsumer, INVENTORY_RELEASE_REQUIRED_EVENT, PROMOTIONS_SETTLE_ATTENTION_EVENT, REFUND_ATTENTION_EVENT, ORDER_GROUP_CANCELLED_EVENT, OrderCancellation, PgStoreCredit, SELLER_ORDER_CANCELLED_EVENT, makePromotionsPort,
 } from "../src/index.js";
-import type { CancellationAuditPort, PaymentMethod, PromotionsPort, VoucherSettlementPort } from "../src/index.js";
+import type { CancellationAuditEntry, CancellationAuditPort, PaymentMethod, PromotionsPort, VoucherSettlementPort } from "../src/index.js";
 import { buildWorld, errCode, intentOf, paidWebhook, quoteAndPlace } from "./fixtures.js";
 import type { Sku, World } from "./fixtures.js";
 
 let w: World;
-let audit: { entries: Parameters<CancellationAuditPort["append"]>[0][] } & CancellationAuditPort;
+let audit: { entries: CancellationAuditEntry[]; failNext: boolean; seenStatus: (string | undefined)[] } & CancellationAuditPort;
 let rprov: FakeProvider;
 let refunds: RefundService;
 let consumer: CancellationRefundConsumer;
@@ -72,8 +72,17 @@ const placePaid = async (userId: string, items: readonly { sku: Sku; qty: number
 
 beforeAll(async () => {
   w = await buildWorld();
-  const entries: Parameters<CancellationAuditPort["append"]>[0][] = [];
-  audit = { entries, append: (e) => { entries.push(e); return Promise.resolve(); } };
+  const entries: CancellationAuditEntry[] = [];
+  const seenStatus: (string | undefined)[] = [];
+  // Records the group status as seen THROUGH the caller's transaction (proves the append runs inside it, before commit); can fail on demand.
+  audit = {
+    entries, failNext: false, seenStatus,
+    appendIn: async (tx, e) => {
+      seenStatus.push((await tx.query<{ status: string }>("SELECT status FROM order_groups WHERE id = $1", [e.targetId])).rows[0]?.status);
+      if (audit.failNext) { audit.failNext = false; throw new Error("audit down"); }
+      entries.push(e);
+    },
+  };
   rprov = new FakeProvider();
   const admin = createAdminAccess({ db: w.app, audit: { appendIn: () => Promise.resolve() }, clock: w.now, thresholdMinor: 50_000_000n });
   refunds = new RefundService({
@@ -232,6 +241,29 @@ describe("OrderCancellation: partial, shipped, replay, preference", () => {
   });
 });
 
+describe("OrderCancellation: PACKED order with an AWB (M4)", () => {
+  it("emits shipment.cancel_required only for a live outbound shipment of a PACKED order", async () => {
+    const sku = await w.seedSku(w.stores[1], 25_000n, 5);
+    const u = await w.newUser();
+    const g = await placePaid(u, [{ sku, qty: 1 }]);
+    const so = (await statusOf(g)).sellers[0]?.id ?? "";
+    await w.raw.query("UPDATE seller_orders SET status = 'PACKED' WHERE id = $1", [so]);
+    const ship = async (status: string, direction = "outbound"): Promise<string> => {
+      const id = randomUUID();
+      await w.raw.query(
+        `INSERT INTO shipments (id, market_id, store_id, user_id, seller_order_ids, direction, courier, service_level, awb, status, declared_weight_g, idempotency_key)
+         VALUES ($1,'EG',$2,$3,$4,$5,'fake','standard',$8,$6,500,$7)`, [id, w.stores[1], u, [so], direction, status, `k:${id}`, `AWB-${id}`]);
+      return id;
+    };
+    const live = await ship("LABEL_READY");
+    await ship("CANCELLED");
+    await ship("DELIVERED", "return");
+    await cancel.cancelBySeller({ storeId: w.stores[1], actorId: "m1", sellerOrderId: so, reasonCode: "cannot_fulfil" });
+    const ev = (await w.raw.query<{ payload: { shipment_id: string; seller_order_id: string } }>("SELECT payload FROM outbox_events WHERE event_type = 'shipment.cancel_required' AND payload->>'order_group_id' = $1", [g])).rows;
+    expect(ev.map((e) => e.payload)).toMatchObject([{ shipment_id: live, seller_order_id: so }]);
+  });
+});
+
 describe("OrderCancellation: unpaid and cash on delivery", () => {
   it("COD awaiting confirmation: group cancelled, seller orders voided, reservation released, no refund row", async () => {
     w.fakes.risk.decision = "require_confirmation";
@@ -380,6 +412,82 @@ describe("chief review fixes", () => {
     await w.raw.query("UPDATE seller_orders SET seller_net_minor = seller_net_minor - 1 WHERE id = $1", [so]);
   });
 
+  it("M5: the audit record is appended inside the cancel transaction; an audit failure rolls the whole cancel back", async () => {
+    const sku = await w.seedSku(w.stores[0], 30_000n, 3);
+    const u = await w.newUser();
+    const g = await placePaid(u, [{ sku, qty: 1 }]);
+    audit.failNext = true;
+    await expect(cancel.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" })).rejects.toThrow("audit down");
+    expect(audit.seenStatus.at(-1)).toBe("CANCELLED"); // the append saw the uncommitted change
+    expect((await statusOf(g)).group?.status).toBe("PAID"); // ...and its failure rolled it back
+    expect(await events(ORDER_GROUP_CANCELLED_EVENT, g)).toHaveLength(0);
+    const n = audit.entries.length;
+    await cancel.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" });
+    expect(audit.entries).toHaveLength(n + 1);
+    expect(audit.entries.at(-1)).toMatchObject({ actorType: "user", actorId: u, targetId: g, diff: { after: { status: "CANCELLED", replayed: false } } });
+  });
+
+  it("H (finding 1): a failed voucher settlement is logged at error level and parked as promotions.settle_attention", async () => {
+    await addPlatformPromo("4000");
+    const sku = await w.seedSku(w.stores[0], 50_000n, 3);
+    const u = await w.newUser();
+    const g = await placePaid(u, [{ sku, qty: 1 }], "card", { withPromotions: true });
+    const logged: { msg: string; fields: Record<string, unknown> | undefined }[] = [];
+    const broken: VoucherSettlementPort = { release: () => Promise.reject(new Error("x")), reinstate: () => Promise.reject(Object.assign(new Error("nope"), { code: "REINSTATE_NOT_ALLOWED" })) };
+    const c3 = new OrderCancellation({ client: w.app, marketId: "EG", reservations: w.reservations, provider: w.fakes.provider, credit: new PgStoreCredit("EGP"), audit, vouchers: broken, now: w.now, log: { error: (msg, fields) => { logged.push({ msg, fields }); } } });
+    expect(await c3.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" })).toMatchObject({ vouchers: "failed", groupStatus: "CANCELLED" });
+    expect(logged).toEqual([{ msg: "cancellation voucher settlement failed", fields: { order_group_id: g, action: "reinstate", error: "REINSTATE_NOT_ALLOWED" } }]);
+    const parked = await events(PROMOTIONS_SETTLE_ATTENTION_EVENT, g);
+    expect(parked.map((e) => e.payload)).toEqual([{ order_group_id: g, action: "reinstate", error: "REINSTATE_NOT_ALLOWED" }]);
+    // the default promotions port (no explicit orderFacts) reinstates on the replay: the shopper-scoped facts see the cancelled group
+    const defaults = new OrderCancellation({ client: w.app, marketId: "EG", reservations: w.reservations, provider: w.fakes.provider, credit: new PgStoreCredit("EGP"), audit, vouchers: makePromotionsPort({ client: w.app, marketId: "EG", kill: promoKill, now: w.now }), now: w.now });
+    expect(await defaults.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" })).toMatchObject({ vouchers: "reinstated", replayed: true });
+  });
+
+  it("H (finding 1): default stderr log; a non-Error rejection reads 'unknown'; an attention write failure is logged, never thrown", async () => {
+    const { OutboxWriter, pgTransactionalWriter } = await import("@outlet/outbox");
+    await addPlatformPromo("2000");
+    const sku = await w.seedSku(w.stores[0], 30_000n, 3);
+    const u = await w.newUser();
+    const g = await placePaid(u, [{ sku, qty: 1 }], "card", { withPromotions: true });
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the port contract cannot stop a non-Error rejection
+    const broken: VoucherSettlementPort = { release: () => Promise.reject(new Error("x")), reinstate: () => Promise.reject("string failure") };
+    // the attention insert fails (its own transaction), every other event goes through
+    const picky = new OutboxWriter({ insertEvent: (tx, e) => (e.type === PROMOTIONS_SETTLE_ATTENTION_EVENT ? Promise.reject(new TypeError("outbox down")) : pgTransactionalWriter.insertEvent(tx, e)) });
+    const lines: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array): boolean => { lines.push(String(chunk)); return true; });
+    try {
+      const c4 = new OrderCancellation({ client: w.app, marketId: "EG", reservations: w.reservations, provider: w.fakes.provider, credit: new PgStoreCredit("EGP"), audit, vouchers: broken, outbox: picky, now: w.now });
+      expect(await c4.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" })).toMatchObject({ vouchers: "failed", groupStatus: "CANCELLED" });
+    } finally {
+      process.stderr.write = write;
+    }
+    const parsed = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(parsed).toEqual([
+      { level: "error", msg: "cancellation voucher settlement failed", order_group_id: g, action: "reinstate", error: "unknown" },
+      { level: "error", msg: "promotions.settle_attention could not be written", order_group_id: g, action: "reinstate", error: "TypeError" },
+    ]);
+    expect(await events(PROMOTIONS_SETTLE_ATTENTION_EVENT, g)).toHaveLength(0);
+  });
+
+  it("finding 2: cancelled before the settle consumer confirmed; reinstate releases the reservation and a late confirm is a no-op", async () => {
+    await addPlatformPromo("3000");
+    const sku = await w.seedSku(w.stores[0], 40_000n, 3);
+    const u = await w.newUser();
+    const g = await placePaid(u, [{ sku, qty: 1 }], "card", { withPromotions: true });
+    const kinds = async (): Promise<string[]> => (await w.raw.query<{ kind: string }>("SELECT kind FROM voucher_redemptions WHERE order_group_id = $1 ORDER BY kind", [g])).rows.map((r) => r.kind);
+    // placePaid confirms synchronously in this harness; rewind to "settle event not consumed yet" by dropping the confirmation row
+    await w.raw.query("ALTER TABLE voucher_redemptions DISABLE TRIGGER USER");
+    await w.raw.query("DELETE FROM voucher_redemptions WHERE order_group_id = $1 AND kind = 'confirmed'", [g]);
+    await w.raw.query("ALTER TABLE voucher_redemptions ENABLE TRIGGER USER");
+    expect(await kinds()).toEqual(["reserved"]);
+    expect(await cancel.execute({ userId: u, orderGroupId: g, reasonCode: "changed_mind" })).toMatchObject({ vouchers: "reinstated", groupStatus: "CANCELLED" });
+    expect(await kinds()).toEqual(["released", "reserved"]);
+    expect(await promotions.confirm(u, g)).toBe(0);
+    expect(await kinds()).toEqual(["released", "reserved"]);
+  });
+
   it("M3: a failed voucher reinstate is retried by replaying the same cancel", async () => {
     await addPlatformPromo("5000");
     const sku = await w.seedSku(w.stores[0], 60_000n, 3);
@@ -390,7 +498,7 @@ describe("chief review fixes", () => {
       release: (a, b) => vouchers.release(a, b),
       reinstate: (a, b) => (fail ? Promise.reject(new Error("promotions down")) : vouchers.reinstate(a, b)),
     };
-    const c2 = new OrderCancellation({ client: w.app, marketId: "EG", reservations: w.reservations, provider: w.fakes.provider, credit: new PgStoreCredit("EGP"), audit, vouchers: flaky, now: w.now });
+    const c2 = new OrderCancellation({ client: w.app, marketId: "EG", reservations: w.reservations, provider: w.fakes.provider, credit: new PgStoreCredit("EGP"), audit, vouchers: flaky, now: w.now, log: { error: () => undefined } });
     expect(await c2.execute({ userId: u, orderGroupId: g, reasonCode: "other" })).toMatchObject({ vouchers: "failed", replayed: false });
     const kinds = async (): Promise<string[]> => (await w.raw.query<{ kind: string }>("SELECT kind FROM voucher_redemptions WHERE order_group_id = $1 ORDER BY kind", [g])).rows.map((r) => r.kind);
     expect(await kinds()).not.toContain("reinstated");

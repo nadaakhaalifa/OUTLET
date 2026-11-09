@@ -145,12 +145,32 @@ describe("voucher settle survives a failed post-commit confirm (chief review 3)"
     expect(await kinds()).toEqual(["reserved"]);
     const ev = (await w.raw.query<{ id: string; payload: Record<string, unknown> }>("SELECT id, payload FROM outbox_events WHERE event_type = 'promotions.settle_requested' AND payload ->> 'order_group_id' = $1", [res.orderGroupId])).rows[0];
     expect(ev).toBeDefined();
-    const consumer = new PromotionsSettleConsumer(w.raw, flaky);
+    const consumer = new PromotionsSettleConsumer(w.workerClient, "EG", flaky);
     await expect(consumer.handle(ev ?? { id: "", payload: {} })).rejects.toThrow("db blip");
     failing = false;
     expect(await consumer.handle(ev ?? { id: "", payload: {} })).toBe("processed");
     expect(await kinds()).toEqual(["confirmed", "reserved"]);
     expect(await consumer.handle(ev ?? { id: "", payload: {} })).toBe("duplicate");
     await w.raw.query("UPDATE promotions SET status = 'ENDED' WHERE id = $1", [id]);
+  });
+
+  it("finding 4: a malformed payload is parked once (inbox row + promotions.settle_attention), never confirmed, never redelivered forever", async () => {
+    const { randomUUID } = await import("node:crypto");
+    const { PROMOTIONS_SETTLE_ATTENTION_EVENT, PromotionsSettleConsumer } = await import("../src/index.js");
+    const calls: string[] = [];
+    const consumer = new PromotionsSettleConsumer(w.workerClient, "EG", { confirm: (a: string, b: string) => { calls.push(`${a}:${b}`); return Promise.resolve(0); } });
+    const evId = randomUUID();
+    const groupId = randomUUID();
+    expect(await consumer.handle({ id: evId, payload: { order_group_id: groupId, user_id: "not-a-uuid" } })).toBe("processed");
+    expect(await consumer.handle({ id: evId, payload: { order_group_id: groupId, user_id: "not-a-uuid" } })).toBe("duplicate");
+    expect(calls).toEqual([]);
+    const parked = (await w.raw.query<{ payload: Record<string, unknown> }>("SELECT payload FROM outbox_events WHERE event_type = $1 AND payload ->> 'source_event_id' = $2", [PROMOTIONS_SETTLE_ATTENTION_EVENT, evId])).rows;
+    expect(parked.map((r) => r.payload)).toEqual([{ order_group_id: groupId, action: "confirm", error: "invalid_payload", source_event_id: evId }]);
+    const garbage = randomUUID();
+    expect(await consumer.handle({ id: garbage, payload: {} })).toBe("processed");
+    const g2 = (await w.raw.query<{ payload: Record<string, unknown>; aggregate_id: string }>("SELECT payload, aggregate_id FROM outbox_events WHERE event_type = $1 AND payload ->> 'source_event_id' = $2", [PROMOTIONS_SETTLE_ATTENTION_EVENT, garbage])).rows[0];
+    expect(g2?.payload.order_group_id).toBeNull();
+    expect(String(g2?.aggregate_id)).toBe(garbage);
+    expect((await w.raw.query("SELECT 1 FROM inbox_processed WHERE consumer = 'checkout.promotions_settle' AND message_id = $1", [garbage])).rows).toHaveLength(1);
   });
 });

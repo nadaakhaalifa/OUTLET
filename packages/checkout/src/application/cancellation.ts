@@ -2,6 +2,7 @@ import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
 import { uuidv7 } from "@outlet/ids";
 import type { ReservationService } from "@outlet/inventory";
+import { CANCELLABLE_SHIPMENT_STATUSES, SHIPMENT_CANCEL_REQUIRED_EVENT } from "@outlet/shipping";
 import { SELLER_ORDER, transition } from "@outlet/orders";
 import type { OrderGroupState, SellerOrderState } from "@outlet/orders";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
@@ -11,10 +12,13 @@ import type { PaymentProviderPort, StoreCreditPort } from "../ports.js";
 import type { Env } from "./env.js";
 import { lockGroup, lockIntentOfGroup, moveGroup, moveIntent, setSessionStatus } from "./order-ops.js";
 import type { GroupRow } from "./order-ops.js";
+import { PROMOTIONS_SETTLE_ATTENTION } from "./promotions-settle-consumer.js";
 import { INVENTORY_RELEASE_REQUIRED_EVENT } from "./seller-order-events.js";
 
 export const ORDER_GROUP_CANCELLED_EVENT = "order_group.cancelled";
 export const SELLER_ORDER_CANCELLED_EVENT = "seller_order.cancelled";
+/** A voucher release / reinstate failed after the cancel committed: finance and ops resolve it (the caps stay counted meanwhile). */
+export const PROMOTIONS_SETTLE_ATTENTION_EVENT = PROMOTIONS_SETTLE_ATTENTION;
 
 /** Shopper reasons (API CancelInput) and seller reasons. Stored as text, never shown raw (Arabic copy is mapped in the clients). */
 export const SHOPPER_CANCEL_REASONS = ["changed_mind", "ordered_by_mistake", "delivery_too_slow", "other"] as const;
@@ -33,18 +37,31 @@ const PAID_GROUP: ReadonlySet<OrderGroupState> = new Set<OrderGroupState>(["PAID
 const PENDING_INTENT = new Set(["CREATED", "REQUIRES_ACTION", "AUTHORIZED"]);
 const EXTERNAL = new Set(["card", "apple_pay", "meeza", "wallet", "instapay", "fawry", "bnpl"]);
 
-/** Audit sink (append-only hash-chained log, master prompt A2.9). Production: @outlet/audit-log PgAuditStore behind the composition root. */
-export interface CancellationAuditPort {
-  append(e: {
-    readonly marketId: string;
-    readonly actorType: "user" | "store_member";
-    readonly actorId: string;
-    readonly action: "order.cancel";
-    readonly targetType: "order_group";
-    readonly targetId: string;
-    readonly diff: { readonly before: Readonly<Record<string, unknown>>; readonly after: Readonly<Record<string, unknown>> };
-  }): Promise<void>;
+export interface CancellationAuditEntry {
+  readonly marketId: string;
+  /** "user" for the shopper, "store_member" for a seller-initiated cancel (actorId is then the store member, never the shopper). */
+  readonly actorType: "user" | "store_member";
+  readonly actorId: string;
+  readonly action: "order.cancel";
+  readonly targetType: "order_group";
+  readonly targetId: string;
+  readonly diff: { readonly before: Readonly<Record<string, unknown>>; readonly after: Readonly<Record<string, unknown>> };
 }
+
+/**
+ * Audit sink (append-only hash-chained log, master prompt A2.9). Appends INSIDE the cancel transaction, so the record commits (or rolls back)
+ * with the state change. Production: @outlet/audit-log PgAuditStore.appendIn behind the composition root.
+ */
+export interface CancellationAuditPort {
+  appendIn(tx: Queryable, e: CancellationAuditEntry): Promise<void>;
+}
+
+/** Error-level log sink (structurally @outlet/logger Logger). */
+export interface CancellationLog { error(msg: string, fields?: Record<string, unknown>): void }
+
+const stderrLog: CancellationLog = {
+  error: (msg, fields) => { process.stderr.write(`${JSON.stringify({ level: "error", msg, ...fields })}\n`); },
+};
 
 /** Structurally @outlet/promotions VoucherService (release before payment; reinstate only for a whole group cancelled before shipping). */
 export interface VoucherSettlementPort {
@@ -63,6 +80,8 @@ export interface OrderCancellationDeps {
   /** Absent = promotions not wired (no voucher was reserved). */
   readonly vouchers?: VoucherSettlementPort;
   readonly outbox?: OutboxWriter;
+  /** Defaults to a JSON line on stderr. */
+  readonly log?: CancellationLog;
   readonly now?: () => Date;
   readonly newId?: () => string;
 }
@@ -118,7 +137,8 @@ interface Plan {
  *    to CANCELLED when no live seller order remains; then vouchers are reinstated (refund-then-reuse rule).
  *  - any target at or after SHIPPED: 409 cancel-after-shipping (it is a refusal or a return).
  * Idempotent by (order group, reason): a repeat with the same reason replays; a different reason on an already cancelled target is 409.
- * Every group change emits `order_group.cancelled {user_id, ...}` (notifications). Audit is appended after commit.
+ * Every group change emits `order_group.cancelled {user_id, ...}` (notifications). The audit record is appended in the same transaction
+ * (replays included). A failed voucher settlement after commit is logged at error level and parked as `promotions.settle_attention`.
  */
 export class OrderCancellation {
   private readonly outbox: OutboxWriter;
@@ -174,27 +194,43 @@ export class OrderCancellation {
       }
     }
 
-    // 2. One transaction for every state change and event.
-    const plan = await this.inUserTx(r.userId, (tx) => this.apply(tx, r));
+    // 2. One transaction for every state change, event and the audit record (M5: the audit row commits with the change).
+    const plan = await this.inUserTx(r.userId, async (tx) => {
+      const p = await this.apply(tx, r);
+      await this.d.audit.appendIn(tx, {
+        marketId: this.d.marketId, actorType: r.initiator === "shopper" ? "user" : "store_member", actorId: r.actorId, action: "order.cancel", targetType: "order_group", targetId: r.groupId,
+        diff: {
+          before: { status: p.before },
+          after: { status: p.result.groupStatus, scope: p.result.scope, reason_code: r.reason, seller_order_ids: p.result.cancelledSellerOrderIds, refund_preference: r.preference, replayed: p.result.replayed },
+        },
+      });
+      return p;
+    });
 
-    // 3. After commit: vouchers (own transaction, idempotent) and the audit record.
+    // 3. After commit: vouchers (own transaction, idempotent).
     let vouchers: CancellationResult["vouchers"] = "none";
     if (plan.voucherAction !== null && this.d.vouchers !== undefined) {
+      const action = plan.voucherAction;
       try {
-        await (plan.voucherAction === "release" ? this.d.vouchers.release(r.userId, r.groupId) : this.d.vouchers.reinstate(r.userId, r.groupId));
-        vouchers = plan.voucherAction === "release" ? "released" : "reinstated";
-      } catch {
+        await (action === "release" ? this.d.vouchers.release(r.userId, r.groupId) : this.d.vouchers.reinstate(r.userId, r.groupId));
+        vouchers = action === "release" ? "released" : "reinstated";
+      } catch (e) {
         vouchers = "failed"; // caps stay counted (never under-counts); a replay of this cancel retries
+        await this.settleAttention(r.userId, r.groupId, action, e);
       }
     }
-    await this.d.audit.append({
-      marketId: this.d.marketId, actorType: r.initiator === "shopper" ? "user" : "store_member", actorId: r.actorId, action: "order.cancel", targetType: "order_group", targetId: r.groupId,
-      diff: {
-        before: { status: plan.before },
-        after: { status: plan.result.groupStatus, scope: plan.result.scope, reason_code: r.reason, seller_order_ids: plan.result.cancelledSellerOrderIds, refund_preference: r.preference, replayed: plan.result.replayed },
-      },
-    });
     return { ...plan.result, vouchers };
+  }
+
+  /** H1 (finding 1): never fail silently. Error log first (survives a DB outage), then a durable attention event in a small transaction. */
+  private async settleAttention(userId: string, groupId: string, action: "release" | "reinstate", e: unknown): Promise<void> {
+    const error = errorCode(e);
+    (this.d.log ?? stderrLog).error("cancellation voucher settlement failed", { order_group_id: groupId, action, error });
+    try {
+      await this.inUserTx(userId, (tx) => this.event(tx, PROMOTIONS_SETTLE_ATTENTION_EVENT, "order_group", groupId, this.now().toISOString(), { order_group_id: groupId, action, error }));
+    } catch (inner) {
+      (this.d.log ?? stderrLog).error("promotions.settle_attention could not be written", { order_group_id: groupId, action, error: errorCode(inner) });
+    }
   }
 
   private async apply(tx: Queryable, r: { userId: string; groupId: string; targets: readonly string[] | null; reason: string; preference: RefundPreference | null; initiator: CancelInitiator }): Promise<Plan> {
@@ -239,6 +275,17 @@ export class OrderCancellation {
         await this.event(tx, INVENTORY_RELEASE_REQUIRED_EVENT, "seller_order", so.id, at, {
           seller_order_id: so.id, order_group_id: g.id, store_id: so.store_id, user_id: g.user_id, market_id: this.d.marketId, reservation_id: g.reservation_id, lines, occurred_at: at,
         });
+      }
+      // M4: a PACKED order may already have its AWB/label; the shipping worker cancels it at the courier (same transaction as the cancel).
+      if (so.status === "PACKED") {
+        const ships = (await tx.query<{ id: string }>(
+          "SELECT id FROM shipments WHERE $1::uuid = ANY(seller_order_ids) AND direction = 'outbound' AND status = ANY($2::text[]) ORDER BY id", [so.id, [...CANCELLABLE_SHIPMENT_STATUSES]],
+        )).rows;
+        for (const sh of ships) {
+          await this.event(tx, SHIPMENT_CANCEL_REQUIRED_EVENT, "shipment", sh.id, at, {
+            shipment_id: sh.id, seller_order_id: so.id, order_group_id: g.id, store_id: so.store_id, user_id: g.user_id, market_id: this.d.marketId, occurred_at: at,
+          });
+        }
       }
       await this.event(tx, SELLER_ORDER_CANCELLED_EVENT, "seller_order", so.id, at, {
         seller_order_id: so.id, order_group_id: g.id, store_id: so.store_id, user_id: g.user_id, reason_code: r.reason, initiator: r.initiator, charged, refund_preference: r.preference,
@@ -302,6 +349,12 @@ const replay = (g: GroupRow, scope: "full" | "partial", voucherAction: Plan["vou
   before: g.status, voucherAction,
   result: { orderGroupId: g.id, groupStatus: g.status, scope, cancelledSellerOrderIds: [], refundExpected: g.payment_method !== "cod", replayed: true },
 });
+
+/** A stable, PII-free failure label: a domain error code when there is one, else the error class name. */
+const errorCode = (e: unknown): string => {
+  if (e instanceof Error) return "code" in e && typeof e.code === "string" ? e.code : e.name;
+  return "unknown";
+};
 
 /** exactOptionalPropertyTypes: the API passes `refundPreference: undefined`; the strict schema wants the key absent. */
 const stripUndefined = (o: CancelRequest): Record<string, unknown> => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
