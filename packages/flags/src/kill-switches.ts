@@ -44,6 +44,14 @@ export const KILL_SWITCHES = {
   "ranking.ml.enabled": ui("ML ranking (falls back to popularity)"),
   "crawlers.enabled": ui("Price-integrity crawlers"),
   "shipping.international.enabled": ui("International shipping"),
+  // Worker process (ADR-0016): one switch per worker job. Off = the relay stops claiming that job's event types (they stay unpublished, in order, and
+  // resume when released); nothing is consumed or dropped. Money jobs fail closed when the flag store is unreachable.
+  "workers.outbox.relay.enabled": ui("Worker: outbox dispatch relay (off = no event reaches any consumer; everything queues)"),
+  "workers.finance.refunds.enabled": money("Worker: cancellation and rejection refunds (finance.refunds; off = refund requests queue)"),
+  "workers.checkout.settle.enabled": money("Worker: voucher settlement after payment (checkout.settle; off = reserved vouchers stay reserved)"),
+  "workers.shipping.tracking.enabled": ui("Worker: courier AWB cancellation (shipping.tracking; off = cancellations queue)"),
+  "workers.ops.attention.enabled": ui("Worker: ops attention queue (ops.attention; off = parked events queue before reaching ops)"),
+  "workers.reporting.rollup.enabled": ui("Worker: admin dashboard rollups and their scheduler ticks (reporting.rollup; off = tiles go stale)"),
 } as const satisfies Record<string, KillSwitchDef>;
 
 export type KillSwitchName = keyof typeof KILL_SWITCHES;

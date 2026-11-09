@@ -6,3 +6,5 @@ export { createSloMetrics } from "./slo.js";
 export type { SloMetrics } from "./slo.js";
 export { pgConnectionTag, PG_PROCESS_NAMES } from "./pg.js";
 export type { PgProcessName } from "./pg.js";
+export { createWorkerMetrics } from "./worker.js";
+export type { WorkerMetrics } from "./worker.js";
