@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createTranslator, type Locale, type MessageKey } from "@outlet/i18n";
+import { uuidv7 } from "../lib/uuid7";
 import { adminCall } from "../client/admin-api";
 import { fmtDateTime } from "../lib/fmt";
 import { label } from "../lib/labels";
@@ -30,7 +31,7 @@ export function ElevationPanel({ locale, market, requests, canDecide, selfId }: 
   const request = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setBusy(true);
-    const r = await adminCall(market, "elevations", { method: "POST", body: { role_code: role, duration_minutes: Number(minutes), reason: reason.trim() } });
+    const r = await adminCall(market, "elevations", { method: "POST", idempotencyKey: uuidv7(), body: { role_code: role, duration_minutes: Number(minutes), reason: reason.trim() } });
     setBusy(false);
     if (r.status === 404 || r.status === 405) { setResult({ ok: false, key: "admin.access.request.unavailable" }); return; }
     if (!r.ok) { setResult({ ok: false, key: problemKey(r.code, r.status) }); return; }
@@ -39,7 +40,7 @@ export function ElevationPanel({ locale, market, requests, canDecide, selfId }: 
   };
 
   const decide = async (id: string, decision: "approve" | "reject") => {
-    const r = await adminCall(market, `approval-requests/${id}/decision`, { method: "POST", body: { decision, reason: decisionReason.trim() } });
+    const r = await adminCall(market, `approval-requests/${id}/decision`, { method: "POST", idempotencyKey: uuidv7(), body: { decision, reason: decisionReason.trim() } });
     setRowResult(r.ok ? { ok: true, key: "admin.action.done" } : { ok: false, key: problemKey(r.code, r.status) });
     if (r.ok) router.refresh();
   };

@@ -1482,6 +1482,7 @@
   "admin.home.tile.kill_switches": "Kill switches engaged",
   "admin.home.note.gmv": "Refunded today {refunded}. Last {days, number} days {week}.",
   "admin.home.note.gmvBasis": "Including VAT, before refunds.",
+  "admin.home.note.slaNoDispatch": "{accept} not accepted in time. Dispatch: not tracked yet.",
   "admin.home.note.sla": "{accept} not accepted in time, {dispatch} not dispatched in time.",
   "admin.home.note.returns": "{requested} requested, {transit} on the way, {inspect} waiting for inspection ({overdue} overdue).",
   "admin.home.note.disputes": "{past} past their deadline.",

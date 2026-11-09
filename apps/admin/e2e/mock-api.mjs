@@ -41,13 +41,13 @@ const dashboard = (range) => {
   const isFinance = control.roles.includes("finance");
   const gate = (key, tile) => (FINANCE_ONLY.has(key) && !isFinance ? { key, status: "forbidden" } : tile);
   const t = {
-    orders_today: ok("orders_today", { count: 42, series_14d: days(14).map((d, i) => ({ day: d, value: i + 1 })) }),
+    orders_today: ok("orders_today", { count: 42, series_14d: days(isFinance ? 14 : 3).map((d, i) => ({ day: d, value: i + 1 })) }),
     gmv_today: gate("gmv_today", ok("gmv_today", { gmv: egp("12345600"), refunded: egp("50000"), gmv_7d: egp("98765400") })),
     sales_series: ok("sales_series", { orders: days(n).map((d, i) => ({ day: d, value: i + 1 })), gmv: isFinance ? days(n).map((d, i) => ({ day: d, value: egp(String((i + 1) * 100000)) })) : null, total_orders: 777, total_gmv: isFinance ? egp("55500000") : null }),
     orders_by_step: ok("orders_by_step", { paid_awaiting_accept: 5, accepted: 4, packed: 3, in_transit: 2, delivery_failed: 1 }),
     top_stores: gate("top_stores", ok("top_stores", { items: [{ store_id: STORE, name_ar: "متجر النيل", name_en: "Nile Store", orders: 12, gmv: egp("900000") }], other: { stores: 3, orders: 7, gmv: egp("300000") } })),
     verified_discount_share: ok("verified_discount_share", { verified: 30, live_skus: 120 }),
-    seller_sla_breaches: ok("seller_sla_breaches", { late_accept: 2, late_dispatch: 1, oldest_at: hoursFromNow(-20) }),
+    seller_sla_breaches: ok("seller_sla_breaches", { late_accept: 2, late_dispatch: isFinance ? 1 : null, oldest_at: hoursFromNow(-20) }),
     cod_awaiting_confirmation: ok("cod_awaiting_confirmation", { count: 6, oldest_at: null }),
     returns_pipeline: ok("returns_pipeline", { requested: 3, in_transit: 2, awaiting_inspection: 1, inspection_overdue: 0 }),
     disputes_open: { key: "disputes_open", status: "unavailable", reason: "read_failed" },
@@ -187,6 +187,7 @@ createServer(async (req, res) => {
   if (req.method === "GET" && rest === "privacy/consent-stats") return send(res, 200, { as_of: new Date().toISOString(), purposes: [{ purpose_code: "marketing_push", purpose_version: 1, granted_count: 412, withdrawn_30d: 9 }] });
   if (req.method === "GET" && rest === "privacy/breaches") return send(res, 200, page([]));
   if (req.method === "GET" && rest === "privacy/transfer-register") return send(res, 200, page([]));
+  if (req.method === "GET" && rest === "audit-log/verify") return send(res, 200, { ok: true, checked: audit.length, head_seq: audit.length, broken_seq: null, reason: null });
   if (req.method === "GET" && rest === "audit-log") return send(res, 200, page(audit));
   return problem(res, 404, "not-found");
 }).listen(3301, () => console.log("admin mock api on 3301"));

@@ -2,6 +2,8 @@ import { barHeights } from "../../lib/charts/models";
 
 const BAR = 8;
 const GAP = 2;
+/** Slot count: a short series keeps the bar size of a full one and sits at the start edge. */
+const SLOTS = 14;
 const HEIGHT = 40;
 
 /**
@@ -12,8 +14,9 @@ const HEIGHT = 40;
 export function Sparkline({ values, rtl, label, valueText }: { values: readonly number[]; rtl: boolean; label: string; valueText: (index: number, value: number) => string }) {
   if (values.length === 0) return null;
   const heights = barHeights(values);
-  const width = values.length * (BAR + GAP) - GAP;
-  const x = (i: number) => (rtl ? values.length - 1 - i : i) * (BAR + GAP);
+  const width = Math.max(SLOTS, values.length) * (BAR + GAP) - GAP;
+  const slots = Math.max(SLOTS, values.length);
+  const x = (i: number) => (rtl ? slots - 1 - i : i) * (BAR + GAP);
   return (
     <figure className="spark">
       <svg viewBox={`0 0 ${String(width)} 40`} preserveAspectRatio="none" role="presentation" focusable="false" className="sparkSvg">

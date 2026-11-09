@@ -77,7 +77,7 @@ export function buildNeeds(resp: DashboardResponse, now: Date): Needs {
   const enforcement = read("price_enforcement");
   if (enforcement !== null) push("enforcement", enforcement.pending_review, false, "/price-integrity");
   const sla = read("seller_sla_breaches");
-  if (sla !== null) push("sla", sla.late_accept + sla.late_dispatch, false, "/today/seller-sla-breaches");
+  if (sla !== null) push("sla", sla.late_accept + (sla.late_dispatch ?? 0), false, "/today/seller-sla-breaches");
   const cod = read("cod_awaiting_confirmation");
   if (cod !== null) push("cod", cod.count, false, "/today/cod-awaiting-confirmation");
   const payouts = read("payouts");

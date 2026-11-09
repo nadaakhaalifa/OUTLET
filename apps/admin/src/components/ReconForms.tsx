@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createTranslator, type Locale, type MessageKey, type Translator } from "@outlet/i18n";
+import { uuidv7 } from "../lib/uuid7";
 import { adminCall } from "../client/admin-api";
 import { problemKey } from "../lib/problem";
 
@@ -27,7 +28,7 @@ export function ResolveForm({ locale, market, itemId }: { locale: Locale; market
   const submit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setBusy(true);
-    const r = await adminCall(market, `reconciliation/items/${itemId}/resolve`, { method: "POST", body: { resolution, ticket_ref: ticket.trim(), note: note.trim() } });
+    const r = await adminCall(market, `reconciliation/items/${itemId}/resolve`, { method: "POST", idempotencyKey: uuidv7(), body: { resolution, ticket_ref: ticket.trim(), note: note.trim() } });
     setBusy(false);
     if (!r.ok) { setResult({ ok: false, key: problemKey(r.code, r.status) }); return; }
     const approval = typeof r.data === "object" && r.data !== null && typeof (r.data as { approval_request_id?: unknown }).approval_request_id === "string";
@@ -64,7 +65,7 @@ export function StartRunForm({ locale, market, today }: { locale: Locale; market
   const submit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setBusy(true);
-    const r = await adminCall(market, "reconciliation/runs", { method: "POST", body: { source, counterparty: counterparty.trim(), business_date: date } });
+    const r = await adminCall(market, "reconciliation/runs", { method: "POST", idempotencyKey: uuidv7(), body: { source, counterparty: counterparty.trim(), business_date: date } });
     setBusy(false);
     setResult(r.ok ? { ok: true, key: "admin.recon.start.done" } : { ok: false, key: problemKey(r.code, r.status) });
     if (r.ok) router.refresh();

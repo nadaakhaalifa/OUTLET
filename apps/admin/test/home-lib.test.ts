@@ -1,3 +1,6 @@
+import { createTranslator } from "@outlet/i18n";
+import { DESCRIBERS } from "../src/components/home/tileModel";
+import { fmtNumber } from "../src/lib/fmt";
 import { describe, expect, it } from "vitest";
 import { buildNeeds, queueOrder } from "../src/lib/attention";
 import { bucketSeries, cardBySlug, CARDS, DashboardResponse, flattenTiles, parseRange, permille, tileState } from "../src/lib/dashboard";
@@ -107,5 +110,23 @@ describe("uuidv7 and queue order", () => {
   it("shows OPEN before ACKED, newest first, never resolved", () => {
     const ids = queueOrder([...attentionItems.map((i) => ({ ...i, status: i.status as "OPEN" | "ACKED" })), { id: "a7700000-0000-4000-8000-000000000003", kind: "x", status: "RESOLVED" as const, created_at: "2026-11-10T00:00:00Z" }]).map((i) => i.status);
     expect(ids).toEqual(["OPEN", "ACKED"]);
+  });
+});
+
+describe("late_dispatch null (dispatch deadlines not tracked yet)", () => {
+  const ctx = (locale: "ar-EG" | "en-EG") => ({ t: createTranslator(locale), locale });
+  it.each(["ar-EG", "en-EG"] as const)("never prints a zero for null and says it is not tracked (%s)", (locale) => {
+    const c = ctx(locale);
+    const b = DESCRIBERS.seller_sla_breaches?.({ late_accept: 2, late_dispatch: null, oldest_at: null }, c);
+    expect(b?.value).toBe(fmtNumber(2, locale));
+    expect(b?.notes[0]).toBe(c.t("admin.home.note.slaNoDispatch", { accept: fmtNumber(2, locale) }));
+    expect(b?.notes[0]).not.toContain(fmtNumber(0, locale));
+    expect(b?.alert).toBe(true);
+  });
+  it("a short orders_today series passes the contract schema; 15 points do not", () => {
+    const f = dashboardFixture();
+    const mk = (n: number) => ({ ...f, sections: { ...f.sections, today: { ...f.sections.today, orders_today: { key: "orders_today", status: "ok", as_of: f.generated_at, data: { count: 1, series_14d: Array.from({ length: n }, (_, i) => ({ day: `2026-11-${String(i + 1).padStart(2, "0")}`, value: i })) } } } } });
+    expect(DashboardResponse.safeParse(mk(3)).success).toBe(true);
+    expect(DashboardResponse.safeParse(mk(15)).success).toBe(false);
   });
 });

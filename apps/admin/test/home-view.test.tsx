@@ -194,6 +194,14 @@ describe("pop pages", () => {
     expect(document.querySelector("[data-testid=pop-list]")).toBeNull();
     expect(screen.queryByRole("link", { name: createTranslator("ar-EG")("admin.home.pop.openList") })).toBeNull();
   });
+  it("orders-today accepts a short series (first rollup day inside the window) and shows only those days", async () => {
+    setProfile(["ops"]);
+    const full = dashboardFixture();
+    const short = dashboardFixture({ orders_today: { ...full.sections.today.orders_today, data: { count: 5, series_14d: [{ day: "2026-11-08", value: 1 }, { day: "2026-11-09", value: 2 }, { day: "2026-11-10", value: 3 }] } } });
+    fetchMock.mockResolvedValueOnce(json(200, short));
+    await renderServer(await open("orders-today"));
+    expect(document.querySelectorAll("[data-testid=pop-list] tbody tr")).toHaveLength(3);
+  });
   it("orders-today shows the 14-day series table", async () => {
     setProfile(["ops"]);
     fetchMock.mockResolvedValueOnce(json(200, dashboardFixture()));

@@ -27,7 +27,7 @@ export const DESCRIBERS: Describers = {
   orders_today: (d, c) => body("orders", null, n(c, d.count), []),
   gmv_today: (d, c) => body("money", null, fmtMoney(d.gmv, c.locale), [c.t("admin.home.note.gmv", { refunded: fmtMoney(d.refunded, c.locale), week: fmtMoney(d.gmv_7d, c.locale), days: 7 }), c.t("admin.home.note.gmvBasis")]),
   orders_by_step: (d, c) => body("orders", null, n(c, d.paid_awaiting_accept + d.accepted + d.packed + d.in_transit + d.delivery_failed), [`${c.t("admin.home.steps.delivery_failed")}: ${n(c, d.delivery_failed)}`]),
-  seller_sla_breaches: (d, c) => body("alert", null, n(c, d.late_accept + d.late_dispatch), [c.t("admin.home.note.sla", { accept: n(c, d.late_accept), dispatch: n(c, d.late_dispatch) }), ...oldest(c, d.oldest_at)], d.late_accept + d.late_dispatch > 0),
+  seller_sla_breaches: (d, c) => body("alert", null, n(c, d.late_accept + (d.late_dispatch ?? 0)), [d.late_dispatch === null ? c.t("admin.home.note.slaNoDispatch", { accept: n(c, d.late_accept) }) : c.t("admin.home.note.sla", { accept: n(c, d.late_accept), dispatch: n(c, d.late_dispatch) }), ...oldest(c, d.oldest_at)], d.late_accept + (d.late_dispatch ?? 0) > 0),
   cod_awaiting_confirmation: (d, c) => body("orders", null, n(c, d.count), oldest(c, d.oldest_at), d.count > 0),
   returns_pipeline: (d, c) => body("orders", null, n(c, d.requested + d.in_transit + d.awaiting_inspection), [c.t("admin.home.note.returns", { requested: n(c, d.requested), transit: n(c, d.in_transit), inspect: n(c, d.awaiting_inspection), overdue: n(c, d.inspection_overdue) })], d.inspection_overdue > 0),
   disputes_open: (d, c) => body("trust", null, n(c, d.open), [c.t("admin.home.note.disputes", { past: n(c, d.past_sla) }), ...oldest(c, d.oldest_at)], d.past_sla > 0),

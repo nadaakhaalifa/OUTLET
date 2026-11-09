@@ -1482,6 +1482,7 @@
   "admin.home.tile.kill_switches": "مفاتيح إيقاف مفعّلة",
   "admin.home.note.gmv": "المستردّ اليوم {refunded}. آخر {days, number} أيام {week}.",
   "admin.home.note.gmvBasis": "شاملة الضريبة، قبل المبالغ المستردة.",
+  "admin.home.note.slaNoDispatch": "{accept} لم تُقبل في موعدها. الشحن: لا يُتتبَّع بعد.",
   "admin.home.note.sla": "{accept} لم تُقبل في موعدها، {dispatch} لم تُشحن في موعدها.",
   "admin.home.note.returns": "{requested} مطلوبة، {transit} في الطريق، {inspect} تنتظر الفحص ({overdue} متأخرة).",
   "admin.home.note.disputes": "{past} تجاوزت موعدها.",

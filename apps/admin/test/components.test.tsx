@@ -240,7 +240,7 @@ describe.each(LOCALES)("audit (%s)", (locale) => {
     await waitFor(() => { expect(screen.getByTestId("chain-status").textContent).toBe(t("admin.audit.verify.unavailable")); });
     expect(await clean()).toEqual([]);
   });
-  it.each([[{ valid: true }, "admin.audit.verify.ok"], [{ valid: false }, "admin.audit.verify.broken"], [{}, "admin.error.generic"]] as const)("maps %j", async (body, key) => {
+  it.each([[{ ok: true }, "admin.audit.verify.ok"], [{ ok: false }, "admin.audit.verify.broken"], [{}, "admin.error.generic"]] as const)("maps %j", async (body, key) => {
     render(<AuditView t={t} locale={locale} market="eg" filters={filters} entries={[]} />);
     expect(screen.getByText(t("admin.audit.empty"))).toBeTruthy();
     fetchMock.mockResolvedValueOnce(json(200, body));

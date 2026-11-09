@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createTranslator, type Locale, type MessageKey } from "@outlet/i18n";
+import { uuidv7 } from "../lib/uuid7";
 import { adminCall } from "../client/admin-api";
 import { problemKey } from "../lib/problem";
 import { assertionToJson, requestOptionsFromJson } from "../lib/webauthn";
@@ -32,7 +33,7 @@ export function PasskeyLogin({ locale, market, home }: { locale: Locale; market:
     setBusy(true);
     try {
       const device = { install_id: installId(), platform: "web", ua_family: "browser" };
-      const opts = await adminCall(market, "auth/passkey/options", { method: "POST", body: { purpose: "sign_in", device } });
+      const opts = await adminCall(market, "auth/passkey/options", { method: "POST", idempotencyKey: uuidv7(), body: { purpose: "sign_in", device } });
       const challenge = typeof opts.data === "object" && opts.data !== null ? (opts.data as { challenge_id?: unknown; public_key?: unknown }) : {};
       const publicKey = requestOptionsFromJson(challenge.public_key);
       if (!opts.ok || typeof challenge.challenge_id !== "string" || publicKey === null) { setError(opts.ok ? "admin.login.error.failed" : problemKey(opts.code, opts.status)); return; }
@@ -43,7 +44,7 @@ export function PasskeyLogin({ locale, market, home }: { locale: Locale; market:
         setError("admin.login.error.cancelled"); return;
       }
       if (credential === null) { setError("admin.login.error.cancelled"); return; }
-      const verified = await adminCall(market, "auth/passkey/verify", { method: "POST", body: { challenge_id: challenge.challenge_id, credential: assertionToJson(credential as PublicKeyCredential), device } });
+      const verified = await adminCall(market, "auth/passkey/verify", { method: "POST", idempotencyKey: uuidv7(), body: { challenge_id: challenge.challenge_id, credential: assertionToJson(credential as PublicKeyCredential), device } });
       if (!verified.ok) { setError("admin.login.error.failed"); return; }
       window.location.assign(home);
     } finally {

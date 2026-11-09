@@ -78,7 +78,7 @@ test("passkey login, then KYC: a document needs a reason code, and approval is r
   await expect(page.getByText("kyc.document.open")).toBeVisible();
   await expect(page.getByRole("cell", { name: "support_ticket:T-42" })).toBeVisible();
   await page.getByRole("button", { name: t("admin.audit.verify.run") }).click();
-  await expect(page.getByTestId("chain-status")).toHaveText(t("admin.audit.verify.unavailable"));
+  await expect(page.getByTestId("chain-status")).toHaveText(t("admin.audit.verify.ok"));
 });
 
 test("the document URL is refused without a reason code (API contract)", async ({ page }) => {
@@ -127,4 +127,12 @@ test("a role without the section sees a forbidden banner, not data", async ({ pa
   await expect(page.getByRole("link", { name: t("admin.nav.kyc") })).toHaveCount(0);
   await page.goto("/eg-ar/kyc");
   await expect(page.locator("[role=alert][data-code=forbidden]")).toHaveText(t("admin.error.forbidden"));
+});
+
+test("a short orders series and an untracked dispatch figure render instead of Could not load", async ({ page }) => {
+  await control({ roles: ["ops"] });
+  await signIn(page);
+  await expect(page.locator("[data-tile=orders_today]")).toBeVisible();
+  await expect(page.locator("[data-tile=orders_today] svg rect")).toHaveCount(3);
+  await expect(page.locator("[data-tile=seller_sla_breaches]").first()).toContainText(t("admin.home.note.slaNoDispatch", { accept: "٢" }));
 });

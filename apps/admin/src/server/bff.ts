@@ -33,7 +33,7 @@ const routes: readonly Route[] = [
   { pattern: /^elevations$/, methods: ["POST"] },
   { pattern: /^privacy\/(requests|breaches|transfer-register|consent-stats|pii-access-log)$/, methods: ["GET"] },
   { pattern: /^audit-log$/, methods: ["GET"] },
-  { pattern: /^audit-log\/verify$/, methods: ["POST"] },
+  { pattern: /^audit-log\/verify$/, methods: ["GET"] },
 ];
 
 const FORWARD_REQUEST = ["content-type", "idempotency-key", "accept-language", "accept"] as const;

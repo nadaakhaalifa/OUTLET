@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createTranslator, type Locale, type MessageKey } from "@outlet/i18n";
+import { uuidv7 } from "../lib/uuid7";
 import { adminCall } from "../client/admin-api";
 import { fmtDateTime } from "../lib/fmt";
 import { label } from "../lib/labels";
@@ -55,6 +56,7 @@ export function KycCasePanel({ locale, market, data, canDecide }: { locale: Loca
     setResult(null);
     const r = await adminCall(market, `kyc-cases/${c.id}/decision`, {
       method: "POST",
+      idempotencyKey: uuidv7(),
       body: { decision, decision_reason: `${code}: ${note.trim()}`, ...(decision === "NEEDS_INFO" && requested.length > 0 ? { requested_documents: requested } : {}) },
     });
     setBusy(false);

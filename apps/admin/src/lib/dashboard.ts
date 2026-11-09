@@ -36,7 +36,7 @@ export const DashboardResponse = z.object({
   generated_at: Iso,
   sections: z.object({
     today: z.object({
-      orders_today: tile("orders_today", z.object({ count: Count, series_14d: z.array(Point).length(14) }).strict()),
+      orders_today: tile("orders_today", z.object({ count: Count, series_14d: z.array(Point).max(14) }).strict()),
       gmv_today: tile("gmv_today", z.object({ gmv: Money, refunded: Money, gmv_7d: Money }).strict()),
     }).strict(),
     sales: z.object({
@@ -49,7 +49,7 @@ export const DashboardResponse = z.object({
       verified_discount_share: tile("verified_discount_share", z.object({ verified: Count, live_skus: Count }).strict()),
     }).strict(),
     orders: z.object({
-      seller_sla_breaches: tile("seller_sla_breaches", z.object({ late_accept: Count, late_dispatch: Count, ...Oldest }).strict()),
+      seller_sla_breaches: tile("seller_sla_breaches", z.object({ late_accept: Count, late_dispatch: Count.nullable(), ...Oldest }).strict()),
       cod_awaiting_confirmation: tile("cod_awaiting_confirmation", z.object({ count: Count, ...Oldest }).strict()),
       returns_pipeline: tile("returns_pipeline", z.object({ requested: Count, in_transit: Count, awaiting_inspection: Count, inspection_overdue: Count }).strict()),
       disputes_open: tile("disputes_open", z.object({ open: Count, past_sla: Count, ...Oldest }).strict()),
