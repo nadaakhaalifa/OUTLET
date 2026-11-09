@@ -127,7 +127,7 @@ export class VoucherService {
           const n = await tx.query<{ n: string | number }>(`SELECT count(*) AS n FROM voucher_redemptions r WHERE r.promotion_id = $1 AND r.user_id = $2 AND ${ACTIVE_RESERVATION}`, [a.promotionId, userId]);
           if (Number(n.rows[0]?.n ?? 0) >= prom.per_user_limit) throw new PromotionError("CAP_EXCEEDED", "per-user limit reached");
         }
-        const vel = await tx.query<{ n: string | number }>(`SELECT count(*) AS n FROM voucher_redemptions r WHERE r.user_id = $1 AND r.kind = 'reserved' AND r.created_at > $2`, [userId, new Date(this.now().getTime() - 3_600_000).toISOString()]);
+        const vel = await tx.query<{ n: string | number }>(`SELECT count(*) AS n FROM voucher_redemptions r WHERE r.user_id = $1 AND ${ACTIVE_RESERVATION} AND r.created_at > $2`, [userId, new Date(this.now().getTime() - 3_600_000).toISOString()]);
         if (Number(vel.rows[0]?.n ?? 0) >= velocity) throw new PromotionError("ABUSE_BLOCKED", "velocity");
         if (this.deps.abuse !== undefined) {
           const verdict = await this.deps.abuse.assess({ userId, deviceId: opts.deviceId ?? null, promotionId: a.promotionId });

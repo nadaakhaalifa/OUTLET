@@ -321,6 +321,19 @@ describe("VoucherService: reserve, confirm, release, reinstate", () => {
     expect(await code(wrongVersion.s.vouchers.reserve(u1, randomUUID(), [applied(randomUUID(), 1n)]))).toBe("CAP_EXCEEDED");
   });
 
+  it("velocity counts only active reservations: released ones do not block the shopper", async () => {
+    const x = await fresh();
+    const quick = mk({ velocity: 2 });
+    const user = randomUUID();
+    await raw.query("INSERT INTO users (id, market_id, created_at, updated_at) VALUES ($1,'EG',$2,$2)", [user, NOW.toISOString()]);
+    const g1 = randomUUID();
+    await quick.vouchers.reserve(user, g1, [applied(x.id, 1n)]);
+    await quick.vouchers.reserve(user, randomUUID(), [applied(x.id, 1n)]);
+    expect(await code(quick.vouchers.reserve(user, randomUUID(), [applied(x.id, 1n)]))).toBe("ABUSE_BLOCKED");
+    await quick.vouchers.release(user, g1);
+    expect(await code(quick.vouchers.reserve(user, randomUUID(), [applied(x.id, 1n)]))).toBe("ok");
+  });
+
   it("voucher max uses, void vouchers, velocity, abuse port and kill switch", async () => {
     const one = await fresh({ maxUses: 1 });
     await one.s.vouchers.reserve(u1, randomUUID(), [applied(one.id, 1n, one.v.voucherId)]);
