@@ -408,6 +408,20 @@ export class SellerOnboardingService {
     return this.moderate(admin, "store.reinstate", "reinstate", "seller.reinstated", { storeId }, raw);
   }
 
+  /**
+   * Read-only: the store's seller and every store of it with its status (the exact set a moderation request is filed against). Needs the action's
+   * own permission; the admin layer pins the set into the hash-protected approval payload so the executor never widens it.
+   */
+  storeSet(admin: Principal, storeId: string, action: "store.suspend" | "store.reinstate"): Promise<{ readonly sellerId: string; readonly stores: readonly { readonly id: string; readonly status: string }[] }> {
+    this.requireAdmin(admin, action);
+    return kycJob(this.env, undefined, async (tx) => {
+      const s = (await tx.query<{ seller_id: string }>("SELECT seller_id FROM stores WHERE id = $1 AND market_id = $2", [storeId, this.env.marketId])).rows[0];
+      if (s === undefined) throw notFound("store");
+      const rows = (await tx.query<{ id: string; status: string }>("SELECT id, status FROM stores WHERE seller_id = $1 AND market_id = $2 ORDER BY id LIMIT 200", [s.seller_id, this.env.marketId])).rows;
+      return { sellerId: s.seller_id, stores: rows };
+    });
+  }
+
   private async moderate(
     admin: Principal, action: "store.suspend" | "store.reinstate", event: "suspend" | "reinstate", emitted: string,
     key: { readonly sellerId: string } | { readonly storeId: string }, raw: { readonly reasonCode: string; readonly note?: string },
@@ -427,6 +441,11 @@ export class SellerOnboardingService {
       const stores = (await tx.query<{ id: string }>("SELECT id FROM stores WHERE seller_id = $1 AND market_id = $2 ORDER BY id LIMIT 200", [sellerId, this.env.marketId])).rows.map((r) => r.id);
       // Only the store-keyed (approval executor) form is replay-safe; the seller-keyed use case keeps the strict state machine.
       if (byStore && c.state === target) return { ...view(c), storeIds: stores };
+      // Reinstating one store while another store of the seller is still suspended (for its own reason) leaves the seller suspended.
+      if (byStore && event === "reinstate" && "storeId" in key) {
+        const still = await tx.query("SELECT 1 FROM stores WHERE seller_id = $1 AND market_id = $2 AND status = 'SUSPENDED' AND id <> $3 LIMIT 1", [sellerId, this.env.marketId, key.storeId]);
+        if (still.rows.length > 0) return { ...view(c), storeIds: stores };
+      }
       const to = await this.move(tx, c, event, { kind: "admin", id: adminId }, reason);
       await emit(this.env, tx, emitted, "seller", sellerId, { caseId: c.id, reasonCode: reason.code ?? "" });
       return { ...view(c), state: to, version: c.version + 1, storeIds: stores };
