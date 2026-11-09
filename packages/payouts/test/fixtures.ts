@@ -70,7 +70,7 @@ export const buildWorld = async (): Promise<World> => {
   const app = roleClient(raw, "outlet_app");
   const worker = roleClient(raw, "outlet_worker");
   const admin = createAdminAccess({
-    db: app, audit: { append: (e) => { audits.push(e); return Promise.resolve(); } }, clock: () => clock.now, thresholdMinor: THRESHOLD,
+    db: app, audit: { appendIn: (_tx, e) => { audits.push(e); return Promise.resolve(); } }, clock: () => clock.now, thresholdMinor: THRESHOLD,
   });
   const rail = new FakePayoutRail();
   const destinations = new FakePayoutDestinations();
