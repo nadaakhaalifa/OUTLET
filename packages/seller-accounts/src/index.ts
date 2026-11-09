@@ -1,6 +1,6 @@
 export { KYC_DOCUMENT_KINDS, REQUIRED_DOCUMENTS, kycGaps } from "./domain/documents.js";
 export type { CompletenessInput, KycDocumentKind } from "./domain/documents.js";
-export { SellerAccountsError, notFound, validation } from "./domain/errors.js";
+export { OnboardingExistsError, SellerAccountsError, notFound, validation } from "./domain/errors.js";
 export type { SellerAccountsErrorCode } from "./domain/errors.js";
 export { isValidIban, normalizeIban, normalizeName } from "./domain/iban.js";
 export { KYC_EVENTS, KYC_STATES, KycTransitionError, canKyc, isKycEditable, isKycOpen, nextKycState } from "./domain/kyc-state.js";

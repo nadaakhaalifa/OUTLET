@@ -5,11 +5,11 @@ import { authorize } from "@outlet/policy";
 import { z } from "zod";
 import { KYC_DOCUMENT_KINDS, kycGaps } from "../domain/documents.js";
 import type { KycDocumentKind } from "../domain/documents.js";
-import { SellerAccountsError, notFound, validation } from "../domain/errors.js";
+import { OnboardingExistsError, SellerAccountsError, notFound, validation } from "../domain/errors.js";
 import { isValidIban, normalizeIban } from "../domain/iban.js";
 import { isKycEditable, nextKycState } from "../domain/kyc-state.js";
 import type { KycEvent, KycState } from "../domain/kyc-state.js";
-import { conflict, emit, isUniqueViolation, kycJob, makeEnv, pgCode } from "./env.js";
+import { ACTIVE_CASE_INDEX, conflict, emit, isUniqueViolation, kycJob, makeEnv, pgCode, pgConstraint } from "./env.js";
 import type { Env, SellerAccountsDeps } from "./env.js";
 import type { Queryable } from "@outlet/outbox";
 import type { KycCheckPort } from "./ports.js";
@@ -127,27 +127,47 @@ export class SellerOnboardingService {
     return row;
   }
 
-  /** Any verified, active login may start a seller application; it becomes the applicant (and later first owner). */
+  /** The applicant's live onboarding case (any state but REJECTED), if any. RLS limits the read to their own rows. */
+  private async liveCase(tx: Queryable): Promise<{ sellerId: string; caseId: string } | undefined> {
+    const r = await tx.query<{ id: string; seller_id: string }>(
+      "SELECT id, seller_id FROM kyc_cases WHERE kind = 'onboarding' AND state <> 'REJECTED' ORDER BY created_at DESC, id DESC LIMIT 1",
+    );
+    const row = r.rows[0];
+    return row === undefined ? undefined : { sellerId: row.seller_id, caseId: row.id };
+  }
+
+  /**
+   * Any verified, active login may start a seller application; it becomes the applicant (and later first owner). Runs entirely under the
+   * applicant's own outlet_app context (no worker job): the seller row goes through create_seller_draft(), the case through the
+   * kyc_cases_user_isolation policy. One live case per applicant (409 onboarding_exists); a REJECTED case allows a fresh draft.
+   */
   async createDraft(userId: string, raw: SellerDraftInput): Promise<{ sellerId: string; caseId: string }> {
     const input = SellerDraftInput.parse(raw);
     const sellerId = this.env.newId();
     const caseId = this.env.newId();
     const at = this.env.now();
     try {
-      // The applicant proves they are an active login under their own user context; the rows are created by the 'seller.kyc' job.
-      const u = await this.userCtx(userId, (tx) => tx.query<{ status: string }>("SELECT status FROM users WHERE id = $1 AND market_id = $2", [userId, this.env.marketId]));
-      if (u.rows[0]?.status !== "active") throw notFound("user");
-      await kycJob(this.env, userId, async (tx) => {
-        await tx.query(
-          `INSERT INTO sellers (id, home_market_id, market_id, legal_type, legal_name_ar, legal_name_en, commercial_register_no, tax_card_no, governorate_code, governorate_name_ar, status, created_at, updated_at)
-           VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10,$10)`,
-          [sellerId, this.env.marketId, input.legal_type, input.legal_name_ar ?? null, input.legal_name_en ?? null, input.commercial_register_no ?? null, input.tax_card_no ?? null, input.governorate_code ?? null, input.governorate_name_ar ?? null, at],
-        );
+      await this.userCtx(userId, async (tx) => {
+        const u = await tx.query<{ status: string }>("SELECT status FROM users WHERE id = $1 AND market_id = $2", [userId, this.env.marketId]);
+        if (u.rows[0]?.status !== "active") throw notFound("user");
+        const existing = await this.liveCase(tx);
+        if (existing !== undefined) throw new OnboardingExistsError(existing.sellerId, existing.caseId);
+        await tx.query("SELECT create_seller_draft($1,$2,$3,$4,$5,$6,$7,$8,$9)", [
+          sellerId, input.legal_type, input.legal_name_ar ?? null, input.legal_name_en ?? null, input.commercial_register_no ?? null,
+          input.tax_card_no ?? null, input.governorate_code ?? null, input.governorate_name_ar ?? null, at,
+        ]);
         await tx.query("INSERT INTO kyc_cases (id, seller_id, market_id, applicant_user_id, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)", [caseId, sellerId, this.env.marketId, userId, at]);
         await emit(this.env, tx, "seller.created", "seller", sellerId, { caseId });
       });
     } catch (e) {
-      if (isUniqueViolation(e)) throw conflict("commercial register number is already registered");
+      if (isUniqueViolation(e)) {
+        if (pgConstraint(e) === ACTIVE_CASE_INDEX || (e instanceof Error && e.message.includes(ACTIVE_CASE_INDEX))) {
+          // Lost a race with a parallel request of the same applicant: report the winner's ids.
+          const existing = await this.userCtx(userId, (tx) => this.liveCase(tx));
+          if (existing !== undefined) throw new OnboardingExistsError(existing.sellerId, existing.caseId);
+        }
+        throw conflict("commercial register number is already registered");
+      }
       throw e;
     }
     return { sellerId, caseId };

@@ -63,6 +63,8 @@ export const emit = async (env: Env, tx: Queryable, type: string, aggregateType:
 };
 
 export const pgCode = (e: unknown): string | undefined => (typeof e === "object" && e !== null && "code" in e && typeof e.code === "string" ? e.code : undefined);
+export const pgConstraint = (e: unknown): string | undefined => (typeof e === "object" && e !== null && "constraint" in e && typeof e.constraint === "string" ? e.constraint : undefined);
+export const ACTIVE_CASE_INDEX = "kyc_cases_applicant_active_uidx";
 export const isUniqueViolation = (e: unknown): boolean => pgCode(e) === "23505";
 
 export const conflict = (message: string): SellerAccountsError => new SellerAccountsError("conflict", message);
