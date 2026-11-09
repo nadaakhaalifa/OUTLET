@@ -436,6 +436,7 @@ export const SELLER_ORDER_FIXTURES: Readonly<Record<string, RouteFixture>> = {
   },
   "POST /v1/{market}/seller/orders/{seller_order_id}/accept": orderAction("accept", "PAID"),
   "POST /v1/{market}/seller/orders/{seller_order_id}/reject": orderAction("reject", "PAID", { reason_code: "out_of_stock" }),
+  "POST /v1/{market}/seller/orders/{seller_order_id}/cancel": orderAction("cancel", "ACCEPTED", { reason_code: "out_of_stock" }),
   "POST /v1/{market}/seller/orders/{seller_order_id}/pack": orderAction("pack", "ACCEPTED"),
   "POST /v1/{market}/seller/shipments": {
     happy: async (t) => {

@@ -10,7 +10,7 @@ import type { StructuredAddress } from "@outlet/shipping";
 import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { ProblemError, Problems } from "../../platform/problem.js";
 import { ORDER_ACTIONS } from "./dto.js";
-import type { RejectInput, SellerOrder, SellerOrderSummaryPage, SellerOrdersQuery, Shipment, ShipmentCreateInput } from "./dto.js";
+import type { RejectInput, SellerCancelInput, SellerOrder, SellerOrderSummaryPage, SellerOrdersQuery, Shipment, ShipmentCreateInput } from "./dto.js";
 import type { SellerOrdersServicesDeps } from "./ports.js";
 
 type Big = string | bigint;
@@ -136,6 +136,20 @@ export class SellerOrderService {
 
   reject(actor: Principal, storeId: string, id: string, input: RejectInput): Promise<SellerOrder> {
     return this.move(actor, storeId, id, "reject", "seller_order.rejected", () => ({ cancelReason: input.reason_code }), { reason_code: input.reason_code, has_note: input.note !== undefined && input.note.length > 0 });
+  }
+
+  /**
+   * Seller cancel of one seller order before shipping (PAID .. PACKED), through OrderCancellation.cancelBySeller: authorized as a store
+   * member with order.fulfill, the order is read under the store context (another store's id is 404), the reason is a fixed code. Refund,
+   * stock release and the courier AWB cancel (shipment.cancel_required) follow from the outbox. The route is idempotent by Idempotency-Key.
+   * TODO(health): no seller health-score penalty hook exists yet (README section 9.3); wire it here once one does.
+   */
+  async cancel(actor: Principal, storeId: string, id: string, input: SellerCancelInput): Promise<SellerOrder> {
+    this.access(actor, "order.fulfill", storeId);
+    if (actor.userId === undefined) throw Problems.forbidden();
+    if (this.d.cancellation === undefined) throw Problems.unavailable("order-cancellation-unconfigured");
+    await this.d.cancellation.cancelBySeller({ storeId, actorId: actor.userId, sellerOrderId: id, reasonCode: input.reason_code });
+    return this.get(actor, storeId, id);
   }
 
   pack(actor: Principal, storeId: string, id: string): Promise<SellerOrder> {

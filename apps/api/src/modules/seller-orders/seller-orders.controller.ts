@@ -7,7 +7,7 @@ import { Problems } from "../../platform/problem.js";
 import { RATE_BUDGETS } from "../../platform/rate-limit/budgets.js";
 import { activeStore } from "../../platform/resolvers.js";
 import { Body, Ctx, Params, Query } from "../../platform/validation.js";
-import { EmptyBody, RejectInput, SellerOrder, SellerOrderIdParams, SellerOrderSummaryPage, SellerOrdersQuery, Shipment, ShipmentCreateInput } from "./dto.js";
+import { EmptyBody, RejectInput, SellerCancelInput, SellerOrder, SellerOrderIdParams, SellerOrderSummaryPage, SellerOrdersQuery, Shipment, ShipmentCreateInput } from "./dto.js";
 import type { Principal } from "@outlet/policy";
 
 interface Tenant { readonly principal: Principal; readonly storeId: string; readonly svc: SellerOrdersServices["orders"] }
@@ -62,6 +62,16 @@ export class SellerOrdersController {
   reject(@Ctx() s: RequestState, @Params() p: SellerOrderIdParams, @Body() body: RejectInput): Promise<SellerOrder> {
     const t = this.tenant(s);
     return t.svc.reject(t.principal, t.storeId, p.seller_order_id, body);
+  }
+
+  @Post("orders/:seller_order_id/cancel")
+  @HttpCode(200)
+  @Authorize("order.fulfill", activeStore, { tenant: "store" })
+  @RateLimit({ budget: RATE_BUDGETS.sellerWrite })
+  @Contract({ operationId: "cancelSellerOrder", summary: "Cancel before shipping (PAID to PACKED); fixed reason code; refunds the shopper and cancels a created AWB", tags: ["Seller Orders"], params: SellerOrderIdParams, body: SellerCancelInput, response: SellerOrder, maxQueries: 30 })
+  cancel(@Ctx() s: RequestState, @Params() p: SellerOrderIdParams, @Body() body: SellerCancelInput): Promise<SellerOrder> {
+    const t = this.tenant(s);
+    return t.svc.cancel(t.principal, t.storeId, p.seller_order_id, body);
   }
 
   @Post("orders/:seller_order_id/pack")

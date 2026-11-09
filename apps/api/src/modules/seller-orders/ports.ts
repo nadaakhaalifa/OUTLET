@@ -22,6 +22,11 @@ export interface PaymentKindPort {
   kindOf(input: { readonly userId: string; readonly orderGroupId: string }): Promise<PaymentKind | null>;
 }
 
+/** Structurally @outlet/checkout OrderCancellation.cancelBySeller (reads the order under the store context, then cancels as the owning shopper). */
+export interface SellerCancellationPort {
+  cancelBySeller(input: { readonly storeId: string; readonly actorId: string; readonly sellerOrderId: string; readonly reasonCode: string }): Promise<unknown>;
+}
+
 export interface SellerOrdersServicesDeps {
   readonly delivery: BuyerDeliveryPort;
   readonly courier: CourierPort;
@@ -29,4 +34,6 @@ export interface SellerOrdersServicesDeps {
   /** Courier code and service level recorded on the request (Bosta first, once contracted). */
   readonly courierCode: string;
   readonly serviceLevel: string;
+  /** Absent = the cancellation saga is not composed (no payments provider): the cancel route answers 503, nothing changes. */
+  readonly cancellation?: SellerCancellationPort | undefined;
 }

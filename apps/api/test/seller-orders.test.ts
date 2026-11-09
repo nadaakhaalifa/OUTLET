@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestApp, bearer, idemKey } from "./harness.js";
 import type { TestApp } from "./harness.js";
@@ -208,3 +209,41 @@ describe("seller inventory", () => {
     expect((await t.inject({ method: "GET", url: "/v1/eg/seller/inventory", headers: s })).statusCode).toBe(403);
   });
 });
+
+describe("seller cancel (M2)", () => {
+  it("cancels a PACKED order as its store, writes the cancel and shipment events once, and replays idempotently", async () => {
+    const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA, status: "PACKED" });
+    const sid = randomUUID();
+    await t.raw.query(
+      `INSERT INTO shipments (id, market_id, store_id, user_id, seller_order_ids, courier, service_level, awb, status, declared_weight_g, idempotency_key)
+       VALUES ($1,'EG',$2,$3,$4,'fake','standard','AWB9','LABEL_READY',500,$5)`, [sid, t.seed.storeA, o.userId, [o.id], `outbound:${o.id}`]);
+    const h = await H(t.seed.storeA, ["warehouse"], true);
+    const r = await post(`/v1/eg/seller/orders/${o.id}/cancel`, h, { reason_code: "cannot_fulfil" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect((JSON.parse(r.body) as { status: string }).status).toBe("CANCELLED");
+    const n = async (type: string): Promise<number> => (await t.raw.query("SELECT 1 FROM outbox_events WHERE event_type = $1 AND aggregate_id = $2", [type, type.startsWith("shipment") ? sid : o.id])).rows.length;
+    expect(await n("seller_order.cancelled")).toBe(1);
+    expect(await n("shipment.cancel_required")).toBe(1);
+    expect((await post(`/v1/eg/seller/orders/${o.id}/cancel`, h, { reason_code: "cannot_fulfil" })).statusCode).toBe(200);
+    expect(await n("shipment.cancel_required")).toBe(1);
+  });
+  it("needs an Idempotency-Key, a fixed reason code, order.fulfill, and hides another store's order", async () => {
+    const mine = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA, status: "ACCEPTED" });
+    const hw = await H(t.seed.storeA, ["warehouse"], false);
+    expect((await post(`/v1/eg/seller/orders/${mine.id}/cancel`, hw, { reason_code: "other" })).statusCode).toBe(400);
+    const h = await H(t.seed.storeA, ["warehouse"], true);
+    expect((await post(`/v1/eg/seller/orders/${mine.id}/cancel`, h, { reason_code: "free text to the shopper" })).statusCode).toBe(400);
+    expect((await post(`/v1/eg/seller/orders/${mine.id}/cancel`, { ...h, "idempotency-key": idemKey(t, 11) }, { reason_code: "other", note: "x" })).statusCode).toBe(400);
+    const fin = await H(t.seed.storeA, ["finance"], true);
+    expect((await post(`/v1/eg/seller/orders/${mine.id}/cancel`, fin, { reason_code: "other" })).statusCode).toBe(403);
+    const theirs = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeB, status: "ACCEPTED" });
+    expect((await post(`/v1/eg/seller/orders/${theirs.id}/cancel`, { ...h, "idempotency-key": idemKey(t, 12) }, { reason_code: "other" })).statusCode).toBe(404);
+    expect((await t.raw.query<{ status: string }>("SELECT status FROM seller_orders WHERE id = $1", [theirs.id])).rows[0]?.status).toBe("ACCEPTED");
+  });
+  it("is 409 once shipped", async () => {
+    const o = await seedSellerOrder(t.raw, t.seed, { storeId: t.seed.storeA, status: "SHIPPED" });
+    const h = await H(t.seed.storeA, ["warehouse"], true);
+    expect((await post(`/v1/eg/seller/orders/${o.id}/cancel`, h, { reason_code: "other" })).statusCode).toBe(409);
+  });
+});
+

@@ -3,7 +3,7 @@ import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
 import { createAdminAccess } from "@outlet/admin-access";
 import { AesGcmFieldCipher, OtpService, PgRateLimiter, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
-import { CheckoutService, OrderCancellation, OrderCloseJob, PROMOTIONS_KILL_SWITCH, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
+import { CheckoutService, OrderCloseJob, PgStoreCredit, WebhookProcessor } from "@outlet/checkout";
 import { PgAuditStore } from "@outlet/audit-log";
 import { brandClient } from "@outlet/db";
 import { InventoryService, ReservationService } from "@outlet/inventory";
@@ -33,7 +33,7 @@ import { noSuggestions } from "./modules/cart/index.js";
 import type { CartServices } from "./modules/cart/index.js";
 import {
   AesRawBodyCipher, FlagKillSwitches, HmacQuoteTokenPort, OrderGroupReader, PlainPrices, StandardTaxCategories, UnconfiguredBilling, UnconfiguredCommission,
-  PgCancellationAudit, UnconfiguredPaymentProvider, UnconfiguredRefunds, UnconfiguredShipping, UnconfiguredSubMerchants, denyAllWebhookIps, productionCheckoutConfig, staticWebhookIps, unconfiguredCodConfirmation,
+  UnconfiguredPaymentProvider, productionOrderCancellation, productionPromotionsPort, UnconfiguredRefunds, UnconfiguredShipping, UnconfiguredSubMerchants, denyAllWebhookIps, productionCheckoutConfig, staticWebhookIps, unconfiguredCodConfirmation,
 } from "./modules/checkout/index.js";
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
@@ -138,8 +138,8 @@ for (const m of listMarkets()) {
     billing: new UnconfiguredBilling(),
     refunds: new UnconfiguredRefunds(),
     marketId,
-    // Promotions fail closed: a failed or killed flag read means no discount. Delivery snapshots freeze the address per seller order at placement.
-    promotions: makePromotionsPort({ client: appClient, marketId, kill: { isEnabled: () => killSwitches.isKilled(PROMOTIONS_KILL_SWITCH, { marketId }).then((k) => !k).catch(() => false) } }),
+    // Promotions fail closed (failed or killed flag read = no discount); the reinstate gate reads the shopper's own seller orders. Delivery snapshots freeze the address per seller order at placement.
+    promotions: productionPromotionsPort(appClient, marketId, killSwitches),
     addressSnapshots: new AddressService({ client: appClient, marketId }, authDeps.cipher),
   };
   const workerClient = authPoolWorker === undefined ? undefined : pgSqlClient<"outlet_worker">(authPoolWorker);
@@ -154,10 +154,11 @@ for (const m of listMarkets()) {
     provider: "paymob",
   });
   // Courier contract and the addresses table do not exist yet (V33/V43): shipping fails closed (503) and no buyer delivery data is shown.
+  const cancellation = provider instanceof UnconfiguredPaymentProvider ? undefined : productionOrderCancellation({ client: appClient, marketId, reservations: ports.reservations, provider, credit: ports.credit, vouchers: ports.promotions, log: logger });
   sellerOrders.set(marketId, {
     orders: new SellerOrderService({
       client: appClient, marketId, now: () => new Date(), newId: uuidv7, outbox: new OutboxWriter(pgTransactionalWriter),
-      delivery: new UnconfiguredBuyerDelivery(), courier: new UnconfiguredCourier(), paymentKinds: new PgPaymentKind(appClient, marketId), courierCode: "bosta", serviceLevel: "standard",
+      delivery: new UnconfiguredBuyerDelivery(), courier: new UnconfiguredCourier(), paymentKinds: new PgPaymentKind(appClient, marketId), courierCode: "bosta", serviceLevel: "standard", cancellation,
     }),
   });
   sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
@@ -175,7 +176,7 @@ for (const m of listMarkets()) {
   // Addresses, returns, tracking and the seller application. Courier, return evidence, cancellation saga and KYC provider stay unconfigured and fail closed (ADR-0029).
   postOrder.set(marketId, postOrderServices({
     marketId, appClient, authClient: brandClient<"outlet_auth">(authClient), workerClient, cipher: authDeps.cipher, hasher: authDeps.hasher,
-    cancellation: provider instanceof UnconfiguredPaymentProvider ? undefined : new OrderCancellation({ client: appClient, marketId, reservations: ports.reservations, provider, credit: ports.credit, audit: new PgCancellationAudit(appClient), vouchers: ports.promotions }),
+    cancellation,
     delivery: workerClient === undefined ? undefined : new OrderCloseJob({ ...ports, client: workerClient, cipher: new AesRawBodyCipher(rawKey) }),
   }));
   const deps: CatalogDeps = { client: appClient, marketId };

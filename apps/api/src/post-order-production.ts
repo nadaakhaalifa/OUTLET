@@ -5,7 +5,7 @@ import type { AddressPort } from "@outlet/checkout";
 import type { RoleSqlClient } from "@outlet/db";
 import { ReturnService, InventoryRestock } from "@outlet/returns";
 import { SellerOnboardingService, StoreMembershipService, UnconfiguredKycCheck, UnconfiguredStrongAuth } from "@outlet/seller-accounts";
-import { AddressService, CourierWebhookProcessor } from "@outlet/shipping";
+import { ADDRESS_CONTENT_VERSION_SQL, AddressService, CourierWebhookProcessor } from "@outlet/shipping";
 import type { DeliveryPort } from "@outlet/shipping";
 import { GeoReader } from "./modules/addresses/index.js";
 import type { AddressesServices } from "./modules/addresses/index.js";
@@ -20,7 +20,7 @@ import { Problems } from "./platform/problem.js";
 
 /**
  * Checkout's AddressPort over the owner's saved addresses (RLS and an explicit owner filter). The deepest known area (district, city, governorate) is the delivery
- * area; `version` is the same content version the address service exposes (changes on every edit), bound into the quote token so an edit answers price-changed {address}.
+ * area; `version` is the same content version the address service exposes (ADDRESS_CONTENT_VERSION_SQL: changes on a content edit, not on make-default), bound into the quote token so an edit answers price-changed {address}.
  */
 export class PgAddressPort implements AddressPort {
   constructor(private readonly client: RoleSqlClient<"outlet_app">, private readonly marketId: string) {}
@@ -30,7 +30,7 @@ export class PgAddressPort implements AddressPort {
     return withDbContext(this.client, { kind: "user", marketId: this.marketId, userId }, async (tx) => {
       const r = (await tx.query<{ area: string; country: string; cod: boolean; v: string }>(
         `SELECT COALESCE(district_area_id, city_area_id, governorate_area_id)::text AS area, country_code AS country, cod_eligible AS cod,
-                (extract(epoch from updated_at) * 1000000)::bigint::text AS v
+                ${ADDRESS_CONTENT_VERSION_SQL} AS v
            FROM addresses WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, [addressRef, userId])).rows[0];
       return r === undefined ? null : { geoAreaId: r.area, countryCode: r.country.trim(), codEligible: r.cod, version: r.v };
     });

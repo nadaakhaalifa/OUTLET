@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { brandClient } from "@outlet/db";
+import { AddressService } from "@outlet/shipping";
+import { FakeCipher as ShippingFakeCipher } from "@outlet/shipping/testing";
 import { PgAddressPort } from "../src/post-order-production.js";
 import { T0, bearer } from "./harness.js";
 import { createTestApp } from "./harness.js";
@@ -19,6 +21,7 @@ afterAll(async () => {
   await t.close();
 });
 
+const addressService = (): AddressService => new AddressService({ client: brandClient<"outlet_app">(t.raw), marketId: "EG" }, new ShippingFakeCipher());
 const json = (body: string): Record<string, unknown> => JSON.parse(body) as Record<string, unknown>;
 const at = (offsetMs = 0): string => new Date(T0 + offsetMs).toISOString();
 
@@ -31,13 +34,32 @@ describe("addresses", () => {
     const g = await geoIds(t);
     const r1 = await port.resolve(s.userId, a.id);
     expect(r1).toMatchObject({ geoAreaId: g.city, countryCode: "EG", codEligible: true });
-    expect(r1?.version).toMatch(/^\d+$/);
+    expect(r1?.version).toMatch(/^[0-9a-f]{64}$/);
     expect(await port.resolve(s.userId, a.id)).toEqual(r1);
     expect(await port.resolve(other.userId, a.id)).toBeNull();
     expect(await port.resolve(s.userId, "not-a-uuid")).toBeNull();
-    // the test clock is frozen, so an edit is simulated by moving updated_at
-    await t.raw.query("UPDATE addresses SET updated_at = updated_at + interval '1 second' WHERE id = $1", [a.id]);
-    expect((await port.resolve(s.userId, a.id))?.version).not.toBe(r1?.version);
+    // the address service exposes the same version (one SQL expression for both)
+    expect(await addressService().versionOf(s.userId, a.id)).toBe(r1?.version);
+  });
+
+  it("finding 8: make-default and a bare updated_at bump keep the version; editing the street changes it", async () => {
+    const s = await t.shopper();
+    const a = await createAddress(t, s.token);
+    const b = await createAddress(t, s.token);
+    const port = new PgAddressPort(brandClient<"outlet_app">(t.raw), "EG");
+    const va = (await port.resolve(s.userId, a.id))?.version;
+    const vb = (await port.resolve(s.userId, b.id))?.version;
+    expect((await t.inject({ method: "POST", url: `/v1/eg/me/addresses/${b.id}/default`, headers: authedHeaders(t, s.token) })).statusCode).toBeLessThan(300);
+    await t.raw.query("UPDATE addresses SET updated_at = updated_at + interval '1 second' WHERE user_id = $1", [s.userId]);
+    expect((await port.resolve(s.userId, a.id))?.version).toBe(va);
+    expect((await port.resolve(s.userId, b.id))?.version).toBe(vb);
+    const body = await addressBody(t) as { fields: Record<string, string> };
+    const edited = await t.inject({ method: "PATCH", url: `/v1/eg/me/addresses/${b.id}`, headers: authedHeaders(t, s.token), payload: { ...body, fields: { ...body.fields, street: "شارع عباس العقاد" } } });
+    expect(edited.statusCode, edited.body).toBe(200);
+    const vb2 = (await port.resolve(s.userId, b.id))?.version;
+    expect(vb2).toMatch(/^[0-9a-f]{64}$/);
+    expect(vb2).not.toBe(vb);
+    expect(await addressService().versionOf(s.userId, b.id)).toBe(vb2);
   });
 
   it("round-trips an address in contract shape (ids, e7 pin) and soft-deletes it", async () => {

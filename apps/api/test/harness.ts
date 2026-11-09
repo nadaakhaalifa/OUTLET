@@ -5,7 +5,7 @@ import { SellerOnboardingService, UnconfiguredKycCheck } from "@outlet/seller-ac
 import { AesGcmFieldCipher, InMemoryRateLimiter, OtpService, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
 import type { SmsSender } from "@outlet/auth-core";
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
-import { CheckoutService, OrderCloseJob, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
+import { CheckoutService, OrderCancellation, OrderCloseJob, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
 import type { PaymentProviderPort } from "@outlet/checkout";
 import {
   FakeAddress, FakeBilling, FakeCipher, FakeCommission, FakeKillSwitches, FakePaymentProvider, FakePrices, FakeRisk, FakeShipping, FakeSubMerchants, FakeTaxCategories, HmacQuoteTokens,
@@ -326,6 +326,11 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     orders: new SellerOrderService({
       client: appClient, marketId: DB_MARKET, now, newId: () => randomUUIDv7(), outbox: new OutboxWriter(pgTransactionalWriter), delivery: fakes.delivery, courier: fakes.courier,
       paymentKinds: new PgPaymentKind(appClient, DB_MARKET), courierCode: "fake", serviceLevel: "standard",
+      // The real saga with a PSP that always voids: a seller cancel route test exercises the whole transaction (no money moves in the API process).
+      cancellation: new OrderCancellation({
+        client: appClient, marketId: DB_MARKET, reservations: new ReservationService({ client: appClient, marketId: DB_MARKET }),
+        provider: { voidIntent: () => Promise.resolve({ outcome: "voided" } as never) }, credit: { release: () => Promise.resolve() } as never, audit: { appendIn: () => Promise.resolve() },
+      }),
     }),
   };
   const sellerInventoryServices = {

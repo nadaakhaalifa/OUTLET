@@ -8,3 +8,5 @@ export {
 } from "./unconfigured.js";
 export { FlagKillSwitches, HmacQuoteTokenPort, StandardTaxCategories, UnconfiguredCommission, productionCheckoutConfig } from "./production.js";
 export { PgCancellationAudit } from "./cancellation-audit.js";
+export { productionOrderCancellation, productionPromotionsPort } from "./cancellation-composition.js";
+export type { PromotionsKillRead } from "./cancellation-composition.js";

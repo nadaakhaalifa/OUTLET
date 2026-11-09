@@ -1,3 +1,4 @@
+import { SELLER_CANCEL_REASONS } from "@outlet/checkout";
 import { z } from "zod";
 import { MoneyDto } from "../../platform/money-wire.js";
 import { CursorQuery } from "../../platform/pagination.js";
@@ -15,6 +16,10 @@ export type SellerOrdersQuery = z.infer<typeof SellerOrdersQuery>;
 export const REJECT_REASONS = ["out_of_stock", "damaged", "pricing_error", "other"] as const;
 export const RejectInput = z.strictObject({ reason_code: z.enum(REJECT_REASONS), note: z.string().trim().max(500).optional() });
 export type RejectInput = z.infer<typeof RejectInput>;
+
+/** Fixed reason codes (Arabic copy is mapped in the clients); no free text reaches the shopper. Mirrors @outlet/checkout SELLER_CANCEL_REASONS. */
+export const SellerCancelInput = z.strictObject({ reason_code: z.enum(SELLER_CANCEL_REASONS) });
+export type SellerCancelInput = z.infer<typeof SellerCancelInput>;
 
 export const EmptyBody = z.strictObject({});
 export type EmptyBody = z.infer<typeof EmptyBody>;

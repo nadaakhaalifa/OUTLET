@@ -9938,6 +9938,83 @@ paths:
         - "seller_order.rejected"
         - "refund.requested"
       x-phase: 1
+  "/v1/{market}/seller/orders/{seller_order_id}/cancel":
+    post:
+      operationId: "cancelSellerOrder"
+      tags:
+        - "Seller Orders"
+      summary: "Cancel before shipping (PAID to PACKED); fixed reason code; refunds the shopper and cancels a created AWB"
+      security:
+        - sellerJwt: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "seller_order_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - "$ref": "#/components/parameters/StoreScope"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SellerCancelInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SellerOrder"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "seller_order.transition"
+        principal: "seller_staff"
+        tenant: "store_id from X-Store-Id (RLS app.current_store_id, SET LOCAL per transaction)"
+        roles:
+          - "owner"
+          - "manager"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "X-Store-Id of a store where the caller is not a member -> 404; store B's seller_orders id with own X-Store-Id -> 404"
+          wrong_role: "member with role support -> 403; no passkey amr -> 403"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "store"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
+      x-outbox-events:
+        - "seller_order.cancelled"
+        - "order_group.cancelled"
+        - "inventory.release_required"
+        - "shipment.cancel_required"
+      x-phase: 1
   "/v1/{market}/seller/orders/{seller_order_id}/pack":
     post:
       operationId: "packSellerOrder"
@@ -13114,6 +13191,75 @@ paths:
         mode: "store"
       x-outbox-events:
         - "payout.approved"
+      x-phase: 1
+  "/v1/{market}/admin/approval-requests/{approval_request_id}/execute":
+    post:
+      operationId: "adminExecuteApprovalRequest"
+      tags:
+        - "Admin Finance"
+      summary: "Run an APPROVED request that was not executed (recovery; idempotent)"
+      description: "Retries the execution step after a failure between the last vote and the effect. The executed_at claim and the effect share one transaction; a request that is not APPROVED (pending, rejected, already executed) -> 409 `approval-not-approved`. requested_by = caller -> 403. Actions without an executor here -> 422 `no-executor-for-action`."
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - name: "approval_request_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/ApprovalRequest"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "422":
+          "$ref": "#/components/responses/Unprocessable"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "admin.approval.decide"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id); app_admin DB role"
+        roles:
+          - "finance"
+          - "security"
+          - "dpo"
+          - "super_admin"
+        not_owned: 404
+        wrong_role: 403
+        step_up: "passkey_5m"
+        negative_tests:
+          other_tenant: "object of another market -> 404"
+          wrong_role: "staff without finance/security/dpo/super_admin -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-idempotency:
+        header: "required"
+        mode: "store"
       x-phase: 1
   "/v1/{market}/admin/privacy/requests":
     get:
@@ -21006,6 +21152,20 @@ components:
       required:
         - "items"
         - "next_cursor"
+    SellerCancelInput:
+      type: "object"
+      additionalProperties: false
+      description: "Seller cancel of one seller order before SHIPPED. Fixed reason codes only (no free text reaches the shopper). Strict allow-list DTO (Zod .strict())."
+      required:
+        - "reason_code"
+      properties:
+        reason_code:
+          type: "string"
+          enum:
+            - "out_of_stock"
+            - "cannot_fulfil"
+            - "pricing_error"
+            - "other"
     RejectInput:
       type: "object"
       additionalProperties: false
