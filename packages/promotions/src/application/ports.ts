@@ -18,8 +18,11 @@ export interface CodeResolutionBudget {
   consume(input: { readonly userId: string; readonly deviceId: string | null }): Promise<boolean>;
 }
 
-/** Orders module fact for reinstatement: every seller order of the group is CANCELLED and none had shipped. */
-export interface OrderFactsPort { wholeOrderCancelledBeforeShipping(orderGroupId: string): Promise<boolean> }
+/**
+ * Orders module fact for reinstatement: every seller order of the group is CANCELLED and none had shipped. `userId` is the shopper the
+ * voucher service acts for: a shopper-scoped implementation answers only for that shopper's own groups (anything else reads as false).
+ */
+export interface OrderFactsPort { wholeOrderCancelledBeforeShipping(orderGroupId: string, userId: string): Promise<boolean> }
 
 export interface AuditPort {
   append(input: {

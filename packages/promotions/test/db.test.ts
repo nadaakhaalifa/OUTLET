@@ -392,10 +392,54 @@ describe("VoucherService: reserve, confirm, release, reinstate", () => {
     expect(await s.vouchers.reinstate(u1, g)).toBe(0);
     expect(await usage(id)).toEqual({ used_minor: 0, used_count: 0 });
     expect(await code(s.vouchers.reserve(u1, randomUUID(), [applied(id, 400n)]))).toBe("ok");
+    facts.cancelledBeforeShipping = false;
+  });
+
+  it("finding 2: a whole-cancelled group whose reservation was never confirmed is released by reinstate, once", async () => {
+    const { s, id } = await fresh({ perUser: 1 });
     const g3 = randomUUID();
     await s.vouchers.reserve(u2, g3, [applied(id, 400n)]);
-    expect(await s.vouchers.reinstate(u2, g3)).toBe(0); // reserved but never confirmed: nothing to reinstate
+    expect(await usage(id)).toEqual({ used_minor: 400, used_count: 1 });
+    facts.cancelledBeforeShipping = true;
+    expect(await s.vouchers.reinstate(u2, g3)).toBe(1); // cancelled before the settle consumer confirmed: released, caps given back
+    expect(await s.vouchers.reinstate(u2, g3)).toBe(0);
     facts.cancelledBeforeShipping = false;
+    expect(await usage(id)).toEqual({ used_minor: 0, used_count: 0 });
+    const kinds = (await raw.query<{ kind: string }>("SELECT kind FROM voucher_redemptions WHERE order_group_id = $1 ORDER BY kind", [g3])).rows.map((r) => r.kind);
+    expect(kinds).toEqual(["released", "reserved"]);
+    expect(await s.vouchers.confirm(u2, g3)).toBe(0); // a late settle event finds nothing to confirm
+    expect(await code(s.vouchers.reserve(u2, randomUUID(), [applied(id, 400n)]))).toBe("ok"); // per-user limit free again
+  });
+
+  it("finding 2: confirm skips a group that is already CANCELLED (settle event consumed after the cancel); reinstate then releases it", async () => {
+    const { s, id } = await fresh();
+    const g = randomUUID();
+    await s.vouchers.reserve(u1, g, [applied(id, 250n)]);
+    await raw.query("SET session_replication_role = replica");
+    await raw.query(
+      `INSERT INTO order_groups (id, user_id, market_id, currency, status, funds_flow, checkout_session_id, idempotency_key, payment_method, items_subtotal_minor, discount_minor, shipping_minor, shipping_vat_minor, vat_minor, total_minor, placed_at, created_at)
+       VALUES ($1,$2,'EG','EGP','CANCELLED','collect_payout',$3,$4,'card',1000,250,0,0,0,750,$5,$5)`,
+      [g, u1, randomUUID(), randomUUID(), NOW.toISOString()],
+    );
+    await raw.query("SET session_replication_role = origin");
+    expect(await s.vouchers.confirm(u1, g)).toBe(0);
+    expect((await raw.query("SELECT 1 FROM voucher_redemptions WHERE order_group_id = $1 AND kind = 'confirmed'", [g])).rows).toEqual([]);
+    expect(await usage(id)).toEqual({ used_minor: 250, used_count: 1 });
+    facts.cancelledBeforeShipping = true;
+    expect(await s.vouchers.reinstate(u1, g)).toBe(1);
+    facts.cancelledBeforeShipping = false;
+    expect(await usage(id)).toEqual({ used_minor: 0, used_count: 0 });
+  });
+
+  it("finding 2: concurrent confirm and reinstate on one group give the caps back exactly once", async () => {
+    const { s, id } = await fresh();
+    const g = randomUUID();
+    await s.vouchers.reserve(u1, g, [applied(id, 120n)]);
+    facts.cancelledBeforeShipping = true;
+    await Promise.all([s.vouchers.confirm(u1, g), s.vouchers.reinstate(u1, g)]);
+    await s.vouchers.reinstate(u1, g); // whichever ran second, a replay settles what is left
+    facts.cancelledBeforeShipping = false;
+    expect(await usage(id)).toEqual({ used_minor: 0, used_count: 0 });
   });
 
   it("voucher_redemptions is append-only and shoppers see only their own rows", async () => {

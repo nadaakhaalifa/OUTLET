@@ -179,9 +179,20 @@ export class VoucherService {
     await tx.query("SELECT promotion_usage_giveback($1, $2, $3)", [row.promotion_id, row.amount_minor.toString(), row.voucher_id]);
   }
 
-  /** Payment succeeded: marks every live reservation of the group confirmed (idempotent). */
+  /** confirm / release / reinstate of one order group run one at a time (settle consumer vs cancellation race, finding 2). */
+  private async lockGroup(tx: Queryable, orderGroupId: string): Promise<void> {
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`vouchers:${orderGroupId}`]);
+  }
+
+  /**
+   * Payment succeeded: marks every live reservation of the group confirmed (idempotent). A group already CANCELLED (the shopper cancelled
+   * before this settle event was consumed) is never confirmed: its reservations stay `reserved` for reinstate to release (finding 2).
+   */
   async confirm(userId: string, orderGroupId: string): Promise<number> {
     return this.asUser(userId, async (tx) => {
+      await this.lockGroup(tx, orderGroupId);
+      const cancelled = await tx.query("SELECT 1 FROM order_groups WHERE id = $1 AND status = 'CANCELLED'", [orderGroupId]);
+      if (cancelled.rows.length > 0) return 0;
       let n = 0;
       for (const r of await this.groupRows(tx, orderGroupId)) if (r.state === "reserved" && (await this.append(tx, userId, orderGroupId, r, "confirmed"))) n++;
       return n;
@@ -191,6 +202,7 @@ export class VoucherService {
   /** Checkout failed or expired before payment: gives the caps back. Confirmed redemptions cannot be released (use reinstate). */
   async release(userId: string, orderGroupId: string): Promise<number> {
     return this.asUser(userId, async (tx) => {
+      await this.lockGroup(tx, orderGroupId);
       let n = 0;
       for (const r of await this.groupRows(tx, orderGroupId)) {
         if (r.state !== "reserved") continue;
@@ -202,17 +214,20 @@ export class VoucherService {
 
   /**
    * Refund-then-reuse block: a paid voucher comes back ONLY when the whole order group was cancelled before shipping (OrderFactsPort).
-   * A return or a partial refund never reinstates it.
+   * A return or a partial refund never reinstates it. Confirmed rows are reinstated; rows still `reserved` (cancelled before the settle
+   * consumer confirmed them, finding 2) are released. Both give the caps back once (append is unique per group, promotion and kind).
    */
   async reinstate(userId: string, orderGroupId: string): Promise<number> {
-    if (this.deps.orderFacts === undefined || !(await this.deps.orderFacts.wholeOrderCancelledBeforeShipping(orderGroupId))) {
+    if (this.deps.orderFacts === undefined || !(await this.deps.orderFacts.wholeOrderCancelledBeforeShipping(orderGroupId, userId))) {
       throw new PromotionError("REINSTATE_NOT_ALLOWED", "only a whole order cancelled before shipping reinstates a voucher");
     }
     return this.asUser(userId, async (tx) => {
+      await this.lockGroup(tx, orderGroupId);
       let n = 0;
       for (const r of await this.groupRows(tx, orderGroupId)) {
-        if (r.state !== "confirmed") continue;
-        if (await this.append(tx, userId, orderGroupId, r, "reinstated")) { await this.giveBack(tx, r); n++; }
+        const kind = r.state === "confirmed" ? "reinstated" : r.state === "reserved" ? "released" : null;
+        if (kind === null) continue;
+        if (await this.append(tx, userId, orderGroupId, r, kind)) { await this.giveBack(tx, r); n++; }
       }
       return n;
     });
