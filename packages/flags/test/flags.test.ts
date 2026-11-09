@@ -185,3 +185,19 @@ describe("PostgresFlagStore (PGlite)", () => {
     });
   });
 });
+
+describe("kill-switch registry", () => {
+  const MONEY_PREFIXES = ["payments.", "referrals.payouts", "gift_cards.", "refunds.", "payouts."];
+  it("every payment, BNPL, COD, payout, refund and gift-card switch is class money and fails closed", () => {
+    const names = Object.keys(KILL_SWITCHES).filter((n) => MONEY_PREFIXES.some((p) => n.startsWith(p)));
+    expect(names).toEqual(expect.arrayContaining(["payments.bnpl.enabled", "payments.cod.enabled", "referrals.payouts.enabled", "gift_cards.sales.enabled", "payments.card.enabled"]));
+    for (const n of names) {
+      const def = KILL_SWITCHES[n as keyof typeof KILL_SWITCHES];
+      expect(def.class, n).toBe("money");
+      expect(def.failMode, n).toBe("closed");
+    }
+  });
+  it("every switch declares a class (a missing class would skip dual approval downstream)", () => {
+    for (const [n, def] of Object.entries(KILL_SWITCHES)) expect(["money", "ui"], n).toContain(def.class);
+  });
+});
