@@ -19,7 +19,7 @@ interface StoreRow { market_id: string; store_id: string; day: string; currency:
 const marketRows = async (): Promise<DayRow[]> => (await admin.query<DayRow>("SELECT market_id, day::text AS day, currency, orders_paid, gmv_minor::text AS gmv_minor, refunded_minor::text AS refunded_minor FROM market_sales_daily ORDER BY market_id, day, currency")).rows;
 const storeRows = async (): Promise<StoreRow[]> => (await admin.query<StoreRow>("SELECT market_id, store_id, day::text AS day, currency, orders_paid, gmv_minor::text AS gmv_minor FROM store_sales_daily ORDER BY market_id, day, store_id, currency")).rows;
 const clean = async (): Promise<void> => {
-  for (const t of ["market_sales_daily", "store_sales_daily", "admin_dashboard_snapshots", "seller_orders", "order_groups", "refunds", "stores", "inbox_processed"]) await admin.query(`DELETE FROM ${t}`);
+  for (const t of ["market_sales_daily", "store_sales_daily", "admin_dashboard_snapshots", "seller_orders", "order_groups", "refunds", "stores", "inbox_processed", "breach_records"]) await admin.query(`DELETE FROM ${t}`);
 };
 
 beforeAll(async () => {
@@ -46,6 +46,8 @@ describe("sales rollup, worked example (GMV: order basis, VAT-inclusive, paid or
     await seedGroup(admin, { placedAt: "2026-11-10T08:00:00Z", status: "AWAITING_COD_CONFIRMATION", method: "cod", parts: [{ storeId: a, total: 222n }] });
     await seedGroup(admin, { placedAt: "2026-11-10T08:00:00Z", status: "CANCELLED", method: "cod", cancelledAt: "2026-11-10T08:30:00Z", parts: [{ storeId: a, total: 333n }] });
     await seedGroup(admin, { market: "AE", currency: "AED", placedAt: "2026-11-10T08:00:00Z", paidAt: "2026-11-10T08:00:00Z", parts: [{ storeId: a, total: 444n }] });
+    // Same basis for COD: a confirmed COD group later cancelled (REFUNDED, cancelled_at set) still counts; its refund shows apart.
+    await seedGroup(admin, { placedAt: "2026-11-10T09:00:00Z", status: "REFUNDED", method: "cod", cancelledAt: "2026-11-10T09:30:00Z", parts: [{ storeId: a, total: 400n }] });
     // A paid group later cancelled still counts in GMV (order basis); its refund shows apart.
     await seedGroup(admin, { placedAt: "2026-11-10T06:00:00Z", paidAt: "2026-11-10T06:01:00Z", status: "REFUNDED", cancelledAt: "2026-11-10T06:30:00Z", parts: [{ storeId: b, total: 1_000n }] });
     await seedRefund(admin, { amount: 1_000n, status: "COMPLETED", completedAt: "2026-11-10T07:00:00Z" });
@@ -55,8 +57,8 @@ describe("sales rollup, worked example (GMV: order basis, VAT-inclusive, paid or
     const d9 = await s.run("EG", "2026-11-09");
     const d10 = await s.run("EG", "2026-11-10");
     expect(d9.market).toEqual([{ currency: "EGP", orders: 0, gmvMinor: 0n, refundedMinor: 0n }]);
-    expect(d10.market).toEqual([{ currency: "EGP", orders: 4, gmvMinor: 15_000n + 2_500n + 700n + 1_000n, refundedMinor: 1_000n }]);
-    expect(d10.stores.map((x) => `${x.storeId === a ? "a" : "b"}:${String(x.orders)}:${x.gmvMinor.toString()}`).sort()).toEqual(["a:2:12500", "b:3:6700"]);
+    expect(d10.market).toEqual([{ currency: "EGP", orders: 5, gmvMinor: 15_000n + 2_500n + 700n + 400n + 1_000n, refundedMinor: 1_000n }]);
+    expect(d10.stores.map((x) => `${x.storeId === a ? "a" : "b"}:${String(x.orders)}:${x.gmvMinor.toString()}`).sort()).toEqual(["a:3:12900", "b:3:6700"]);
     const storeSum = d10.stores.reduce((acc, x) => acc + x.gmvMinor, 0n);
     expect(storeSum).toBe(d10.market[0]?.gmvMinor);
     expect((await marketRows()).filter((r) => r.market_id === "AE")).toEqual([]);
@@ -163,9 +165,12 @@ describe("snapshots", () => {
     await seedRefund(admin, { amount: 1_500n, status: "MANUAL_REVIEW", createdAt: "2026-11-05T00:00:00Z", dueAt: "2026-11-09T00:00:00Z" });
     await seedRefund(admin, { amount: 500n, status: "FAILED", createdAt: "2026-11-06T00:00:00Z", dueAt: "2026-12-01T00:00:00Z" });
     await seedRefund(admin, { amount: 9_999n, status: "REQUESTED", market: "AE", currency: "AED", dueAt: "2026-11-01T00:00:00Z" });
+    await admin.query("INSERT INTO breach_records (id, market_id, opened_by, detected_at, opened_at, severity, summary, pdpc_deadline_at, updated_at) VALUES ('018f0000-0000-7000-8000-0000000009a1','EG','t','2026-11-09T00:00:00Z','2026-11-09T00:00:00Z','low','s','2026-11-11T00:00:00Z','2026-11-09T00:00:00Z'), ('018f0000-0000-7000-8000-0000000009a2','AE','t','2026-11-09T00:00:00Z','2026-11-09T00:00:00Z','low','s','2026-11-12T00:00:00Z','2026-11-09T00:00:00Z')");
     await svc().snapshots("EG");
     const get = async (k: string): Promise<unknown> => (await admin.query<{ payload: unknown }>("SELECT payload FROM admin_dashboard_snapshots WHERE market_id = 'EG' AND tile_key = $1", [k])).rows[0]?.payload;
     expect(await get("orders_by_step")).toEqual({ paid_awaiting_accept: 1, accepted: 1, packed: 0, in_transit: 1, delivery_failed: 0 });
+    expect(await get("seller_sla_breaches")).toMatchObject({ late_dispatch: null });
+    expect(await get("breaches_open")).toEqual({ open: 1, next_pdpc_deadline_at: "2026-11-11T00:00:00.000Z", next_subjects_deadline_at: null });
     expect(await get("stores_moderation")).toEqual({ pending_review: 1, suspended: 1 });
     expect(await get("cod_awaiting_confirmation")).toEqual({ count: 1, oldest_at: "2026-11-10T07:00:00.000Z" });
     expect(await get("refunds_waiting")).toEqual({ count: 2, amount: { amount_minor: "2000", currency: "EGP" }, manual_review: 1, failed: 1, oldest_at: "2026-11-05T00:00:00.000Z" });

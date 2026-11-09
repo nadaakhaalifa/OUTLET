@@ -20,8 +20,9 @@ export interface DayRollup { readonly marketId: string; readonly day: string; re
 
 /**
  * Counted order groups of one market-local day (GMV basis, plan D3): reached PAID (day of paid_at), or a confirmed COD group that has no paid_at yet
- * (day of placed_at: no confirmation timestamp column exists). Cancelled COD groups never count; a paid group that is later cancelled or refunded still
- * counts here and shows up in refunded_minor. The day of an instant is `(ts AT TIME ZONE tz)::date`, which is exact on Egypt's DST switch days (a local
+ * (day of placed_at: no confirmation timestamp column exists). `cancelled_at` is not consulted for either method: a confirmed COD group that is later cancelled (status REFUND_PENDING / REFUNDED) counts exactly like a paid group that is later cancelled
+ * or refunded, and the cancellation shows up in refunded_minor when its refund completes. A COD group whose status is CANCELLED is not counted (the status no longer says whether it was ever
+ * confirmed, and no confirmation timestamp exists), nor is one awaiting confirmation. The day of an instant is `(ts AT TIME ZONE tz)::date`, which is exact on Egypt's DST switch days (a local
  * midnight that does not exist cannot be mapped back to an instant, so no day boundary is ever computed). The range predicate only narrows the index
  * scan: UTC midnight of the previous day to the day after, far wider than any UTC offset.
  */
@@ -32,7 +33,7 @@ const COUNTED_GROUPS = `
      WHERE g.market_id = $1 AND g.paid_at >= w.s AND g.paid_at < w.e AND (g.paid_at AT TIME ZONE $3)::date = $2::date
     UNION ALL
     SELECT g.id, g.currency, g.total_minor FROM order_groups g, win w
-     WHERE g.market_id = $1 AND g.paid_at IS NULL AND g.payment_method = 'cod' AND g.cancelled_at IS NULL
+     WHERE g.market_id = $1 AND g.paid_at IS NULL AND g.payment_method = 'cod'
        AND g.status IN ('CONFIRMED_COD', 'PARTIALLY_FULFILLED', 'COMPLETED', 'REFUND_PENDING', 'REFUNDED')
        AND g.placed_at >= w.s AND g.placed_at < w.e AND (g.placed_at AT TIME ZONE $3)::date = $2::date
   )`;

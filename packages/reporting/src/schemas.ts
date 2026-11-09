@@ -12,7 +12,7 @@ const Oldest = { oldest_at: Iso.nullable() };
 
 export const SNAPSHOT_TILE_DATA = {
   orders_by_step: z.object({ paid_awaiting_accept: Count, accepted: Count, packed: Count, in_transit: Count, delivery_failed: Count }).strict(),
-  seller_sla_breaches: z.object({ late_accept: Count, late_dispatch: Count, ...Oldest }).strict(),
+  seller_sla_breaches: z.object({ late_accept: Count, late_dispatch: Count.nullable(), ...Oldest }).strict(),
   cod_awaiting_confirmation: z.object({ count: Count, ...Oldest }).strict(),
   returns_pipeline: z.object({ requested: Count, in_transit: Count, awaiting_inspection: Count, inspection_overdue: Count }).strict(),
   disputes_open: z.object({ open: Count, past_sla: Count, ...Oldest }).strict(),

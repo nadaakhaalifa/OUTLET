@@ -38,11 +38,11 @@ export const SNAPSHOT_READERS: { readonly [K in SnapshotTileKey]: Reader<K> } = 
   },
 
   async seller_sla_breaches(c) {
-    // dispatch_by is not written by any code yet, so late_dispatch stays 0 until it is; the tile reports what the table says.
-    const r = await one<{ la: number; ld: number; oldest: Date | string | null }>(
+    // dispatch_by is not written by any code yet: late_dispatch is null (unknown), never a fabricated 0, until a row has it. oldest_at likewise ignores it.
+    const r = await one<{ la: number; ld: number | null; oldest: Date | string | null }>(
       c,
       `SELECT count(*) FILTER (WHERE status IN ('PAID', 'CONFIRMED_COD') AND accept_by < $2::timestamptz)::int AS la,
-              count(*) FILTER (WHERE status = 'ACCEPTED' AND dispatch_by < $2::timestamptz)::int AS ld,
+              CASE WHEN count(dispatch_by) = 0 THEN NULL ELSE count(*) FILTER (WHERE status = 'ACCEPTED' AND dispatch_by < $2::timestamptz)::int END AS ld,
               min(CASE WHEN status IN ('PAID', 'CONFIRMED_COD') AND accept_by < $2::timestamptz THEN accept_by
                        WHEN status = 'ACCEPTED' AND dispatch_by < $2::timestamptz THEN dispatch_by END) AS oldest
          FROM seller_orders WHERE market_id = $1 AND status IN ('PAID', 'CONFIRMED_COD', 'ACCEPTED')`,
@@ -167,13 +167,11 @@ export const SNAPSHOT_READERS: { readonly [K in SnapshotTileKey]: Reader<K> } = 
   },
 
   async breaches_open(c) {
-    // breach_records has no RLS (0028): the market pin below is the only guard, and the worker grant is column-limited.
+    // breach_records has no RLS (0028): the worker has no grant on it; breach_open_summary() (0035, SECURITY DEFINER) pins the market and the job.
     const r = await one<{ n: number; pdpc: Date | string | null; subj: Date | string | null }>(
       c,
-      `SELECT count(*)::int AS n, min(pdpc_deadline_at) FILTER (WHERE pdpc_notified_at IS NULL) AS pdpc,
-              min(subjects_deadline_at) FILTER (WHERE subjects_notified_at IS NULL) AS subj
-         FROM breach_records WHERE market_id = $1 AND status <> 'CLOSED'`,
-      [c.marketId],
+      "SELECT open AS n, next_pdpc AS pdpc, next_subjects AS subj FROM breach_open_summary()",
+      [],
     );
     return { open: r.n, next_pdpc_deadline_at: iso(r.pdpc), next_subjects_deadline_at: iso(r.subj) };
   },
