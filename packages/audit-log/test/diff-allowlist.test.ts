@@ -16,6 +16,8 @@ const EXTRA_KEYS: Readonly<Record<string, readonly string[]>> = {
   "apps/api/src/modules/admin/ops-services.ts": ["reason"],
   // enums (scope, reason_code, refund_preference), id list and a boolean flag.
   "packages/checkout/src/application/cancellation.ts": ["scope", "reason_code", "seller_order_ids", "refund_preference", "replayed"],
+  // `reasonCode` is the suspend/reinstate enum validated by Zod at the route; `storeIds` is the list of store ids moved.
+  "apps/api/src/modules/admin/store-moderation.ts": ["reasonCode", "storeIds"],
 };
 /** Files whose diff is passed through from a typed caller; the producers are covered by this same test. */
 const INDIRECT: readonly string[] = [
