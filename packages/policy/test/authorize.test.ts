@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  ADMIN_POLICY, ADMIN_ROLES, authorize, dualApprovalRequired, Principal, requiresReasonCode, REQUIRES_REASON_CODE, Resource, SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS,
+  ADMIN_POLICY, ADMIN_ROLES, authorize, POLICY_VERSION, dualApprovalRequired, Principal, requiresReasonCode, REQUIRES_REASON_CODE, Resource, SELLER_POLICY, SELLER_ROLES, SHOPPER_ACTIONS,
   type Principal as P,
 } from "../src/index.js";
 
@@ -72,7 +72,7 @@ describe("explicit role matrix (spec, not derived from the tables)", () => {
 
 describe("reason codes", () => {
   it("lists exactly the sensitive reads and exports", () => {
-    expect([...REQUIRES_REASON_CODE]).toEqual(["user.read", "privacy.export", "data.export", "ledger.read", "reconciliation.read"]);
+    expect([...REQUIRES_REASON_CODE]).toEqual(["user.read", "privacy.export", "data.export", "ledger.read", "reconciliation.read", "seller_kyc.read"]);
     for (const a of REQUIRES_REASON_CODE) expect(requiresReasonCode(a)).toBe(true);
     expect(requiresReasonCode("order.read")).toBe(false);
   });
@@ -244,5 +244,21 @@ describe("dual approval for admin console actions", () => {
     for (const a of ["elevation.request", "elevation.approve", "privacy.breach.open", "price_integrity.read", "tax.read", "reconciliation.read"]) {
       expect(dualApprovalRequired(a, cfg, 0n)).toBe(false);
     }
+  });
+});
+
+describe("policy v5: admin KYC detail and RBAC read", () => {
+  it("version is 5", () => {
+    expect(POLICY_VERSION).toBe(5);
+  });
+  it("seller_kyc.read (PII reveal, reason code required) is ops and trust_safety only", () => {
+    expect(requiresReasonCode("seller_kyc.read")).toBe(true);
+    for (const role of ADMIN_ROLES) expect(reason(authorize(admin(role), "seller_kyc.read", { type: "admin_console", marketId: "EG" }))).toBe(["ops", "trust_safety"].includes(role) ? "allow" : "forbidden");
+  });
+  it("rbac.read is security only (super_admin needs break-glass)", () => {
+    expect(reason(authorize(admin("security"), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("allow");
+    for (const role of ["ops", "finance", "trust_safety", "support", "marketing", "dpo"]) expect(reason(authorize(admin(role), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("forbidden");
+    expect(reason(authorize(admin("super_admin"), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("forbidden");
+    expect(reason(authorize(admin("super_admin", true), "rbac.read", { type: "admin_console", marketId: "EG" }))).toBe("allow");
   });
 });

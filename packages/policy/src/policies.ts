@@ -1,7 +1,7 @@
 import type { Action } from "./types.js";
 
 /** Bump on any change to the tables below; recorded in audit entries. */
-export const POLICY_VERSION = 4;
+export const POLICY_VERSION = 5;
 
 export const SELLER_ROLES = ["owner", "manager", "catalog", "warehouse", "finance", "support"] as const;
 export const ADMIN_ROLES = ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"] as const;
@@ -36,24 +36,24 @@ export const SELLER_POLICY: Readonly<Record<(typeof SELLER_ROLES)[number], reado
 export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonly Action[]>> = {
   ops: [
     "store.read", "store.suspend", "store.reinstate", "store.threshold.write", "listing.read", "order.read", "return.read", "return.decide",
-    "seller_kyc.review", "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
+    "seller_kyc.review", "seller_kyc.read", "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
   ],
   finance: [
     "order.read", "store.threshold.write", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read",
     "kill_switch.read", "kill_switch.engage", "reconciliation.read", "reconciliation.resolve", "price_integrity.read", "tax.read", "approval.read", "approval.decide", "elevation.request",
   ],
   trust_safety: [
-    "store.read", "store.suspend", "store.reinstate", "listing.read", "listing.takedown", "return.read", "dispute.decide", "seller_kyc.review",
+    "store.read", "store.suspend", "store.reinstate", "listing.read", "listing.takedown", "return.read", "dispute.decide", "seller_kyc.review", "seller_kyc.read",
     "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
   ],
   support: ["order.read", "return.read", "user.read", "customer_message.read", "customer_message.write", "approval.read", "approval.decide", "elevation.request"],
   marketing: ["promotion.write", "catalog.read", "plan.price.change", "approval.read", "approval.decide", "elevation.request"],
   dpo: ["user.read", "privacy.export", "privacy.delete", "data.export", "breach.manage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request"],
   security: [
-    "audit.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve",
+    "audit.read", "rbac.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve",
   ],
   super_admin: [
-    "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "kill_switch.read", "kill_switch.engage",
+    "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "rbac.read", "kill_switch.read", "kill_switch.engage",
     "approval.read", "approval.decide", "elevation.request", "elevation.approve",
   ],
 };
@@ -72,6 +72,6 @@ export const AMOUNT_DUAL_APPROVAL: readonly Action[] = ["payout.approve", "refun
 export const SUPER_ADMIN_ACTIONS: readonly Action[] = ADMIN_POLICY.super_admin;
 
 /** Actions whose use must carry a reason code in the audit log (PII/financial reads and exports). */
-export const REQUIRES_REASON_CODE: readonly Action[] = ["user.read", "privacy.export", "data.export", "ledger.read", "reconciliation.read"];
+export const REQUIRES_REASON_CODE: readonly Action[] = ["user.read", "privacy.export", "data.export", "ledger.read", "reconciliation.read", "seller_kyc.read"];
 
 export const requiresReasonCode = (action: Action): boolean => REQUIRES_REASON_CODE.includes(action);
