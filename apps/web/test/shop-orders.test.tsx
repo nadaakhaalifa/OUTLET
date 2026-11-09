@@ -216,13 +216,14 @@ describe("AddressBook", () => {
     await expectNoA11yViolations(container);
   });
   it("makes an address the default through the API, then reloads", async () => {
-    const updateAddress = vi.fn().mockResolvedValue(second);
+    const makeDefaultAddress = vi.fn().mockResolvedValue(second);
+    const updateAddress = vi.fn();
     const listAddresses = vi.fn().mockResolvedValueOnce([address(), second]).mockResolvedValue([address({ is_default: false }), { ...second, is_default: true }].map((a) => a));
-    book({ updateAddress, listAddresses });
+    book({ makeDefaultAddress, updateAddress, listAddresses });
     fireEvent.click(await screen.findByRole("button", { name: "Make the address of سلمى the default" }));
     await screen.findByText("Address saved.");
-    expect(updateAddress.mock.calls[0]?.[0]).toBe(second.id);
-    expect(updateAddress.mock.calls[0]?.[1]).toMatchObject({ isDefault: true, landmark: "جنب الصيدلية" });
+    expect(makeDefaultAddress).toHaveBeenCalledWith(second.id);
+    expect(updateAddress).not.toHaveBeenCalled();
   });
   it("deletes only after confirmation", async () => {
     const deleteAddress = vi.fn().mockResolvedValue(undefined);
@@ -254,6 +255,7 @@ describe("AddressBook", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save address" }));
     await waitFor(() => { expect(updateAddress).toHaveBeenCalled(); });
     expect(updateAddress.mock.calls[0]?.[0]).toBe(address().id);
+    expect(updateAddress.mock.calls[0]?.[1]).toHaveProperty("pin", null);
   });
   it("shows empty, error and signed-out states; Arabic renders", async () => {
     const a = book({ listAddresses: vi.fn().mockResolvedValue([]) }, AR);

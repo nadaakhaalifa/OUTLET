@@ -155,6 +155,16 @@ describe("createBrowserApi commerce", () => {
     expect(f2).toMatchObject({ floor: "3", apartment: "9", landmark: "ل" });
     expect(body(h.calls[1]!)).toMatchObject({ country_code: "EG", recipient_name: "منى" });
   });
+  it("passes the map pin through on edit and makes an address default through its own endpoint", async () => {
+    const a = address();
+    const h = harness(() => res(200, a));
+    const input = { recipientName: "منى", phoneE164: "+201012345678", governorateId: "g1", districtId: "d1", street: "س", building: "1", floor: "", apartment: "", landmark: "ل" };
+    await h.api.updateAddress(a.id, { ...input, pin: { lat_e7: 300_000_000, lng_e7: 310_000_000 }, label: "Home" });
+    await h.api.makeDefaultAddress(a.id);
+    expect(body(h.calls[0]!)).toMatchObject({ pin: { lat_e7: 300_000_000, lng_e7: 310_000_000 }, label: "Home" });
+    expect(h.calls[1]?.url).toBe(`/api/bff/eg/me/addresses/${a.id}/default`);
+    expect(h.calls[1]?.init.method).toBe("POST");
+  });
   it("walletBalance: positive balance, zero balance and API problems all map without throwing, other errors propagate", async () => {
     expect(await harness(() => res(200, { total_available: m(5_000) })).api.walletBalance()).toMatchObject({ amountMinor: 5_000n });
     expect(await harness(() => res(200, { total_available: m(0) })).api.walletBalance()).toBeNull();

@@ -111,7 +111,10 @@ describe("BagView", () => {
 
 describe("helpers", () => {
   it("only https or same-origin redirects are followed", () => {
-    expect(isSafeRedirect("https://pay.example/x", "http://localhost:3100")).toBe(true);
+    expect(isSafeRedirect("https://pay.example/x", "http://localhost:3100", ["pay.example"])).toBe(true);
+    expect(isSafeRedirect("https://pay.example/x", "http://localhost:3100", [])).toBe(false);
+    expect(isSafeRedirect("https://other.example/x", "http://localhost:3100", ["pay.example"])).toBe(false);
+    expect(isSafeRedirect("http://pay.example/x", "http://localhost:3100", ["pay.example"])).toBe(false);
     expect(isSafeRedirect("http://localhost:3100/eg-ar/orders/1", "http://localhost:3100")).toBe(true);
     for (const bad of ["javascript:alert(1)", "http://evil.test/x", "data:text/html,x", "//evil.test"]) expect(isSafeRedirect(bad, "http://localhost:3100")).toBe(false);
   });

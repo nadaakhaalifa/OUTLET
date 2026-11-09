@@ -49,7 +49,7 @@ export const privacyRequest = (over: Record<string, unknown> = {}) => privacyReq
 const unset = (name: string) => () => Promise.reject(new Error(`unexpected call: ${name}`));
 /** A ShopperApi whose every method rejects unless overridden, so a test fails loudly on an unplanned call. */
 export function stubApi(over: Partial<{ [K in keyof ShopperApi]: ShopperApi[K] }> = {}): ShopperApi {
-  const names = ["requestOtp", "verifyOtp", "passkeyOptions", "passkeyVerify", "logout", "me", "listSessions", "revokeSession", "listConsents", "patchConsents", "requestExport", "requestDelete", "cancelDelete", "listPrivacyRequests", "getCart", "setQty", "removeLine", "ackDefects", "getProductBrief", "geoAreas", "listAddresses", "createAddress", "updateAddress", "deleteAddress", "walletBalance", "quote", "placeOrder", "getOrderGroup", "confirmCod", "listOrders", "cancelSellerOrder", "createReturn", "listReturns", "getReturn", "cancelReturn", "openDispute", "uploadEvidence"] as const;
+  const names = ["requestOtp", "verifyOtp", "passkeyOptions", "passkeyVerify", "logout", "me", "listSessions", "revokeSession", "listConsents", "patchConsents", "requestExport", "requestDelete", "cancelDelete", "listPrivacyRequests", "getCart", "setQty", "removeLine", "ackDefects", "getProductBrief", "geoAreas", "listAddresses", "createAddress", "updateAddress", "deleteAddress", "makeDefaultAddress", "walletBalance", "quote", "placeOrder", "getOrderGroup", "confirmCod", "listOrders", "cancelSellerOrder", "createReturn", "listReturns", "getReturn", "cancelReturn", "openDispute", "uploadEvidence"] as const;
   const base = Object.fromEntries(names.map((n) => [n, vi.fn(unset(n))])) as unknown as ShopperApi;
   return { ...base, ...over };
 }

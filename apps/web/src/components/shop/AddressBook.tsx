@@ -69,7 +69,7 @@ export function AddressBook({ locale, api = browserApi() }: { readonly locale: L
                   <Button variant="secondary" aria-label={t("addresses.editFor", { name: a.recipient_name })} onClick={() => { setMode({ kind: "edit", id: a.id }); }}>{t("addresses.edit")}</Button>
                   {a.is_default ? null : (
                     <Button variant="secondary" disabled={busy} aria-label={t("addresses.makeDefaultFor", { name: a.recipient_name })} onClick={() => {
-                      void run(async () => { await api.updateAddress(a.id, { recipientName: a.recipient_name, phoneE164: a.phone_e164, governorateId: a.fields.governorate_id, districtId: a.fields.district_id, street: a.fields.street, building: a.fields.building, floor: a.fields.floor ?? "", apartment: a.fields.apartment ?? "", landmark: a.fields.landmark, isDefault: true }); }, t("addresses.saved"));
+                      void run(async () => { await api.makeDefaultAddress(a.id); }, t("addresses.saved"));
                     }}>{t("addresses.makeDefault")}</Button>
                   )}
                   <Button variant="ghost" aria-label={t("addresses.deleteFor", { name: a.recipient_name })} onClick={() => { setMode({ kind: "delete", id: a.id }); }}>{t("addresses.delete")}</Button>

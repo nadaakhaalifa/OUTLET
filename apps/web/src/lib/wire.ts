@@ -108,6 +108,9 @@ export const geoAreaSchema = z.object({ id: uuid, parent_id: nullStr, level: z.e
 export type GeoArea = z.infer<typeof geoAreaSchema>;
 export const addressSchema = z.object({
   id: uuid, recipient_name: z.string(), phone_e164: z.string(), is_default: z.boolean(),
+  label: z.string().nullable().optional().transform((v) => v ?? null),
+  /** Map pin (degrees x 1e7); kept on every edit so a save never erases it. */
+  pin: z.object({ lat_e7: z.number().int(), lng_e7: z.number().int() }).nullable().optional().transform((v) => v ?? null),
   /** Only when the API says so (landmark + pin rules are server-side); no badge otherwise. */
   cod_eligible: z.boolean().nullable().optional().transform((v) => v ?? null),
   fields: z.object({ governorate_id: uuid, district_id: uuid, street: z.string(), building: z.string(), floor: nullStr, apartment: nullStr, landmark: z.string() }),

@@ -22,11 +22,15 @@ const METHOD_KEYS = {
 } as const satisfies Record<PaymentMethod, MessageKey>;
 const FEE_KEYS: Readonly<Record<string, MessageKey>> = { cod_fee: "checkout.fee.cod_fee", payment_fee: "checkout.fee.payment_fee", service_fee: "checkout.fee.service_fee" };
 
-/** A redirect is followed only to https, or to this very origin (never javascript:, data: or plain http elsewhere). */
-export function isSafeRedirect(url: string, origin: string): boolean {
+/** PSP hosts a redirect may leave to (build-time env, comma separated, exact host match). Empty = fail closed: this origin only. */
+export const pspRedirectHosts = (raw: string | undefined = process.env.NEXT_PUBLIC_PSP_REDIRECT_HOSTS): readonly string[] =>
+  (raw ?? "").split(",").map((h) => h.trim().toLowerCase()).filter((h) => h !== "");
+
+/** A redirect is followed only to this very origin or to https on a configured PSP host (never javascript:, data:, plain http or an unlisted host). */
+export function isSafeRedirect(url: string, origin: string, hosts: readonly string[] = pspRedirectHosts()): boolean {
   try {
     const u = new URL(url, origin);
-    return u.protocol === "https:" || u.origin === origin;
+    return u.origin === origin || (u.protocol === "https:" && hosts.includes(u.hostname.toLowerCase()));
   } catch {
     return false;
   }

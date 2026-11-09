@@ -72,7 +72,7 @@ export function AddressForm({ locale, api, onSaved, initial, onCancel }: Address
     setBusy(true); setError(null);
     try {
       const input = { recipientName: f.recipient.trim(), phoneE164: phone, governorateId: gov, districtId, street: f.street.trim(), building: f.building.trim(), floor: f.floor.trim(), apartment: f.apartment.trim(), landmark: f.landmark.trim() };
-      onSaved(initial === undefined ? await api.createAddress(input) : await api.updateAddress(initial.id, { ...input, isDefault: initial.is_default }));
+      onSaved(initial === undefined ? await api.createAddress(input) : await api.updateAddress(initial.id, { ...input, isDefault: initial.is_default, label: initial.label, pin: initial.pin }));
     } catch { setError(t("checkout.address.invalid")); } finally { setBusy(false); }
   }
 

@@ -39,6 +39,9 @@ export interface NewAddress {
   readonly apartment: string;
   readonly landmark: string;
   readonly isDefault?: boolean;
+  readonly label?: string | null;
+  /** Pass the stored pin back on edit: PATCH replaces the whole address. */
+  readonly pin?: { readonly lat_e7: number; readonly lng_e7: number } | null;
 }
 export interface Page<T> { readonly items: readonly T[]; readonly nextCursor: string | null }
 export interface NewReturn {
@@ -77,6 +80,8 @@ export interface ShopperApi {
   createAddress: (input: NewAddress) => Promise<Address>;
   updateAddress: (id: string, input: NewAddress) => Promise<Address>;
   deleteAddress: (id: string) => Promise<void>;
+  /** Flips only the default flag server-side (the map pin and every other field stay untouched). */
+  makeDefaultAddress: (id: string) => Promise<Address>;
   walletBalance: () => Promise<Money | null>;
   quote: (input: QuoteInput) => Promise<Quote>;
   placeOrder: (input: CheckoutInput) => Promise<CheckoutResult>;
@@ -127,6 +132,7 @@ export function createBrowserApi(market = "eg", doFetch: typeof fetch = (i, init
   const wire = (m: Money) => ({ amount_minor: toWire(m).amountMinor, currency: m.currency });
   const addressBody = (a: NewAddress) => ({
     country_code: "EG", recipient_name: a.recipientName, phone_e164: a.phoneE164, ...(a.isDefault === undefined ? {} : { is_default: a.isDefault }),
+    ...(a.label == null ? {} : { label: a.label }), ...(a.pin == null ? {} : { pin: { lat_e7: a.pin.lat_e7, lng_e7: a.pin.lng_e7 } }),
     fields: { governorate_id: a.governorateId, district_id: a.districtId, street: a.street, building: a.building, ...(a.floor === "" ? {} : { floor: a.floor }), ...(a.apartment === "" ? {} : { apartment: a.apartment }), landmark: a.landmark },
   });
   const cursorQ = (cursor?: string) => `?limit=20${cursor === undefined ? "" : `&cursor=${encodeURIComponent(cursor)}`}`;
@@ -182,6 +188,7 @@ export function createBrowserApi(market = "eg", doFetch: typeof fetch = (i, init
     async listAddresses() { return addressPageSchema.parse(await bff("me/addresses?limit=50")).items; },
     async createAddress(a) { return addressSchema.parse(await bff("me/addresses", "POST", addressBody(a))); },
     async updateAddress(id, a) { return addressSchema.parse(await bff(`me/addresses/${id}`, "PATCH", addressBody(a))); },
+    async makeDefaultAddress(id) { return addressSchema.parse(await bff(`me/addresses/${id}/default`, "POST", {})); },
     async deleteAddress(id) { await bff(`me/addresses/${id}`, "DELETE"); },
     async walletBalance() {
       try {
