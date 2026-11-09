@@ -32,7 +32,7 @@ export const promotionsSettleHandlers = (worker: RoleSqlClient<"outlet_worker">,
   return new Map([[PROMOTIONS_SETTLE_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
 };
 
-/** shipping.tracking job: cancels the courier AWB of a seller order cancelled while PACKED (M4). Courier is the configured adapter (Unconfigured fails closed: the event is redelivered until a courier exists). */
+/** shipping.tracking job: cancels the courier AWB of a seller order cancelled while PACKED (M4). Courier is the configured adapter; the worker process composes UnconfiguredWorkerCourier until a contract exists, which answers not_cancellable so the event is parked as shipment.cancel_attention for ops (ADR-0016). */
 export const shipmentCancelHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, courier: Pick<CourierPort, "cancelShipment">): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
   const c = new ShipmentCancelConsumer({ client: worker, marketId, courier });
   return new Map([[SHIPMENT_CANCEL_REQUIRED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);

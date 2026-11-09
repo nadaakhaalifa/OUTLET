@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/cli.js",
+    "worker": "node dist/worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "openapi": "tsc -p tsconfig.build.json && node dist/openapi/cli.js"
