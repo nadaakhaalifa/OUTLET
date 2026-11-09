@@ -77,7 +77,7 @@ export const DashboardResponse = z.object({
   generated_at: Iso,
   sections: z.object({
     today: z.object({
-      orders_today: tile("orders_today", z.object({ count: Count, series_14d: z.array(Point).length(14) }).strict()),
+      orders_today: tile("orders_today", z.object({ count: Count, series_14d: z.array(Point).max(14) }).strict()),
       gmv_today: tile("gmv_today", z.object({ gmv: Money, refunded: Money, gmv_7d: Money }).strict()),
     }).strict(),
     sales: z.object({
@@ -97,7 +97,8 @@ export const DashboardResponse = z.object({
       verified_discount_share: tile("verified_discount_share", z.object({ verified: Count, live_skus: Count }).strict()), // ratio computed in UI with integers
     }).strict(),
     orders: z.object({
-      seller_sla_breaches: tile("seller_sla_breaches", z.object({ late_accept: Count, late_dispatch: Count, ...Oldest }).strict()),
+      seller_sla_breaches: tile("seller_sla_breaches", z.object({ late_accept: Count, late_dispatch: Count.nullable(), // null until seller_orders.dispatch_by is populated (not a fabricated 0)
+        ...Oldest }).strict()),
       cod_awaiting_confirmation: tile("cod_awaiting_confirmation", z.object({ count: Count, ...Oldest }).strict()),
       returns_pipeline: tile("returns_pipeline", z.object({ requested: Count, in_transit: Count, awaiting_inspection: Count, inspection_overdue: Count }).strict()),
       disputes_open: tile("disputes_open", z.object({ open: Count, past_sla: Count, ...Oldest }).strict()),
@@ -133,7 +134,8 @@ export type DashboardResponse = z.infer<typeof DashboardResponse>;
 
 Rules:
 - Every tile key is always present (stable shape); hidden = `forbidden`.
-- `as_of` for snapshot tiles is the snapshot time; the UI shows "Updated {relative}" and turns a tile `stale` when `as_of` is older than 2x its refresh (sales 10 min, snapshots 2 min). The API itself returns `unavailable/stale` past 15 min (fail closed on stale money numbers).
+- `as_of` for snapshot tiles is the snapshot time; the UI shows "Updated {relative}" and turns a tile `stale` when `as_of` is older than 2x its refresh (sales 10 min, snapshots 2 min). The API fails closed at 15 minutes (`unavailable/stale`, no numbers). Separately, the console marks a snapshot stale at 2 minutes (10 minutes for sales tiles) while still showing the numbers with "Stale since {time}".
+- `series_14d`: max 14 points, days before the first rollup are absent (a short series is valid; the UI left-aligns it, newest last).
 - Series: one point per market-local day, oldest first, missing days filled with 0 **only** inside the rollup's covered window; days before the first rollup run are absent (the UI starts the axis there), never invented.
 - Money values in one tile share one currency; a multi-currency market returns one tile per currency later (out of scope for EG; `currency` kept for ADR-0006).
 - `top_stores.name_*` come from `stores`; no seller PII.
