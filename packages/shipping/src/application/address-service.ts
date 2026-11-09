@@ -117,7 +117,30 @@ export class AddressService {
   }
 
   async get(userId: string, id: string): Promise<AddressView> {
-    const r = await this.user(userId, async (tx) => (await tx.query<Row>(`SELECT ${COLS} FROM addresses WHERE id = $1 AND deleted_at IS NULL`, [id])).rows[0]);
+    return this.user(userId, (tx) => this.getIn(tx, id));
+  }
+
+  /** Same read inside the caller's user-context transaction (RLS scopes it to the owner). */
+  async getIn(tx: Queryable, id: string): Promise<AddressView> {
+    const r = (await tx.query<Row>(`SELECT ${COLS} FROM addresses WHERE id = $1 AND deleted_at IS NULL`, [id])).rows[0];
+    if (r === undefined) throw new ShippingError("not_found", "not_found");
+    return this.view(r);
+  }
+
+  /** Content version of an owned address: changes on every edit or delete. Checkout binds it into the price-lock token. */
+  async versionOf(userId: string, id: string): Promise<string | null> {
+    const r = await this.user(userId, async (tx) => (await tx.query<{ v: string }>("SELECT (extract(epoch from updated_at) * 1000000)::bigint::text AS v FROM addresses WHERE id = $1 AND deleted_at IS NULL", [id])).rows[0]);
+    return r?.v ?? null;
+  }
+
+  /** Make-default only: flips the flag and leaves every other column (map pin included) untouched. */
+  async setDefault(userId: string, id: string): Promise<AddressView> {
+    const now = this.env.now().toISOString();
+    const r = await this.user(userId, async (tx) => {
+      await tx.query(DEFAULT_LOCK_SQL, [userId]);
+      await tx.query("UPDATE addresses SET is_default = false, updated_at = $2::timestamptz WHERE user_id = $1 AND is_default AND id <> $3", [userId, now, id]);
+      return (await tx.query<Row>(`UPDATE addresses SET is_default = true, updated_at = $2::timestamptz WHERE id = $1 AND deleted_at IS NULL RETURNING ${COLS}`, [id, now])).rows[0];
+    });
     if (r === undefined) throw new ShippingError("not_found", "not_found");
     return this.view(r);
   }
@@ -161,7 +184,15 @@ export class AddressService {
    * 30 days after a terminal shipment event (tracking job).
    */
   async snapshotForOrder(userId: string, sellerOrderId: string, addressId: string): Promise<void> {
-    const a = await this.get(userId, addressId);
+    await this.user(userId, (tx) => this.snapshotForOrderIn(tx, userId, sellerOrderId, addressId));
+  }
+
+  /**
+   * Same freeze inside the caller's transaction (checkout placeIn): the snapshot row exists iff the order exists. A missing / deleted address
+   * throws not_found and rolls the whole order back.
+   */
+  async snapshotForOrderIn(tx: Queryable, userId: string, sellerOrderId: string, addressId: string): Promise<void> {
+    const a = await this.getIn(tx, addressId);
     const parts = [a.address.governorateCode, a.address.cityCode, a.address.districtCode].filter((c): c is string => c !== undefined);
     const nowDate = this.env.now();
     const now = nowDate.toISOString();
@@ -171,19 +202,15 @@ export class AddressService {
       await this.cipher.encrypt(maskPhone(a.phone), SNAPSHOT_AAD.masked(sellerOrderId)), await this.cipher.encrypt(JSON.stringify(a.address), SNAPSHOT_AAD.addr(sellerOrderId)),
     ];
     const pin = a.address.pin === undefined ? null : await this.cipher.encrypt(JSON.stringify(a.address.pin), SNAPSHOT_AAD.pin(sellerOrderId));
-    const ok = await this.user(userId, async (tx) => {
-      const so = (await tx.query<{ order_group_id: string; store_id: string }>("SELECT order_group_id, store_id FROM seller_orders WHERE id = $1", [sellerOrderId])).rows[0];
-      if (so === undefined) return false;
-      const area = (await tx.query<{ id: string }>("SELECT id FROM geo_areas WHERE market_id = $1 AND code = $2", [this.env.marketId, parts[parts.length - 1]])).rows[0];
-      if (area === undefined) return false;
-      await tx.query(
-        `INSERT INTO delivery_snapshots (seller_order_id, order_group_id, store_id, user_id, market_id, geo_area_id, recipient_name_ct, phone_ct, phone_masked_ct, address_ct, pin_ct, seller_access_until, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13::timestamptz) ON CONFLICT (seller_order_id) DO NOTHING`,
-        [sellerOrderId, so.order_group_id, so.store_id, userId, this.env.marketId, area.id, name, phone, masked, addr, pin, until, now],
-      );
-      return true;
-    });
-    if (!ok) throw new ShippingError("not_found", "not_found");
+    const so = (await tx.query<{ order_group_id: string; store_id: string }>("SELECT order_group_id, store_id FROM seller_orders WHERE id = $1", [sellerOrderId])).rows[0];
+    if (so === undefined) throw new ShippingError("not_found", "not_found");
+    const area = (await tx.query<{ id: string }>("SELECT id FROM geo_areas WHERE market_id = $1 AND code = $2", [this.env.marketId, parts[parts.length - 1]])).rows[0];
+    if (area === undefined) throw new ShippingError("not_found", "not_found");
+    await tx.query(
+      `INSERT INTO delivery_snapshots (seller_order_id, order_group_id, store_id, user_id, market_id, geo_area_id, recipient_name_ct, phone_ct, phone_masked_ct, address_ct, pin_ct, seller_access_until, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13::timestamptz) ON CONFLICT (seller_order_id) DO NOTHING`,
+      [sellerOrderId, so.order_group_id, so.store_id, userId, this.env.marketId, area.id, name, phone, masked, addr, pin, until, now],
+    );
   }
 
   /** Seller read. RLS returns nothing once seller_access_until has passed or for another store's order. */
