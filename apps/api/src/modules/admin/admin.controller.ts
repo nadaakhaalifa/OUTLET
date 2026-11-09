@@ -42,10 +42,11 @@ const KILL_RELEASE_ACTION = "kill_switch.engage";
 const STORE_SUSPEND_ACTION = "store.suspend";
 const STORE_REINSTATE_ACTION = "store.reinstate";
 /** The reason and note the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
-const moderationPayload = (payload: Readonly<Record<string, unknown>>): { reasonCode: string; note: string } => {
-  const { reasonCode, note } = payload;
+const moderationPayload = (payload: Readonly<Record<string, unknown>>): { reasonCode: string; note: string; storeIds: readonly string[] } => {
+  const { reasonCode, note, storeIds } = payload;
   if (typeof reasonCode !== "string" || typeof note !== "string") throw Problems.unprocessable("invalid-approval-payload");
-  return { reasonCode, note };
+  if (!Array.isArray(storeIds) || storeIds.length === 0 || storeIds.length > 200 || !storeIds.every((x) => typeof x === "string")) throw Problems.unprocessable("invalid-approval-payload");
+  return { reasonCode, note, storeIds };
 };
 const releaseReason = (payload: Readonly<Record<string, unknown>>): string => (typeof payload.reason === "string" && payload.reason.length >= 3 ? payload.reason : "approved release");
 
@@ -267,9 +268,12 @@ export class AdminController {
 
   /** Both routes only file the dual-approval request (409 dual-approval-required, request id in `detail`); the effect runs when the second approver votes. */
   private async fileStoreRequest(t: Staff, storeId: string, action: string, payload: Record<string, unknown>, from: readonly string[]): Promise<never> {
-    const store = await this.stores(t).get(t.principal, storeId);
+    const port = this.stores(t);
+    const store = await port.get(t.principal, storeId);
     if (!from.includes(store.status)) throw new ProblemError(409, "invalid-transition", `The store is ${store.status}`);
-    const r = await t.svc.access.requireApproval(t.principal, { action, targetType: "store", targetId: storeId, payload });
+    // The exact store set goes into the hash-protected payload: the approvers vote on it and the executor acts on nothing else.
+    const storeIds = await port.targets(t.principal, storeId, action === STORE_SUSPEND_ACTION ? "SUSPENDED" : "ACTIVE");
+    const r = await t.svc.access.requireApproval(t.principal, { action, targetType: "store", targetId: storeId, payload: { ...payload, storeIds } });
     if (!r.required) throw Problems.internal("dual-approval-expected");
     throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
   }

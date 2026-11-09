@@ -5,7 +5,7 @@ import type {
   ReconciliationRunPage, RunsQuery,
 } from "./dto.js";
 import type { AdminOpsServices } from "./ops-services.js";
-import type { DashboardReaderPort } from "./dashboard.js";
+import type { DashboardReaderPort } from "./ports.js";
 
 export type AdminAccessPort = Pick<AdminAccess, "buildPrincipal" | "approve" | "reject" | "recordPiiView" | "requireApproval" | "executeApproval" | "verifyApproved" | "requestElevation" | "approveElevation" | "rejectElevation" | "activateElevation">;
 

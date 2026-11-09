@@ -4,7 +4,7 @@ import type { AttentionCounts, AttentionItem } from "@outlet/ops-attention";
 import type { Principal } from "@outlet/policy";
 import { ProblemError, Problems } from "../../platform/problem.js";
 import type { AttentionItemDto, AttentionResolveInput } from "./dto-dashboard.js";
-import type { AuditAppendPort } from "./ops-services.js";
+import type { AuditAppendPort } from "./ports.js";
 
 export interface AttentionPageDto { readonly items: AttentionItemDto[]; readonly next_cursor: string | null }
 

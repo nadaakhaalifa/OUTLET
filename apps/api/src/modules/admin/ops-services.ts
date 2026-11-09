@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import type { AuditEntryInput } from "@outlet/audit-log";
 import { PgAuditStore } from "@outlet/audit-log";
 import { contextClient, withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient, SqlClient } from "@outlet/db";
@@ -12,11 +11,8 @@ import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { Problems } from "../../platform/problem.js";
 import type { AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDto, ElevationPage, ElevationsQuery, FeatureFlagDto, FeatureFlagPage, FlagsQuery, PiiAccessLogEntryPage, PiiAccessLogQuery } from "./dto-ops.js";
 
-/** Appends one hash-chained audit entry. AuditChain satisfies it; production stays Unconfigured (503) until the Postgres chain is composed. */
-export interface AuditAppendPort {
-  /** Written in the caller's transaction: the entry commits or rolls back with the audited change. */
-  appendIn(tx: Queryable, input: AuditEntryInput): Promise<unknown>;
-}
+import type { AuditAppendPort } from "./ports.js";
+export type { AuditAppendPort };
 
 export interface FlagAdminPort {
   /** Rows of this market plus the global rows, as stored. */

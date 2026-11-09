@@ -7,29 +7,11 @@ import { SNAPSHOT_TILE_DATA, SNAPSHOT_TILE_KEYS, SNAPSHOT_VERSION, addDays, loca
 import type { SnapshotTileKey } from "@outlet/reporting";
 import type { DashboardQuery, DashboardResponse } from "./dto-dashboard.js";
 import type { AdminServices } from "./services.js";
+import type { SalesDailyRow } from "./ports.js";
 
 // ---------------------------------------------------------------- ports
 
-export interface SnapshotRow { readonly key: string; readonly asOf: string; readonly payload: unknown; readonly version: number }
-export interface SalesDailyRow { readonly day: string; readonly orders: number; readonly gmvMinor: bigint; readonly refundedMinor: bigint }
-export interface SalesDaily {
-  readonly rows: readonly SalesDailyRow[];
-  /** First day the rollup ever covered (null = never ran). Days before it are absent from every series, never invented. */
-  readonly firstDay: string | null;
-  /** Newest refresh time among the rows read. */
-  readonly refreshedAt: string | null;
-}
-export interface StoreTop {
-  readonly items: readonly { storeId: string; nameAr: string; nameEn: string | null; orders: number; gmvMinor: bigint }[];
-  readonly other: { readonly stores: number; readonly orders: number; readonly gmvMinor: bigint };
-  readonly asOf: string | null;
-}
-/** The three rollup reads (one statement each, job admin.dashboard). */
-export interface DashboardReaderPort {
-  snapshots(marketId: string, keys: readonly string[]): Promise<readonly SnapshotRow[]>;
-  salesDaily(marketId: string, currency: string, from: string, to: string): Promise<SalesDaily>;
-  storeSalesTop(marketId: string, currency: string, from: string, to: string, limit: number): Promise<StoreTop>;
-}
+export type { SnapshotRow, SalesDailyRow, SalesDaily, StoreTop, DashboardReaderPort } from "./ports.js";
 
 export interface DashboardDeps {
   readonly now: () => Date;

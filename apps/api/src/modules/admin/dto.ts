@@ -27,6 +27,8 @@ export const ApprovalRequestDto = z.strictObject({
   decided_by: z.uuid().nullable(),
   decided_at: Iso.nullable(),
   reason: z.string().max(500).nullable(),
+  /** Store moderation requests only: the exact stores the request acts on (null for every other action). */
+  store_ids: z.array(z.uuid()).max(200).nullable(),
 });
 export type ApprovalRequestDto = z.infer<typeof ApprovalRequestDto>;
 export const ApprovalRequestPage = pageOf(ApprovalRequestDto);

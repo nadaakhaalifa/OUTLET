@@ -48,11 +48,18 @@ export class PgApprovalReader implements ApprovalReaderPort {
     return { forMe, soonestExpiresAt: soonest };
   }
 
+  private static storeIds(r: Row): string[] | null {
+    if (r.action !== "store.suspend" && r.action !== "store.reinstate") return null;
+    const ids = r.payload?.storeIds;
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string").slice(0, 200) : null;
+  }
+
   private static map(r: Row): ApprovalRequestDto {
     const executed = r.status === "APPROVED" && r.executed_at !== null;
     return {
       id: r.id, action: r.action, target_type: r.target_type, target_id: r.target_id, requested_by: r.requested_by, status: executed ? "EXECUTED" : r.status,
       created_at: iso(r.created_at), expires_at: iso(r.expires_at), decided_by: r.decided_by, decided_at: isoOrNull(r.decided_at), reason: r.reason === null ? null : r.reason.slice(0, 500),
+      store_ids: PgApprovalReader.storeIds(r),
     };
   }
 
@@ -90,9 +97,9 @@ export class PgApprovalReader implements ApprovalReaderPort {
 
 interface Row {
   id: string; action: string; target_type: string; target_id: string; requested_by: string; status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
-  created_at: Date | string; expires_at: Date | string; decided_by: string | null; decided_at: Date | string | null; reason: string | null; executed_at: Date | string | null;
+  created_at: Date | string; expires_at: Date | string; decided_by: string | null; decided_at: Date | string | null; reason: string | null; executed_at: Date | string | null; payload: { storeIds?: unknown } | null;
 }
-const COLS = "id, action, target_type, target_id, requested_by, status, created_at, expires_at, decided_by, decided_at, reason, executed_at";
+const COLS = "id, action, target_type, target_id, requested_by, status, created_at, expires_at, decided_by, decided_at, reason, executed_at, payload";
 
 interface DetailRow {
   id: string; seller_id: string; kind: string; state: AdminKycCase["case"]["status"]; submitted_at: Date | string | null; decided_at: Date | string | null; reason_note: string | null; version: number;

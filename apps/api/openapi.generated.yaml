@@ -99,6 +99,15 @@ paths:
                             - type: string
                               maxLength: 500
                             - type: "null"
+                        store_ids:
+                          anyOf:
+                            - maxItems: 200
+                              type: array
+                              items:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
                       required:
                         - id
                         - action
@@ -111,6 +120,7 @@ paths:
                         - decided_by
                         - decided_at
                         - reason
+                        - store_ids
                       additionalProperties: false
                   next_cursor:
                     anyOf:
@@ -246,6 +256,15 @@ paths:
                       - type: string
                         maxLength: 500
                       - type: "null"
+                  store_ids:
+                    anyOf:
+                      - maxItems: 200
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
                 required:
                   - id
                   - action
@@ -258,6 +277,7 @@ paths:
                   - decided_by
                   - decided_at
                   - reason
+                  - store_ids
                 additionalProperties: false
         "400":
           description: Malformed request or unknown field (strict DTO).
@@ -418,6 +438,15 @@ paths:
                       - type: string
                         maxLength: 500
                       - type: "null"
+                  store_ids:
+                    anyOf:
+                      - maxItems: 200
+                        type: array
+                        items:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
                 required:
                   - id
                   - action
@@ -430,6 +459,7 @@ paths:
                   - decided_by
                   - decided_at
                   - reason
+                  - store_ids
                 additionalProperties: false
         "400":
           description: Malformed request or unknown field (strict DTO).
@@ -1968,9 +1998,11 @@ paths:
                                         minimum: 0
                                         maximum: 9007199254740991
                                       late_dispatch:
-                                        type: integer
-                                        minimum: 0
-                                        maximum: 9007199254740991
+                                        anyOf:
+                                          - type: integer
+                                            minimum: 0
+                                            maximum: 9007199254740991
+                                          - type: "null"
                                       oldest_at:
                                         anyOf:
                                           - type: string

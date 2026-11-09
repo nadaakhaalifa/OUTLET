@@ -69,6 +69,69 @@ describe("store suspend and reinstate (always dual approval)", () => {
     expect(t.adminAudit.entries.filter((e) => e.action === "store.reinstated").at(-1)).toMatchObject({ targetId: s.storeId, diff: { after: { status: "ACTIVE", reasonCode: "appeal_upheld" } } });
   });
 
+  const file = async (storeId: string, action: "suspend" | "reinstate"): Promise<string> => {
+    const asked = await post((await t.admin(["trust_safety"])).token, `/v1/eg/admin/stores/${storeId}/${action}`, { reason_code: action === "suspend" ? "counterfeit" : "appeal_upheld", note: "long enough note here" });
+    expect(asked.statusCode).toBe(409);
+    return json<{ detail: string }>(asked.body).detail;
+  };
+  const approveBoth = async (id: string): Promise<{ statusCode: number; body: string }> => {
+    await decide((await t.admin(["trust_safety"])).token, id);
+    return decide((await t.admin(["ops"])).token, id);
+  };
+  const addStore = async (sellerId: string, status: string): Promise<string> => {
+    const id = randomUUID();
+    await t.raw.query("INSERT INTO stores (id, seller_id, market_id, slug, display_name_ar, kind, ships_from_country, status) VALUES ($1,$2,'EG',$3,'م','local','EG',$4)", [id, sellerId, `x-${id.slice(0, 8)}`, status]);
+    return id;
+  };
+
+  it("the approval request carries the exact store set; the executor acts on that set only, not on stores added after filing", async () => {
+    const s = await seedStore(t.raw);
+    const b = await addStore(s.sellerId, "ACTIVE");
+    const id = await file(s.storeId, "suspend");
+    const late = await addStore(s.sellerId, "ACTIVE"); // appears after filing: not approved, must not be touched
+    const listed = json<{ items: { id: string; store_ids: string[] | null }[] }>((await get((await t.admin(["ops"])).token, "/v1/eg/admin/approval-requests?action=store.suspend&limit=50")).body);
+    expect([...(listed.items.find((i) => i.id === id)?.store_ids ?? [])].sort()).toEqual([s.storeId, b].sort());
+    expect((await approveBoth(id)).statusCode).toBe(200);
+    expect(await status(s.storeId)).toBe("SUSPENDED");
+    expect(await status(b)).toBe("SUSPENDED");
+    expect(await status(late)).toBe("ACTIVE");
+  });
+
+  it("reinstating one of two suspended stores touches only that store and leaves the seller SUSPENDED while the other remains suspended", async () => {
+    const s = await seedStore(t.raw);
+    const b = await addStore(s.sellerId, "ACTIVE");
+    expect((await approveBoth(await file(s.storeId, "suspend"))).statusCode).toBe(200);
+    expect(await status(b)).toBe("SUSPENDED");
+    expect((await approveBoth(await file(s.storeId, "reinstate"))).statusCode).toBe(200);
+    expect(await status(s.storeId)).toBe("ACTIVE");
+    expect(await status(b)).toBe("SUSPENDED");
+    expect(await sellerStatus(s.sellerId)).toBe("suspended");
+    expect((await t.raw.query<{ state: string }>("SELECT state FROM kyc_cases WHERE id = $1", [s.caseId])).rows[0]?.state).toBe("SUSPENDED");
+    // Reinstating the last one brings the seller back.
+    expect((await approveBoth(await file(b, "reinstate"))).statusCode).toBe(200);
+    expect(await status(b)).toBe("ACTIVE");
+    expect(await sellerStatus(s.sellerId)).toBe("active");
+  });
+
+  it("a store that changed between filing and the second vote converges: 409, nothing written, the request stays APPROVED and re-executable", async () => {
+    const s = await seedStore(t.raw);
+    const id = await file(s.storeId, "suspend");
+    await decide((await t.admin(["trust_safety"])).token, id);
+    await t.raw.query("UPDATE stores SET status = 'CLOSED' WHERE id = $1", [s.storeId]);
+    const ops = await t.admin(["ops"]);
+    const second = await decide(ops.token, id);
+    expect(second.statusCode).toBe(409);
+    expect(json<{ code: string }>(second.body).code).toBe("invalid-transition");
+    expect(await sellerStatus(s.sellerId)).toBe("active");
+    expect((await t.raw.query<{ state: string }>("SELECT state FROM kyc_cases WHERE id = $1", [s.caseId])).rows[0]?.state).toBe("APPROVED");
+    const row = (await t.raw.query<{ status: string; executed_at: string | null }>("SELECT status, executed_at FROM approval_requests WHERE id = $1", [id])).rows[0];
+    expect(row).toMatchObject({ status: "APPROVED", executed_at: null });
+    await t.raw.query("UPDATE stores SET status = 'ACTIVE' WHERE id = $1", [s.storeId]);
+    expect((await post(ops.token, `/v1/eg/admin/approval-requests/${id}/execute`, {})).statusCode).toBe(200);
+    expect(await status(s.storeId)).toBe("SUSPENDED");
+    expect(await sellerStatus(s.sellerId)).toBe("suspended");
+  });
+
   it("validation: a free-text reason code, a short note and unknown fields are 400; finance and support are 403; an unknown store is 404", async () => {
     const s = await seedStore(t.raw);
     const ts = await t.admin(["trust_safety"]);
