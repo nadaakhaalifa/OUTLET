@@ -76,6 +76,7 @@ const mapApproval = (r: ApprovalDb): ApprovalRequestRow => ({
   id: r.id, marketId: r.market_id, action: r.action, targetType: r.target_type, targetId: r.target_id, payload: r.payload, requestedBy: r.requested_by,
   status: r.status, requiredApprovals: r.required_approvals, expiresAt: toDate(r.expires_at), executedAt: r.executed_at === null ? null : toDate(r.executed_at),
 });
+const VERIFY_MARGIN_MS = 60_000;
 const approvalHash = (a: { action: string; targetType: string; targetId: string; payload: unknown }): Buffer =>
   sha256(canonicalJson({ action: a.action, targetType: a.targetType, targetId: a.targetId, payload: a.payload }));
 
@@ -213,7 +214,8 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
         throw new AdminAccessError("APPROVAL_TAMPERED", "payload does not match approved hash");
       }
       if (row.executed_at !== null) throw new AdminAccessError("APPROVAL_NOT_APPROVED", "request was already executed");
-      if (now.getTime() >= toDate(row.expires_at).getTime()) throw new AdminAccessError("APPROVAL_EXPIRED", "approval too old to execute");
+      // Margin: the effect runs before the claim (executeApproval re-checks expiry), so a request about to expire must not start an effect the claim would then refuse.
+      if (now.getTime() >= toDate(row.expires_at).getTime() - VERIFY_MARGIN_MS) throw new AdminAccessError("APPROVAL_EXPIRED", "approval too close to expiry to execute");
       return mapApproval(row);
     });
 

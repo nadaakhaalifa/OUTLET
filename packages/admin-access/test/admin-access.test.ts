@@ -184,6 +184,16 @@ describe("generic dual approval (requireApproval / executeApproval)", () => {
     expect(await code(svc.verifyApproved(f3, res.request.id))).toBe("APPROVAL_NOT_APPROVED");
   });
 
+  it("verifyApproved refuses with less than 60 s left before expiry, so the later claim cannot expire first", async () => {
+    const res = await svc.requireApproval(d1, { action: "data.export", targetType: "export", targetId: "e-margin", payload: {} });
+    if (!res.required) throw new Error("x");
+    await svc.approve(d2, res.request.id); await svc.approve(d3, res.request.id);
+    advance(24 * HOUR - 90_000);
+    expect((await svc.verifyApproved(d1, res.request.id)).id).toBe(res.request.id);
+    advance(40_000);
+    expect(await code(svc.verifyApproved(d1, res.request.id))).toBe("APPROVAL_EXPIRED");
+  });
+
   it("detects a tampered payload and refuses stale approvals", async () => {
     const res = await svc.requireApproval(d1, { action: "data.export", targetType: "export", targetId: "e1", payload: { scope: "orders" } });
     if (!res.required) throw new Error("data.export must always need approval");
