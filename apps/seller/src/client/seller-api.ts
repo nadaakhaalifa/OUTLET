@@ -60,6 +60,8 @@ export type OrderActionResult = z.infer<typeof OrderActionResult>;
 export const ShipmentWire = z.object({ id: z.string(), awb: z.string(), label_url: z.string().nullable() });
 export type ShipmentWire = z.infer<typeof ShipmentWire>;
 export const REJECT_REASONS = ["out_of_stock", "damaged", "pricing_error", "other"] as const;
+export const CANCEL_REASONS = ["out_of_stock", "cannot_fulfil", "pricing_error", "other"] as const;
+export type CancelReason = (typeof CANCEL_REASONS)[number];
 export type RejectReason = (typeof REJECT_REASONS)[number];
 
 export interface ApiFailure {
@@ -85,6 +87,7 @@ export interface SellerApi {
   adjustStock(body: { sku_id: string; delta: number; reason: StockReason; expected_version?: number }): Promise<ApiResult<LevelWire>>;
   acceptOrder(id: string): Promise<ApiResult<OrderActionResult>>;
   rejectOrder(id: string, reason: RejectReason, note?: string): Promise<ApiResult<OrderActionResult>>;
+  cancelOrder(id: string, reason: CancelReason): Promise<ApiResult<OrderActionResult>>;
   packOrder(id: string): Promise<ApiResult<OrderActionResult>>;
   shipOrder(id: string, weightG: number): Promise<ApiResult<ShipmentWire>>;
 }
@@ -140,6 +143,7 @@ export const createSellerApi = (market: string, fetchImpl: typeof fetch = (...a)
     adjustStock: (body) => call(LevelWire, "inventory/adjustments", { method: "POST", body }),
     acceptOrder: (id) => call(OrderActionResult, `orders/${id}/accept`, { method: "POST", body: {} }),
     rejectOrder: (id, reason, note) => call(OrderActionResult, `orders/${id}/reject`, { method: "POST", body: { reason_code: reason, ...(note === undefined || note === "" ? {} : { note }) } }),
+    cancelOrder: (id, reason) => call(OrderActionResult, `orders/${id}/cancel`, { method: "POST", body: { reason_code: reason } }),
     packOrder: (id) => call(OrderActionResult, `orders/${id}/pack`, { method: "POST", body: {} }),
     shipOrder: (id, weightG) => call(ShipmentWire, "shipments", { method: "POST", body: { seller_order_ids: [id], declared_weight_g: weightG } }),
     upload: (id, kind, file, onProgress) =>

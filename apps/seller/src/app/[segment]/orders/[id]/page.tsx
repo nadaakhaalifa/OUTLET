@@ -72,7 +72,7 @@ export default async function OrderPage({ params }: { params: Promise<{ segment:
           ) : null}
           <p className="hint">{formatDate(new Date(o.created_at), resolved.locale, { style: "long" })}</p>
 
-          <OrderActions locale={resolved.locale} marketId={resolved.marketId} orderId={o.id} actions={o.available_actions} />
+          <OrderActions locale={resolved.locale} marketId={resolved.marketId} orderId={o.id} actions={o.available_actions} status={o.status} />
 
           <section aria-labelledby="lines-h">
             <h2 id="lines-h" className="panelTitle">

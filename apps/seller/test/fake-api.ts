@@ -68,6 +68,7 @@ export const fakeApi = (script: { onPatch?: (version: number, body: object) => A
     }),
     acceptOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "ACCEPTED", available_actions: ["pack"], total: { amount_minor: "100", currency: "EGP" } }))),
     rejectOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "REJECTED_BY_SELLER", available_actions: [], total: { amount_minor: "100", currency: "EGP" } }))),
+    cancelOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "CANCELLED", available_actions: [], total: { amount_minor: "100", currency: "EGP" } }))),
     packOrder: vi.fn((id: string) => Promise.resolve(ok({ id, status: "PACKED", available_actions: ["ship"], total: { amount_minor: "100", currency: "EGP" } }))),
     shipOrder: vi.fn((id: string): Promise<ApiResult<ShipmentWire>> => Promise.resolve(ok({ id, awb: "AWB1", label_url: null }))),
   } satisfies SellerApi;

@@ -114,6 +114,15 @@ describe("createSellerApi", () => {
     expect(await api(res("<html>", 502)).getProduct("p")).toEqual({ ok: false, status: 502, code: "unknown", reasons: [] });
     expect(await api(res({ nope: 1 }, 500)).getProduct("p")).toMatchObject({ code: "unknown" });
   });
+  it("cancelOrder POSTs the fixed reason code only, with an idempotency key", async () => {
+    let seen: { url: string; init: RequestInit } | undefined;
+    const api = createSellerApi("eg", (url, init) => { seen = { url: String(url), init: init ?? {} }; return Promise.resolve(new Response(JSON.stringify({ id: "o", status: "CANCELLED", available_actions: [], total: { amount_minor: "1", currency: "EGP" } }), { status: 200 })); });
+    expect((await api.cancelOrder("o", "out_of_stock")).ok).toBe(true);
+    expect(seen?.url).toBe("/api/seller/eg/orders/o/cancel");
+    expect(seen?.init.body).toBe(JSON.stringify({ reason_code: "out_of_stock" }));
+    expect((seen?.init.headers as Record<string, string>)["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("rejects a malformed success body and reports network errors as status 0", async () => {
     expect(await createSellerApi("eg", () => Promise.resolve(res({ id: 1 }))).getProduct("p")).toEqual({ ok: false, status: 200, code: "bad-response", reasons: [] });
     expect(await createSellerApi("eg", () => Promise.reject(new Error("x"))).getProduct("p")).toEqual({ ok: false, status: 0, code: "network", reasons: [] });

@@ -57,6 +57,36 @@ describe.each(LOCALES)("OrderActions (%s)", (locale) => {
     await waitFor(() => { expect(f.api.rejectOrder).toHaveBeenCalledWith(ORDER, "damaged", "فيه خدش"); });
   });
 
+  it("cancel is offered only from PAID to PACKED, needs a reason, explains the full refund and health impact, then calls the API", async () => {
+    const f = fakeApi();
+    const { unmount } = render(<OrderActions locale={locale} marketId="EG" orderId={ORDER} actions={[]} status="SHIPPED" api={f.api} />);
+    expect(screen.queryByRole("button", { name: t("seller.orders.action.cancel") })).toBeNull();
+    unmount();
+    render(<OrderActions locale={locale} marketId="EG" orderId={ORDER} actions={["pack"]} status="PACKED" api={f.api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("seller.orders.action.cancel") }));
+    expect(screen.getByText(t("seller.orders.confirm.cancel_order"))).toBeTruthy();
+    expect(screen.queryByLabelText(t("seller.orders.reject.note"))).toBeNull();
+    expect(await clean()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: t("seller.orders.confirm.yes") }));
+    expect((await screen.findByRole("alert")).textContent).toContain(t("seller.orders.cancel.required"));
+    expect(f.api.cancelOrder).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(t("seller.orders.cancel.reason")), { target: { value: "cannot_fulfil" } });
+    fireEvent.click(screen.getByRole("button", { name: t("seller.orders.confirm.yes") }));
+    await waitFor(() => { expect(f.api.cancelOrder).toHaveBeenCalledWith(ORDER, "cannot_fulfil"); });
+    expect((await screen.findByRole("status")).textContent).toContain(t("seller.orders.result.cancelled"));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it.each([["cancel-after-shipping", 409, "seller.orders.err.cancelAfterShipping"], ["order-not-cancellable", 409, "seller.orders.err.notCancellable"], ["not-found", 404, "seller.error.notFound"]] as const)("cancel maps %s to a clear message", async (code, status, key) => {
+    const f = fakeApi();
+    f.api.cancelOrder = vi.fn(() => Promise.resolve(fail(status, code)));
+    render(<OrderActions locale={locale} marketId="EG" orderId={ORDER} actions={[]} status="PAID" api={f.api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("seller.orders.action.cancel") }));
+    fireEvent.change(screen.getByLabelText(t("seller.orders.cancel.reason")), { target: { value: "other" } });
+    fireEvent.click(screen.getByRole("button", { name: t("seller.orders.confirm.yes") }));
+    expect((await screen.findByRole("alert")).textContent).toContain(t(key));
+  });
+
   it("ship validates the weight, shows the AWB and a safe label link only", async () => {
     const f = fakeApi();
     f.api.shipOrder.mockResolvedValueOnce(ok({ id: ORDER, awb: "AWB-9", label_url: "javascript:alert(1)" }));

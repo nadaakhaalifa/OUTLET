@@ -5,7 +5,7 @@ import { STORE_COOKIE, SESSION_COOKIE } from "./env";
 
 const MARKET = /^[a-z]{2}$/;
 const UUID = z.uuid();
-const ALLOWED_PATH = /^(products(\/[0-9a-f-]{36}(\/(readiness|media|defect-cards|publish))?)?|categories|attribute-sets\/[0-9a-f-]{36}|orders(\/[0-9a-f-]{36}(\/(accept|reject|pack))?)?|shipments|inventory(\/adjustments)?)$/;
+const ALLOWED_PATH = /^(products(\/[0-9a-f-]{36}(\/(readiness|media|defect-cards|publish))?)?|categories|attribute-sets\/[0-9a-f-]{36}|orders(\/[0-9a-f-]{36}(\/(accept|reject|pack|cancel))?)?|shipments|inventory(\/adjustments)?)$/;
 /** The applicant's own KYC application (user tenant: the store does not exist before approval, so no X-Store-Id). */
 const ONBOARDING_PATH = /^onboarding(\/(bank-account|documents|submit))?$/;
 const FORWARD_REQUEST = ["content-type", "idempotency-key", "if-match", "accept-language", "accept"] as const;

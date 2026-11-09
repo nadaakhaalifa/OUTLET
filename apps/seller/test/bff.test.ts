@@ -28,8 +28,17 @@ describe("planProxy", () => {
     expect(plan.init.headers.get("if-match")).toBe('"2"');
   });
 
+  it("forwards a seller order cancel POST to the API with the Idempotency-Key and the JSON body", () => {
+    const plan = planProxy(input({ segments: ["eg", "orders", PRODUCT, "cancel"], method: "POST", headers: new Headers({ host: "seller.test", origin: "http://seller.test", "sec-fetch-site": "same-origin", "idempotency-key": "0190a000-0000-7000-8000-000000000001", "content-type": "application/json", cookie: "secret" }) }));
+    expect(plan.kind).toBe("forward");
+    if (plan.kind !== "forward") return;
+    expect(plan.url).toBe(`http://api.test/v1/eg/seller/orders/${PRODUCT}/cancel`);
+    expect(plan.init.headers.get("idempotency-key")).toBe("0190a000-0000-7000-8000-000000000001");
+    expect(plan.init.headers.get("cookie")).toBeNull();
+  });
+
   it("allows only the seller catalog paths", () => {
-    for (const path of [["products", PRODUCT], ["products", PRODUCT, "readiness"], ["products", PRODUCT, "media"], ["products", PRODUCT, "defect-cards"], ["products", PRODUCT, "publish"], ["categories"], ["attribute-sets", PRODUCT], ["orders"], ["orders", PRODUCT], ["orders", PRODUCT, "accept"], ["orders", PRODUCT, "reject"], ["orders", PRODUCT, "pack"], ["shipments"], ["inventory"], ["inventory", "adjustments"]]) {
+    for (const path of [["products", PRODUCT], ["products", PRODUCT, "readiness"], ["products", PRODUCT, "media"], ["products", PRODUCT, "defect-cards"], ["products", PRODUCT, "publish"], ["categories"], ["attribute-sets", PRODUCT], ["orders"], ["orders", PRODUCT], ["orders", PRODUCT, "accept"], ["orders", PRODUCT, "cancel"], ["orders", PRODUCT, "reject"], ["orders", PRODUCT, "pack"], ["shipments"], ["inventory"], ["inventory", "adjustments"]]) {
       expect(planProxy(input({ segments: ["eg", ...path] })).kind, path.join("/")).toBe("forward");
     }
     for (const path of [["orders", "not-a-uuid"], ["orders", PRODUCT, "ship"], ["orders", PRODUCT, "../../me"], ["shipments", PRODUCT], ["inventory", "units"], ["products", "not-a-uuid"], ["products", PRODUCT, "../../me"], ["store", "members"], []]) {
