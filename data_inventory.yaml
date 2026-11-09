@@ -5483,16 +5483,16 @@ tables:
     residency: cell
     tenant: "none"
     partitioning: null
-    personal_data: false
-    data_subjects: []
+    personal_data: true
+    data_subjects: ["seller_representative"]
     verify: []
     columns:
       - {name: "market_id", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
       - {name: "store_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
       - {name: "day", type: "date", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
       - {name: "currency", type: "char(3)", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
-      - {name: "orders_paid", type: "int", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
-      - {name: "gmv_minor", type: "bigint", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}
+      - {name: "orders_paid", type: "int", pii_class: P2, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "P2 when the store belongs to a sole trader (a natural person); never reaches seller-visible or export paths"}
+      - {name: "gmv_minor", type: "bigint", pii_class: P2, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "P2 when the store belongs to a sole trader (a natural person); never reaches seller-visible or export paths"}
       - {name: "store_name_ar", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "public store name (P0 at source), copied at rollup time"}
       - {name: "store_name_en", type: "text", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell, note: "public store name (P0 at source), copied at rollup time"}
       - {name: "refreshed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["admin_reporting"], lawful_basis: legitimate_interest, retention: sales_rollup_25m, processors: ["cloud_cell"], residency: cell}

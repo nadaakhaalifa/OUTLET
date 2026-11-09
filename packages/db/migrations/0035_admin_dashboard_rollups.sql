@@ -121,7 +121,22 @@ CREATE POLICY reconciliation_exceptions__worker_reporting_rollup ON reconciliati
 GRANT SELECT (status, market_id) ON stores TO outlet_worker;
 GRANT SELECT (id, product_id, store_id, market_id, status) ON skus TO outlet_worker;
 GRANT SELECT (id, store_id, market_id, status, deleted_at) ON products TO outlet_worker;
-GRANT SELECT (market_id, status, pdpc_deadline_at, pdpc_notified_at, subjects_deadline_at, subjects_notified_at) ON breach_records TO outlet_worker;
+-- breach_records has no RLS (0028), so a role-wide column grant would let any worker job read every market's breach rows. Instead the worker gets no table
+-- grant at all: it calls breach_open_summary(), SECURITY DEFINER, which pins the market and refuses every context except the reporting.rollup worker job.
+CREATE FUNCTION breach_open_summary() RETURNS TABLE (open int, next_pdpc timestamptz, next_subjects timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS
+$$
+BEGIN
+  IF app.ctx() IS DISTINCT FROM 'worker' OR app.job() IS DISTINCT FROM 'reporting.rollup' OR app.current_market_id() IS NULL THEN
+    RAISE EXCEPTION 'breach_open_summary is for the reporting.rollup worker job with a bound market' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+    SELECT count(*)::int, min(b.pdpc_deadline_at) FILTER (WHERE b.pdpc_notified_at IS NULL), min(b.subjects_deadline_at) FILTER (WHERE b.subjects_notified_at IS NULL)
+      FROM breach_records b WHERE b.market_id = app.current_market_id() AND b.status <> 'CLOSED';
+END
+$$;
+REVOKE ALL ON FUNCTION breach_open_summary() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION breach_open_summary() TO outlet_worker;
 
 -- Indexes (CREATE INDEX plain, like every migration here; the tables are small at this phase and the runner is transactional).
 CREATE INDEX order_groups_paid_at_idx ON order_groups (market_id, paid_at) WHERE paid_at IS NOT NULL;

@@ -106,8 +106,12 @@ describe("admin dashboard rollup tables (migration 0035)", () => {
     expect(await asWorker(worker("admin.dashboard"), (q) => q("SELECT id FROM stores"))).toBe(0);
   });
 
-  it("breach_records is readable by the worker role only through the narrow column grant (no summary)", async () => {
-    await asWorker(worker("reporting.rollup"), (q) => q("SELECT market_id, status, pdpc_deadline_at, pdpc_notified_at, subjects_deadline_at, subjects_notified_at FROM breach_records"));
-    await expect(asWorker(worker("reporting.rollup"), (q) => q("SELECT summary FROM breach_records"))).rejects.toThrow(/permission denied/);
+  it("breach_records: no direct SELECT for the worker role; breach_open_summary() works only for reporting.rollup, pinned to its market", async () => {
+    await expect(asWorker(worker("reporting.rollup"), (q) => q("SELECT market_id FROM breach_records"))).rejects.toThrow(/permission denied/);
+    await c.query("INSERT INTO breach_records (id, market_id, opened_by, detected_at, opened_at, severity, summary, pdpc_deadline_at, updated_at) VALUES ($1,'EG','t',now()-interval '1 day',now(),'low','s',now()+interval '1 day',now()), ($2,'AE','t',now()-interval '1 day',now(),'low','s',now()+interval '1 day',now())", [randomUUID(), randomUUID()]);
+    expect(await asWorker(worker("reporting.rollup"), (q) => q("SELECT * FROM breach_open_summary() WHERE open = 1"))).toBe(1);
+    await expect(asWorker(worker("admin.dashboard"), (q) => q("SELECT * FROM breach_open_summary()"))).rejects.toThrow(/reporting.rollup/);
+    await expect(asWorker(worker("ops.attention"), (q) => q("SELECT * FROM breach_open_summary()"))).rejects.toThrow(/reporting.rollup/);
+    await expect(asRole(c, "outlet_app", async (tx) => { await applyDbContext(tx, { kind: "user", marketId: "EG", userId: randomUUID() }); await tx.query("SELECT * FROM breach_open_summary()"); })).rejects.toThrow(/permission denied|reporting.rollup/);
   });
 });
