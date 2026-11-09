@@ -25,4 +25,4 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   }
 }
 
-export { handle as GET, handle as POST, handle as PATCH };
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT };

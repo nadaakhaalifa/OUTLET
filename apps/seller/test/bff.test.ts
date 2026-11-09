@@ -80,4 +80,27 @@ describe("responses", () => {
     expect(await out.text()).toBe('{"a":1}');
     expect((await passResponse(new Response(null, { status: 304 }))).status).toBe(304);
   });
+
+  describe("onboarding (user tenant, no store)", () => {
+    const noStore = jar({ seller_session: "tok" });
+    it("forwards the applicant routes with the bearer and without X-Store-Id", () => {
+      for (const [method, path] of [["GET", ["onboarding"]], ["POST", ["onboarding"]], ["PUT", ["onboarding", "bank-account"]], ["POST", ["onboarding", "documents"]], ["POST", ["onboarding", "submit"]]] as const) {
+        const plan = planProxy(input({ method, segments: ["eg", ...path], search: "", cookies: noStore, headers: new Headers({ host: "seller.test", origin: "http://seller.test", "sec-fetch-site": "same-origin", "content-type": "multipart/form-data; boundary=x" }), body: new ArrayBuffer(1) }));
+        expect(plan.kind, `${method} ${path.join("/")}`).toBe("forward");
+        if (plan.kind !== "forward") continue;
+        expect(plan.url).toBe(`http://api.test/v1/eg/seller/${path.join("/")}`);
+        expect(plan.init.headers.get("x-store-id")).toBeNull();
+        expect(plan.init.headers.get("authorization")).toBe("Bearer tok");
+        expect(plan.init.headers.get("content-type")).toContain("multipart");
+      }
+    });
+    it("still needs a session, a same-origin write, and the right method and path", () => {
+      expect(planProxy(input({ segments: ["eg", "onboarding"], cookies: jar({}) }))).toMatchObject({ status: 401 });
+      expect(planProxy(input({ method: "POST", segments: ["eg", "onboarding"], cookies: noStore, headers: new Headers({ host: "seller.test", origin: "http://evil.test" }) }))).toMatchObject({ status: 403 });
+      expect(planProxy(input({ method: "PATCH", segments: ["eg", "onboarding"], cookies: noStore }))).toMatchObject({ status: 405 });
+      expect(planProxy(input({ method: "PUT", segments: ["eg", "products"] }))).toMatchObject({ status: 405 });
+      expect(planProxy(input({ segments: ["eg", "onboarding", "members"], cookies: noStore }))).toMatchObject({ status: 404 });
+      expect(planProxy(input({ segments: ["eg", "products"], cookies: noStore }))).toMatchObject({ status: 400 });
+    });
+  });
 });

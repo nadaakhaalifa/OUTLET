@@ -9,6 +9,7 @@ interface Item {
 
 const ITEMS: readonly Item[] = [
   { id: "overview", key: "seller.nav.overview", href: "" },
+  { id: "onboarding", key: "seller.nav.onboarding", href: "/onboarding" },
   { id: "products", key: "seller.nav.products", href: "/products" },
   { id: "offers", key: "seller.nav.offers", href: null },
   { id: "orders", key: "seller.nav.orders", href: "/orders" },

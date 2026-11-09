@@ -12,6 +12,11 @@ export default async function OverviewPage({ params }: { params: SegmentParams }
       <h1 className="pageTitle">{t("seller.nav.overview")}</h1>
       <p className="lead">{t("seller.overview.lead")}</p>
       <p>
+        <Link className="btnLink" href={`${base}/onboarding`}>
+          {t("seller.overview.onboarding")}
+        </Link>
+      </p>
+      <p>
         <Link className="btnLink" href={`${base}/products/new`}>
           {t("seller.products.add")}
         </Link>
