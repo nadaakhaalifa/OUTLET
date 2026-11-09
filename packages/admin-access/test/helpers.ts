@@ -27,7 +27,7 @@ export const makeEnv = async (): Promise<Env> => {
   const audits: AuditEntryInput[] = [];
   const svc = createAdminAccess({
     db: roleClient(client, "outlet_app"),
-    audit: { append: (e) => { audits.push(e); return Promise.resolve(); } },
+    audit: { appendIn: (_tx, e) => { audits.push(e); return Promise.resolve(); } },
     clock: () => now,
     thresholdMinor: 1_000_000n,
   });

@@ -246,9 +246,12 @@ describe("reason codes for PII views", () => {
   it("writes an id-only audit entry; unauthorised actors are refused before any entry", async () => {
     await svc.recordPiiView(sup, view, "support_ticket");
     expect(audits).toHaveLength(1);
-    expect(audits[0]).toMatchObject({ action: "pii.viewed", actorId: SUP, targetType: "user", targetId: "u-1", diff: { after: { action: "user.read", reasonCode: "support_ticket" } } });
+    expect(audits[0]).toMatchObject({ action: "pii.viewed", actorId: SUP, targetType: "user", targetId: "u-1", diff: { after: { piiAccessId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string } } });
+    const rows = await env.client.query<{ id: string; action: string; reason_code: string; actor_id: string }>("SELECT id, action, reason_code, actor_id FROM pii_access_log ORDER BY occurred_at, id");
+    expect(rows.rows[0]).toMatchObject({ id: (audits[0]?.diff?.after as { piiAccessId: string }).piiAccessId, action: "user.read", reason_code: "support_ticket", actor_id: SUP });
     await svc.recordPiiView(sup, view, "other_with_note", "customer called twice");
-    expect(audits[1]?.diff?.after).toMatchObject({ reasonCode: "other_with_note", note: "customer called twice" });
+    expect(JSON.stringify(audits[1])).not.toContain("customer called twice");
+    expect((await env.client.query("SELECT 1 FROM pii_access_log WHERE reason_code = 'other_with_note'")).rows).toHaveLength(1);
     expect(await code(svc.recordPiiView(fin, view, "support_ticket"))).toBe("FORBIDDEN");
     expect(audits).toHaveLength(2);
   });

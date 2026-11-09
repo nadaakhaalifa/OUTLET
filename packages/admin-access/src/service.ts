@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canonicalJson } from "@outlet/audit-log";
+import { PiiAccessLog, canonicalJson } from "@outlet/audit-log";
 import type { AuditEntryInput } from "@outlet/audit-log";
 import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
@@ -14,9 +14,9 @@ import {
 import type { ApprovalStatus } from "./domain.js";
 import { AdminAccessError } from "./errors.js";
 
-/** Port: AuditChain satisfies it structurally. */
+/** Port: PgAuditStore satisfies it structurally. The entry is written in the caller's transaction, so it commits or rolls back with the audited change. */
 export interface AuditPort {
-  append(input: AuditEntryInput): Promise<unknown>;
+  appendIn(tx: Queryable, input: AuditEntryInput): Promise<unknown>;
 }
 export interface AuditMeta {
   readonly ipHash: string | null;
@@ -81,6 +81,8 @@ const approvalHash = (a: { action: string; targetType: string; targetId: string;
 
 export const createAdminAccess = (deps: AdminAccessDeps) => {
   const newId = deps.newId ?? (() => uuidv7());
+  // pii_access_log is the single source of truth for staff PII views; the chain entry only points at its row.
+  const piiLog = new PiiAccessLog(deps.db, { now: deps.clock, newId });
   const outbox = new OutboxWriter(pgTransactionalWriter);
 
   const actorId = (p: Principal): string => {
@@ -97,8 +99,8 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
     if (d.effect === "deny") throw new AdminAccessError(d.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", `${action} denied`);
   };
 
-  const audit = (p: Principal, action: string, targetType: string, targetId: string, after: unknown, before?: unknown): Promise<unknown> =>
-    deps.audit.append({
+  const audit = (tx: Queryable, p: Principal, action: string, targetType: string, targetId: string, after: unknown, before?: unknown): Promise<unknown> =>
+    deps.audit.appendIn(tx, {
       marketId: p.marketId, actorType: "staff", actorId: p.userId ?? null, action, targetType, targetId,
       diff: { ...(before === undefined ? {} : { before }), after },
       ipHash: deps.meta?.().ipHash ?? null, deviceId: deps.meta?.().deviceId ?? null, requestId: deps.meta?.().requestId ?? null,
@@ -119,7 +121,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
     );
     const row = r.rows[0];
     if (!row) throw new Error("approval insert returned no row");
-    await audit(p, "approval.requested", "approval_request", id, { action: a.action, targetType: a.targetType, targetId: a.targetId, expiresAt: expiresAt.toISOString() });
+    await audit(tx, p, "approval.requested", "approval_request", id, { action: a.action, targetType: a.targetType, targetId: a.targetId, expiresAt: expiresAt.toISOString() });
     return mapApproval(row);
   };
 
@@ -148,7 +150,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       if (now.getTime() >= toDate(row.expires_at).getTime()) {
         nextApprovalStatus(row.status, "expire", 0, row.required_approvals);
         await tx.query("UPDATE approval_requests SET status = 'EXPIRED', decided_at = $2 WHERE id = $1", [requestId, now.toISOString()]);
-        await audit(approver, "approval.expired", "approval_request", requestId, { status: "EXPIRED" }, { status: "PENDING" });
+        await audit(tx, approver, "approval.expired", "approval_request", requestId, { status: "EXPIRED" }, { status: "PENDING" });
         return { expired: true as const };
       }
       const me = actorId(approver);
@@ -163,7 +165,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       const n = await tx.query<{ n: number | string }>("SELECT count(*) AS n FROM approval_decisions WHERE approval_request_id = $1 AND decision = 'APPROVE'", [requestId]);
       const approvals = Number(n.rows[0]?.n ?? 0);
       const next = nextApprovalStatus(row.status, decision, approvals, row.required_approvals);
-      await audit(approver, decision === "approve" ? "approval.approved_vote" : "approval.rejected_vote", "approval_request", requestId, { approvals, status: next });
+      await audit(tx, approver, decision === "approve" ? "approval.approved_vote" : "approval.rejected_vote", "approval_request", requestId, { approvals, status: next });
       if (next !== "PENDING") {
         await tx.query("UPDATE approval_requests SET status = $2, decided_by = $3, decided_at = $4, reason = $5 WHERE id = $1", [requestId, next, me, now.toISOString(), note ?? null]);
         await emit(tx, approver, now, `admin_access.approval_${next.toLowerCase()}`, "approval_request", requestId, { action: row.action });
@@ -191,7 +193,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       const claim = await tx.query("UPDATE approval_requests SET executed_at = $2 WHERE id = $1 AND executed_at IS NULL RETURNING id", [requestId, now.toISOString()]);
       if (claim.rows.length === 0) return { executed: false as const, reason: "already_executed" as const };
       const result = await fn(mapApproval(row), tx, now);
-      await audit(actor, "approval.executed", "approval_request", requestId, { action: row.action });
+      await audit(tx, actor, "approval.executed", "approval_request", requestId, { action: row.action });
       return { executed: true as const, result };
     });
 
@@ -227,7 +229,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
           [assignmentId, p.staffId, p.role, actor.marketId, req.requestedBy, req.id, p.reason, now.toISOString(), expiresAt.toISOString()],
         );
       }
-      await audit(actor, "role.granted", "staff", p.staffId, { role: p.role, assignmentId, expiresAt: expiresAt.toISOString(), approvalRequestId: req.id });
+      await audit(tx, actor, "role.granted", "staff", p.staffId, { role: p.role, assignmentId, expiresAt: expiresAt.toISOString(), approvalRequestId: req.id });
       await emit(tx, actor, now, "admin_access.role_granted", "staff_role_assignment", assignmentId, { role: p.role });
       return { assignmentId, expiresAt };
     });
@@ -244,7 +246,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       if (!row) throw new AdminAccessError("NOT_FOUND", "assignment not found");
       if (row.revoked_at !== null) throw new AdminAccessError("ALREADY_REVOKED", "already revoked");
       await tx.query("UPDATE staff_role_assignments SET revoked_at = $2, revoked_by = $3 WHERE id = $1", [assignmentId, now.toISOString(), actor.userId]);
-      await audit(actor, "role.revoked", "staff", row.staff_id, { role: row.role_code, assignmentId, reason: reason.data }, { revoked: false });
+      await audit(tx, actor, "role.revoked", "staff", row.staff_id, { role: row.role_code, assignmentId, reason: reason.data }, { revoked: false });
       await emit(tx, actor, now, "admin_access.role_revoked", "staff_role_assignment", assignmentId, { role: row.role_code });
     });
   };
@@ -263,7 +265,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
          VALUES ($1,$2,$3,$4,$5,$6,'PENDING',$7,$8)`,
         [id, actor.marketId, me, parsed.data.role, parsed.data.reason, parsed.data.ttlMinutes, pendingUntil.toISOString(), now.toISOString()],
       );
-      await audit(actor, "elevation.requested", "elevation_request", id, { role: parsed.data.role, ttlMinutes: parsed.data.ttlMinutes, reason: parsed.data.reason });
+      await audit(tx, actor, "elevation.requested", "elevation_request", id, { role: parsed.data.role, ttlMinutes: parsed.data.ttlMinutes, reason: parsed.data.reason });
       const base = { id, staffId: me, role: parsed.data.role, ttlMinutes: parsed.data.ttlMinutes, status: "PENDING" as const };
       if (parsed.data.role !== "super_admin") return base;
       // ADM-T06: break-glass needs two distinct approvers holding role.grant; the approval window equals the pending window.
@@ -285,7 +287,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       if (decision === "approve" && row.role_code === "super_admin") throw new AdminAccessError("DUAL_APPROVAL_REQUIRED", "super_admin elevation needs two approvers via its approval request");
       if (now.getTime() >= toDate(row.pending_until).getTime()) {
         await tx.query("UPDATE elevation_requests SET status = 'EXPIRED', decided_at = $2 WHERE id = $1", [id, now.toISOString()]);
-        await audit(approver, "elevation.expired", "elevation_request", id, { status: "EXPIRED" }, { status: "PENDING" });
+        await audit(tx, approver, "elevation.expired", "elevation_request", id, { status: "EXPIRED" }, { status: "PENDING" });
         return { expired: true as const };
       }
       if (row.staff_id === approver.userId) throw new AdminAccessError("SELF_APPROVAL", "requester cannot approve own elevation");
@@ -297,7 +299,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       } else {
         await tx.query("UPDATE elevation_requests SET status = 'REJECTED', decided_at = $2 WHERE id = $1", [id, now.toISOString()]);
       }
-      await audit(approver, decision === "approve" ? "elevation.approved" : "elevation.rejected", "elevation_request", id,
+      await audit(tx, approver, decision === "approve" ? "elevation.approved" : "elevation.rejected", "elevation_request", id,
         { role: row.role_code, status, ...(decision === "approve" ? { expiresAt: ends.toISOString(), breakGlass: row.role_code === "super_admin" } : {}) }, { status: "PENDING" });
       if (decision === "approve") await emit(tx, approver, now, "admin_access.elevation_approved", "elevation_request", id, { role: row.role_code });
       return { expired: false as const, elevation: { id, staffId: row.staff_id, role: row.role_code, ttlMinutes: row.ttl_minutes, status } };
@@ -324,7 +326,7 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
       await tx.query("UPDATE elevation_requests SET status = 'APPROVED', approved_by = $2, decided_at = $3, starts_at = $3, expires_at = $4 WHERE id = $1", [p.elevationId, me, now.toISOString(), ends.toISOString()]);
       const votes = await tx.query<{ approver_id: string }>("SELECT approver_id FROM approval_decisions WHERE approval_request_id = $1 AND decision = 'APPROVE' ORDER BY approver_id", [approvalRequestId]);
       const approvers = votes.rows.map((v) => v.approver_id);
-      await audit(actor, "elevation.approved", "elevation_request", p.elevationId, { role: row.role_code, status: "APPROVED", expiresAt: ends.toISOString(), breakGlass: true, approvers, approvalRequestId }, { status: "PENDING" });
+      await audit(tx, actor, "elevation.approved", "elevation_request", p.elevationId, { role: row.role_code, status: "APPROVED", expiresAt: ends.toISOString(), breakGlass: true, approvers, approvalRequestId }, { status: "PENDING" });
       await emit(tx, actor, now, "admin.break_glass_activated", "elevation_request", p.elevationId,
         { actor: row.staff_id, approvers: approvers.join(","), reason: p.reason, ttlMinutes: String(row.ttl_minutes), approvalRequestId });
       return { id: p.elevationId, staffId: row.staff_id, role: row.role_code, ttlMinutes: row.ttl_minutes, status: "APPROVED" as const };
@@ -365,7 +367,12 @@ export const createAdminAccess = (deps: AdminAccessDeps) => {
     const trimmed = note?.trim();
     if (code.data === "other_with_note" && (trimmed === undefined || trimmed.length === 0)) throw new AdminAccessError("REASON_CODE_REQUIRED", "other_with_note requires a note");
     if (trimmed !== undefined && trimmed.length > 500) throw new AdminAccessError("INVALID_INPUT", "note too long");
-    await audit(actor, "pii.viewed", view.targetType, view.targetId, { action: view.action, reasonCode: code.data, ...(trimmed ? { note: trimmed } : {}) });
+    await run(actor, async (tx) => {
+      const rec = await piiLog.recordIn(tx, {
+        marketId: actor.marketId, actorId: actorId(actor), targetType: view.targetType, targetId: view.targetId, action: view.action, reasonCode: code.data, requestId: deps.meta?.().requestId ?? null,
+      });
+      await audit(tx, actor, "pii.viewed", view.targetType, view.targetId, { piiAccessId: rec.id });
+    });
   };
 
   return {
