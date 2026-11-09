@@ -22,6 +22,9 @@ export const TRANSITIONS: Readonly<Record<ShipmentStatus, readonly ShipmentStatu
   CANCELLED: [],
 };
 
+/** Statuses a cancellation may still cancel (label not yet handed over). PICKED_UP and later is a return or refusal, never a cancel (M4). */
+export const CANCELLABLE_SHIPMENT_STATUSES: readonly ShipmentStatus[] = SHIPMENT_STATUSES.filter((s) => s !== "CANCELLED" && TRANSITIONS[s].includes("CANCELLED"));
+
 export interface ShipmentState {
   readonly status: ShipmentStatus;
   readonly attempts: number;

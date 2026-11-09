@@ -29,6 +29,18 @@ export interface CourierEvent {
 }
 export interface NormalisedEvent { readonly eventId: string; readonly awb: string; readonly status: ShipmentStatus; readonly occurredAt: string }
 
+/**
+ * Thrown by a CourierPort.cancelShipment adapter for a definite answer. `not_found` and `already_cancelled` mean the parcel is already gone
+ * (the cancel is a success); `not_cancellable` means the courier has the parcel (permanent: finance/ops must handle it). Any other error is
+ * treated as transient and retried.
+ */
+export class CourierCancelError extends Error {
+  constructor(readonly code: "not_found" | "already_cancelled" | "not_cancellable", message = code) {
+    super(message);
+    this.name = "CourierCancelError";
+  }
+}
+
 /** Courier boundary. No real adapter exists (the contract is an owner decision, V33/V43); production stays unconfigured and fails closed. */
 export interface CourierPort {
   createShipment(req: CreateShipmentRequest): Promise<CreatedShipment>;

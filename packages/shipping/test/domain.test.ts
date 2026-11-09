@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
-  MAX_DELIVERY_ATTEMPTS, SHIPMENT_STATUSES, ShippingError, TRANSITIONS, addressSchema, applyTracking, chargeableWeight, codEligible, quoteShipment, transition, volumetricGrams,
+  CANCELLABLE_SHIPMENT_STATUSES, MAX_DELIVERY_ATTEMPTS, SHIPMENT_STATUSES, ShippingError, TRANSITIONS, addressSchema, applyTracking, chargeableWeight, codEligible, quoteShipment, transition, volumetricGrams,
 } from "../src/index.js";
 import type { CourierOffer, ShipmentState, ShipmentStatus } from "../src/index.js";
 
@@ -144,3 +144,16 @@ describe("shipment state machine", () => {
     }), RUNS);
   });
 });
+
+describe("cancellation edges (M4)", () => {
+  it("only LABEL_PENDING and LABEL_READY may be cancelled; picked-up and later is a return, never a cancel", () => {
+    expect([...CANCELLABLE_SHIPMENT_STATUSES].sort()).toEqual(["LABEL_PENDING", "LABEL_READY"]);
+    for (const from of SHIPMENT_STATUSES) {
+      const ok = CANCELLABLE_SHIPMENT_STATUSES.includes(from);
+      let got: string | undefined;
+      try { transition({ status: from, attempts: 0 }, "CANCELLED"); } catch (e) { got = e instanceof ShippingError ? e.code : "other"; }
+      expect(got).toBe(ok ? undefined : "INVALID_TRANSITION");
+    }
+  });
+});
+

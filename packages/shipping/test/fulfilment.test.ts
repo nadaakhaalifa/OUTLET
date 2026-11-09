@@ -3,7 +3,7 @@ import { brandClient, withDbContext } from "@outlet/db";
 import type { Queryable } from "@outlet/db";
 import { roleClient } from "@outlet/db/testing";
 import { afterEach, describe, expect, it } from "vitest";
-import { AddressService, CourierWebhookProcessor, MAX_WEBHOOK_BYTES, SELLER_ACCESS_INITIAL_DAYS, ShipmentService, SnapshotRetention, TrackingStaleScanner, maskPhone } from "../src/index.js";
+import { AddressService, CourierWebhookProcessor, CourierCancelError, MAX_WEBHOOK_BYTES, SELLER_ACCESS_INITIAL_DAYS, SHIPMENT_CANCELLED_EVENT, SHIPMENT_CANCEL_ATTENTION_EVENT, SHIPMENT_CANCEL_REQUIRED_EVENT, ShipmentCancelConsumer, ShipmentService, SnapshotRetention, TrackingStaleScanner, maskPhone } from "../src/index.js";
 import { FakeCipher, FakeCourier, FakeLabelStore, FakeWebhook } from "../src/testing.js";
 import { buildWorld, errorCode } from "./fixtures.js";
 import type { World } from "./fixtures.js";
@@ -81,6 +81,26 @@ describe("AddressService", () => {
     expect(await errorCode(s.addresses.update(other, a.id, input))).toBe("not_found");
     expect(await errorCode(s.addresses.remove(other, a.id))).toBe("not_found");
     expect(await s.addresses.list(other)).toEqual([]);
+  });
+
+  it("finding 8: the content version ignores make-default and updated_at, changes on a street edit and is gone after delete", async () => {
+    const s = await setup();
+    const a = await s.addresses.create(s.x.user, input);
+    const b = await s.addresses.create(s.x.user, { ...input, label: "work" });
+    const va = await s.addresses.versionOf(s.x.user, a.id);
+    const vb = await s.addresses.versionOf(s.x.user, b.id);
+    expect(va).toMatch(/^[0-9a-f]{64}$/);
+    s.x.now.value = new Date(s.x.now.value.getTime() + 60_000);
+    await s.addresses.setDefault(s.x.user, b.id);
+    expect(await s.addresses.versionOf(s.x.user, a.id)).toBe(va);
+    expect(await s.addresses.versionOf(s.x.user, b.id)).toBe(vb);
+    await s.addresses.update(s.x.user, b.id, { ...input, address: { ...addr, street: "Abbas El Akkad" } });
+    const vb2 = await s.addresses.versionOf(s.x.user, b.id);
+    expect(vb2).toMatch(/^[0-9a-f]{64}$/);
+    expect(vb2).not.toBe(vb);
+    expect(await s.addresses.versionOf(randomUUID(), b.id)).toBeNull();
+    await s.addresses.remove(s.x.user, b.id);
+    expect(await s.addresses.versionOf(s.x.user, b.id)).toBeNull();
   });
 
   it("district without city is invalid; district resolves", async () => {
@@ -506,3 +526,80 @@ describe("C6 and C7: AAD binds the row; default-address race", () => {
     expect(seen.filter((x) => x.includes("pg_advisory_xact_lock")).length).toBe(8);
   });
 });
+
+describe("ShipmentCancelConsumer (M4)", () => {
+  const evt = (shipmentId: string, so: string, id = randomUUID()) => ({ id, payload: { shipment_id: shipmentId, seller_order_id: so } });
+  const make = async (over: { cancelShipment?: (awb: string) => Promise<void> } = {}) => {
+    const s = await setup();
+    const so = await s.seedOrder(s.x.storeA, s.x.user);
+    const shipment = await s.ship(so);
+    const calls: string[] = [];
+    const courier = { cancelShipment: (awb: string): Promise<void> => { calls.push(awb); return over.cancelShipment?.(awb) ?? s.courier.cancelShipment(awb); } };
+    const consumer = new ShipmentCancelConsumer({ client: s.worker, marketId: "EG", courier, now: () => s.x.now.value });
+    const status = async (): Promise<string | undefined> => (await q(s.x, "SELECT status FROM shipments WHERE id = $1", [shipment.id]))[0]?.status as string | undefined;
+    const emitted = async (type: string): Promise<number> => (await q(s.x, "SELECT 1 FROM outbox_events WHERE event_type = $1", [type])).length;
+    return { s, so, shipment, calls, consumer, status, emitted };
+  };
+
+  it("cancels the AWB and the shipment once; a replay of the same event is a duplicate", async () => {
+    const m = await make();
+    const e = evt(m.shipment.id, m.so);
+    expect(await m.consumer.handle(e)).toBe("processed");
+    expect(await m.status()).toBe("CANCELLED");
+    expect(m.s.courier.cancelled.has(m.shipment.awb)).toBe(true);
+    expect(await m.emitted(SHIPMENT_CANCELLED_EVENT)).toBe(1);
+    expect(await m.consumer.handle(e)).toBe("duplicate");
+    expect(m.calls).toHaveLength(1);
+    // a second event for the same shipment (another delivery id) finds CANCELLED: success, no courier call, no second event
+    expect(await m.consumer.handle(evt(m.shipment.id, m.so))).toBe("processed");
+    expect(m.calls).toHaveLength(1);
+    expect(await m.emitted(SHIPMENT_CANCELLED_EVENT)).toBe(1);
+    expect(await m.emitted(SHIPMENT_CANCEL_ATTENTION_EVENT)).toBe(0);
+  });
+  it("treats courier not_found / already_cancelled as success", async () => {
+    for (const code of ["not_found", "already_cancelled"] as const) {
+      const m = await make({ cancelShipment: () => Promise.reject(new CourierCancelError(code)) });
+      expect(await m.consumer.handle(evt(m.shipment.id, m.so))).toBe("processed");
+      expect(await m.status()).toBe("CANCELLED");
+      await w?.close(); w = undefined;
+    }
+  });
+  it("retries on any other courier failure: no inbox row, no state change; the redelivery succeeds", async () => {
+    let fail = true;
+    const m = await make({ cancelShipment: () => (fail ? Promise.reject(new Error("503")) : Promise.resolve()) });
+    const e = evt(m.shipment.id, m.so);
+    await expect(m.consumer.handle(e)).rejects.toThrow("503");
+    expect(await m.status()).toBe("LABEL_READY");
+    expect(await q(m.s.x, "SELECT 1 FROM inbox_processed WHERE message_id = $1", [e.id])).toHaveLength(0);
+    fail = false;
+    expect(await m.consumer.handle(e)).toBe("processed");
+    expect(await m.status()).toBe("CANCELLED");
+  });
+  it("parks a courier not_cancellable refusal, a parcel already with the courier, an unknown shipment and a bad payload as attention events", async () => {
+    const m = await make({ cancelShipment: () => Promise.reject(new CourierCancelError("not_cancellable")) });
+    expect(await m.consumer.handle(evt(m.shipment.id, m.so))).toBe("processed");
+    expect(await m.status()).toBe("LABEL_READY");
+    await m.s.x.raw.query("UPDATE shipments SET status = 'IN_TRANSIT' WHERE id = $1", [m.shipment.id]);
+    expect(await m.consumer.handle(evt(m.shipment.id, m.so))).toBe("processed");
+    expect(await m.status()).toBe("IN_TRANSIT");
+    expect(await m.consumer.handle(evt(randomUUID(), m.so))).toBe("processed");
+    expect(await m.consumer.handle({ id: randomUUID(), payload: { nope: 1 } })).toBe("processed");
+    const reasons = (await q(m.s.x, "SELECT payload->>'reason' AS r FROM outbox_events WHERE event_type = $1 ORDER BY occurred_at, id", [SHIPMENT_CANCEL_ATTENTION_EVENT])).map((r) => r.r);
+    expect(reasons.sort()).toEqual(["already_with_courier", "courier_not_cancellable", "invalid_payload", "shipment_not_found"]);
+    expect(await m.emitted(SHIPMENT_CANCELLED_EVENT)).toBe(0);
+  });
+  it("cancels a LABEL_PENDING shipment without an AWB and parks a shipment that carries other orders", async () => {
+    const m = await make();
+    await m.s.x.raw.query("UPDATE shipments SET status = 'LABEL_PENDING', awb = NULL WHERE id = $1", [m.shipment.id]);
+    expect(await m.consumer.handle(evt(m.shipment.id, m.so))).toBe("processed");
+    expect(await m.status()).toBe("CANCELLED");
+    expect(m.calls).toHaveLength(0);
+    const other = await make();
+    await other.s.x.raw.query("UPDATE shipments SET seller_order_ids = $2 WHERE id = $1", [other.shipment.id, [other.so, randomUUID()]]);
+    expect(await other.consumer.handle(evt(other.shipment.id, other.so))).toBe("processed");
+    expect(await other.status()).toBe("LABEL_READY");
+    expect((await q(other.s.x, "SELECT payload->>'reason' AS r FROM outbox_events WHERE event_type = $1", [SHIPMENT_CANCEL_ATTENTION_EVENT]))[0]?.r).toBe("multi_order_shipment");
+  });
+  it("exposes the trigger event name", () => { expect(SHIPMENT_CANCEL_REQUIRED_EVENT).toBe("shipment.cancel_required"); });
+});
+

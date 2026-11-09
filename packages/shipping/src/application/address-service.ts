@@ -55,6 +55,16 @@ interface Row {
 }
 const COLS = "id, label, recipient_name_ct, phone_ct, address_ct, cod_eligible, is_default";
 
+/**
+ * Content version of an address row (SQL expression over the `addresses` columns): sha256 over country, the three area ids, COD eligibility,
+ * the address ciphertext and the pin ciphertext (lengths prefixed so the two byte strings cannot shift into each other). It deliberately ignores
+ * updated_at, is_default and label, so making an address the default never invalidates a quote (spurious price-changed {address}). Checkout's
+ * AddressPort (apps/api PgAddressPort) MUST use this same expression.
+ */
+export const ADDRESS_CONTENT_VERSION_SQL =
+  "encode(sha256(convert_to(concat_ws('|', country_code, governorate_area_id::text, COALESCE(city_area_id::text, ''), COALESCE(district_area_id::text, ''), cod_eligible::text, " +
+  "length(address_ct)::text, COALESCE(length(pin_ct), -1)::text), 'UTF8') || address_ct || COALESCE(pin_ct, ''::bytea)), 'hex')";
+
 export class AddressService {
   private readonly env: Env;
   private readonly validator: AddressValidator;
@@ -127,9 +137,12 @@ export class AddressService {
     return this.view(r);
   }
 
-  /** Content version of an owned address: changes on every edit or delete. Checkout binds it into the price-lock token. */
+  /**
+   * Content version of an owned address: changes on every edit of what prices or gates delivery (areas, address, pin, COD eligibility) and
+   * disappears on delete; make-default and label changes leave it alone. Checkout binds it into the price-lock token. Same SQL as PgAddressPort.
+   */
   async versionOf(userId: string, id: string): Promise<string | null> {
-    const r = await this.user(userId, async (tx) => (await tx.query<{ v: string }>("SELECT (extract(epoch from updated_at) * 1000000)::bigint::text AS v FROM addresses WHERE id = $1 AND deleted_at IS NULL", [id])).rows[0]);
+    const r = await this.user(userId, async (tx) => (await tx.query<{ v: string }>(`SELECT ${ADDRESS_CONTENT_VERSION_SQL} AS v FROM addresses WHERE id = $1 AND deleted_at IS NULL`, [id])).rows[0]);
     return r?.v ?? null;
   }
 
