@@ -2,7 +2,7 @@ import type { AddressService } from "@outlet/shipping";
 
 /** The shopper's own address book (P3, field-encrypted by the package). Every call binds the user context: a foreign id is invisible under RLS. */
 export interface AddressesServices {
-  readonly addresses: Pick<AddressService, "create" | "list" | "get" | "update" | "remove">;
+  readonly addresses: Pick<AddressService, "create" | "list" | "get" | "update" | "remove" | "setDefault">;
   /** Geo picker lookups (public configuration, no tenant key). */
   readonly geo: GeoPort;
 }

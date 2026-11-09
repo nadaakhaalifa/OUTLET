@@ -4,7 +4,7 @@ import { T0, bearer, idemKey } from "./harness.js";
 import type { TestApp } from "./harness.js";
 import { authedHeaders } from "./flows.js";
 import { makePdf, multipartBody } from "./png.js";
-import type { RouteFixture } from "./route-fixtures.js";
+import type { RouteFixture } from "./route-fixture-types.js";
 import { seedSellerOrder } from "./seller-orders-fakes.js";
 
 export const DAY = 86_400_000;
@@ -138,6 +138,18 @@ export const POST_ORDER_FIXTURES: Readonly<Record<string, RouteFixture>> = {
       const owner = await t.shopper();
       const a = await createAddress(t, owner.token);
       return { method: "PATCH", url: `/v1/eg/me/addresses/${a.id}`, headers: authedHeaders(t, (await t.shopper()).token), payload: await addressBody(t) };
+    },
+  },
+  "POST /v1/{market}/me/addresses/{address_id}/default": {
+    happy: async (t) => {
+      const s = await t.shopper();
+      const a = await createAddress(t, s.token);
+      return { req: { method: "POST", url: `/v1/eg/me/addresses/${a.id}/default`, headers: authedHeaders(t, s.token) }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const owner = await t.shopper();
+      const a = await createAddress(t, owner.token);
+      return { method: "POST", url: `/v1/eg/me/addresses/${a.id}/default`, headers: authedHeaders(t, (await t.shopper()).token) };
     },
   },
   "DELETE /v1/{market}/me/addresses/{address_id}": {

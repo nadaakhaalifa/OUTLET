@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SqlClient } from "@outlet/db";
 import { bearer, idemKey } from "./harness.js";
 import type { TestApp } from "./harness.js";
-import type { RouteFixture } from "./route-fixtures.js";
+import type { RouteFixture } from "./route-fixture-types.js";
 
 const FINANCE_REASON = { "x-reason-code": "finance_reconciliation" };
 
@@ -47,6 +47,18 @@ export const seedRun = async (raw: SqlClient): Promise<{ runId: string; itemId: 
     [itemId, runId, randomUUID()],
   );
   return { runId, itemId };
+};
+
+/** A PENDING elevation request of another staff member (so the test staff may decide it). */
+export const seedElevation = async (raw: SqlClient, o: { staffId?: string; role?: string } = {}): Promise<{ id: string; staffId: string }> => {
+  const id = randomUUID();
+  const staffId = o.staffId ?? randomUUID();
+  await raw.query(
+    `INSERT INTO elevation_requests (id, market_id, staff_id, role_code, reason, ttl_minutes, status, pending_until, created_at)
+     VALUES ($1,'EG',$2,$3,'incident response',15,'PENDING','2100-01-01','2030-01-01')`,
+    [id, staffId, o.role ?? "ops"],
+  );
+  return { id, staffId };
 };
 
 const staffHeaders = (t: TestApp, token: string, extra: Record<string, string> = {}): Record<string, string> => ({ ...bearer(token), "idempotency-key": idemKey(t), ...extra });
@@ -105,6 +117,58 @@ export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
     otherTenant: async (t) => {
       const { token } = await t.admin(["finance"]);
       return { method: "GET", url: `/v1/eg/admin/reconciliation/runs/${MISSING}/items`, headers: { ...bearer(token), ...FINANCE_REASON } };
+    },
+  },
+  "GET /v1/{market}/admin/audit-log": {
+    happy: async (t) => {
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/audit-log?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/audit-log/verify": {
+    happy: async (t) => {
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/audit-log/verify", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/elevations": {
+    happy: async (t) => {
+      await seedElevation(t.raw);
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/elevations?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/elevations": {
+    happy: async (t) => {
+      const { token } = await t.admin(["support"]);
+      return { req: { method: "POST", url: "/v1/eg/admin/elevations", headers: staffHeaders(t, token), payload: { role: "ops", reason: "incident response", ttl_minutes: 15 } }, status: 201 };
+    },
+  },
+  "POST /v1/{market}/admin/elevations/{elevation_id}/decision": {
+    happy: async (t) => {
+      const e = await seedElevation(t.raw);
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/elevations/${e.id}/decision`, headers: staffHeaders(t, token), payload: { decision: "approve" } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["security"]);
+      return { method: "POST", url: `/v1/eg/admin/elevations/${MISSING}/decision`, headers: staffHeaders(t, token), payload: { decision: "approve" } };
+    },
+  },
+  "GET /v1/{market}/admin/feature-flags": {
+    happy: async (t) => {
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/feature-flags?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/feature-flags/{flag_key}/kill-switch": {
+    happy: async (t) => {
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "POST", url: "/v1/eg/admin/feature-flags/games.enabled/kill-switch", headers: staffHeaders(t, token), payload: { enabled: false, reason: "incident drill" } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const { token } = await t.admin(["finance"]);
+      return { method: "POST", url: "/v1/eg/admin/feature-flags/not.a.switch/kill-switch", headers: staffHeaders(t, token), payload: { enabled: false, reason: "incident drill" } };
     },
   },
 };

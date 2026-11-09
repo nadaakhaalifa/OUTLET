@@ -158,7 +158,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: audit.read
+        action: approval.read
         principal: staff
         tenant: admin
       x-rate-limit:
@@ -308,7 +308,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: audit.read
+        action: approval.decide
         principal: staff
         tenant: admin
       x-rate-limit:
@@ -337,6 +337,1143 @@ paths:
                   maxLength: 2000
               required:
                 - decision
+                - reason
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/admin/audit-log:
+    get:
+      operationId: adminListAuditLog
+      summary: Audit log (diffs redacted)
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: target_type
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        actor_type:
+                          type: string
+                          maxLength: 500
+                        actor_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        action:
+                          type: string
+                          maxLength: 500
+                        target_type:
+                          type: string
+                          maxLength: 500
+                        target_id:
+                          type: string
+                          maxLength: 500
+                        reason_code:
+                          anyOf:
+                            - type: string
+                              maxLength: 500
+                            - type: "null"
+                        request_id:
+                          type: string
+                          maxLength: 500
+                        occurred_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - id
+                        - actor_type
+                        - actor_id
+                        - action
+                        - target_type
+                        - target_id
+                        - reason_code
+                        - request_id
+                        - occurred_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: audit.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+      x-paginated: keyset
+  /v1/{market}/admin/audit-log/verify:
+    get:
+      operationId: adminVerifyAuditLog
+      summary: Re-hash the market's audit chain (a broken chain is ok:false with the first bad seq, not an error)
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: from_seq
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  checked:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  head_seq:
+                    anyOf:
+                      - type: integer
+                        minimum: 1
+                        maximum: 9007199254740991
+                      - type: "null"
+                  broken_seq:
+                    anyOf:
+                      - type: integer
+                        minimum: 1
+                        maximum: 9007199254740991
+                      - type: "null"
+                  reason:
+                    anyOf:
+                      - type: string
+                        enum:
+                          - hash
+                          - link
+                          - gap
+                          - market
+                      - type: "null"
+                required:
+                  - ok
+                  - checked
+                  - head_seq
+                  - broken_seq
+                  - reason
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: audit.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_verify
+          key: user
+          limit: 6
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+  /v1/{market}/admin/elevations:
+    get:
+      operationId: adminListElevations
+      summary: Just-in-time elevations (own; all of the market for approvers)
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - APPROVED
+              - REJECTED
+              - EXPIRED
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        staff_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        role:
+                          type: string
+                          enum:
+                            - ops
+                            - finance
+                            - trust_safety
+                            - support
+                            - marketing
+                            - dpo
+                            - security
+                            - super_admin
+                        reason:
+                          type: string
+                          maxLength: 500
+                        ttl_minutes:
+                          type: integer
+                          minimum: 1
+                          maximum: 60
+                        status:
+                          type: string
+                          enum:
+                            - PENDING
+                            - APPROVED
+                            - REJECTED
+                            - EXPIRED
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        pending_until:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        decided_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        starts_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        expires_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        approved_by:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        approval_request_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                      required:
+                        - id
+                        - staff_id
+                        - role
+                        - reason
+                        - ttl_minutes
+                        - status
+                        - created_at
+                        - pending_until
+                        - decided_at
+                        - starts_at
+                        - expires_at
+                        - approved_by
+                        - approval_request_id
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: elevation.request
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+      x-paginated: keyset
+    post:
+      operationId: adminRequestElevation
+      summary: Ask for a role for 1 to 60 minutes (super_admin also files its dual-approval request)
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  staff_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  role:
+                    type: string
+                    enum:
+                      - ops
+                      - finance
+                      - trust_safety
+                      - support
+                      - marketing
+                      - dpo
+                      - security
+                      - super_admin
+                  reason:
+                    type: string
+                    maxLength: 500
+                  ttl_minutes:
+                    type: integer
+                    minimum: 1
+                    maximum: 60
+                  status:
+                    type: string
+                    enum:
+                      - PENDING
+                      - APPROVED
+                      - REJECTED
+                      - EXPIRED
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  pending_until:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  decided_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  starts_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  expires_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  approved_by:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  approval_request_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                required:
+                  - id
+                  - staff_id
+                  - role
+                  - reason
+                  - ttl_minutes
+                  - status
+                  - created_at
+                  - pending_until
+                  - decided_at
+                  - starts_at
+                  - expires_at
+                  - approved_by
+                  - approval_request_id
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: elevation.request
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                    - ops
+                    - finance
+                    - trust_safety
+                    - support
+                    - marketing
+                    - dpo
+                    - security
+                    - super_admin
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 500
+                ttl_minutes:
+                  type: integer
+                  minimum: 1
+                  maximum: 60
+              required:
+                - role
+                - reason
+                - ttl_minutes
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/admin/elevations/{elevation_id}/decision:
+    post:
+      operationId: adminDecideElevation
+      summary: Approve or reject a pending elevation (never your own; super_admin needs two approvers through its approval request)
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: elevation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  staff_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  role:
+                    type: string
+                    enum:
+                      - ops
+                      - finance
+                      - trust_safety
+                      - support
+                      - marketing
+                      - dpo
+                      - security
+                      - super_admin
+                  reason:
+                    type: string
+                    maxLength: 500
+                  ttl_minutes:
+                    type: integer
+                    minimum: 1
+                    maximum: 60
+                  status:
+                    type: string
+                    enum:
+                      - PENDING
+                      - APPROVED
+                      - REJECTED
+                      - EXPIRED
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  pending_until:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  decided_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  starts_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  expires_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  approved_by:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  approval_request_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                required:
+                  - id
+                  - staff_id
+                  - role
+                  - reason
+                  - ttl_minutes
+                  - status
+                  - created_at
+                  - pending_until
+                  - decided_at
+                  - starts_at
+                  - expires_at
+                  - approved_by
+                  - approval_request_id
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: elevation.approve
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  enum:
+                    - approve
+                    - reject
+              required:
+                - decision
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/admin/feature-flags:
+    get:
+      operationId: adminListFeatureFlags
+      summary: Feature flags and kill switches
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                          maxLength: 500
+                        kind:
+                          type: string
+                          enum:
+                            - release
+                            - experiment
+                            - kill_switch
+                            - ops
+                        description:
+                          type: string
+                          maxLength: 500
+                        fail_mode:
+                          type: string
+                          enum:
+                            - closed
+                            - open
+                        rules:
+                          maxItems: 50
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              market_id:
+                                anyOf:
+                                  - type: string
+                                    pattern: ^[A-Z]{2}(-[A-Z0-9]{2,3})?$
+                                  - type: "null"
+                              enabled:
+                                type: boolean
+                              variant:
+                                type: object
+                                propertyNames:
+                                  type: string
+                                additionalProperties: {}
+                              version:
+                                type: integer
+                                minimum: 1
+                                maximum: 9007199254740991
+                            required:
+                              - id
+                              - market_id
+                              - enabled
+                              - variant
+                              - version
+                            additionalProperties: false
+                      required:
+                        - key
+                        - kind
+                        - description
+                        - fail_mode
+                        - rules
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: kill_switch.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+      x-paginated: keyset
+  /v1/{market}/admin/feature-flags/{flag_key}/kill-switch:
+    post:
+      operationId: adminToggleKillSwitch
+      summary: Toggle a kill switch
+      tags:
+        - Admin RBAC
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: flag_key
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z0-9_.-]{3,64}$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    maxLength: 500
+                  kind:
+                    type: string
+                    enum:
+                      - release
+                      - experiment
+                      - kill_switch
+                      - ops
+                  description:
+                    type: string
+                    maxLength: 500
+                  fail_mode:
+                    type: string
+                    enum:
+                      - closed
+                      - open
+                  rules:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        market_id:
+                          anyOf:
+                            - type: string
+                              pattern: ^[A-Z]{2}(-[A-Z0-9]{2,3})?$
+                            - type: "null"
+                        enabled:
+                          type: boolean
+                        variant:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        version:
+                          type: integer
+                          minimum: 1
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - market_id
+                        - enabled
+                        - variant
+                        - version
+                      additionalProperties: false
+                required:
+                  - key
+                  - kind
+                  - description
+                  - fail_mode
+                  - rules
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: kill_switch.engage
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 2000
+              required:
+                - enabled
                 - reason
               additionalProperties: false
       x-idempotency:
@@ -4039,11 +5176,12 @@ paths:
                   type: string
                   maxLength: 500
                 voucher_codes:
-                  maxItems: 50
+                  maxItems: 5
                   type: array
                   items:
                     type: string
-                    maxLength: 500
+                    minLength: 1
+                    maxLength: 32
                 store_credit:
                   type: object
                   properties:
@@ -4532,11 +5670,12 @@ paths:
                   type: string
                   maxLength: 500
                 voucher_codes:
-                  maxItems: 50
+                  maxItems: 5
                   type: array
                   items:
                     type: string
-                    maxLength: 500
+                    minLength: 1
+                    maxLength: 32
                 store_credit:
                   type: object
                   properties:
@@ -5767,6 +6906,212 @@ paths:
                 - recipient_name
                 - phone_e164
                 - fields
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/me/addresses/{address_id}/default:
+    post:
+      operationId: makeMyAddressDefault
+      summary: Make one of my addresses the default (changes only the flag; the map pin and every other field stay as saved)
+      tags:
+        - Me
+      security:
+        - shopperJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: address_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  country_code:
+                    type: string
+                    const: EG
+                  label:
+                    anyOf:
+                      - type: string
+                        maxLength: 500
+                      - type: "null"
+                  recipient_name:
+                    type: string
+                    maxLength: 500
+                  phone_e164:
+                    type: string
+                    maxLength: 20
+                  fields:
+                    type: object
+                    properties:
+                      governorate_id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      district_id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      street:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                      building:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                      floor:
+                        anyOf:
+                          - type: string
+                            minLength: 1
+                            maxLength: 500
+                          - type: "null"
+                      apartment:
+                        anyOf:
+                          - type: string
+                            minLength: 1
+                            maxLength: 500
+                          - type: "null"
+                      landmark:
+                        type: string
+                        minLength: 1
+                        maxLength: 500
+                    required:
+                      - governorate_id
+                      - district_id
+                      - street
+                      - building
+                      - landmark
+                    additionalProperties: false
+                  pin:
+                    anyOf:
+                      - type: object
+                        properties:
+                          lat_e7:
+                            type: integer
+                            minimum: -900000000
+                            maximum: 900000000
+                          lng_e7:
+                            type: integer
+                            minimum: -1800000000
+                            maximum: 1800000000
+                        required:
+                          - lat_e7
+                          - lng_e7
+                        additionalProperties: false
+                      - type: "null"
+                  geo_area_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  is_default:
+                    type: boolean
+                  cod_eligible:
+                    type: boolean
+                  validated_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - id
+                  - country_code
+                  - label
+                  - recipient_name
+                  - phone_e164
+                  - fields
+                  - pin
+                  - geo_area_id
+                  - is_default
+                  - cod_eligible
+                  - validated_at
+                  - created_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: address.write
+        principal: shopper
+        tenant: user
+      x-rate-limit:
+        - budget: shopper_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 12
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
               additionalProperties: false
       x-idempotency:
         header: required
@@ -7090,6 +8435,14 @@ paths:
                   enum:
                     - original
                     - store_credit
+                seller_order_ids:
+                  minItems: 1
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
               required:
                 - reason_code
               additionalProperties: false
@@ -10429,7 +11782,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: session.read
+        action: seller.onboard
         principal: shopper
         tenant: user
       x-rate-limit:
@@ -10519,7 +11872,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: session.read
+        action: seller.onboard
         principal: shopper
         tenant: user
       x-rate-limit:
@@ -10647,7 +12000,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: session.read
+        action: seller.onboard
         principal: shopper
         tenant: user
       x-rate-limit:
@@ -10770,7 +12123,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: session.read
+        action: seller.onboard
         principal: shopper
         tenant: user
       x-rate-limit:
@@ -10943,7 +12296,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: session.read
+        action: seller.onboard
         principal: shopper
         tenant: user
       x-rate-limit:

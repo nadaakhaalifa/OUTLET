@@ -68,8 +68,8 @@ export class TrackingController {
   })
   async webhook(@Ctx() s: RequestState, @Req() req: ApiRequest, @Params() p: CourierParams): Promise<CourierWebhookAck> {
     const svc = this.deps.tracking(marketOf(s));
-    if (svc.courierCode !== p.courier_code) throw Problems.notFound();
-    if (!this.deps.webhookIps.allowed(courierIpKey(p.courier_code), req.ip)) throw Problems.forbidden("webhook-source-denied");
+    // unknown courier and a failed source check answer the same 404, so configured couriers cannot be enumerated
+    if (svc.courierCode !== p.courier_code || !this.deps.webhookIps.allowed(courierIpKey(p.courier_code), req.ip)) throw Problems.notFound();
     const raw = s.rawBody;
     if (raw === undefined) throw Problems.badRequest("malformed-request");
     const headers: Record<string, string> = {};

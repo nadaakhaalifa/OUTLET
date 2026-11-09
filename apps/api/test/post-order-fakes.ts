@@ -22,10 +22,12 @@ import { Problems } from "../src/platform/problem.js";
 export class RecordingCancellation implements OrderCancellationPort {
   readonly calls: { userId: string; orderGroupId: string; reasonCode: string; refundPreference: string | undefined }[] = [];
   unconfigured = true;
-  cancel(i: { userId: string; orderGroupId: string; reasonCode: string; refundPreference: "original" | "store_credit" | undefined }): Promise<void> {
+  /** When set, the call is forwarded to the real OrderCancellation (production composition) after being recorded. */
+  delegate: OrderCancellationPort | undefined;
+  cancel(i: { userId: string; orderGroupId: string; reasonCode: string; refundPreference: "original" | "store_credit" | undefined; sellerOrderIds?: readonly string[] | undefined }): Promise<void> {
     if (this.unconfigured) return Promise.reject(Problems.unavailable("order-cancellation-unconfigured"));
     this.calls.push(i);
-    return Promise.resolve();
+    return this.delegate === undefined ? Promise.resolve() : this.delegate.cancel(i);
   }
 }
 
@@ -53,7 +55,7 @@ export const buildPostOrder = (i: {
   const fakes: PostOrderFakes = { policy: new FakePolicy(), evidence: new FakeEvidence(), restock: new FakeRestock(), provider: new FakeProvider(), kill: new FakeKill(), cancellation: new RecordingCancellation(), kyc: new FakeKycCheck(), courier: i.courier, delivered: [] };
   const returnsDeps = {
     app: i.app, worker: i.worker, marketId: i.marketId, policy: fakes.policy, evidence: fakes.evidence, restock: fakes.restock, provider: fakes.provider, kill: fakes.kill, now: i.now,
-    admin: createAdminAccess({ db: i.app, audit: { append: () => Promise.resolve() }, clock: i.now, thresholdMinor: 500_000n }),
+    admin: createAdminAccess({ db: i.app, audit: { appendIn: () => Promise.resolve() }, clock: i.now, thresholdMinor: 500_000n }),
   };
   const sellerDeps = { app: i.app, auth: i.auth, worker: i.worker, marketId: i.marketId, cipher: i.cipher, hasher: i.hasher, now: i.now };
   const orders = { markDelivered: (id: string, at: Date): Promise<unknown> => { fakes.delivered.push(id); return i.closer.markDelivered(id, at); } };

@@ -17,7 +17,7 @@ import type { SellerOnboardingServices } from "./services.js";
 
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 /** Any authenticated login acts on its own application; the policy has no seller.onboard action yet, so the neutral own-account action is used (see the module README). */
-const OWN_ACCOUNT = "session.read";
+const OWN_ACCOUNT = "seller.onboard";
 const STRONG_AMR = new Set(["passkey", "hwk"]);
 
 interface Own { readonly userId: string; readonly marketId: string; readonly svc: SellerOnboardingServices }
@@ -93,8 +93,9 @@ export class SellerOnboardingController {
     const form = DocumentUploadForm.safeParse({ doc_type: field("doc_type"), ...(field("expires_on") === undefined ? {} : { expires_on: field("expires_on") }) });
     if (!form.success) throw Problems.validation([{ path: "/body/doc_type", code: "invalid_value" }]);
     const bytes = await part.toBuffer();
-    // Platform-owned document: ingested by a system principal bound to the applicant (media.created_by = the applicant, which addDocument re-checks).
-    const actor: Principal = { kind: "system", userId: o.userId, marketId: o.marketId, roles: [], scopes: ["media.platform_write"] };
+    // Platform-owned document uploaded as the applicant (shopper principal, policy action seller.onboard on their own application;
+    // media.created_by = the applicant, which addDocument re-checks).
+    const actor: Principal = { kind: "shopper", userId: o.userId, marketId: o.marketId, roles: [], scopes: [] };
     const asset = await this.deps.catalog(o.marketId).media.ingest({ bytes, declaredMime: part.mimetype, kind: "document", actor });
     if (asset.status !== "ready") throw Problems.unprocessable("media-rejected", [{ path: "/body/file", code: "media_rejected" }]);
     const doc = await o.svc.onboarding.addDocument(o.userId, sellerId, { kind: form.data.doc_type, mediaAssetId: asset.id, ...(form.data.expires_on === undefined ? {} : { expiresOn: form.data.expires_on }) });

@@ -95,5 +95,5 @@ export type InspectionInput = z.infer<typeof InspectionInput>;
 export const EmptyBody = z.strictObject({});
 export type EmptyBody = z.infer<typeof EmptyBody>;
 
-export const CancelInput = z.strictObject({ reason_code: z.enum(["changed_mind", "ordered_by_mistake", "delivery_too_slow", "other"]), refund_preference: z.enum(["original", "store_credit"]).optional() });
+export const CancelInput = z.strictObject({ reason_code: z.enum(["changed_mind", "ordered_by_mistake", "delivery_too_slow", "other"]), refund_preference: z.enum(["original", "store_credit"]).optional(), seller_order_ids: z.array(z.uuid()).min(1).max(50).optional() });
 export type CancelInput = z.infer<typeof CancelInput>;

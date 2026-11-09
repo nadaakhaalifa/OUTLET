@@ -11,7 +11,7 @@ const QuoteFields = {
   payment_method: METHOD,
   bnpl_provider: z.string().max(500).optional(),
   /** Resolved server-side; codes that do not apply come back in `invalid_voucher_codes`, never silently dropped. */
-  voucher_codes: z.array(z.string().max(500)).max(50).optional(),
+  voucher_codes: z.array(z.string().trim().min(1).max(32)).max(5).optional(),
   store_credit: MoneyDto.optional(),
 };
 

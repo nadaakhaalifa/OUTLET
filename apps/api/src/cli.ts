@@ -3,7 +3,8 @@ import { createPrivateKey, createPublicKey, randomBytes } from "node:crypto";
 import { createAdminAccess } from "@outlet/admin-access";
 import { AesGcmFieldCipher, OtpService, PgRateLimiter, SessionService, createAuthDeps, registerDevice } from "@outlet/auth-core";
 import { CartService, pgInventoryAvailability } from "@outlet/cart";
-import { CheckoutService, OrderCloseJob, PROMOTIONS_KILL_SWITCH, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
+import { CheckoutService, OrderCancellation, OrderCloseJob, PROMOTIONS_KILL_SWITCH, PgStoreCredit, WebhookProcessor, makePromotionsPort } from "@outlet/checkout";
+import { PgAuditStore } from "@outlet/audit-log";
 import { brandClient } from "@outlet/db";
 import { InventoryService, ReservationService } from "@outlet/inventory";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
@@ -23,7 +24,7 @@ import { AddressService } from "@outlet/shipping";
 import { Redis } from "ioredis";
 import pg from "pg";
 import { createApp } from "./app.js";
-import { postOrderServices } from "./post-order-production.js";
+import { PgAddressPort, postOrderServices } from "./post-order-production.js";
 import type { PostOrderServices } from "./post-order-production.js";
 import { parseEnv, parseWebhookIps, trustProxyList } from "./config.js";
 import { PgChallengeStore, PgPasskeyStore, SessionReader, UnconfiguredDeviceAttestation, UnconfiguredFieldCipher, UnconfiguredOidc, UnconfiguredPasskeys, UnconfiguredSms, WebAuthnPasskeys, pgPhoneLabel } from "./modules/auth/index.js";
@@ -31,13 +32,13 @@ import type { AuthServices } from "./modules/auth/index.js";
 import { noSuggestions } from "./modules/cart/index.js";
 import type { CartServices } from "./modules/cart/index.js";
 import {
-  AesRawBodyCipher, FlagKillSwitches, HmacQuoteTokenPort, OrderGroupReader, PlainPrices, StandardTaxCategories, UnconfiguredAddress, UnconfiguredBilling, UnconfiguredCommission,
-  UnconfiguredPaymentProvider, UnconfiguredRefunds, UnconfiguredShipping, UnconfiguredSubMerchants, denyAllWebhookIps, productionCheckoutConfig, staticWebhookIps, unconfiguredCodConfirmation,
+  AesRawBodyCipher, FlagKillSwitches, HmacQuoteTokenPort, OrderGroupReader, PlainPrices, StandardTaxCategories, UnconfiguredBilling, UnconfiguredCommission,
+  PgCancellationAudit, UnconfiguredPaymentProvider, UnconfiguredRefunds, UnconfiguredShipping, UnconfiguredSubMerchants, denyAllWebhookIps, productionCheckoutConfig, staticWebhookIps, unconfiguredCodConfirmation,
 } from "./modules/checkout/index.js";
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
-import { PgApprovalReader, PgKycAdmin, PgReconciliationReader, UnconfiguredAuditPort, unconfiguredAdminServices } from "./modules/admin/index.js";
+import { FlagAdmin, PgApprovalReader, PgAuditReader, PgElevationReader, PgKycAdmin, PgReconciliationReader, unconfiguredAdminServices } from "./modules/admin/index.js";
 import type { AdminServices } from "./modules/admin/index.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SellerInventoryService } from "./modules/seller-inventory/index.js";
@@ -125,7 +126,7 @@ for (const m of listMarkets()) {
     reservations: new ReservationService({ client: appClient, marketId }),
     provider,
     shipping: new UnconfiguredShipping(),
-    address: new UnconfiguredAddress(),
+    address: new PgAddressPort(appClient, marketId),
     commission: new UnconfiguredCommission(),
     taxCategories: new StandardTaxCategories(),
     taxRates: InMemoryTaxRateProvider.withMarketDefaults([m.id]),
@@ -160,12 +161,13 @@ for (const m of listMarkets()) {
     }),
   });
   sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
-  // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. The audit trail has no
-  // Postgres store yet (UnconfiguredAuditPort), so audited staff writes fail closed; dual approval is required at every amount (threshold 0) until finance sets one.
+  // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. Audited staff writes append to the Postgres hash chain (outlet_app, same transaction); dual approval is required at every amount (threshold 0) until finance sets one.
+  const auditPort = new PgAuditStore(appClient);
   admins.set(marketId, workerClient === undefined
     ? unconfiguredAdminServices
     : {
-        access: createAdminAccess({ db: appClient, audit: new UnconfiguredAuditPort(), clock: () => new Date(), thresholdMinor: 0n }),
+        access: createAdminAccess({ db: appClient, audit: auditPort, clock: () => new Date(), thresholdMinor: 0n }),
+        ops: { flags: new FlagAdmin(appClient, auditPort), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient) },
         approvals: new PgApprovalReader(appClient),
         kyc: new PgKycAdmin(workerClient, new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck())),
         reconciliation: new PgReconciliationReader(workerClient),
@@ -173,6 +175,7 @@ for (const m of listMarkets()) {
   // Addresses, returns, tracking and the seller application. Courier, return evidence, cancellation saga and KYC provider stay unconfigured and fail closed (ADR-0029).
   postOrder.set(marketId, postOrderServices({
     marketId, appClient, authClient: brandClient<"outlet_auth">(authClient), workerClient, cipher: authDeps.cipher, hasher: authDeps.hasher,
+    cancellation: provider instanceof UnconfiguredPaymentProvider ? undefined : new OrderCancellation({ client: appClient, marketId, reservations: ports.reservations, provider, credit: ports.credit, audit: new PgCancellationAudit(appClient), vouchers: ports.promotions }),
     delivery: workerClient === undefined ? undefined : new OrderCloseJob({ ...ports, client: workerClient, cipher: new AesRawBodyCipher(rawKey) }),
   }));
   const deps: CatalogDeps = { client: appClient, marketId };

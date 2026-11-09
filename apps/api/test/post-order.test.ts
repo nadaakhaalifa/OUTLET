@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { brandClient } from "@outlet/db";
+import { PgAddressPort } from "../src/post-order-production.js";
 import { T0, bearer } from "./harness.js";
 import { createTestApp } from "./harness.js";
 import type { TestApp } from "./harness.js";
@@ -21,6 +23,23 @@ const json = (body: string): Record<string, unknown> => JSON.parse(body) as Reco
 const at = (offsetMs = 0): string => new Date(T0 + offsetMs).toISOString();
 
 describe("addresses", () => {
+  it("PgAddressPort resolves the owner's address with a content version that changes on edit, and nothing for anyone else", async () => {
+    const s = await t.shopper();
+    const other = await t.shopper();
+    const a = await createAddress(t, s.token);
+    const port = new PgAddressPort(brandClient<"outlet_app">(t.raw), "EG");
+    const g = await geoIds(t);
+    const r1 = await port.resolve(s.userId, a.id);
+    expect(r1).toMatchObject({ geoAreaId: g.city, countryCode: "EG", codEligible: true });
+    expect(r1?.version).toMatch(/^\d+$/);
+    expect(await port.resolve(s.userId, a.id)).toEqual(r1);
+    expect(await port.resolve(other.userId, a.id)).toBeNull();
+    expect(await port.resolve(s.userId, "not-a-uuid")).toBeNull();
+    // the test clock is frozen, so an edit is simulated by moving updated_at
+    await t.raw.query("UPDATE addresses SET updated_at = updated_at + interval '1 second' WHERE id = $1", [a.id]);
+    expect((await port.resolve(s.userId, a.id))?.version).not.toBe(r1?.version);
+  });
+
   it("round-trips an address in contract shape (ids, e7 pin) and soft-deletes it", async () => {
     const s = await t.shopper();
     const created = await t.inject({ method: "POST", url: "/v1/eg/me/addresses", headers: authedHeaders(t, s.token), payload: await addressBody(t, { label: "البيت" }) });
@@ -47,6 +66,21 @@ describe("addresses", () => {
     expect(json(bad.body).code).toBe("address-area-invalid");
     const extra = await t.inject({ method: "POST", url: "/v1/eg/me/addresses", headers: authedHeaders(t, s.token), payload: { ...body, is_admin: true } });
     expect(extra.statusCode).toBe(400);
+  });
+
+  it("make-default flips only the flag: the map pin and fields survive; an unparseable cursor is 400 cursor-invalid", async () => {
+    const s = await t.shopper();
+    const first = await createAddress(t, s.token);
+    const second = await createAddress(t, s.token);
+    const r = await t.inject({ method: "POST", url: `/v1/eg/me/addresses/${second.id}/default`, headers: authedHeaders(t, s.token) });
+    expect(r.statusCode).toBe(200);
+    const a = json(r.body) as { id: string; is_default: boolean; pin: { lat_e7: number }; fields: { landmark: string } };
+    expect([a.id, a.is_default, a.pin.lat_e7]).toEqual([second.id, true, 300_500_000]);
+    const list = json((await t.inject({ method: "GET", url: "/v1/eg/me/addresses", headers: bearer(s.token) })).body) as { items: { id: string; is_default: boolean }[] };
+    expect(list.items.filter((i) => i.is_default).map((i) => i.id)).toEqual([second.id]);
+    expect(list.items.map((i) => i.id)).toContain(first.id);
+    const bad = await t.inject({ method: "GET", url: "/v1/eg/me/addresses?cursor=bm9wZQ", headers: bearer(s.token) });
+    expect([bad.statusCode, json(bad.body).code]).toEqual([400, "cursor-invalid"]);
   });
 
   it("pages with an opaque cursor", async () => {
@@ -253,11 +287,10 @@ describe("tracking and the courier webhook", () => {
     expect(tracked.shipments[0]?.status).toBe("DELIVERED");
   });
 
-  it("an unknown courier code is 404; a source address outside the allow-list is 403; an oversized body is 413; credentials are not needed", async () => {
+  it("an unknown courier code is 404; a source address outside the allow-list is the same 404 (couriers are not enumerable); an oversized body is 413; credentials are not needed", async () => {
     expect((await t.inject({ method: "POST", url: "/v1/eg/webhooks/couriers/other", headers: { "content-type": "application/json" }, payload: "{}" })).statusCode).toBe(404);
     const denied = await t.inject({ ...courierEvents([]), remoteAddress: "10.9.9.9" });
-    expect(denied.statusCode).toBe(403);
-    expect(json(denied.body).code).toBe("webhook-source-denied");
+    expect(denied.statusCode).toBe(404);
     const big = await t.inject({ method: "POST", url: "/v1/eg/webhooks/couriers/fake", headers: { "content-type": "application/json", "x-signature": "valid" }, payload: JSON.stringify({ events: [], pad: "x".repeat(300_000) }) });
     expect(big.statusCode).toBe(413);
   });
@@ -332,6 +365,10 @@ describe("seller application", () => {
     const token = await t.mint({ userId: stranger.userId, amr: ["otp", "passkey"] });
     expect((await t.inject({ method: "GET", url: "/v1/eg/seller/onboarding", headers: bearer(token) })).statusCode).toBe(404);
     expect((await t.inject({ method: "PUT", url: "/v1/eg/seller/onboarding/bank-account", headers: authedHeaders(t, token), payload: { iban: VALID_IBAN, account_name: "x" } })).statusCode).toBe(404);
+    const before = Number((await t.raw.query<{ n: string }>("SELECT count(*)::text n FROM media_assets WHERE created_by = $1", [stranger.userId])).rows[0]?.n);
+    const form = multipartBody({ doc_type: "tax_card" }, { name: "tax.pdf", type: "application/pdf", data: makePdf() });
+    expect((await t.inject({ method: "POST", url: "/v1/eg/seller/onboarding/documents", headers: { ...authedHeaders(t, token), "content-type": form.contentType }, payload: form.payload })).statusCode).toBe(404);
+    expect(Number((await t.raw.query<{ n: string }>("SELECT count(*)::text n FROM media_assets WHERE created_by = $1", [stranger.userId])).rows[0]?.n)).toBe(before);
   });
 });
 

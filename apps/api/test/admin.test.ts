@@ -163,7 +163,9 @@ describe("reconciliation reads need a reason code and are audited", () => {
     expect(body.items[0]).toMatchObject({ id: run.itemId, status: "MISSING_SOURCE", age_days: 2, actual: null, expected: { amount_minor: "12500", currency: "EGP" } });
     const entries = t.adminAudit.entries.slice(before);
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ action: "pii.viewed", actorId: userId, targetType: "reconciliation_run", targetId: run.runId, diff: { after: { action: "ledger.read", reasonCode: "finance_reconciliation" } } });
+    expect(entries[0]).toMatchObject({ action: "pii.viewed", actorId: userId, targetType: "reconciliation_run", targetId: run.runId, diff: { after: { piiAccessId: expect.any(String) as unknown } } });
+    const logged = await t.raw.query<{ action: string; reason_code: string; target_id: string }>("SELECT action, reason_code, target_id FROM pii_access_log WHERE actor_id = $1", [userId]);
+    expect(logged.rows).toEqual([{ action: "ledger.read", reason_code: "finance_reconciliation", target_id: run.runId }]);
   });
 
   it("lists runs with the contract source names", async () => {
@@ -177,6 +179,6 @@ describe("reconciliation reads need a reason code and are audited", () => {
 
 describe("coverage", () => {
   it("has a fixture for every admin route (routes.test.ts runs the matrix)", () => {
-    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(6);
+    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(13);
   });
 });

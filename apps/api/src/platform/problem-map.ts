@@ -195,6 +195,8 @@ const returnsProblem = (e: ReturnsError): ProblemError => {
     case "seller_net_negative":
     case "bnpl_provider_only":
       return Problems.conflict(e.code.replaceAll("_", "-"));
+    case "request_bnpl_provider_only":
+      return Problems.unprocessable("return-bnpl-provider-only");
     case "refunds_disabled":
       return Problems.unavailable("refunds-disabled");
     case "commission_base_mismatch":
@@ -214,6 +216,8 @@ const sellerAccountsProblem = (e: SellerAccountsError): ProblemError => {
       return Problems.forbidden();
     case "passkey_required":
       return Problems.forbidden("passkey-required");
+    case "onboarding_exists":
+      return new ProblemError(409, "onboarding-exists", "Conflict", { detail: `seller_id=${e.details[0] ?? ""} kyc_case_id=${e.details[1] ?? ""}` });
     case "conflict":
     case "invalid_transition":
     case "last_owner":

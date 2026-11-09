@@ -10,8 +10,7 @@ import { Problems } from "../../platform/problem.js";
 import { RATE_BUDGETS } from "../../platform/rate-limit/budgets.js";
 import { activeStore, self } from "../../platform/resolvers.js";
 import { Body, Ctx, Params, Query } from "../../platform/validation.js";
-import { groupWire } from "../checkout/checkout.controller.js";
-import { OrderGroup } from "../checkout/dto.js";
+import { OrderGroup, groupWire } from "../checkout/index.js";
 import {
   CancelInput, Dispute, EmptyBody, DisputeInput, InspectionInput, OrderGroupIdParams, REASON_TO_PACKAGE, ReturnIdParams, ReturnRequest, ReturnRequestInput, ReturnRequestPage, ReturnsQuery, SellerOrderIdParams,
 } from "./dto.js";
@@ -158,9 +157,12 @@ export class ReturnsController {
     const orders = this.deps.checkout(u.marketId).orders;
     const g = await orders.detail(u.userId, p.order_group_id);
     if (g === null) throw Problems.notFound();
-    if (g.sellerOrders.some((o) => !CANCELLABLE.has(o.status) && !SETTLED_UNSHIPPED.has(o.status))) throw Problems.conflict("cancel-after-shipping");
-    if (!CANCELLABLE_GROUP.has(g.status) || !g.sellerOrders.some((o) => CANCELLABLE.has(o.status))) throw Problems.conflict("order-not-cancellable");
-    await u.svc.cancellation.cancel({ userId: u.userId, orderGroupId: p.order_group_id, reasonCode: b.reason_code, refundPreference: b.refund_preference });
+    // Partial cancel (seller_order_ids): the service validates the chosen stores; the whole-group guards below apply only to a full cancel.
+    if (b.seller_order_ids === undefined) {
+      if (g.sellerOrders.some((o) => !CANCELLABLE.has(o.status) && !SETTLED_UNSHIPPED.has(o.status))) throw Problems.conflict("cancel-after-shipping");
+      if (!CANCELLABLE_GROUP.has(g.status) || !g.sellerOrders.some((o) => CANCELLABLE.has(o.status))) throw Problems.conflict("order-not-cancellable");
+    }
+    await u.svc.cancellation.cancel({ userId: u.userId, orderGroupId: p.order_group_id, reasonCode: b.reason_code, refundPreference: b.refund_preference, ...(b.seller_order_ids === undefined ? {} : { sellerOrderIds: b.seller_order_ids }) });
     const after = await orders.detail(u.userId, p.order_group_id);
     if (after === null) throw Problems.notFound();
     return groupWire(after);

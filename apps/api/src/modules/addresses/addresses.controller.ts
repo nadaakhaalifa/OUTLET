@@ -39,7 +39,13 @@ export class AddressesController {
   async list(@Ctx() s: RequestState, @Query() q: AddressesQuery): Promise<AddressPage> {
     const o = this.own(s);
     const all = await o.svc.addresses.list(o.userId);
-    const from = q.cursor === undefined ? 0 : all.findIndex((a) => a.id === Buffer.from(q.cursor ?? "", "base64url").toString("utf8")) + 1;
+    let from = 0;
+    if (q.cursor !== undefined) {
+      const at = all.findIndex((a) => a.id === Buffer.from(q.cursor ?? "", "base64url").toString("utf8"));
+      // an unparseable or stale cursor is a client error, never "start over" (that would loop a pager)
+      if (at < 0) throw Problems.badRequest("cursor-invalid");
+      from = at + 1;
+    }
     const slice = all.slice(from, from + q.limit);
     const last = slice[slice.length - 1];
     const more = from + q.limit < all.length && last !== undefined;
@@ -65,6 +71,16 @@ export class AddressesController {
     const o = this.own(s);
     const view = await o.svc.addresses.update(o.userId, p.address_id, await toPackageInput(o.svc.geo, b));
     return one(await toWire(o.svc.geo, o.userId, [view]));
+  }
+
+  @Post("addresses/:address_id/default")
+  @HttpCode(200)
+  @Authorize("address.write", self)
+  @RateLimit({ budget: RATE_BUDGETS.shopperWrite })
+  @Contract({ operationId: "makeMyAddressDefault", summary: "Make one of my addresses the default (changes only the flag; the map pin and every other field stay as saved)", tags: ["Me"], params: AddressIdParams, body: z.strictObject({}), response: Address, status: 200, maxQueries: 12 })
+  async makeDefault(@Ctx() s: RequestState, @Params() p: AddressIdParams): Promise<Address> {
+    const o = this.own(s);
+    return one(await toWire(o.svc.geo, o.userId, [await o.svc.addresses.setDefault(o.userId, p.address_id)]));
   }
 
   @Delete("addresses/:address_id")

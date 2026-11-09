@@ -4,8 +4,9 @@ import type {
   ApprovalRequestDto, ApprovalRequestPage, ApprovalsQuery, ItemsQuery, KycCaseSummaryPage, KycCasesQuery, KycDecisionInput, KycDecisionResult, ReconciliationItemPage,
   ReconciliationRunPage, RunsQuery,
 } from "./dto.js";
+import type { AdminOpsServices } from "./ops-services.js";
 
-export type AdminAccessPort = Pick<AdminAccess, "buildPrincipal" | "approve" | "reject" | "recordPiiView">;
+export type AdminAccessPort = Pick<AdminAccess, "buildPrincipal" | "approve" | "reject" | "recordPiiView" | "requireApproval" | "executeApproval" | "requestElevation" | "approveElevation" | "rejectElevation" | "activateElevation">;
 
 export interface ApprovalReaderPort {
   list(p: Principal, q: ApprovalsQuery): Promise<ApprovalRequestPage>;
@@ -30,4 +31,6 @@ export interface AdminServices {
   readonly approvals: ApprovalReaderPort;
   readonly kyc: KycAdminPort;
   readonly reconciliation: ReconciliationReaderPort;
+  /** Feature flags / kill switches and the audit-log read. Absent until composed: those routes answer 503. */
+  readonly ops?: AdminOpsServices;
 }

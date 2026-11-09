@@ -47,7 +47,7 @@ export interface ReturnReaderPort {
  * saga is designed; the eligibility rules (ownership 404, after SHIPPED 409) are enforced before the port is called.
  */
 export interface OrderCancellationPort {
-  cancel(input: { readonly userId: string; readonly orderGroupId: string; readonly reasonCode: string; readonly refundPreference: "original" | "store_credit" | undefined }): Promise<void>;
+  cancel(input: { readonly userId: string; readonly orderGroupId: string; readonly reasonCode: string; readonly refundPreference: "original" | "store_credit" | undefined; readonly sellerOrderIds?: readonly string[] | undefined }): Promise<void>;
 }
 
 export interface ReturnsServices {

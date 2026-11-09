@@ -53,7 +53,7 @@ describe("toProblem: inventory, cart, admin-access, shipping, returns, seller-ac
   });
   it.each<[ReturnsErrorCode, number, string]>([
     ["not_found", 404, "not-found"], ["forbidden", 403, "forbidden"], ["not_delivered", 409, "not-delivered"], ["invalid_state", 409, "invalid-state"],
-    ["approval_required", 409, "approval-required"], ["refund_exceeds_paid", 409, "refund-exceeds-paid"], ["bnpl_provider_only", 409, "bnpl-provider-only"],
+    ["approval_required", 409, "approval-required"], ["refund_exceeds_paid", 409, "refund-exceeds-paid"], ["bnpl_provider_only", 409, "bnpl-provider-only"], ["request_bnpl_provider_only", 422, "return-bnpl-provider-only"],
     ["refunds_disabled", 503, "refunds-disabled"], ["commission_base_mismatch", 500, "internal-error"], ["window_closed", 422, "return-window-closed"],
     ["photos_required", 422, "return-photos-required"], ["non_returnable", 422, "return-non-returnable"],
   ])("returns %s", (code, status, problem) => {

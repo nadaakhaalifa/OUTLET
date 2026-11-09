@@ -37,7 +37,7 @@ import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/inde
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
-import { PgApprovalReader, PgKycAdmin, PgReconciliationReader } from "../src/modules/admin/index.js";
+import { FlagAdmin, PgApprovalReader, PgAuditReader, PgElevationReader, PgKycAdmin, PgReconciliationReader } from "../src/modules/admin/index.js";
 import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
 import { InMemoryBuyerDelivery } from "./seller-orders-fakes.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
@@ -234,6 +234,8 @@ export interface TestAppOptions extends CreateAppOptions {
   readonly idempotency?: IdempotencyPort;
   readonly killSwitches?: KillSwitchPort;
   readonly catalog?: (marketId: string) => CatalogServices;
+  /** false = the admin console is composed without flag/audit-log services (those routes answer 503). */
+  readonly adminOps?: boolean;
 }
 
 /** NestJS + Fastify app on PGlite with the ADR-0011 roles bootstrapped; the API runs as outlet_app. */
@@ -305,6 +307,11 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
         const real = await svc.get(u, a).then(() => true, () => false);
         if (real) await svc.snapshotForOrder(u, so, a);
       },
+      snapshotForOrderIn: async (tx: Queryable, u: string, so: string, a: string): Promise<void> => {
+        const svc = new AddressService({ client: appClient, marketId: DB_MARKET, now }, new ShippingFakeCipher());
+        const real = await svc.getIn(tx, a).then(() => true, () => false);
+        if (real) await svc.snapshotForOrderIn(tx, u, so, a);
+      },
     },
   };
   const checkoutServices = {
@@ -329,11 +336,15 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     closer: new OrderCloseJob({ ...common, client: roleClient(raw, "outlet_worker"), cipher: new FakeCipher() }), courier: fakes.courier,
   });
   const adminAudit = new InMemoryAuditStore();
+  // In-memory chain for the console tests; it cannot roll back with the transaction (the Postgres store is covered in admin-ops-tx.test.ts).
+  const adminChain = new AuditChain(adminAudit, { now });
+  const chainAudit = { appendIn: (_tx: unknown, input: Parameters<AuditChain["append"]>[0]) => adminChain.append(input) };
   const adminServices = {
-    access: createAdminAccess({ db: appClient, audit: new AuditChain(adminAudit, { now }), clock: now, thresholdMinor: 0n }),
+    access: createAdminAccess({ db: appClient, audit: chainAudit, clock: now, thresholdMinor: 0n }),
     approvals: new PgApprovalReader(appClient),
     kyc: new PgKycAdmin(roleClient(raw, "outlet_worker"), new SellerOnboardingService({ app: appClient, auth: authClient, worker: roleClient(raw, "outlet_worker"), marketId: DB_MARKET, cipher: authDeps.cipher, hasher: authDeps.hasher, now }, new UnconfiguredKycCheck())),
     reconciliation: new PgReconciliationReader(roleClient(raw, "outlet_worker")),
+    ...(opts.adminOps === false ? {} : { ops: { flags: new FlagAdmin(appClient, chainAudit), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient, now) } }),
   };
   const deps: ApiDeps = {
     admin: () => adminServices,
