@@ -11,7 +11,7 @@ import type { SalesDailyRow } from "./ports.js";
 
 // ---------------------------------------------------------------- ports
 
-export type { SnapshotRow, SalesDailyRow, SalesDaily, StoreTop, DashboardReaderPort } from "./ports.js";
+export type { SnapshotRow, SalesDailyRow, SalesDaily, StoreTop, LedgerIntegrityRun, DashboardReaderPort } from "./ports.js";
 
 export interface DashboardDeps {
   readonly now: () => Date;
@@ -35,6 +35,8 @@ const ORDERS = "order.read";
 
 /** A snapshot older than this is not shown (money numbers fail closed, contract section 3). */
 export const STALE_AFTER_MS = 15 * 60_000;
+/** The integrity job runs nightly; a result older than 26 h means it missed a night, and a money tile fails closed instead of showing yesterday's verdict. */
+export const INTEGRITY_STALE_AFTER_MS = 26 * 3_600_000;
 const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90 } as const;
 const TOP_STORES = 5;
 
@@ -85,10 +87,12 @@ export class DashboardService {
       }
     };
     const ops = this.services.ops;
-    const [snap, sales, top, kyc, approvals, elevations, attention, flags] = await Promise.all([
+    const integrityRead = reader?.ledgerIntegrity?.bind(reader);
+    const [snap, sales, top, integrity, kyc, approvals, elevations, attention, flags] = await Promise.all([
       run("snapshots", snapKeys.length > 0, reader === undefined ? undefined : () => reader.snapshots(marketId, snapKeys)),
       run("sales", wantSales, reader === undefined ? undefined : () => reader.salesDaily(marketId, currency, seriesFrom, today)),
       run("top_stores", wantTop, reader === undefined ? undefined : () => reader.storeSalesTop(marketId, currency, rangeFrom, today, TOP_STORES)),
+      run("ledger_integrity", wantGmv, integrityRead === undefined ? undefined : () => integrityRead(marketId)),
       run("kyc_queue", live.kyc, () => this.services.kyc.count(marketId)),
       run("approvals_pending", live.approvals, () => this.services.approvals.countPending(p)),
       run("elevations_active", live.elevations, ops?.elevations === undefined ? undefined : () => (ops.elevations ?? never()).countActive(p, seesAllElevations)),
@@ -185,6 +189,15 @@ export class DashboardService {
     const attentionTile = liveTile("attention_open", live.attention, attention, ops?.attention === undefined, (v) => ({ open: v.open, acked: v.acked, by_kind: { ...v.byKind }, oldest_at: v.oldestAt }));
     const killTile = liveTile("kill_switches", live.flags, flags, ops === undefined, (records) => engaged(records, marketId));
 
+    const ledgerIntegrity = ((): Tile<unknown> => {
+      if (!wantGmv) return forbidden("ledger_integrity");
+      if (reader?.ledgerIntegrity === undefined) return unavailable("ledger_integrity", "not_connected");
+      if (integrity.state !== "ok") return unavailable("ledger_integrity", "read_failed");
+      const v = integrity.value;
+      if (v === null) return unavailable("ledger_integrity", "not_connected");
+      if (now.getTime() - Date.parse(v.checkedAt) > INTEGRITY_STALE_AFTER_MS) return unavailable("ledger_integrity", "stale");
+      return ok("ledger_integrity", v.checkedAt, { balanced: v.balanced, chain_ok: v.chainOk, checked_at: v.checkedAt });
+    })();
     const finance = (key: string): Tile<never> => (wantGmv ? (unavailable(key, "not_connected")) : (forbidden(key)));
 
     // The tile unions are checked against DashboardResponse by the route's response schema and by the contract tests.
@@ -196,8 +209,9 @@ export class DashboardService {
         orders: { seller_sla_breaches: snapTile("seller_sla_breaches"), cod_awaiting_confirmation: snapTile("cod_awaiting_confirmation"), returns_pipeline: snapTile("returns_pipeline"), disputes_open: snapTile("disputes_open") },
         money: {
           refunds_waiting: snapTile("refunds_waiting"), refunds_overdue: snapTile("refunds_overdue"), payouts: snapTile("payouts"), recon_unmatched: snapTile("recon_unmatched"),
-          // No courier adapter, no persisted integrity-job result: honest "Not connected yet" (plan section 2), never computed on the request path.
-          cod_unremitted: finance("cod_unremitted"), ledger_integrity: finance("ledger_integrity"),
+          // No courier adapter: cod_unremitted is an honest "Not connected yet" (plan section 2). ledger_integrity shows the latest STORED integrity-job run
+          // (migration 0039); it is never computed on the request path, and not_connected only until the first run exists.
+          cod_unremitted: finance("cod_unremitted"), ledger_integrity: ledgerIntegrity,
         },
         trust: { kyc_queue: kycTile, stores_moderation: snapTile("stores_moderation"), price_enforcement: snapTile("price_enforcement"), listings_by_status: snapTile("listings_by_status") },
         privacy: { breaches_open: snapTile("breaches_open"), dsar_queue: snapTile("dsar_queue") },

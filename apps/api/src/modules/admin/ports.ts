@@ -23,8 +23,19 @@ export interface StoreTop {
   readonly other: { readonly stores: number; readonly orders: number; readonly gmvMinor: bigint };
   readonly asOf: string | null;
 }
-/** The three rollup reads (one statement each, job admin.dashboard). */
+/** Latest stored ledger-integrity run of a market (reconciliation_runs source ledger_integrity). Never computed on the request path. */
+export interface LedgerIntegrityRun {
+  /** finished_at of the run. */
+  readonly checkedAt: string;
+  readonly balanced: boolean;
+  readonly chainOk: boolean;
+  /** Per-currency sum of postings (decimal minor units); all "0" when balanced. */
+  readonly totals: Readonly<Record<string, string>>;
+}
+/** The three rollup reads plus the stored integrity result (one statement each, job admin.dashboard). */
 export interface DashboardReaderPort {
+  /** Optional so a reader without the integrity job answers "not connected". null = no run stored yet. */
+  ledgerIntegrity?(marketId: string): Promise<LedgerIntegrityRun | null>;
   snapshots(marketId: string, keys: readonly string[]): Promise<readonly SnapshotRow[]>;
   salesDaily(marketId: string, currency: string, from: string, to: string): Promise<SalesDaily>;
   storeSalesTop(marketId: string, currency: string, from: string, to: string, limit: number): Promise<StoreTop>;

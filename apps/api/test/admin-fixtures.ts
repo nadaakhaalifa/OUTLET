@@ -121,6 +121,20 @@ export const seedAttention = async (raw: SqlClient, o: { status?: "OPEN" | "ACKE
   return { id };
 };
 
+/** A dead-lettered outbox event with its payload-free dlq row (what OutboxDispatchRelay leaves), in the given market. */
+export const seedDlq = async (raw: SqlClient, o: { type?: string; marketId?: string; at?: string } = {}): Promise<{ id: string; eventId: string }> => {
+  const eventId = randomUUID();
+  const id = randomUUID();
+  const type = o.type ?? "order.placed";
+  await raw.query(
+    `INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, payload, occurred_at, attempts, last_error, dead_lettered_at)
+     VALUES ($1,$2,'order',$3,$4,'{"secret":"+201000000000"}'::jsonb,$5::timestamptz,8,'Error:E_DOWN',$5::timestamptz)`,
+    [eventId, o.marketId ?? "EG", randomUUID(), type, o.at ?? "2029-12-31T10:00:00Z"],
+  );
+  await raw.query("INSERT INTO dlq_messages (id, consumer, message_id, payload, error, attempts) VALUES ($1,'outbox-dispatch',$2,$3::jsonb,'Error:E_DOWN',8)", [id, eventId, JSON.stringify({ event_type: type })]);
+  return { id, eventId };
+};
+
 const staffHeaders = (t: TestApp, token: string, extra: Record<string, string> = {}): Record<string, string> => ({ ...bearer(token), "idempotency-key": idemKey(t), ...extra });
 const MISSING = "00000000-0000-4000-8000-00000000dead";
 
@@ -158,6 +172,27 @@ export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
     otherTenant: async (t) => {
       const { token } = await t.admin(["finance"]);
       return { method: "POST", url: `/v1/eg/admin/attention/${MISSING}/resolve`, headers: staffHeaders(t, token), payload: { resolution_code: "FIXED_MANUALLY" } };
+    },
+  },
+  "GET /v1/{market}/admin/dlq": {
+    happy: async (t) => {
+      await seedDlq(t.raw);
+      const { token } = await t.admin(["ops"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/dlq?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/dlq/replay": {
+    happy: async (t) => {
+      const d = await seedDlq(t.raw);
+      const { token } = await t.admin(["security"]);
+      return { req: { method: "POST", url: "/v1/eg/admin/dlq/replay", headers: staffHeaders(t, token), payload: { ids: [d.id] } }, status: 200 };
+    },
+  },
+  "POST /v1/{market}/admin/dlq/discard": {
+    happy: async (t) => {
+      const d = await seedDlq(t.raw);
+      const { token } = await t.admin(["ops"]);
+      return { req: { method: "POST", url: "/v1/eg/admin/dlq/discard", headers: staffHeaders(t, token), payload: { ids: [d.id], reason_code: "obsolete" } }, status: 200 };
     },
   },
   "GET /v1/{market}/admin/approval-requests": {

@@ -21,6 +21,10 @@ import {
   AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDecisionInput, ElevationDto, ElevationIdParams, ElevationPage, ElevationRequestInput, ElevationsQuery,
    FeatureFlagDto, FeatureFlagPage, FlagKeyParams, FlagsQuery, KillSwitchInput, PiiAccessLogEntryPage, PiiAccessLogQuery, StoreIdParams, StoreReinstateInput, StoreSuspendInput } from "./dto-ops.js";
 import { DashboardService } from "./dashboard.js";
+import { DlqActionResult, DlqDiscardInput, DlqPage, DlqQuery, DlqReplayInput } from "./dto-dlq.js";
+import type { DlqAdminPort } from "./dlq-admin.js";
+import { isMoneyEventType } from "@outlet/outbox";
+import type { DiscardReasonCode } from "@outlet/outbox";
 import {
   AttentionAckInput, AttentionIdParams, AttentionItemDto, AttentionItemPage, AttentionQuery, AttentionResolveInput, DashboardQuery, DashboardResponse,
 } from "./dto-dashboard.js";
@@ -41,6 +45,13 @@ const ELEVATION_ACTION = "elevation.approve";
 const KILL_RELEASE_ACTION = "kill_switch.engage";
 const STORE_SUSPEND_ACTION = "store.suspend";
 const STORE_REINSTATE_ACTION = "store.reinstate";
+const DLQ_DISCARD_MONEY_ACTION = "dlq.discard.money";
+/** The ids and reason the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
+const dlqPayload = (payload: Readonly<Record<string, unknown>>): DlqDiscardInput => {
+  const r = DlqDiscardInput.safeParse({ ids: payload.ids, reason_code: payload.reasonCode });
+  if (!r.success) throw Problems.unprocessable("invalid-approval-payload");
+  return r.data;
+};
 /** The reason and note the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
 const moderationPayload = (payload: Readonly<Record<string, unknown>>): { reasonCode: string; note: string; storeIds: readonly string[] } => {
   const { reasonCode, note, storeIds } = payload;
@@ -81,6 +92,12 @@ export class AdminController {
     const a = this.ops(t).attention;
     if (a === undefined) throw Problems.unavailable("admin-unavailable");
     return a;
+  }
+
+  private dlq(t: Staff): DlqAdminPort {
+    const d = this.ops(t).dlq;
+    if (d === undefined) throw Problems.unavailable("admin-unavailable");
+    return d;
   }
 
   // ---------------------------------------------------------------- dashboard (Home)
@@ -190,6 +207,15 @@ export class AdminController {
       const applied = await stores.apply(t.principal, req.targetId, to, { ...moderationPayload(req.payload), approvalRequestId: req.id });
       await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
         await stores.record(t.principal, tx, applied);
+      });
+    } else if (decided.action === DLQ_DISCARD_MONEY_ACTION) {
+      const dlq = this.dlq(t);
+      // The effect runs as the outbox.relay worker job (another role), so like store moderation it goes first and is idempotent; then claim + audit share one transaction.
+      const req = await t.svc.access.verifyApproved(t.principal, decided.id);
+      const input = dlqPayload(req.payload);
+      const applied = await dlq.discard(t.principal, input.ids, input.reason_code);
+      await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
+        await dlq.record(t.principal, applied, { reasonCode: input.reason_code, approvalRequestId: req.id }, tx);
       });
     } else if (decided.action === ELEVATION_ACTION) {
       // The executor is the last approver, never the requester.
@@ -461,6 +487,62 @@ export class AdminController {
   async listFlags(@Ctx() s: RequestState, @Query() q: FlagsQuery): Promise<FeatureFlagPage> {
     const t = this.staff(s);
     return flagPage(await this.ops(t).flags.list(t.marketId), q);
+  }
+
+  // ---------------------------------------------------------------- relay dead-letter queue (ids, event types, attempts and error codes only; never a payload)
+
+  @Get("dlq")
+  @Paginated()
+  @Authorize("dlq.manage", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListDlq", summary: "Dead-lettered outbox events, newest first (event type, attempts, error code; never the payload)", tags: ["Admin DLQ"], query: DlqQuery, response: DlqPage, maxQueries: 3 })
+  listDlq(@Ctx() s: RequestState, @Query() q: DlqQuery): Promise<DlqPage> {
+    const t = this.staff(s);
+    return this.dlq(t).list(t.principal, q);
+  }
+
+  @Post("dlq/replay")
+  @HttpCode(200)
+  @Authorize("dlq.manage", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminReplayDlq",
+    summary: "Send up to 50 dead-lettered events back to the relay (attempts reset; idempotent: an id not in the DLQ is reported not_in_dlq; no dual approval, redelivery is deduplicated by the consumers' inbox; audited as dlq.replayed)",
+    tags: ["Admin DLQ"],
+    body: DlqReplayInput,
+    response: DlqActionResult,
+    maxQueries: 6,
+  })
+  replayDlq(@Ctx() s: RequestState, @Body() body: DlqReplayInput): Promise<DlqActionResult> {
+    const t = this.staff(s);
+    return this.dlq(t).replay(t.principal, body.ids);
+  }
+
+  @Post("dlq/discard")
+  @HttpCode(200)
+  @Authorize("dlq.manage", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminDiscardDlq",
+    summary: "Give up on up to 50 dead-lettered events with a fixed reason code (audited as dlq.discarded). A batch that contains a money event type (refund.*, promotions.*, payout.*, order_group.late_payment_refund) files a dual-approval request instead: 409 dual-approval-required with the request id in `detail`; the second approver's vote runs it",
+    tags: ["Admin DLQ"],
+    body: DlqDiscardInput,
+    response: DlqActionResult,
+    maxQueries: 8,
+  })
+  async discardDlq(@Ctx() s: RequestState, @Body() body: DlqDiscardInput): Promise<DlqActionResult> {
+    const t = this.staff(s);
+    const dlq = this.dlq(t);
+    const types = await dlq.types(t.principal, body.ids);
+    if ([...types.values()].some(isMoneyEventType)) {
+      // The set of ids goes into the hash-protected payload: the approvers vote on it and the executor acts on nothing else.
+      const r = await t.svc.access.requireApproval(t.principal, { action: DLQ_DISCARD_MONEY_ACTION, targetType: "dlq_batch", targetId: body.ids[0] ?? t.marketId, payload: { ids: body.ids, reasonCode: body.reason_code } });
+      if (!r.required) throw Problems.internal("dual-approval-expected");
+      throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
+    }
+    const applied = await dlq.discard(t.principal, body.ids, body.reason_code satisfies DiscardReasonCode);
+    await dlq.record(t.principal, applied, { reasonCode: body.reason_code });
+    return applied;
   }
 
   @Post("feature-flags/:flag_key/kill-switch")

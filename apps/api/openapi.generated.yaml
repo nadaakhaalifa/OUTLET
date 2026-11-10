@@ -3596,6 +3596,387 @@ paths:
           layer: app
           source: default
       x-max-queries: 10
+  /v1/{market}/admin/dlq:
+    get:
+      operationId: adminListDlq
+      summary: Dead-lettered outbox events, newest first (event type, attempts, error code; never the payload)
+      tags:
+        - Admin DLQ
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        event_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        event_type:
+                          type: string
+                          maxLength: 200
+                        attempts:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        last_error:
+                          anyOf:
+                            - type: string
+                              maxLength: 200
+                            - type: "null"
+                        dead_lettered_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      required:
+                        - id
+                        - event_id
+                        - event_type
+                        - attempts
+                        - last_error
+                        - dead_lettered_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: dlq.manage
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+      x-paginated: keyset
+  /v1/{market}/admin/dlq/discard:
+    post:
+      operationId: adminDiscardDlq
+      summary: "Give up on up to 50 dead-lettered events with a fixed reason code (audited as dlq.discarded). A batch that contains a money event type (refund.*, promotions.*, payout.*, order_group.late_payment_refund) files a dual-approval request instead: 409 dual-approval-required with the request id in `detail`; the second approver's vote runs it"
+      tags:
+        - Admin DLQ
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        outcome:
+                          type: string
+                          enum:
+                            - replayed
+                            - discarded
+                            - not_in_dlq
+                      required:
+                        - id
+                        - outcome
+                      additionalProperties: false
+                  changed:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - results
+                  - changed
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: dlq.manage
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  minItems: 1
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                reason_code:
+                  type: string
+                  enum:
+                    - duplicate
+                    - obsolete
+                    - poison_payload
+                    - handled_manually
+                    - test_data
+              required:
+                - ids
+                - reason_code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/admin/dlq/replay:
+    post:
+      operationId: adminReplayDlq
+      summary: "Send up to 50 dead-lettered events back to the relay (attempts reset; idempotent: an id not in the DLQ is reported not_in_dlq; no dual approval, redelivery is deduplicated by the consumers' inbox; audited as dlq.replayed)"
+      tags:
+        - Admin DLQ
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        outcome:
+                          type: string
+                          enum:
+                            - replayed
+                            - discarded
+                            - not_in_dlq
+                      required:
+                        - id
+                        - outcome
+                      additionalProperties: false
+                  changed:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - results
+                  - changed
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: dlq.manage
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  minItems: 1
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - ids
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/admin/elevations:
     get:
       operationId: adminListElevations

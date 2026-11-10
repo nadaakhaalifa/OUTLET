@@ -1,6 +1,10 @@
 import { withDbContext } from "@outlet/db";
 import type { Queryable, RoleSqlClient } from "@outlet/db";
-import type { DashboardReaderPort, SalesDaily, SnapshotRow, StoreTop } from "./dashboard.js";
+import { z } from "zod";
+import type { DashboardReaderPort, LedgerIntegrityRun, SalesDaily, SnapshotRow, StoreTop } from "./dashboard.js";
+
+/** reconciliation_runs.details written by the payouts IntegrityJob (version 1). */
+const IntegrityDetails = z.object({ version: z.literal(1), balanced: z.boolean(), chain_ok: z.boolean(), totals: z.record(z.string(), z.string().regex(/^-?\d+$/)) }).loose();
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
 
@@ -13,6 +17,21 @@ export class PgDashboardReader implements DashboardReaderPort {
 
   private job<T>(marketId: string, fn: (tx: Queryable) => Promise<T>): Promise<T> {
     return withDbContext(this.worker, { kind: "worker", marketId, job: "admin.dashboard" }, fn);
+  }
+
+  async ledgerIntegrity(marketId: string): Promise<LedgerIntegrityRun | null> {
+    const r = await this.job(marketId, (tx) =>
+      tx.query<{ finished_at: Date | string; details: unknown }>(
+        `SELECT finished_at, details FROM reconciliation_runs
+          WHERE market_id = $1 AND source = 'ledger_integrity' AND status IN ('completed', 'failed') AND finished_at IS NOT NULL
+          ORDER BY business_date DESC, finished_at DESC LIMIT 1`,
+        [marketId],
+      ),
+    );
+    const row = r.rows[0];
+    if (row === undefined) return null;
+    const d = IntegrityDetails.parse(row.details);
+    return { checkedAt: iso(row.finished_at), balanced: d.balanced, chainOk: d.chain_ok, totals: d.totals };
   }
 
   async snapshots(marketId: string, keys: readonly string[]): Promise<readonly SnapshotRow[]> {

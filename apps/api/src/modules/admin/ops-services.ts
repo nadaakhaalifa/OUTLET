@@ -6,6 +6,7 @@ import { FlagService, KILL_SWITCHES, PostgresFlagStore, isKillSwitchName } from 
 import type { FlagRecord, KillSwitchName } from "@outlet/flags";
 import type { Principal } from "@outlet/policy";
 import type { AttentionAdminPort } from "./attention-admin.js";
+import type { DlqAdminPort } from "./dlq-admin.js";
 import type { StoreModerationPort } from "./store-moderation.js";
 import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { Problems } from "../../platform/problem.js";
@@ -56,6 +57,8 @@ export interface AdminOpsServices {
   readonly stores?: StoreModerationPort;
   /** Absent until composed: the attention routes answer 503 and the dashboard tile reads `not_connected`. */
   readonly attention?: AttentionAdminPort;
+  /** Absent until composed (needs the worker pool: it runs as job outbox.relay): the DLQ routes answer 503. */
+  readonly dlq?: DlqAdminPort;
 }
 
 const noopAudit = { record: (): Promise<void> => Promise.resolve() };

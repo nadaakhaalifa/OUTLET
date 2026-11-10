@@ -38,7 +38,7 @@ import {
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
-import { AttentionAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration, unconfiguredAdminServices } from "./modules/admin/index.js";
+import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration, unconfiguredAdminServices } from "./modules/admin/index.js";
 import type { AdminServices } from "./modules/admin/index.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SellerInventoryService } from "./modules/seller-inventory/index.js";
@@ -176,6 +176,8 @@ for (const m of listMarkets()) {
           // Attention queue (outlet_app, user context; every write audits in its own transaction). The Home dashboard reads the rollups as the admin.dashboard worker job; until the
           // reporting.rollup job has run, snapshot and sales tiles answer unavailable/not_connected (never zero), and cod_unremitted / ledger_integrity stay not connected.
           attention: new AttentionAdmin(appClient, auditPort),
+          // Relay DLQ replay / discard run as the outbox.relay worker job (worker pool); inside this branch the worker pool exists, otherwise the whole console is 503.
+          dlq: new DlqAdmin(workerClient, appClient, auditPort),
         },
         dashboard: new PgDashboardReader(workerClient),
         approvals: new PgApprovalReader(appClient),

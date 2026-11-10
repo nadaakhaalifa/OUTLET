@@ -11,3 +11,5 @@ export type { DashboardDeps, DashboardReaderPort, SalesDaily, SnapshotRow, Store
 export { PgDashboardReader } from "./dashboard-readers.js";
 export { AttentionAdmin } from "./attention-admin.js";
 export type { AttentionAdminPort, AttentionPageDto } from "./attention-admin.js";
+export { DlqAdmin } from "./dlq-admin.js";
+export type { DlqAdminPort } from "./dlq-admin.js";
