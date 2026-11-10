@@ -15237,6 +15237,438 @@ paths:
         header: "required"
         mode: "store"
       x-phase: 1
+  "/v1/{market}/admin/refunds":
+    get:
+      operationId: "adminListRefunds"
+      tags:
+        - "Admin Finance"
+      summary: "Refunds, newest first (status filter). Order ids, store id, status, route and amount only; the page also carries the not-completed counts and amounts of the market and how many are overdue"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "REQUESTED"
+              - "MANUAL_REVIEW"
+              - "FAILED"
+              - "PROCESSING"
+              - "COMPLETED"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminRefundPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "refund.approve"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "other market's rows are never listed"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/payouts":
+    get:
+      operationId: "adminListPayouts"
+      tags:
+        - "Admin Finance"
+      summary: "Seller payouts, newest first (status filter), with the open counts and net amounts per status"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "SCHEDULED"
+              - "ON_HOLD"
+              - "APPROVED"
+              - "SENT"
+              - "SETTLED"
+              - "FAILED"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminPayoutPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "payout.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "other market's rows are never listed"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/payouts/{payout_id}":
+    get:
+      operationId: "adminGetPayout"
+      tags:
+        - "Admin Finance"
+      summary: "One payout with its line count and the store's open payout holds"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - name: "payout_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminPayoutDetail"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "payout.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "id of another market -> 404 (never listed)"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/payouts/{payout_id}/hold":
+    post:
+      operationId: "adminHoldPayout"
+      tags:
+        - "Admin Finance"
+      summary: "Put a SCHEDULED or APPROVED payout ON_HOLD with a fixed reason code (intent and result audited; holding it again with the same reason changes nothing; another state is 409 invalid-transition)"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - name: "payout_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/AdminPayoutHoldInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminPayout"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "payout.hold"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "id of another market -> 404 (never listed)"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/payouts/{payout_id}/release":
+    post:
+      operationId: "adminReleasePayout"
+      tags:
+        - "Admin Finance"
+      summary: "Release an ON_HOLD payout back to SCHEDULED (always dual approval: this files the request, the second approver's vote runs it; the earlier approval is void and the payout must be approved again). 409 dual-approval-required with the request id in detail"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/IdempotencyKey"
+        - name: "payout_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/AdminPayoutReleaseInput"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminPayout"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "404":
+          "$ref": "#/components/responses/NotFound"
+        "409":
+          "$ref": "#/components/responses/Conflict"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "payout.hold"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "finance"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "id of another market -> 404 (never listed)"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 30
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/returns":
+    get:
+      operationId: "adminListReturns"
+      tags:
+        - "Admin Orders"
+      summary: "Open returns, newest first (stage filter: requested, in transit, awaiting inspection, inspection overdue), with the pipeline counts. Order and store ids only; no shopper identity"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "stage"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "requested"
+              - "in_transit"
+              - "awaiting_inspection"
+              - "inspection_overdue"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminReturnPage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "return.read"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "ops"
+          - "support"
+          - "trust_safety"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "other market's rows are never listed"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
+  "/v1/{market}/admin/disputes":
+    get:
+      operationId: "adminListDisputes"
+      tags:
+        - "Admin Orders"
+      summary: "Disputes, newest first (default: the open queue, OPEN and UNDER_REVIEW), with the open and past-SLA counts. Ids, reason code and SLA only; the shopper's note is never returned"
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - "$ref": "#/components/parameters/Market"
+        - "$ref": "#/components/parameters/AcceptLanguage"
+        - "$ref": "#/components/parameters/Cursor"
+        - "$ref": "#/components/parameters/Limit"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "OPEN"
+              - "UNDER_REVIEW"
+              - "RESOLVED_SHOPPER"
+              - "RESOLVED_SELLER"
+              - "WITHDRAWN"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/AdminDisputePage"
+        "400":
+          "$ref": "#/components/responses/BadRequest"
+        "401":
+          "$ref": "#/components/responses/Unauthorized"
+        "403":
+          "$ref": "#/components/responses/Forbidden"
+        "429":
+          "$ref": "#/components/responses/TooManyRequests"
+      x-authz:
+        policy: "dispute.decide"
+        principal: "staff"
+        tenant: "staff market (staff_role_assignments.market_id)"
+        roles:
+          - "trust_safety"
+        not_owned: 404
+        wrong_role: 403
+        negative_tests:
+          other_tenant: "other market's rows are never listed"
+          wrong_role: "staff without the action -> 403; shopper or seller token -> 403 wrong-principal"
+      x-rate-limit:
+        - limit: 120
+          window_s: 60
+          key: "staff"
+          source: "default"
+          layer: "app"
+      x-market:
+        source: "path"
+        param: "market"
+        binding: "token market must equal path market"
+      x-phase: 1
 components:
   securitySchemes:
     shopperJwt:
@@ -25487,3 +25919,591 @@ components:
       required:
         - "received"
         - "duplicate"
+    AdminRefund:
+      type: "object"
+      additionalProperties: false
+      description: "One refund. Order ids, store id, status, route and amount only: no shopper identity, no free text."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        order_group_id:
+          type: "string"
+          format: "uuid"
+        seller_order_id:
+          type: "string"
+          format: "uuid"
+        return_request_id:
+          type:
+            - "string"
+            - "null"
+          format: "uuid"
+        store_id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum:
+            - "REQUESTED"
+            - "MANUAL_REVIEW"
+            - "FAILED"
+            - "PROCESSING"
+            - "COMPLETED"
+        reason:
+          type: "string"
+          enum:
+            - "return"
+            - "seller_rejected"
+            - "goodwill"
+            - "cancellation"
+        route:
+          type: "string"
+          enum:
+            - "psp_original"
+            - "bnpl_provider"
+            - "store_credit"
+            - "bank_transfer"
+            - "fawry_voucher"
+            - "mixed"
+        amount:
+          "$ref": "#/components/schemas/Money"
+        attempts:
+          type: "integer"
+          minimum: 0
+        overdue:
+          type: "boolean"
+        due_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        created_at:
+          type: "string"
+          format: "date-time"
+        completed_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+      required:
+        - "id"
+        - "order_group_id"
+        - "seller_order_id"
+        - "return_request_id"
+        - "store_id"
+        - "status"
+        - "reason"
+        - "route"
+        - "amount"
+        - "attempts"
+        - "overdue"
+        - "due_at"
+        - "created_at"
+        - "completed_at"
+    AdminRefundPage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/AdminRefund"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+        summary:
+          type: "array"
+          maxItems: 40
+          items:
+            type: "object"
+            additionalProperties: false
+            properties:
+              status:
+                type: "string"
+                enum:
+                  - "REQUESTED"
+                  - "MANUAL_REVIEW"
+                  - "FAILED"
+                  - "PROCESSING"
+              count:
+                type: "integer"
+                minimum: 0
+              amount:
+                "$ref": "#/components/schemas/Money"
+            required:
+              - "status"
+              - "count"
+              - "amount"
+        overdue_count:
+          type: "integer"
+          minimum: 0
+      required:
+        - "items"
+        - "next_cursor"
+        - "summary"
+        - "overdue_count"
+    AdminPayout:
+      type: "object"
+      additionalProperties: false
+      description: "One seller payout (CANCELLED payouts are never listed). hold_reason is a system or staff reason code, never free text."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        store_id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum:
+            - "SCHEDULED"
+            - "ON_HOLD"
+            - "APPROVED"
+            - "SENT"
+            - "SETTLED"
+            - "FAILED"
+        mode:
+          type: "string"
+          enum:
+            - "transfer"
+            - "statement"
+        cycle_start:
+          type: "string"
+          format: "date"
+        cycle_end:
+          type: "string"
+          format: "date"
+        gross:
+          "$ref": "#/components/schemas/Money"
+        adjustments:
+          "$ref": "#/components/schemas/Money"
+        net:
+          "$ref": "#/components/schemas/Money"
+        hold_reason:
+          type:
+            - "string"
+            - "null"
+          maxLength: 100
+        failure_code:
+          type:
+            - "string"
+            - "null"
+          maxLength: 100
+        approval_request_id:
+          type:
+            - "string"
+            - "null"
+          format: "uuid"
+        sent_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        settled_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        created_at:
+          type: "string"
+          format: "date-time"
+      required:
+        - "id"
+        - "store_id"
+        - "status"
+        - "mode"
+        - "cycle_start"
+        - "cycle_end"
+        - "gross"
+        - "adjustments"
+        - "net"
+        - "hold_reason"
+        - "failure_code"
+        - "approval_request_id"
+        - "sent_at"
+        - "settled_at"
+        - "created_at"
+    AdminPayoutPage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/AdminPayout"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+        summary:
+          type: "array"
+          maxItems: 40
+          items:
+            type: "object"
+            additionalProperties: false
+            properties:
+              status:
+                type: "string"
+                enum:
+                  - "SCHEDULED"
+                  - "ON_HOLD"
+                  - "APPROVED"
+                  - "FAILED"
+              count:
+                type: "integer"
+                minimum: 0
+              net:
+                "$ref": "#/components/schemas/Money"
+            required:
+              - "status"
+              - "count"
+              - "net"
+      required:
+        - "items"
+        - "next_cursor"
+        - "summary"
+    AdminPayoutDetail:
+      type: "object"
+      additionalProperties: false
+      description: "A payout plus its line count and the store's open payout holds."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        store_id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum:
+            - "SCHEDULED"
+            - "ON_HOLD"
+            - "APPROVED"
+            - "SENT"
+            - "SETTLED"
+            - "FAILED"
+        mode:
+          type: "string"
+          enum:
+            - "transfer"
+            - "statement"
+        cycle_start:
+          type: "string"
+          format: "date"
+        cycle_end:
+          type: "string"
+          format: "date"
+        gross:
+          "$ref": "#/components/schemas/Money"
+        adjustments:
+          "$ref": "#/components/schemas/Money"
+        net:
+          "$ref": "#/components/schemas/Money"
+        hold_reason:
+          type:
+            - "string"
+            - "null"
+          maxLength: 100
+        failure_code:
+          type:
+            - "string"
+            - "null"
+          maxLength: 100
+        approval_request_id:
+          type:
+            - "string"
+            - "null"
+          format: "uuid"
+        sent_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        settled_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        created_at:
+          type: "string"
+          format: "date-time"
+        line_count:
+          type: "integer"
+          minimum: 0
+        open_holds:
+          type: "array"
+          maxItems: 50
+          items:
+            type: "object"
+            additionalProperties: false
+            properties:
+              id:
+                type: "string"
+                format: "uuid"
+              reason:
+                type: "string"
+                enum:
+                  - "risk"
+                  - "enforcement"
+                  - "kyc"
+                  - "dispute"
+              seller_order_id:
+                type:
+                  - "string"
+                  - "null"
+                format: "uuid"
+              starts_at:
+                type: "string"
+                format: "date-time"
+              released_at:
+                type:
+                  - "string"
+                  - "null"
+                format: "date-time"
+            required:
+              - "id"
+              - "reason"
+              - "seller_order_id"
+              - "starts_at"
+              - "released_at"
+      required:
+        - "id"
+        - "store_id"
+        - "status"
+        - "mode"
+        - "cycle_start"
+        - "cycle_end"
+        - "gross"
+        - "adjustments"
+        - "net"
+        - "hold_reason"
+        - "failure_code"
+        - "approval_request_id"
+        - "sent_at"
+        - "settled_at"
+        - "created_at"
+        - "line_count"
+        - "open_holds"
+    AdminPayoutHoldInput:
+      type: "object"
+      additionalProperties: false
+      description: "Fixed reason codes only (no free text)."
+      properties:
+        reason_code:
+          type: "string"
+          enum:
+            - "risk_review"
+            - "iban_check"
+            - "dispute_pending"
+            - "kyc_review"
+            - "seller_request"
+            - "other"
+      required:
+        - "reason_code"
+    AdminPayoutReleaseInput:
+      type: "object"
+      additionalProperties: false
+      description: "Fixed reason codes only; the release itself is dual approval (action payout.release)."
+      properties:
+        reason_code:
+          type: "string"
+          enum:
+            - "issue_resolved"
+            - "error_corrected"
+            - "review_cleared"
+      required:
+        - "reason_code"
+    AdminReturn:
+      type: "object"
+      additionalProperties: false
+      description: "One open return. Order and store ids only; no shopper identity."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        order_group_id:
+          type: "string"
+          format: "uuid"
+        seller_order_id:
+          type: "string"
+          format: "uuid"
+        store_id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum:
+            - "REQUESTED"
+            - "IN_TRANSIT"
+            - "RECEIVED"
+        stage:
+          type: "string"
+          enum:
+            - "requested"
+            - "in_transit"
+            - "awaiting_inspection"
+            - "inspection_overdue"
+        reason_code:
+          type: "string"
+          maxLength: 60
+        resolution:
+          type: "string"
+          enum:
+            - "refund"
+            - "exchange"
+            - "store_credit"
+        created_at:
+          type: "string"
+          format: "date-time"
+        received_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+        inspection_due_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+      required:
+        - "id"
+        - "order_group_id"
+        - "seller_order_id"
+        - "store_id"
+        - "status"
+        - "stage"
+        - "reason_code"
+        - "resolution"
+        - "created_at"
+        - "received_at"
+        - "inspection_due_at"
+    AdminReturnPage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/AdminReturn"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+        summary:
+          type: "object"
+          additionalProperties: false
+          properties:
+            requested:
+              type: "integer"
+              minimum: 0
+            in_transit:
+              type: "integer"
+              minimum: 0
+            awaiting_inspection:
+              type: "integer"
+              minimum: 0
+            inspection_overdue:
+              type: "integer"
+              minimum: 0
+          required:
+            - "requested"
+            - "in_transit"
+            - "awaiting_inspection"
+            - "inspection_overdue"
+      required:
+        - "items"
+        - "next_cursor"
+        - "summary"
+    AdminDispute:
+      type: "object"
+      additionalProperties: false
+      description: "One dispute. The shopper's note is free text and is never returned."
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        return_request_id:
+          type: "string"
+          format: "uuid"
+        store_id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum:
+            - "OPEN"
+            - "UNDER_REVIEW"
+            - "RESOLVED_SHOPPER"
+            - "RESOLVED_SELLER"
+            - "WITHDRAWN"
+        reason_code:
+          type: "string"
+          maxLength: 60
+        assigned:
+          type: "boolean"
+        sla_due_at:
+          type: "string"
+          format: "date-time"
+        past_sla:
+          type: "boolean"
+        created_at:
+          type: "string"
+          format: "date-time"
+        resolved_at:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+      required:
+        - "id"
+        - "return_request_id"
+        - "store_id"
+        - "status"
+        - "reason_code"
+        - "assigned"
+        - "sla_due_at"
+        - "past_sla"
+        - "created_at"
+        - "resolved_at"
+    AdminDisputePage:
+      type: "object"
+      additionalProperties: false
+      description: "Keyset page. next_cursor is null on the last page."
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/AdminDispute"
+        next_cursor:
+          type:
+            - "string"
+            - "null"
+          maxLength: 512
+        summary:
+          type: "object"
+          additionalProperties: false
+          properties:
+            open:
+              type: "integer"
+              minimum: 0
+            past_sla:
+              type: "integer"
+              minimum: 0
+          required:
+            - "open"
+            - "past_sla"
+      required:
+        - "items"
+        - "next_cursor"
+        - "summary"

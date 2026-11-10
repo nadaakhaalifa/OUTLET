@@ -135,6 +135,67 @@ export const seedDlq = async (raw: SqlClient, o: { type?: string; marketId?: str
   return { id, eventId };
 };
 
+
+/** Runs `fn` with FK checks relaxed (random ids stand in for the order graph) and always restores them. */
+const relaxed = async <T>(raw: SqlClient, fn: () => Promise<T>): Promise<T> => {
+  await raw.query("SET session_replication_role = replica");
+  try {
+    return await fn();
+  } finally {
+    await raw.query("SET session_replication_role = origin");
+  }
+};
+
+export const seedRefund = async (raw: SqlClient, o: { market?: string; status?: string; amount?: bigint; createdAt?: string; dueAt?: string | null } = {}): Promise<{ id: string; orderGroupId: string; storeId: string }> => {
+  const id = randomUUID();
+  const orderGroupId = randomUUID();
+  const storeId = randomUUID();
+  await relaxed(raw, () => raw.query(
+    `INSERT INTO refunds (id, order_group_id, seller_order_id, user_id, store_id, market_id, reason, route, currency, amount_minor, goods_minor, commission_minor, commission_vat_minor, seller_minor, seller_account, destinations, status, idempotency_key, due_at, created_at, last_error)
+     VALUES ($1,$2,$3,$4,$5,$6,'return','psp_original','EGP',$7,$7,0,0,$7,'seller_pending','[]'::jsonb,$8,$9,$10::timestamptz,$11::timestamptz,'PSP said: +201000000000')`,
+    [id, orderGroupId, randomUUID(), randomUUID(), storeId, o.market ?? "EG", (o.amount ?? 15_000n).toString(), o.status ?? "REQUESTED", randomUUID(), o.dueAt ?? null, o.createdAt ?? "2029-12-31T10:00:00Z"],
+  ));
+  return { id, orderGroupId, storeId };
+};
+
+export const seedReturn = async (raw: SqlClient, o: { market?: string; status?: string; createdAt?: string; inspectionDueAt?: string | null } = {}): Promise<{ id: string; userId: string }> => {
+  const id = randomUUID();
+  const userId = randomUUID();
+  await relaxed(raw, () => raw.query(
+    `INSERT INTO return_requests (id, seller_order_id, order_group_id, user_id, store_id, market_id, status, reason_code, fault, window_basis, delivered_at_snapshot, window_ends_at, method, resolution, idempotency_key, created_at, received_at, inspection_due_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'changed_mind','none','no_reason_14d', now() - interval '20 days', now() - interval '1 day','pickup','refund',gen_random_uuid(),$8::timestamptz,$9::timestamptz,$10::timestamptz)`,
+    [id, randomUUID(), randomUUID(), userId, randomUUID(), o.market ?? "EG", o.status ?? "REQUESTED", o.createdAt ?? "2029-12-31T10:00:00Z", o.status === "RECEIVED" ? "2029-12-31T12:00:00Z" : null, o.inspectionDueAt ?? null],
+  ));
+  return { id, userId };
+};
+
+export const seedDispute = async (raw: SqlClient, o: { market?: string; status?: string; slaDueAt?: string; createdAt?: string } = {}): Promise<{ id: string }> => {
+  const ret = await seedReturn(raw, { market: o.market ?? "EG", status: "REQUESTED" });
+  const id = randomUUID();
+  await relaxed(raw, () => raw.query(
+    `INSERT INTO disputes (id, return_request_id, user_id, store_id, market_id, status, reason_code, shopper_note, sla_due_at, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,'other','call me on +201000000000',$7::timestamptz,$8::timestamptz)`,
+    [id, ret.id, ret.userId, randomUUID(), o.market ?? "EG", o.status ?? "OPEN", o.slaDueAt ?? "2100-01-01T00:00:00Z", o.createdAt ?? "2029-12-31T10:00:00Z"],
+  ));
+  return { id };
+};
+
+export const seedPayout = async (raw: SqlClient, o: { market?: string; status?: string; holdReason?: string | null; createdAt?: string } = {}): Promise<{ id: string; storeId: string }> => {
+  const id = randomUUID();
+  const storeId = randomUUID();
+  const start = `2029-${String(1 + (Number.parseInt(id.slice(0, 2), 16) % 12)).padStart(2, "0")}-01`;
+  await relaxed(raw, () => raw.query(
+    `INSERT INTO payouts (id, batch_id, store_id, market_id, cycle_start, cycle_end, gross_minor, adjustments_minor, net_minor, currency, status, hold_reason, idempotency_key, created_at, settled_at)
+     VALUES ($1,$2,$3,$4,$5::date,$5::date + 6,250000,-10000,240000,'EGP',$6,$7,$8,$9::timestamptz, CASE WHEN $6 = 'SETTLED' THEN now() END)`,
+    [id, randomUUID(), storeId, o.market ?? "EG", start, o.status ?? "SCHEDULED", o.holdReason ?? null, randomUUID(), o.createdAt ?? "2029-12-31T10:00:00Z"],
+  ));
+  return { id, storeId };
+};
+
+export const seedPayoutHold = async (raw: SqlClient, storeId: string): Promise<void> => {
+  await relaxed(raw, () => raw.query("INSERT INTO payout_holds (id, store_id, market_id, reason, starts_at) VALUES ($1,$2,'EG','risk','2029-12-30T00:00:00Z')", [randomUUID(), storeId]));
+};
+
 const staffHeaders = (t: TestApp, token: string, extra: Record<string, string> = {}): Record<string, string> => ({ ...bearer(token), "idempotency-key": idemKey(t), ...extra });
 const MISSING = "00000000-0000-4000-8000-00000000dead";
 
@@ -193,6 +254,72 @@ export const ADMIN_FIXTURES: Readonly<Record<string, RouteFixture>> = {
       const d = await seedDlq(t.raw);
       const { token } = await t.admin(["ops"]);
       return { req: { method: "POST", url: "/v1/eg/admin/dlq/discard", headers: staffHeaders(t, token), payload: { ids: [d.id], reason_code: "obsolete" } }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/refunds": {
+    happy: async (t) => {
+      await seedRefund(t.raw);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/refunds?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/payouts": {
+    happy: async (t) => {
+      await seedPayout(t.raw);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/payouts?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/payouts/{payout_id}": {
+    happy: async (t) => {
+      const p = await seedPayout(t.raw);
+      await seedPayoutHold(t.raw, p.storeId);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "GET", url: `/v1/eg/admin/payouts/${p.id}`, headers: bearer(token) }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const p = await seedPayout(t.raw, { market: "AE" });
+      const { token } = await t.admin(["finance"]);
+      return { method: "GET", url: `/v1/eg/admin/payouts/${p.id}`, headers: bearer(token) };
+    },
+  },
+  "POST /v1/{market}/admin/payouts/{payout_id}/hold": {
+    happy: async (t) => {
+      const p = await seedPayout(t.raw);
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/payouts/${p.id}/hold`, headers: staffHeaders(t, token), payload: { reason_code: "risk_review" } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const p = await seedPayout(t.raw, { market: "AE" });
+      const { token } = await t.admin(["finance"]);
+      return { method: "POST", url: `/v1/eg/admin/payouts/${p.id}/hold`, headers: staffHeaders(t, token), payload: { reason_code: "risk_review" } };
+    },
+  },
+  "POST /v1/{market}/admin/payouts/{payout_id}/release": {
+    // Always dual approval: the call files the request and answers 409 dual-approval-required.
+    happy: async (t) => {
+      const p = await seedPayout(t.raw, { status: "ON_HOLD", holdReason: "ops:risk_review" });
+      const { token } = await t.admin(["finance"]);
+      return { req: { method: "POST", url: `/v1/eg/admin/payouts/${p.id}/release`, headers: staffHeaders(t, token), payload: { reason_code: "issue_resolved" } }, status: 409 };
+    },
+    otherTenant: async (t) => {
+      const p = await seedPayout(t.raw, { market: "AE", status: "ON_HOLD", holdReason: "ops:risk_review" });
+      const { token } = await t.admin(["finance"]);
+      return { method: "POST", url: `/v1/eg/admin/payouts/${p.id}/release`, headers: staffHeaders(t, token), payload: { reason_code: "issue_resolved" } };
+    },
+  },
+  "GET /v1/{market}/admin/returns": {
+    happy: async (t) => {
+      await seedReturn(t.raw);
+      const { token } = await t.admin(["ops"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/returns?limit=10", headers: bearer(token) }, status: 200 };
+    },
+  },
+  "GET /v1/{market}/admin/disputes": {
+    happy: async (t) => {
+      await seedDispute(t.raw);
+      const { token } = await t.admin(["trust_safety"]);
+      return { req: { method: "GET", url: "/v1/eg/admin/disputes?limit=10", headers: bearer(token) }, status: 200 };
     },
   },
   "GET /v1/{market}/admin/approval-requests": {

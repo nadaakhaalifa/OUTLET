@@ -224,6 +224,6 @@ describe("KYC case detail and roles catalogue", () => {
 
 describe("coverage", () => {
   it("has a fixture for every admin route (routes.test.ts runs the matrix)", () => {
-    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(26);
+    expect(Object.keys(ADMIN_FIXTURES)).toHaveLength(33);
   });
 });

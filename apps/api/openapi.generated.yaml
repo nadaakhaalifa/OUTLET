@@ -3596,6 +3596,170 @@ paths:
           layer: app
           source: default
       x-max-queries: 10
+  /v1/{market}/admin/disputes:
+    get:
+      operationId: adminListDisputes
+      summary: "Disputes, newest first (default: the open queue, OPEN and UNDER_REVIEW), with the open and past-SLA counts. Ids, reason code and SLA only; the shopper's note is never returned"
+      tags:
+        - Admin Orders
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - OPEN
+              - UNDER_REVIEW
+              - RESOLVED_SHOPPER
+              - RESOLVED_SELLER
+              - WITHDRAWN
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        return_request_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - OPEN
+                            - UNDER_REVIEW
+                            - RESOLVED_SHOPPER
+                            - RESOLVED_SELLER
+                            - WITHDRAWN
+                        reason_code:
+                          type: string
+                          maxLength: 60
+                        assigned:
+                          type: boolean
+                        sla_due_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                        past_sla:
+                          type: boolean
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                        resolved_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                      required:
+                        - id
+                        - return_request_id
+                        - store_id
+                        - status
+                        - reason_code
+                        - assigned
+                        - sla_due_at
+                        - past_sla
+                        - created_at
+                        - resolved_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                  summary:
+                    type: object
+                    properties:
+                      open:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      past_sla:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - open
+                      - past_sla
+                    additionalProperties: false
+                required:
+                  - items
+                  - next_cursor
+                  - summary
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: dispute.decide
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+      x-paginated: keyset
   /v1/{market}/admin/dlq:
     get:
       operationId: adminListDlq
@@ -5395,6 +5559,942 @@ paths:
       x-idempotency:
         header: required
         mode: store
+  /v1/{market}/admin/payouts:
+    get:
+      operationId: adminListPayouts
+      summary: Seller payouts, newest first (status filter), with the open counts and net amounts per status
+      tags:
+        - Admin Finance
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - SCHEDULED
+              - ON_HOLD
+              - APPROVED
+              - SENT
+              - SETTLED
+              - FAILED
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - SCHEDULED
+                            - ON_HOLD
+                            - APPROVED
+                            - SENT
+                            - SETTLED
+                            - FAILED
+                        mode:
+                          type: string
+                          enum:
+                            - transfer
+                            - statement
+                        cycle_start:
+                          type: string
+                          format: date
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                        cycle_end:
+                          type: string
+                          format: date
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                        gross:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        adjustments:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        net:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        hold_reason:
+                          anyOf:
+                            - type: string
+                              maxLength: 100
+                            - type: "null"
+                        failure_code:
+                          anyOf:
+                            - type: string
+                              maxLength: 100
+                            - type: "null"
+                        approval_request_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        sent_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                        settled_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      required:
+                        - id
+                        - store_id
+                        - status
+                        - mode
+                        - cycle_start
+                        - cycle_end
+                        - gross
+                        - adjustments
+                        - net
+                        - hold_reason
+                        - failure_code
+                        - approval_request_id
+                        - sent_at
+                        - settled_at
+                        - created_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                  summary:
+                    maxItems: 40
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - SCHEDULED
+                            - ON_HOLD
+                            - APPROVED
+                            - FAILED
+                        count:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        net:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                      required:
+                        - status
+                        - count
+                        - net
+                      additionalProperties: false
+                required:
+                  - items
+                  - next_cursor
+                  - summary
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+      x-paginated: keyset
+  /v1/{market}/admin/payouts/{payout_id}:
+    get:
+      operationId: adminGetPayout
+      summary: One payout with its line count and the store's open payout holds
+      tags:
+        - Admin Finance
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: payout_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  store_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - SCHEDULED
+                      - ON_HOLD
+                      - APPROVED
+                      - SENT
+                      - SETTLED
+                      - FAILED
+                  mode:
+                    type: string
+                    enum:
+                      - transfer
+                      - statement
+                  cycle_start:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  cycle_end:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  gross:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  adjustments:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  net:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  hold_reason:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  failure_code:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  approval_request_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  sent_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  settled_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                  line_count:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  open_holds:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        reason:
+                          type: string
+                          enum:
+                            - risk
+                            - enforcement
+                            - kyc
+                            - dispute
+                        seller_order_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        starts_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                        released_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                      required:
+                        - id
+                        - reason
+                        - seller_order_id
+                        - starts_at
+                        - released_at
+                      additionalProperties: false
+                required:
+                  - id
+                  - store_id
+                  - status
+                  - mode
+                  - cycle_start
+                  - cycle_end
+                  - gross
+                  - adjustments
+                  - net
+                  - hold_reason
+                  - failure_code
+                  - approval_request_id
+                  - sent_at
+                  - settled_at
+                  - created_at
+                  - line_count
+                  - open_holds
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 5
+  /v1/{market}/admin/payouts/{payout_id}/hold:
+    post:
+      operationId: adminHoldPayout
+      summary: Put a SCHEDULED or APPROVED payout ON_HOLD with a fixed reason code (intent and result audited; holding it again with the same reason changes nothing; another state is 409 invalid-transition)
+      tags:
+        - Admin Finance
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: payout_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  store_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - SCHEDULED
+                      - ON_HOLD
+                      - APPROVED
+                      - SENT
+                      - SETTLED
+                      - FAILED
+                  mode:
+                    type: string
+                    enum:
+                      - transfer
+                      - statement
+                  cycle_start:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  cycle_end:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  gross:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  adjustments:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  net:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  hold_reason:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  failure_code:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  approval_request_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  sent_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  settled_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                required:
+                  - id
+                  - store_id
+                  - status
+                  - mode
+                  - cycle_start
+                  - cycle_end
+                  - gross
+                  - adjustments
+                  - net
+                  - hold_reason
+                  - failure_code
+                  - approval_request_id
+                  - sent_at
+                  - settled_at
+                  - created_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.hold
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason_code:
+                  type: string
+                  enum:
+                    - risk_review
+                    - iban_check
+                    - dispute_pending
+                    - kyc_review
+                    - seller_request
+                    - other
+              required:
+                - reason_code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
+  /v1/{market}/admin/payouts/{payout_id}/release:
+    post:
+      operationId: adminReleasePayout
+      summary: "Release an ON_HOLD payout back to SCHEDULED (always dual approval: this files the request, the second approver's vote runs it; the earlier approval is void and the payout must be approved again). 409 dual-approval-required with the request id in detail"
+      tags:
+        - Admin Finance
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: payout_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  store_id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - SCHEDULED
+                      - ON_HOLD
+                      - APPROVED
+                      - SENT
+                      - SETTLED
+                      - FAILED
+                  mode:
+                    type: string
+                    enum:
+                      - transfer
+                      - statement
+                  cycle_start:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  cycle_end:
+                    type: string
+                    format: date
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                  gross:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  adjustments:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  net:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  hold_reason:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  failure_code:
+                    anyOf:
+                      - type: string
+                        maxLength: 100
+                      - type: "null"
+                  approval_request_id:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  sent_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  settled_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                      - type: "null"
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                required:
+                  - id
+                  - store_id
+                  - status
+                  - mode
+                  - cycle_start
+                  - cycle_end
+                  - gross
+                  - adjustments
+                  - net
+                  - hold_reason
+                  - failure_code
+                  - approval_request_id
+                  - sent_at
+                  - settled_at
+                  - created_at
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Idempotency key in flight or state conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Idempotency key reused with another body, or a business rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.hold
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_write
+          key: user
+          limit: 30
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason_code:
+                  type: string
+                  enum:
+                    - issue_resolved
+                    - error_corrected
+                    - review_cleared
+              required:
+                - reason_code
+              additionalProperties: false
+      x-idempotency:
+        header: required
+        mode: store
   /v1/{market}/admin/privacy/pii-access-log:
     get:
       operationId: adminListPiiAccessLog
@@ -5887,6 +6987,426 @@ paths:
           layer: app
           source: default
       x-max-queries: 3
+      x-paginated: keyset
+  /v1/{market}/admin/refunds:
+    get:
+      operationId: adminListRefunds
+      summary: Refunds, newest first (status filter). Order ids, store id, status, route and amount only; the page also carries the not-completed counts and amounts of the market and how many are overdue
+      tags:
+        - Admin Finance
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - REQUESTED
+              - MANUAL_REVIEW
+              - FAILED
+              - PROCESSING
+              - COMPLETED
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        order_group_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        seller_order_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        return_request_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - REQUESTED
+                            - MANUAL_REVIEW
+                            - FAILED
+                            - PROCESSING
+                            - COMPLETED
+                        reason:
+                          type: string
+                          enum:
+                            - return
+                            - seller_rejected
+                            - goodwill
+                            - cancellation
+                        route:
+                          type: string
+                          enum:
+                            - psp_original
+                            - bnpl_provider
+                            - store_credit
+                            - bank_transfer
+                            - fawry_voucher
+                            - mixed
+                        amount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        attempts:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        overdue:
+                          type: boolean
+                        due_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                        completed_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                      required:
+                        - id
+                        - order_group_id
+                        - seller_order_id
+                        - return_request_id
+                        - store_id
+                        - status
+                        - reason
+                        - route
+                        - amount
+                        - attempts
+                        - overdue
+                        - due_at
+                        - created_at
+                        - completed_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                  summary:
+                    maxItems: 40
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - REQUESTED
+                            - MANUAL_REVIEW
+                            - FAILED
+                            - PROCESSING
+                        count:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        amount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                      required:
+                        - status
+                        - count
+                        - amount
+                      additionalProperties: false
+                  overdue_count:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - items
+                  - next_cursor
+                  - summary
+                  - overdue_count
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: refund.approve
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
+      x-paginated: keyset
+  /v1/{market}/admin/returns:
+    get:
+      operationId: adminListReturns
+      summary: "Open returns, newest first (stage filter: requested, in transit, awaiting inspection, inspection overdue), with the pipeline counts. Order and store ids only; no shopper identity"
+      tags:
+        - Admin Orders
+      security:
+        - adminPasskeySession: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: stage
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - requested
+              - in_transit
+              - awaiting_inspection
+              - inspection_overdue
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        order_group_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        seller_order_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        store_id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - REQUESTED
+                            - IN_TRANSIT
+                            - RECEIVED
+                        stage:
+                          type: string
+                          enum:
+                            - requested
+                            - in_transit
+                            - awaiting_inspection
+                            - inspection_overdue
+                        reason_code:
+                          type: string
+                          maxLength: 60
+                        resolution:
+                          type: string
+                          enum:
+                            - refund
+                            - exchange
+                            - store_credit
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                        received_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                        inspection_due_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                            - type: "null"
+                      required:
+                        - id
+                        - order_group_id
+                        - seller_order_id
+                        - store_id
+                        - status
+                        - stage
+                        - reason_code
+                        - resolution
+                        - created_at
+                        - received_at
+                        - inspection_due_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                  summary:
+                    type: object
+                    properties:
+                      requested:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      in_transit:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      awaiting_inspection:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      inspection_overdue:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - requested
+                      - in_transit
+                      - awaiting_inspection
+                      - inspection_overdue
+                    additionalProperties: false
+                required:
+                  - items
+                  - next_cursor
+                  - summary
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: return.read
+        principal: staff
+        tenant: admin
+      x-rate-limit:
+        - budget: admin_read
+          key: user
+          limit: 120
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
       x-paginated: keyset
   /v1/{market}/admin/roles:
     get:

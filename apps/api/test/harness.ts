@@ -37,7 +37,8 @@ import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/inde
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
-import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration } from "../src/modules/admin/index.js";
+import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgOpsLists, PgPiiAccessReader, PgReconciliationReader, PayoutsAdmin, StoreModeration } from "../src/modules/admin/index.js";
+import { PayoutService, UnconfiguredPayoutDestinations, UnconfiguredPayoutRail } from "@outlet/payouts";
 import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
 import { InMemoryBuyerDelivery } from "./seller-orders-fakes.js";
 import { DealsReader } from "../src/modules/catalog-public/deals-reader.js";
@@ -120,6 +121,8 @@ export interface TestApp extends ApiApp {
   /** Staff user with live standing grants for `roles` (passkey session unless amr is given); every audited admin write lands in `adminAudit`. */
   admin(roles: readonly string[], amr?: readonly string[]): Promise<{ userId: string; token: string }>;
   readonly adminAudit: InMemoryAuditStore;
+  /** The payout service behind the console hold / release routes (worker pool, test clock). */
+  readonly payoutService: PayoutService;
   shopper(): Promise<{ userId: string; token: string }>;
   /** A registered device id (what X-Device-Id carries). */
   device(): Promise<string>;
@@ -345,13 +348,17 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const adminChain = new AuditChain(adminAudit, { now });
   const chainAudit = { appendIn: (_tx: unknown, input: Parameters<AuditChain["append"]>[0]) => adminChain.append(input) };
   const kycOnboarding = new SellerOnboardingService({ app: appClient, auth: authClient, worker: roleClient(raw, "outlet_worker"), marketId: DB_MARKET, cipher: authDeps.cipher, hasher: authDeps.hasher, now }, new UnconfiguredKycCheck());
+  const adminAccess = createAdminAccess({ db: appClient, audit: chainAudit, clock: now, thresholdMinor: 0n });
+  const payoutService = new PayoutService({
+    client: roleClient(raw, "outlet_worker"), currency: "EGP", now, admin: adminAccess, rail: new UnconfiguredPayoutRail(), destinations: new UnconfiguredPayoutDestinations(), audit: { append: () => Promise.resolve() },
+  });
   const adminServices = {
-    access: createAdminAccess({ db: appClient, audit: chainAudit, clock: now, thresholdMinor: 0n }),
+    access: adminAccess,
     approvals: new PgApprovalReader(appClient),
     kyc: new PgKycAdmin(roleClient(raw, "outlet_worker"), kycOnboarding),
     reconciliation: new PgReconciliationReader(roleClient(raw, "outlet_worker")),
     dashboard: new PgDashboardReader(roleClient(raw, "outlet_worker")),
-    ...(opts.adminOps === false ? {} : { ops: { flags: new FlagAdmin(appClient, chainAudit), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient, now), piiAccess: new PgPiiAccessReader(appClient), attention: new AttentionAdmin(appClient, chainAudit, now), dlq: new DlqAdmin(roleClient(raw, "outlet_worker"), appClient, chainAudit, now), stores: new StoreModeration({ stores: new StoreService({ ...catalogDeps, now }), sellers: kycOnboarding, audit: chainAudit }) } }),
+    ...(opts.adminOps === false ? {} : { ops: { flags: new FlagAdmin(appClient, chainAudit), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient, now), piiAccess: new PgPiiAccessReader(appClient), attention: new AttentionAdmin(appClient, chainAudit, now), dlq: new DlqAdmin(roleClient(raw, "outlet_worker"), appClient, chainAudit, now), lists: new PgOpsLists(roleClient(raw, "outlet_worker")), payouts: new PayoutsAdmin(payoutService, appClient, chainAudit), stores: new StoreModeration({ stores: new StoreService({ ...catalogDeps, now }), sellers: kycOnboarding, audit: chainAudit }) } }),
   };
   const deps: ApiDeps = {
     admin: () => adminServices,
@@ -426,6 +433,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     shopper,
     admin,
     adminAudit,
+    payoutService,
     device,
     raw,
     counter,

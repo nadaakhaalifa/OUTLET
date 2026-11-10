@@ -13,3 +13,5 @@ export { AttentionAdmin } from "./attention-admin.js";
 export type { AttentionAdminPort, AttentionPageDto } from "./attention-admin.js";
 export { DlqAdmin } from "./dlq-admin.js";
 export type { DlqAdminPort } from "./dlq-admin.js";
+export { PayoutsAdmin, PgOpsLists } from "./ops-lists.js";
+export type { OpsListsPort, PayoutServicePort, PayoutsAdminPort } from "./ops-lists.js";

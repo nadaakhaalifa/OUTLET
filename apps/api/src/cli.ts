@@ -8,6 +8,7 @@ import { PgAuditStore } from "@outlet/audit-log";
 import { brandClient } from "@outlet/db";
 import { InventoryService, ReservationService } from "@outlet/inventory";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
+import { PayoutService, UnconfiguredPayoutDestinations, UnconfiguredPayoutRail } from "@outlet/payouts";
 import { uuidv7 } from "@outlet/ids";
 import { InMemoryTaxRateProvider } from "@outlet/tax";
 import { DefectService, ListingService, PublicCatalogService, StoreService, VariantService } from "@outlet/catalog";
@@ -38,7 +39,7 @@ import {
 import type { CheckoutServices } from "./modules/checkout/index.js";
 import { DealsReader } from "./modules/catalog-public/deals-reader.js";
 import { DiscoveryReader } from "./modules/catalog-public/discovery-reader.js";
-import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgPiiAccessReader, PgReconciliationReader, StoreModeration, unconfiguredAdminServices } from "./modules/admin/index.js";
+import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PayoutsAdmin, PgKycAdmin, PgOpsLists, PgPiiAccessReader, PgReconciliationReader, StoreModeration, unconfiguredAdminServices } from "./modules/admin/index.js";
 import type { AdminServices } from "./modules/admin/index.js";
 import { AttributeSetReader } from "./modules/seller-catalog/index.js";
 import { SellerInventoryService } from "./modules/seller-inventory/index.js";
@@ -165,10 +166,11 @@ for (const m of listMarkets()) {
   // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. Audited staff writes append to the Postgres hash chain (outlet_app, same transaction); dual approval is required at every amount (threshold 0) until finance sets one.
   const auditPort = new PgAuditStore(appClient);
   const kycOnboarding = workerClient === undefined ? undefined : new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck());
+  const adminAccess = createAdminAccess({ db: appClient, audit: auditPort, clock: () => new Date(), thresholdMinor: 0n });
   admins.set(marketId, workerClient === undefined || kycOnboarding === undefined
     ? unconfiguredAdminServices
     : {
-        access: createAdminAccess({ db: appClient, audit: auditPort, clock: () => new Date(), thresholdMinor: 0n }),
+        access: adminAccess,
         // Store suspend / reinstate need the seller.kyc worker job (seller and KYC case) and the store context (stores + public read model); without DATABASE_URL_WORKER the whole console is 503.
         ops: {
           flags: new FlagAdmin(appClient, auditPort), audit: new PgAuditReader(appClient), elevations: new PgElevationReader(appClient), piiAccess: new PgPiiAccessReader(appClient),
@@ -178,6 +180,10 @@ for (const m of listMarkets()) {
           attention: new AttentionAdmin(appClient, auditPort),
           // Relay DLQ replay / discard run as the outbox.relay worker job (worker pool); inside this branch the worker pool exists, otherwise the whole console is 503.
           dlq: new DlqAdmin(workerClient, appClient, auditPort),
+          // Refunds / returns / disputes lists read as finance.refunds, payouts as finance.payouts (existing worker policies, no new grant). Hold / release reuse PayoutService (state machine,
+          // version lock, outbox) with the rail and destinations Unconfigured: neither is reachable from hold or release, so no money can move from this path.
+          lists: new PgOpsLists(workerClient),
+          payouts: new PayoutsAdmin(new PayoutService({ client: workerClient, currency: "EGP", now: () => new Date(), admin: adminAccess, rail: new UnconfiguredPayoutRail(), destinations: new UnconfiguredPayoutDestinations(), audit: { append: () => Promise.resolve() } }), appClient, auditPort),
         },
         dashboard: new PgDashboardReader(workerClient),
         approvals: new PgApprovalReader(appClient),

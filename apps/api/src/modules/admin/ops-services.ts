@@ -7,6 +7,7 @@ import type { FlagRecord, KillSwitchName } from "@outlet/flags";
 import type { Principal } from "@outlet/policy";
 import type { AttentionAdminPort } from "./attention-admin.js";
 import type { DlqAdminPort } from "./dlq-admin.js";
+import type { OpsListsPort, PayoutsAdminPort } from "./ops-lists.js";
 import type { StoreModerationPort } from "./store-moderation.js";
 import { decodeCursor, encodeCursor } from "../../platform/cursor.js";
 import { Problems } from "../../platform/problem.js";
@@ -59,6 +60,10 @@ export interface AdminOpsServices {
   readonly attention?: AttentionAdminPort;
   /** Absent until composed (needs the worker pool: it runs as job outbox.relay): the DLQ routes answer 503. */
   readonly dlq?: DlqAdminPort;
+  /** Absent until composed (needs the worker pool: jobs finance.refunds / finance.payouts): the refunds, payouts, returns and disputes routes answer 503. */
+  readonly lists?: OpsListsPort;
+  /** Absent until composed (needs the worker pool and a PayoutService): payout hold / release answer 503. */
+  readonly payouts?: PayoutsAdminPort;
 }
 
 const noopAudit = { record: (): Promise<void> => Promise.resolve() };

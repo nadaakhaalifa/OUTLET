@@ -21,6 +21,10 @@ import {
   AuditLogEntryPage, AuditQuery, AuditVerifyQuery, AuditVerifyResult, ElevationDecisionInput, ElevationDto, ElevationIdParams, ElevationPage, ElevationRequestInput, ElevationsQuery,
    FeatureFlagDto, FeatureFlagPage, FlagKeyParams, FlagsQuery, KillSwitchInput, PiiAccessLogEntryPage, PiiAccessLogQuery, StoreIdParams, StoreReinstateInput, StoreSuspendInput } from "./dto-ops.js";
 import { DashboardService } from "./dashboard.js";
+import {
+  DisputePage, DisputesQuery, PayoutDetailDto, PayoutDto, PayoutDtoStrip, PayoutHoldInput, PayoutIdParams, PayoutPage, PayoutReleaseInput, PayoutsQuery, RefundPage, RefundsQuery, ReturnPage, ReturnsQuery,
+} from "./dto-lists.js";
+import type { OpsListsPort, PayoutsAdminPort } from "./ops-lists.js";
 import { DlqActionResult, DlqDiscardInput, DlqPage, DlqQuery, DlqReplayInput } from "./dto-dlq.js";
 import type { DlqAdminPort } from "./dlq-admin.js";
 import { isMoneyEventType } from "@outlet/outbox";
@@ -46,6 +50,13 @@ const KILL_RELEASE_ACTION = "kill_switch.engage";
 const STORE_SUSPEND_ACTION = "store.suspend";
 const STORE_REINSTATE_ACTION = "store.reinstate";
 const DLQ_DISCARD_MONEY_ACTION = "dlq.discard.money";
+const PAYOUT_RELEASE_ACTION = "payout.release";
+/** The reason the requester filed for a payout release (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
+const releasePayload = (payload: Readonly<Record<string, unknown>>): PayoutReleaseInput => {
+  const r = PayoutReleaseInput.safeParse({ reason_code: payload.reasonCode });
+  if (!r.success) throw Problems.unprocessable("invalid-approval-payload");
+  return r.data;
+};
 /** The ids and reason the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
 const dlqPayload = (payload: Readonly<Record<string, unknown>>): DlqDiscardInput => {
   const r = DlqDiscardInput.safeParse({ ids: payload.ids, reason_code: payload.reasonCode });
@@ -92,6 +103,18 @@ export class AdminController {
     const a = this.ops(t).attention;
     if (a === undefined) throw Problems.unavailable("admin-unavailable");
     return a;
+  }
+
+  private lists(t: Staff): OpsListsPort {
+    const l = this.ops(t).lists;
+    if (l === undefined) throw Problems.unavailable("admin-unavailable");
+    return l;
+  }
+
+  private payouts(t: Staff): PayoutsAdminPort {
+    const p = this.ops(t).payouts;
+    if (p === undefined) throw Problems.unavailable("admin-unavailable");
+    return p;
   }
 
   private dlq(t: Staff): DlqAdminPort {
@@ -216,6 +239,15 @@ export class AdminController {
       const applied = await dlq.discard(t.principal, input.ids, input.reason_code);
       await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
         await dlq.record(t.principal, applied, { reasonCode: input.reason_code, approvalRequestId: req.id }, tx);
+      });
+    } else if (decided.action === PAYOUT_RELEASE_ACTION) {
+      const payouts = this.payouts(t);
+      // The effect runs as the finance.payouts worker job (another role): prove the request first, apply the idempotent release, then claim + audit in one transaction.
+      const req = await t.svc.access.verifyApproved(t.principal, decided.id);
+      const input = releasePayload(req.payload);
+      const applied = await payouts.release(t.principal, req.targetId);
+      await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
+        await payouts.recordRelease(t.principal, tx, { payoutId: req.targetId, reasonCode: input.reason_code, approvalRequestId: req.id, changed: applied.changed });
       });
     } else if (decided.action === ELEVATION_ACTION) {
       // The executor is the last approver, never the requester.
@@ -378,6 +410,106 @@ export class AdminController {
     const page = await t.svc.reconciliation.listItems(t.marketId, p.reconciliation_run_id, q, this.deps.clock.now());
     if (page === null) throw Problems.notFound();
     return page;
+  }
+
+  // ---------------------------------------------------------------- refunds, payouts, returns, disputes (Money and Orders lists; ids, statuses and amounts only)
+
+  @Get("refunds")
+  @Paginated()
+  @Authorize("refund.approve", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListRefunds", summary: "Refunds, newest first (status filter). Order ids, store id, status, route and amount only; the page also carries the not-completed counts and amounts of the market and how many are overdue", tags: ["Admin Finance"], query: RefundsQuery, response: RefundPage, maxQueries: 4 })
+  listRefunds(@Ctx() s: RequestState, @Query() q: RefundsQuery): Promise<RefundPage> {
+    const t = this.staff(s);
+    return this.lists(t).refunds(t.marketId, q, this.deps.clock.now());
+  }
+
+  @Get("payouts")
+  @Paginated()
+  @Authorize("payout.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListPayouts", summary: "Seller payouts, newest first (status filter), with the open counts and net amounts per status", tags: ["Admin Finance"], query: PayoutsQuery, response: PayoutPage, maxQueries: 4 })
+  listPayouts(@Ctx() s: RequestState, @Query() q: PayoutsQuery): Promise<PayoutPage> {
+    const t = this.staff(s);
+    return this.lists(t).payouts(t.marketId, q);
+  }
+
+  @Get("payouts/:payout_id")
+  @Authorize("payout.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminGetPayout", summary: "One payout with its line count and the store's open payout holds", tags: ["Admin Finance"], params: PayoutIdParams, response: PayoutDetailDto, maxQueries: 5 })
+  async getPayout(@Ctx() s: RequestState, @Params() p: PayoutIdParams): Promise<PayoutDetailDto> {
+    const t = this.staff(s);
+    const row = await this.lists(t).payout(t.marketId, p.payout_id);
+    if (row === null) throw Problems.notFound();
+    return row;
+  }
+
+  @Post("payouts/:payout_id/hold")
+  @HttpCode(200)
+  @Authorize("payout.hold", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminHoldPayout",
+    summary: "Put a SCHEDULED or APPROVED payout ON_HOLD with a fixed reason code (intent and result audited; holding it again with the same reason changes nothing; another state is 409 invalid-transition)",
+    tags: ["Admin Finance"],
+    params: PayoutIdParams,
+    body: PayoutHoldInput,
+    response: PayoutDto,
+    status: 200,
+    maxQueries: 8,
+  })
+  async holdPayout(@Ctx() s: RequestState, @Params() p: PayoutIdParams, @Body() body: PayoutHoldInput): Promise<PayoutDto> {
+    const t = this.staff(s);
+    const lists = this.lists(t);
+    await this.payouts(t).hold(t.principal, p.payout_id, body.reason_code);
+    const row = await lists.payout(t.marketId, p.payout_id);
+    if (row === null) throw Problems.notFound();
+    return PayoutDtoStrip.parse(row);
+  }
+
+  @Post("payouts/:payout_id/release")
+  @HttpCode(200)
+  @Authorize("payout.hold", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminWrite })
+  @Contract({
+    operationId: "adminReleasePayout",
+    summary: "Release an ON_HOLD payout back to SCHEDULED (always dual approval: this files the request, the second approver's vote runs it; the earlier approval is void and the payout must be approved again). 409 dual-approval-required with the request id in detail",
+    tags: ["Admin Finance"],
+    params: PayoutIdParams,
+    body: PayoutReleaseInput,
+    response: PayoutDto,
+    status: 200,
+    maxQueries: 8,
+  })
+  async releasePayout(@Ctx() s: RequestState, @Params() p: PayoutIdParams, @Body() body: PayoutReleaseInput): Promise<PayoutDto> {
+    const t = this.staff(s);
+    const payouts = this.payouts(t);
+    // Only a payout that can be released is filed (404 outside the market, 409 invalid-transition otherwise); the approvers vote on this exact payout and reason.
+    const { storeId } = await payouts.assertReleasable(t.principal, p.payout_id);
+    const r = await t.svc.access.requireApproval(t.principal, { action: PAYOUT_RELEASE_ACTION, targetType: "payout", targetId: p.payout_id, payload: { reasonCode: body.reason_code, storeId } });
+    if (!r.required) throw Problems.internal("dual-approval-expected");
+    throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
+  }
+
+  @Get("returns")
+  @Paginated()
+  @Authorize("return.read", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListReturns", summary: "Open returns, newest first (stage filter: requested, in transit, awaiting inspection, inspection overdue), with the pipeline counts. Order and store ids only; no shopper identity", tags: ["Admin Orders"], query: ReturnsQuery, response: ReturnPage, maxQueries: 4 })
+  listReturns(@Ctx() s: RequestState, @Query() q: ReturnsQuery): Promise<ReturnPage> {
+    const t = this.staff(s);
+    return this.lists(t).returns(t.marketId, q, this.deps.clock.now());
+  }
+
+  @Get("disputes")
+  @Paginated()
+  @Authorize("dispute.decide", market, { tenant: "admin" })
+  @RateLimit({ budget: RATE_BUDGETS.adminRead })
+  @Contract({ operationId: "adminListDisputes", summary: "Disputes, newest first (default: the open queue, OPEN and UNDER_REVIEW), with the open and past-SLA counts. Ids, reason code and SLA only; the shopper's note is never returned", tags: ["Admin Orders"], query: DisputesQuery, response: DisputePage, maxQueries: 4 })
+  listDisputes(@Ctx() s: RequestState, @Query() q: DisputesQuery): Promise<DisputePage> {
+    const t = this.staff(s);
+    return this.lists(t).disputes(t.marketId, q, this.deps.clock.now());
   }
 
   // ---------------------------------------------------------------- roles catalogue
