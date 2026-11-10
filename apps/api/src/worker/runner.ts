@@ -2,6 +2,8 @@ import type { Logger } from "@outlet/logger";
 import { withSpan } from "@outlet/observability";
 import type { WorkerMetrics } from "@outlet/observability";
 import { OutboxDispatchRelay, errorCode } from "@outlet/outbox";
+import { measureStaleness, outboxPendingSource } from "@outlet/search";
+import type { SearchFreshness } from "@outlet/search";
 import type { OutboxEvent, PendingByType, SqlClient } from "@outlet/outbox";
 import { RELAY_KILL_SWITCH, UNSUBSCRIBED_TYPES } from "./jobs.js";
 import type { Handler, KillRead, WorkerJobDef } from "./jobs.js";
@@ -41,6 +43,13 @@ export interface UnroutedStatus {
   readonly types: readonly string[];
 }
 
+export interface SearchStatus {
+  readonly stalenessMs: number;
+  /** search_provider_unconfigured while no external engine exists (ADR-0010, ADR-0029): never reported as fresh. */
+  readonly status: SearchFreshness;
+  readonly deadLettered: number;
+}
+
 export interface RunnerStatus {
   readonly marketId: string;
   readonly relayKilled: boolean;
@@ -49,6 +58,8 @@ export interface RunnerStatus {
   readonly consumers: readonly ConsumerStatus[];
   /** Pending events no consumer of this process claims (null until the first lag read). */
   readonly unrouted: UnroutedStatus | null;
+  /** Search index staleness (null until the first lag read). */
+  readonly search: SearchStatus | null;
 }
 
 class HandlerTimeout extends Error {
@@ -85,6 +96,7 @@ export class MarketRunner {
   private killed = new Set<string>();
   private lag = new Map<string, { pending: number; lagSeconds: number }>();
   private unrouted: UnroutedStatus | null = null;
+  private search: SearchStatus | null = null;
   private lastLagAt = 0;
 
   constructor(private readonly o: RunnerOptions) {
@@ -129,6 +141,7 @@ export class MarketRunner {
         return { job: j.name, killed: this.killed.has(j.name), pending: l?.pending ?? 0, lagSeconds: l?.lagSeconds ?? null };
       }),
       unrouted: this.unrouted,
+      search: this.search,
     };
   }
 
@@ -214,6 +227,11 @@ export class MarketRunner {
       types: other.map((p) => p.type).sort(),
     };
     this.o.metrics.setUnrouted(this.o.marketId, this.unrouted.pending, this.unrouted.lagSeconds);
+    // Search staleness from the outbox.relay context (it already reads outbox_events). No engine is contracted (ADR-0010, ADR-0029): the engine state is fixed
+    // Unconfigured, so the status reads search_provider_unconfigured (never fresh) unless an event is stale or dead-lettered.
+    const s = await measureStaleness(outboxPendingSource(this.o.relayDb, this.o.marketId), this.now(), { state: () => Promise.resolve({ configured: false, unsyncedDocuments: 0, oldestUnsyncedAt: null }) });
+    this.search = { stalenessMs: s.stalenessMs, status: s.status, deadLettered: s.deadLettered };
+    this.o.metrics.setSearchStaleness(this.o.marketId, s.stalenessMs, s.status);
   }
 
   private async dispatch(e: OutboxEvent): Promise<void> {

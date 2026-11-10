@@ -29,7 +29,7 @@ export type DlqReplayInput = z.infer<typeof DlqReplayInput>;
 export const DlqDiscardInput = z.strictObject({ ids: Ids, reason_code: z.enum(DISCARD_REASON_CODES) });
 export type DlqDiscardInput = z.infer<typeof DlqDiscardInput>;
 export const DlqActionResult = z.strictObject({
-  results: z.array(z.strictObject({ id: z.uuid(), outcome: z.enum(["replayed", "discarded", "not_in_dlq"]) })).max(DLQ_MAX_IDS),
+  results: z.array(z.strictObject({ id: z.uuid(), outcome: z.enum(["replayed", "discarded", "not_in_dlq", "expired"]) })).max(DLQ_MAX_IDS),
   /** Rows actually changed (replayed or discarded). */
   changed: z.number().int().min(0),
 });

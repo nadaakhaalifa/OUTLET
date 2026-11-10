@@ -4,12 +4,14 @@ import type { RoleSqlClient } from "@outlet/db";
 import type { Logger } from "@outlet/logger";
 import type { WorkerMetrics } from "@outlet/observability";
 import { errorCode } from "@outlet/outbox";
+import { INTEGRITY_REQUESTED_EVENT } from "@outlet/payouts";
+import { RETENTION_REQUESTED_EVENT } from "@outlet/privacy";
 import { ROLLUP_REQUESTED_EVENT } from "@outlet/reporting";
-import { ROLLUP_KILL_SWITCH } from "./jobs.js";
+import { LEDGER_INTEGRITY_KILL_SWITCH, RETENTION_KILL_SWITCH, ROLLUP_KILL_SWITCH } from "./jobs.js";
 import type { KillRead } from "./jobs.js";
 import { tryLeaderTx } from "./leader.js";
 
-export type TickScope = "snapshots" | "sales" | "nightly";
+export type TickScope = "snapshots" | "sales" | "nightly" | "retention" | "ledger_integrity";
 export type TickOutcome = "emitted" | "exists" | "not_leader" | "killed" | "failed";
 
 export interface SchedulerMarket {
@@ -22,6 +24,10 @@ export interface SchedulerMarket {
 export const SNAPSHOT_WINDOW_MS = 60_000;
 export const SALES_WINDOW_MS = 300_000;
 export const NIGHTLY_LAST_HOUR = 6;
+/** Ledger integrity tick: once per market-local date, opens one hour after the rollup nightly (01:00-06:00 local) so the two scans never start together. */
+export const INTEGRITY_FIRST_HOUR = 1;
+/** Retention purge ticks: hourly in the 03:00-06:00 local window (after the nightly rollup and ledger integrity), so a backlog is drained over three runs a night. */
+export const RETENTION_FIRST_HOUR = 3;
 
 export interface TickWindow {
   readonly scope: TickScope;
@@ -49,6 +55,10 @@ export const windowsAt = (at: Date, tz: string): readonly TickWindow[] => {
   ];
   const local = localParts(at, tz);
   if (local.hour < NIGHTLY_LAST_HOUR) out.push({ scope: "nightly", key: `nightly:${local.date}`, startMs: Date.parse(`${local.date}T00:00:00Z`) });
+  if (local.hour >= INTEGRITY_FIRST_HOUR && local.hour < NIGHTLY_LAST_HOUR) out.push({ scope: "ledger_integrity", key: `ledger_integrity:${local.date}`, startMs: Date.parse(`${local.date}T00:00:00Z`) });
+  if (local.hour >= RETENTION_FIRST_HOUR && local.hour < NIGHTLY_LAST_HOUR) {
+    out.push({ scope: "retention", key: `retention:${local.date}:${String(local.hour).padStart(2, "0")}`, startMs: Date.parse(`${local.date}T${String(local.hour).padStart(2, "0")}:00:00Z`) });
+  }
   return out;
 };
 
@@ -119,10 +129,16 @@ export class RollupScheduler {
     const out: TickResult[] = [];
     for (const m of this.o.markets) {
       const killed = await this.o.kill.isKilled(ROLLUP_KILL_SWITCH, { marketId: m.marketId });
+      // The retention scope is gated by its own switch, read only inside its window (a deleting job: unreadable flag store = killed, fail closed).
+      let retentionKilled: boolean | undefined;
+      // Ledger integrity is money class (unreadable flag store = killed), read only inside its window.
+      let integrityKilled: boolean | undefined;
       for (const w of windowsAt(at, m.timezone)) {
         const memo = `${m.marketId}|${w.scope}`;
         if (this.done.get(memo) === w.key) continue;
-        const outcome = killed ? "killed" : await this.emit(m.marketId, w, at);
+        if (w.scope === "ledger_integrity") integrityKilled ??= await this.o.kill.isKilled(LEDGER_INTEGRITY_KILL_SWITCH, { marketId: m.marketId });
+        if (w.scope === "retention") retentionKilled ??= await this.o.kill.isKilled(RETENTION_KILL_SWITCH, { marketId: m.marketId });
+        const outcome = (w.scope === "retention" ? retentionKilled === true : w.scope === "ledger_integrity" ? integrityKilled === true : killed) ? "killed" : await this.emit(m.marketId, w, at);
         if (outcome === "emitted" || outcome === "exists") this.done.set(memo, w.key);
         this.o.metrics.recordTick({ market_id: m.marketId, scope: w.scope, outcome });
         out.push({ marketId: m.marketId, scope: w.scope, outcome });
@@ -139,8 +155,8 @@ export class RollupScheduler {
         if (!(await tryLeaderTx(tx, `worker.scheduler|${marketId}|${w.scope}`))) return "not_leader";
         const r = await tx.query(
           `INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, visibility, payload, occurred_at)
-           VALUES ($1, $2, 'reporting_rollup', $1, $3, 'internal', $4::jsonb, $5::timestamptz) ON CONFLICT (id) DO NOTHING RETURNING id`,
-          [id, marketId, ROLLUP_REQUESTED_EVENT, JSON.stringify({ scope: w.scope, window: w.key }), at.toISOString()],
+           VALUES ($1, $2, $6, $1, $3, 'internal', $4::jsonb, $5::timestamptz) ON CONFLICT (id) DO NOTHING RETURNING id`,
+          [id, marketId, w.scope === "retention" ? RETENTION_REQUESTED_EVENT : w.scope === "ledger_integrity" ? INTEGRITY_REQUESTED_EVENT : ROLLUP_REQUESTED_EVENT, JSON.stringify({ scope: w.scope, window: w.key }), at.toISOString(), w.scope === "retention" ? "privacy_retention" : w.scope === "ledger_integrity" ? "ledger_integrity" : "reporting_rollup"],
         );
         return r.rows.length === 1 ? "emitted" : "exists";
       });

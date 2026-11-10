@@ -49,10 +49,11 @@ describe("admin DLQ routes", () => {
     expect(await event(d.eventId)).toEqual({ attempts: 0, published_at: null, dead_lettered_at: null, last_error: null });
     expect(await dlqStatus(d.id)).toBe("replayed");
     const entries = t.adminAudit.entries.slice(before);
-    expect(entries).toMatchObject([{ action: "dlq.replayed", actorId: sec.userId, diff: { after: { ids: [d.id], count: 1 } } }]);
+    expect(entries).toMatchObject([{ action: "dlq.replay_requested", actorId: sec.userId, diff: { after: { ids: [d.id], count: 1 } } }, { action: "dlq.replayed", actorId: sec.userId, diff: { after: { ids: [d.id], count: 1 } } }]);
     expect(JSON.stringify(entries)).not.toContain("201000000000");
     expect(await post(sec.token, "replay", { ids: [d.id] })).toMatchObject({ status: 200, body: { results: [{ id: d.id, outcome: "not_in_dlq" }], changed: 0 } });
-    expect(t.adminAudit.entries).toHaveLength(before + 1);
+    // The retry records only its intent (no after entry: nothing changed).
+    expect(t.adminAudit.entries.slice(before + 2).map((e) => e.action)).toEqual(["dlq.replay_requested"]);
   });
 
   it("an id of another market is not_in_dlq and untouched (indistinguishable from unknown); bad bodies are 400; non-managing roles 403", async () => {
@@ -75,7 +76,7 @@ describe("admin DLQ routes", () => {
     expect(await dlqStatus(d.id)).toBe("discarded");
     expect(await event(d.eventId)).toMatchObject({ last_error: "discarded:obsolete" });
     expect((await event(d.eventId)).published_at).not.toBeNull();
-    expect(t.adminAudit.entries.slice(before)).toMatchObject([{ action: "dlq.discarded", diff: { after: { ids: [d.id], count: 1, reasonCode: "obsolete" } } }]);
+    expect(t.adminAudit.entries.slice(before)).toMatchObject([{ action: "dlq.discard_requested", diff: { after: { ids: [d.id], count: 1, reasonCode: "obsolete" } } }, { action: "dlq.discarded", diff: { after: { ids: [d.id], count: 1, reasonCode: "obsolete" } } }]);
   });
 
   it("discard of a money event type files a dual-approval request, changes nothing until the second approver votes, then applies once", async () => {
@@ -99,13 +100,31 @@ describe("admin DLQ routes", () => {
     expect(t.adminAudit.entries.slice(before).map((e) => e.action)).toContain("dlq.discarded");
   });
 
-  it("no audit, no claim: the discard effect is idempotent, so a failing audit port leaves the event discarded and a retry converges", async () => {
+  it("intent first: a failing audit port stops the effect (nothing changes, so nothing is unaudited); a retry after the audit recovers works", async () => {
     const d = await seedDlq(t.raw);
     const staff = { kind: "admin" as const, userId: (await t.admin(["ops"])).userId, marketId: "EG", roles: ["ops"], scopes: [] };
-    const svc = new DlqAdmin(roleClient(t.raw, "outlet_worker"), roleClient(t.raw, "outlet_app"), { appendIn: () => Promise.reject(new Error("audit down")) });
-    const applied = await svc.discard(staff, [d.id], "duplicate");
-    await expect(svc.record(staff, applied, { reasonCode: "duplicate" })).rejects.toThrow("audit down");
-    expect((await svc.discard(staff, [d.id], "duplicate")).changed).toBe(0);
-    await expect(svc.replay(staff, [randomUUID()])).resolves.toMatchObject({ changed: 0 });
+    const down = new DlqAdmin(roleClient(t.raw, "outlet_worker"), roleClient(t.raw, "outlet_app"), { appendIn: () => Promise.reject(new Error("audit down")) });
+    await expect(down.discard(staff, [d.id], "duplicate")).rejects.toThrow("audit down");
+    await expect(down.replay(staff, [d.id])).rejects.toThrow("audit down");
+    expect(await dlqStatus(d.id)).toBe("open");
+    const seen: { action: string }[] = [];
+    const ok = new DlqAdmin(roleClient(t.raw, "outlet_worker"), roleClient(t.raw, "outlet_app"), { appendIn: (_tx, e) => { seen.push({ action: e.action }); return Promise.resolve(); } });
+    const applied = await ok.discard(staff, [d.id], "duplicate");
+    expect(applied.changed).toBe(1);
+    await ok.record(staff, applied, { reasonCode: "duplicate" });
+    expect(seen.map((x) => x.action)).toEqual(["dlq.discard_requested", "dlq.discarded"]);
+    await expect(ok.replay(staff, [randomUUID()])).resolves.toMatchObject({ changed: 0 });
+  });
+
+  it("replay writes the intent entry before the effect, then the after entry; an event dead-lettered over 45 days ago is expired and not audited as replayed", async () => {
+    const d = await seedDlq(t.raw);
+    const old = await seedDlq(t.raw);
+    await t.raw.query("UPDATE outbox_events SET dead_lettered_at = now() - interval '46 days' WHERE id = $1", [old.eventId]);
+    const sec = await t.admin(["security"]);
+    const before = t.adminAudit.entries.length;
+    const r = await post(sec.token, "replay", { ids: [d.id, old.id] });
+    expect(r.body).toMatchObject({ changed: 1, results: [{ id: d.id, outcome: "replayed" }, { id: old.id, outcome: "expired" }] });
+    expect(await dlqStatus(old.id)).toBe("open");
+    expect(t.adminAudit.entries.slice(before).map((e) => e.action)).toEqual(["dlq.replay_requested", "dlq.replayed"]);
   });
 });

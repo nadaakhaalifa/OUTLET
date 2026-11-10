@@ -20209,6 +20209,7 @@ components:
                   - "replayed"
                   - "discarded"
                   - "not_in_dlq"
+                  - "expired"
             required:
               - "id"
               - "outcome"

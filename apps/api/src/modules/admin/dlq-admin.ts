@@ -14,20 +14,22 @@ export interface DlqAdminPort {
   list(p: Principal, q: { readonly limit: number; readonly cursor?: string | undefined }): Promise<DlqPage>;
   /** Event type per open DLQ id of the market (ids not in the DLQ are absent): decides whether a discard needs a second approver. */
   types(p: Principal, ids: readonly string[]): Promise<ReadonlyMap<string, string>>;
-  /** Effect + audit entry `dlq.replayed` (counts and ids only) when something changed. Idempotent: an id not in the DLQ is `not_in_dlq`. */
+  /** Intent audit `dlq.replay_requested` BEFORE the effect, then the effect, then `dlq.replayed` (counts and ids only) when something changed. Idempotent: an id not in the DLQ is `not_in_dlq`; one dead-lettered over 45 days ago is `expired` (discard only). */
   replay(p: Principal, ids: readonly string[]): Promise<DlqActionResult>;
-  /** Effect only (runs as the outbox.relay worker job, other role than the audit write): the caller records it with `record`, in the approval's claim transaction when there is one. */
+  /** Intent audit `dlq.discard_requested` BEFORE the effect, then the effect only (runs as the outbox.relay worker job, other role than the audit write): the caller records it with `record`, in the approval's claim transaction when there is one. */
   discard(p: Principal, ids: readonly string[], reason: DiscardReasonCode): Promise<DlqActionResult>;
   /** Audit entry `dlq.discarded` for an applied discard; `tx` joins the caller's transaction (an approval claim), otherwise its own outlet_app transaction. */
   record(p: Principal, r: DlqActionResult, extra: { readonly reasonCode: DiscardReasonCode; readonly approvalRequestId?: string }, tx?: Queryable): Promise<void>;
 }
 
-const result = (rs: readonly DlqResult[]): DlqActionResult => ({ results: rs.map((r) => ({ id: r.id, outcome: r.outcome })), changed: rs.filter((r) => r.outcome !== "not_in_dlq").length });
+const APPLIED = (o: DlqResult["outcome"]): boolean => o === "replayed" || o === "discarded";
+const result = (rs: readonly DlqResult[]): DlqActionResult => ({ results: rs.map((r) => ({ id: r.id, outcome: r.outcome })), changed: rs.filter((r) => APPLIED(r.outcome)).length });
 
 /**
  * Staff side of the relay DLQ. The mutation runs as the `outbox.relay` worker job (the only job whose policies reach outbox_events and dlq_messages, migration 0007)
- * on the market's own pin, through `@outlet/outbox` DlqReplay (no SECURITY DEFINER function, no new grant). The audit entry is appended afterwards through the
- * outlet_app chain, like store moderation: both effects are idempotent, so a failed audit write is repaired by retrying (a replay then reports `not_in_dlq`).
+ * on the market's own pin, through `@outlet/outbox` DlqReplay (no SECURITY DEFINER function, no new grant). The worker and the audit chain are different roles, so one
+ * transaction cannot hold both: an INTENT entry (`dlq.*_requested`, ids and reason only) is committed through the outlet_app chain BEFORE the effect, so an
+ * effect is never unaudited (a failed intent write stops it; a failed after-entry leaves the intent as the trail, and a retry reports `not_in_dlq`).
  */
 export class DlqAdmin implements DlqAdminPort {
   constructor(private readonly worker: RoleSqlClient<"outlet_worker">, private readonly app: RoleSqlClient<"outlet_app">, private readonly audit: AuditAppendPort, private readonly now: () => Date = () => new Date()) {}
@@ -60,6 +62,7 @@ export class DlqAdmin implements DlqAdminPort {
 
   async replay(p: Principal, ids: readonly string[]): Promise<DlqActionResult> {
     const actor = this.actor(p);
+    await this.intent(p, actor, "dlq.replay_requested", ids, {});
     const r = result(await this.dlq(p).replay(p.marketId, ids));
     if (r.changed > 0) {
       await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, (tx) =>
@@ -70,7 +73,8 @@ export class DlqAdmin implements DlqAdminPort {
   }
 
   async discard(p: Principal, ids: readonly string[], reason: DiscardReasonCode): Promise<DlqActionResult> {
-    this.actor(p);
+    const actor = this.actor(p);
+    await this.intent(p, actor, "dlq.discard_requested", ids, { reasonCode: reason });
     return result(await this.dlq(p).discard(p.marketId, ids, reason));
   }
 
@@ -82,8 +86,18 @@ export class DlqAdmin implements DlqAdminPort {
     await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, body);
   }
 
+  private async intent(p: Principal, actor: string, action: "dlq.replay_requested" | "dlq.discard_requested", ids: readonly string[], extra: Record<string, string>): Promise<void> {
+    const wanted = [...new Set(ids)];
+    await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, (tx) =>
+      this.audit.appendIn(tx, {
+        marketId: p.marketId, actorType: "staff", actorId: actor, action, targetType: "dlq_batch", targetId: wanted[0] ?? p.marketId,
+        diff: { after: { ids: wanted, count: wanted.length, ...extra } }, ipHash: null, deviceId: null, requestId: null,
+      }),
+    );
+  }
+
   private async append(tx: Queryable, p: Principal, actor: string, action: "dlq.replayed" | "dlq.discarded", r: DlqActionResult, extra: Record<string, string>): Promise<void> {
-    const ids = r.results.filter((x) => x.outcome !== "not_in_dlq").map((x) => x.id);
+    const ids = r.results.filter((x) => APPLIED(x.outcome)).map((x) => x.id);
     await this.audit.appendIn(tx, {
       marketId: p.marketId, actorType: "staff", actorId: actor, action, targetType: "dlq_batch", targetId: ids[0] ?? p.marketId,
       diff: { after: { ids, count: ids.length, skipped: r.results.length - ids.length, ...extra } }, ipHash: null, deviceId: null, requestId: null,

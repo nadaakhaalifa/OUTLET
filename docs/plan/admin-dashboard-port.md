@@ -50,7 +50,7 @@ Legend - **Served**: `yes` = the API already returns this (reuse the reader); `c
 | overdueRefunds | `refunds_overdue` (not COMPLETED and `due_at < now`) | snapshot: `refunds` | `refund.approve` | no |
 | giftCardLiability | - | **no equivalent, drop** (gift cards Phase 2; store-credit liability can come later from ledger) | | |
 | reconciliation | `recon_unmatched` (OPEN + ESCALATED exceptions, oldest age, count aged > 3 days) | `reconciliation_exceptions` | `finance.summary.read` NEW | partly: runs/items served via `PgReconciliationReader` (needs reason code); count is no |
-| drift (balance check) | `ledger_integrity` (latest integrity-job result: trial balance per currency, hash chain ok) | integrity job output (none persisted today) | `finance.summary.read` NEW | no: **Not connected yet** until the integrity job stores results. Never computed live on request (full `postings` scan). |
+| drift (balance check) | `ledger_integrity` (latest integrity-job result: trial balance per currency, hash chain ok) | latest stored `reconciliation_runs` row (source `ledger_integrity`, nightly job, migration 0039) | `finance.summary.read` NEW | no: **Not connected yet** only until the first nightly run; stale after 26 h. Never computed live on request (full `postings` scan). |
 | lowStock / soldOut | - | **drop** (Seller Center concern); replaced by `verified_discount_share` | | |
 | products | `listings_by_status` (PUBLISHED, IN_REVIEW, PAUSED, BLOCKED) | snapshot: `products` | `listing.read` | no |
 | attention: nearDeadline, proofs, requests, intlDelayed, needsReview, newCountry, lowStock | - | **drop** (single-shop / cross-border / production concepts) | | |

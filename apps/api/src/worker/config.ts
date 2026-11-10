@@ -32,8 +32,13 @@ export const WorkerEnvSchema = z.object({
   WORKER_DRAIN_MS: int(0, 30_000, 30_000),
   WORKER_SCHEDULER_MS: int(1_000, 60_000, 5_000),
   WORKER_LAG_MS: int(1_000, 300_000, 15_000),
+  /** Retention purge (privacy.retention): true (default) counts rows only; "false" deletes. Deletes are irreversible, so only an explicit "false" turns them on. */
+  WORKER_RETENTION_DRY_RUN: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  /** Retention purge time budget per run (ms); the loop stops between batches once spent and the next hourly window continues. Must stay below WORKER_HANDLER_TIMEOUT_MS. */
+  WORKER_RETENTION_BUDGET_MS: int(1_000, 110_000, 8_000),
   OTEL_EXPORTER: z.enum(["otlp", "none"]).default("none"),
-}).refine((e) => leaseMsFor(e) <= MAX_LEASE_MS, { message: "WORKER_BATCH_SIZE x WORKER_HANDLER_TIMEOUT_MS + 60 s must not exceed 15 minutes", path: ["WORKER_BATCH_SIZE"] });
+}).refine((e) => leaseMsFor(e) <= MAX_LEASE_MS, { message: "WORKER_BATCH_SIZE x WORKER_HANDLER_TIMEOUT_MS + 60 s must not exceed 15 minutes", path: ["WORKER_BATCH_SIZE"] })
+  .refine((e) => e.WORKER_RETENTION_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_RETENTION_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_RETENTION_BUDGET_MS"] });
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;
 
 /** Parses env; the error lists variable names and issue codes only (never values: connection strings are secrets). */

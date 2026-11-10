@@ -116,7 +116,8 @@ describe("tick ids and windows", () => {
   });
 
   it("windows: nightly only before 06:00 local", () => {
-    expect(windowsAt(new Date("2026-11-10T03:59:00Z"), "Africa/Cairo").map((w) => w.scope)).toEqual(["snapshots", "sales", "nightly"]);
+    expect(windowsAt(new Date("2026-11-10T03:59:00Z"), "Africa/Cairo").map((w) => w.scope)).toEqual(["snapshots", "sales", "nightly", "ledger_integrity", "retention"]);
+    expect(windowsAt(new Date("2026-11-09T22:30:00Z"), "Africa/Cairo").map((w) => w.scope)).toEqual(["snapshots", "sales", "nightly"]); // 00:30: before the integrity window opens
     expect(windowsAt(new Date("2026-11-10T04:00:00Z"), "Africa/Cairo").map((w) => w.scope)).toEqual(["snapshots", "sales"]);
   });
 

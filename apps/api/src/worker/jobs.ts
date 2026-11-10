@@ -3,9 +3,14 @@ import { LateRefundConsumer, RejectedOrderInventoryRelease, SELLER_ORDER_REJECTE
 import type { RefundPort } from "@outlet/checkout";
 import { contextClient } from "@outlet/db";
 import type { RoleSqlClient } from "@outlet/db";
+import { CHANNEL_KILL_SWITCH_NAMES } from "@outlet/notifications";
+import type { Channel } from "@outlet/notifications";
+import { isKillSwitchName } from "@outlet/flags";
 import type { KillSwitchName } from "@outlet/flags";
+import type { Logger } from "@outlet/logger";
 import { COMMITTED_RELEASED_EVENT, RELEASE_REQUIRED_EVENT, ReleaseRequiredConsumer } from "@outlet/inventory";
 import { ATTENTION_OPENED_EVENT } from "@outlet/ops-attention";
+import type { RetentionMetricsPort } from "@outlet/privacy";
 import { makeEnv } from "@outlet/pricing-integrity";
 import { pricingDisplayLookup } from "@outlet/search";
 import type { InboxOutcome } from "@outlet/outbox";
@@ -20,7 +25,7 @@ import { NoCategoryReturnPolicy, UnconfiguredEvidence } from "../modules/returns
 import { pgSqlClient } from "../platform/db.js";
 import type { PoolLike } from "../platform/db.js";
 import { Problems } from "../platform/problem.js";
-import { attentionHandlers, financeRefundHandlers, promotionsSettleHandlers, reportingRollupHandlers, searchSyncHandlers, shipmentCancelHandlers } from "../worker-consumers.js";
+import { attentionHandlers, financeRefundHandlers, ledgerIntegrityHandlers, notificationHandlers, promotionsSettleHandlers, reportingRollupHandlers, retentionHandlers, searchSyncHandlers, shipmentCancelHandlers } from "../worker-consumers.js";
 import type { OutboxEventIn } from "../worker-consumers.js";
 
 export type Handler = (e: OutboxEventIn) => Promise<InboxOutcome>;
@@ -51,6 +56,11 @@ export interface KillRead {
 export const RELAY_KILL_SWITCH: KillSwitchName = "workers.outbox.relay.enabled";
 export const ROLLUP_KILL_SWITCH: KillSwitchName = "workers.reporting.rollup.enabled";
 export const SEARCH_SYNC_KILL_SWITCH: KillSwitchName = "workers.search.sync.enabled";
+/** Nightly ledger integrity run and its scheduler tick. Money class: unreadable flag store = killed (no run), never a silent "ok". */
+export const LEDGER_INTEGRITY_KILL_SWITCH: KillSwitchName = "workers.ledger.integrity.enabled";
+/** Retention purge (privacy.retention): deletes rows, so the switch is fail CLOSED (flag store unreadable = killed), unlike the other workers.* ui switches. */
+export const RETENTION_KILL_SWITCH: KillSwitchName = "workers.privacy.retention.enabled";
+export const NOTIFICATIONS_KILL_SWITCH: KillSwitchName = "workers.notifications.dispatch.enabled";
 
 /**
  * Event types that have no in-process consumer BY DESIGN and may be acked as published without a handler (chief review F1). Everything else with
@@ -58,8 +68,9 @@ export const SEARCH_SYNC_KILL_SWITCH: KillSwitchName = "workers.search.sync.enab
  * - ops.attention_opened: informational (the item row is the record); a notification consumer may subscribe later (then remove it from here).
  * - shipment.cancelled: result of ShipmentCancelConsumer; nothing downstream yet.
  * - inventory.committed_released: result of ReleaseRequiredConsumer; the replenisher reads inventory_levels, not this event.
+ * - ledger.integrity_failed: informational; alerting reads the stored reconciliation run status and its exceptions, not this event (a consumer may subscribe later).
  */
-export const UNSUBSCRIBED_TYPES: readonly string[] = [ATTENTION_OPENED_EVENT, SHIPMENT_CANCELLED_EVENT, COMMITTED_RELEASED_EVENT];
+export const UNSUBSCRIBED_TYPES: readonly string[] = [ATTENTION_OPENED_EVENT, SHIPMENT_CANCELLED_EVENT, COMMITTED_RELEASED_EVENT, "ledger.integrity_failed"];
 
 /**
  * No PSP is contracted (ADR-0029): refund execution is never reached from the worker's cancellation consumer (createForCancellation only records
@@ -101,6 +112,8 @@ export interface MarketJobsInput {
    */
   readonly lateRefunds?: RefundPort;
   readonly now?: () => Date;
+  /** privacy.retention: dryRun defaults to true (counts only; WORKER_RETENTION_DRY_RUN=false deletes). */
+  readonly retention?: { readonly dryRun?: boolean; readonly budgetMs?: number; readonly metrics?: RetentionMetricsPort; readonly log?: Logger; readonly inventoryPath?: string };
 }
 
 /**
@@ -112,6 +125,12 @@ const searchDisplay = (i: MarketJobsInput, opts: { readonly now?: () => Date }):
     client: contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "search.sync" }), marketId: i.marketId,
     killSwitch: { isKilled: () => i.kill.isKilled("pricing.price_watch.enabled", { marketId: i.marketId }).catch(() => true) }, ...opts,
   }));
+
+/** notifications.<channel>.enabled (ui class: an unreadable store means allowed, an unknown name means killed). */
+const channelKilled = (i: MarketJobsInput, channel: Channel): Promise<boolean> => {
+  const name = CHANNEL_KILL_SWITCH_NAMES[channel];
+  return isKillSwitchName(name) ? i.kill.isKilled(name, { marketId: i.marketId }) : Promise.resolve(true);
+};
 
 /** Every inbox consumer of the worker for one market, with its kill switch. */
 export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
@@ -137,7 +156,12 @@ export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
     { name: "inventory.release", killSwitch: "workers.inventory.release.enabled", handlers: new Map<string, Handler>([[RELEASE_REQUIRED_EVENT, (e) => release.handle(e)]]) },
     { name: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: attentionHandlers(i.worker, i.marketId) },
     { name: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
+    // Deletes only through the `privacy.retention` RLS policies (migration 0040); dry run unless the owner flips WORKER_RETENTION_DRY_RUN.
+    { name: "privacy.retention", killSwitch: RETENTION_KILL_SWITCH, handlers: retentionHandlers(i.worker, i.marketId, { ...i.retention, ...opts }) },
+    { name: "finance.integrity", killSwitch: LEDGER_INTEGRITY_KILL_SWITCH, handlers: ledgerIntegrityHandlers(i.worker, i.marketId, i.now) },
     { name: "search.sync", killSwitch: SEARCH_SYNC_KILL_SWITCH, handlers: searchSyncHandlers(i.worker, i.marketId, { display: searchDisplay(i, opts) }) },
+    // Plans notification_log rows only (no channel provider, ADR-0029); per-channel notifications.<channel>.enabled switches still suppress rows (fail open).
+    { name: "notifications.dispatch", killSwitch: NOTIFICATIONS_KILL_SWITCH, handlers: notificationHandlers(i.worker, i.marketId, { isChannelKilled: (c) => channelKilled(i, c), ...opts }) },
   ];
   if (i.lateRefunds !== undefined) {
     const late = new LateRefundConsumer(contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "payments.webhook" }), i.lateRefunds);

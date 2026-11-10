@@ -40,6 +40,8 @@ export const startHealthServer = (opts: { readonly host: string; readonly port: 
           consumers: m.consumers.map((c) => ({ job: c.job, killed: c.killed, pending: c.pending, lag_seconds: c.lagSeconds })),
           // Pending types no consumer of this process claims (never acked): a consumer still has to be composed for them.
           unrouted: m.unrouted === null ? null : { pending: m.unrouted.pending, lag_seconds: m.unrouted.lagSeconds, types: m.unrouted.types },
+          // Search index staleness; status search_provider_unconfigured while no external engine exists (counts and a status token only).
+          search: m.search === null ? null : { staleness_ms: m.search.stalenessMs, status: m.search.status, dead_lettered: m.search.deadLettered },
         })),
       },
     ];

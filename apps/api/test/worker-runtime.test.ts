@@ -1,3 +1,4 @@
+import { NOTIFYING_EVENT_TYPES } from "@outlet/notifications";
 import { randomUUID } from "node:crypto";
 import { brandClient, contextClient } from "@outlet/db";
 import type { RoleSqlClient, SqlClient } from "@outlet/db";
@@ -84,7 +85,7 @@ describe("relay + inbox round trip (ops.attention consumer)", () => {
     expect(await r.turn(0)).toBe(10); // idle: back off from pollMs ...
     expect(await r.turn(10)).toBe(20); // ... doubling ...
     expect(await r.turn(40)).toBe(40); // ... up to pollMaxMs
-    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "inventory.rejected_release", "inventory.release", "ops.attention", "reporting.rollup", "search.sync"]);
+    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "inventory.rejected_release", "inventory.release", "ops.attention", "reporting.rollup", "privacy.retention", "finance.integrity", "search.sync", "notifications.dispatch"]);
   });
 
   it("a disabled kill switch parks the consumer: nothing claimed, no inbox row; health reports it killed with lag; release resumes it", async () => {
@@ -153,15 +154,32 @@ describe("routing (chief review F1, F2, F6)", () => {
   };
 
   it("a type with no consumer is never claimed or acked: it stays pending and shows as unrouted; an allow-listed type is acked", async () => {
-    const lost = await seed("order_group.placed");
+    const lost = await seed("payout.approved");
     const info = await seed("inventory.committed_released");
     const r = runner();
     await r.turn(0);
     const rows = await outbox();
     expect(rows.find((e) => e.id === lost)).toMatchObject({ published_at: null, attempts: 0 });
     expect(rows.find((e) => e.id === info)?.published_at).not.toBeNull();
-    expect(r.status().unrouted).toMatchObject({ pending: 1, types: ["order_group.placed"] });
+    expect(r.status().unrouted).toMatchObject({ pending: 1, types: ["payout.approved"] });
     expect(r.status().unrouted?.lagSeconds).toBeGreaterThanOrEqual(9);
+  });
+
+  it("ledger.integrity_failed is acked without a consumer (not a permanent unrouted row); search staleness reads search_provider_unconfigured, never fresh", async () => {
+    const id = await seed("ledger.integrity_failed", { failed: "x", market_id: M });
+    const r = runner();
+    await r.turn(0);
+    expect((await outbox()).find((e) => e.id === id)?.published_at).not.toBeNull();
+    expect(r.status().unrouted).toMatchObject({ pending: 0, types: [] });
+    expect(r.status().search).toMatchObject({ status: "search_provider_unconfigured", stalenessMs: 0, deadLettered: 0 });
+  });
+
+  it("search staleness is stale once a sync event waits past the 60 s SLO", async () => {
+    await db.query("INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, payload, occurred_at) VALUES ($1, $2, 'x', $3, 'listing.updated', '{}'::jsonb, $4)", [uuidv7(), M, randomUUID(), new Date(Date.now() - 120_000).toISOString()]);
+    const r = runner();
+    await r.turn(0);
+    expect(r.status().search).toMatchObject({ status: "stale" });
+    expect(r.status().search?.stalenessMs).toBeGreaterThanOrEqual(60_000);
   });
 
   it("every owner of a type runs in order; one failure fails the event, the retry re-runs both (the first dedupes in its inbox)", async () => {
@@ -290,7 +308,7 @@ describe("startWorker (composition, health endpoint, drain)", () => {
     try {
       await until(() => w.health().markets[0]?.lastPollAt != null);
       const consumers = w.health().markets[0]?.consumers ?? [];
-      expect(consumers.filter((c) => c.killed).map((c) => c.job).sort()).toEqual(["checkout.settle", "finance.refunds"]);
+      expect(consumers.filter((c) => c.killed).map((c) => c.job).sort()).toEqual(["checkout.settle", "finance.integrity", "finance.refunds", "privacy.retention"]);
       expect(w.health().markets[0]?.relayKilled).toBe(false);
       expect(lines.join("\n")).toContain("flag store read failed");
       t += 10_000;
@@ -335,11 +353,11 @@ describe("worker composition pieces", () => {
   it("registers every consumer; seller_order.rejected has two owners; the late refund is routed only with a PSP port", () => {
     const jobs = marketJobs({ marketId: M, worker, app, kill: killing([]) });
     expect(jobs.flatMap((j) => [...j.handlers.keys()]).sort()).toEqual(
-      ["inventory.release_required", "inventory.restocked", "inventory.sold_out", "listing.activated", "listing.updated", "price.changed", "promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"],
+      [...NOTIFYING_EVENT_TYPES, "inventory.release_required", "inventory.restocked", "inventory.sold_out", "ledger.integrity_requested", "listing.activated", "listing.updated", "price.changed", "privacy.retention_requested", "promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"].sort(),
     );
     const withPsp = marketJobs({ marketId: M, worker, app, kill: killing([]), now: () => new Date(), lateRefunds: { requestRefund: () => Promise.resolve({ accepted: true }) } });
     expect(withPsp.find((j) => j.name === "payments.late_refund")?.handlers.has("order_group.late_payment_refund")).toBe(true);
-    expect(UNSUBSCRIBED_TYPES).toEqual(["ops.attention_opened", "shipment.cancelled", "inventory.committed_released"]);
+    expect(UNSUBSCRIBED_TYPES).toEqual(["ops.attention_opened", "shipment.cancelled", "inventory.committed_released", "ledger.integrity_failed"]);
   });
 
   it("parseWorkerEnv refuses a lease over 15 minutes", () => {

@@ -314,8 +314,8 @@ describe("GET /v1/eg/admin/dashboard (HTTP, real readers on the test database)",
     const { client, statements } = wrapped();
     const svc = new DashboardService({ ...fakes().services, dashboard: new PgDashboardReader(client) }, { now: () => NOW, logger, market });
     await svc.build({ ...principal("finance"), roles: ["finance", "ops"] }, "EG", { range: "90d" });
-    expect(statements.length).toBeLessThanOrEqual(3);
-    expect(statements.every((s) => /admin_dashboard_snapshots|market_sales_daily|store_sales_daily/.test(s))).toBe(true);
+    expect(statements.length).toBeLessThanOrEqual(4); // snapshots, sales, top stores, stored ledger_integrity run
+    expect(statements.every((s) => /admin_dashboard_snapshots|market_sales_daily|store_sales_daily|reconciliation_runs/.test(s))).toBe(true);
     // live readers are fakes here; the real ones run (and are counted by the route fixture) in routes.test.ts.
   });
 

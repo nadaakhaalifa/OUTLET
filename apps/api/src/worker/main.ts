@@ -3,7 +3,7 @@ import type { RoleSqlClient } from "@outlet/db";
 import { FlagService, PostgresFlagStore } from "@outlet/flags";
 import type { Logger } from "@outlet/logger";
 import { listMarkets } from "@outlet/markets-config";
-import { createWorkerMetrics } from "@outlet/observability";
+import { createRetentionMetrics, createWorkerMetrics } from "@outlet/observability";
 import type { WorkerMetrics } from "@outlet/observability";
 import { errorCode } from "@outlet/outbox";
 import { leaseMsFor } from "./config.js";
@@ -47,6 +47,7 @@ export const startWorker = async (d: WorkerDeps): Promise<RunningWorker> => {
   const metrics = d.metrics ?? createWorkerMetrics();
   const kill: KillRead =
     d.kill ?? new FlagService({ store: new PostgresFlagStore(d.worker), audit: { record: () => Promise.resolve() }, onError: (e) => { d.log.warn("worker: flag store read failed", { error: errorCode(e) }); } });
+  const retentionMetrics = createRetentionMetrics();
   const markets = d.markets ?? listMarkets().map((m) => ({ marketId: m.id.toUpperCase(), timezone: m.timezone }));
   const runners = markets.map(
     (m) =>
@@ -54,7 +55,7 @@ export const startWorker = async (d: WorkerDeps): Promise<RunningWorker> => {
         marketId: m.marketId,
         relayDb: contextClient(d.worker, { kind: "worker", marketId: m.marketId, job: "outbox.relay" }),
         // Consumer transactions carry statement_timeout = handler timeout (F3); the relay's own client is not bounded.
-        jobs: marketJobs({ marketId: m.marketId, worker: boundedClient(d.worker, d.env.WORKER_HANDLER_TIMEOUT_MS), app: boundedClient(d.app, d.env.WORKER_HANDLER_TIMEOUT_MS), kill, now }),
+        jobs: marketJobs({ marketId: m.marketId, retention: { dryRun: d.env.WORKER_RETENTION_DRY_RUN, budgetMs: d.env.WORKER_RETENTION_BUDGET_MS, metrics: retentionMetrics, log: d.log }, worker: boundedClient(d.worker, d.env.WORKER_HANDLER_TIMEOUT_MS), app: boundedClient(d.app, d.env.WORKER_HANDLER_TIMEOUT_MS), kill, now }),
         kill, metrics, log: d.log, now,
         pollMs: d.env.WORKER_POLL_MS, pollMaxMs: d.env.WORKER_POLL_MAX_MS, batchSize: d.env.WORKER_BATCH_SIZE, maxAttempts: d.env.WORKER_MAX_ATTEMPTS,
         leaseMs: leaseMsFor(d.env), handlerTimeoutMs: d.env.WORKER_HANDLER_TIMEOUT_MS, lagMs: d.env.WORKER_LAG_MS,

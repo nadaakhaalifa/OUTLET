@@ -3747,6 +3747,7 @@ paths:
                             - replayed
                             - discarded
                             - not_in_dlq
+                            - expired
                       required:
                         - id
                         - outcome
@@ -3884,6 +3885,7 @@ paths:
                             - replayed
                             - discarded
                             - not_in_dlq
+                            - expired
                       required:
                         - id
                         - outcome

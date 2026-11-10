@@ -29,7 +29,7 @@ Status: **Proposed** (architect, 2026-11-10). Plan: `docs/plan/admin-dashboard-p
 | `payouts` | `payout.read` | snapshots | NEW |
 | `recon_unmatched` | `finance.summary.read` | snapshots (`reconciliation_exceptions`) | NEW (PgReconciliationReader lists runs/items only, reason-coded) |
 | `cod_unremitted` | `finance.summary.read` | none until a courier adapter is configured | returns `unavailable/not_connected` |
-| `ledger_integrity` | `finance.summary.read` | integrity-job result | returns `unavailable/not_connected` until the job persists results |
+| `ledger_integrity` | `finance.summary.read` | latest stored `reconciliation_runs` row, source `ledger_integrity` (`PgDashboardReader.ledgerIntegrity`, migration 0039) | `ok` with `{balanced, chain_ok, checked_at}` (`as_of` = run finish time; a mismatch is status `ok` with `balanced:false` and/or `chain_ok:false`, rendered red); `unavailable/not_connected` only while no run exists; `unavailable/stale` when the run is older than 26 h; `read_failed` on a read or parse error. Never computed on the request path. |
 | `kyc_queue` | `seller_kyc.review` | `PgKycAdmin.count` (worker ctx `seller.kyc`) | list YES, add `count` |
 | `stores_moderation` | `store.read` | snapshots | NEW |
 | `price_enforcement`, `verified_discount_share` | `price_integrity.read` | snapshots | NEW (enforcement list route is contract-only) |
