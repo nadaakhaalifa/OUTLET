@@ -1,6 +1,6 @@
 # ADR-0015: Admin dashboard aggregates (rollup tables, policy actions, GMV definition)
 
-Status: Proposed (needs chief-reviewer and owner approval: policy, RLS and finance aggregates are two-key areas). Date: 2026-11-10.
+Status: Accepted. Chief-reviewer sign-off 2026-11-10 (approve with fixes, all applied); owner approval 2026-11-10 ("approve ADR-0015 and ADR-0016"). Date: 2026-11-10.
 Plan: `docs/plan/admin-dashboard-port.md` (section 4 D1-D3, section 5). Contract: `docs/api/admin-dashboard-contract.md`. Relates to ADR-0011 (roles and RLS contexts).
 
 ## Context

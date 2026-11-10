@@ -1,7 +1,7 @@
 # ADR-0016: Worker process (outbox dispatch, inbox consumers, rollup scheduler)
 
-- Status: **Proposed**. Two-key area (it composes the finance.refunds, checkout.settle, late-refund and inventory-release consumers and holds an outlet_app credential): needs a fresh-context review and owner approval before merge (`needs-human`).
-- **Owner approval required (two-key):** the outlet_app uses listed in Decision 5 and migration 0037 may not merge without explicit human owner approval.
+- Status: **Accepted** (2026-11-10). Two-key area (it composes the finance.refunds, checkout.settle, late-refund and inventory-release consumers and holds an outlet_app credential): fresh-context chief review done (REJECT → fixes F1–F7, F9, F10 applied → APPROVE WITH FIXES, residuals applied); owner approval given 2026-11-10 ("approve ADR-0015 and ADR-0016").
+- **Owner approval (two-key):** the outlet_app uses listed in Decision 5 and migration 0037 were approved by the owner on 2026-11-10. Any new outlet_app use in the worker reopens this ADR.
 - Revision 2 (2026-11-10): chief review of 922f4d9..86480d7 (REJECT on F1-F4) applied: F1-F7, F9, F10. F8 and F11 are deferred follow-ups (see "Not done / open").
 - Date: 2026-11-10
 - Relates to: ADR-0011 (roles, worker jobs, relay per market), ADR-0014 (API vs worker pools), ADR-0015 (rollup cadence), ADR-0029 (unconfigured adapters fail closed).
