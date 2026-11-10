@@ -11,7 +11,8 @@ import { uuidv7 } from "../lib/uuid7";
 
 interface Msg { readonly ok: boolean; readonly key: MessageKey }
 
-const isResult = (d: unknown): d is { changed: number } => typeof d === "object" && d !== null && typeof (d as { changed?: unknown }).changed === "number";
+const isResult = (d: unknown): d is { changed: number; results?: readonly { outcome?: unknown }[] } => typeof d === "object" && d !== null && typeof (d as { changed?: unknown }).changed === "number";
+const hasExpired = (d: { results?: readonly { outcome?: unknown }[] }): boolean => (d.results ?? []).some((x) => x.outcome === "expired");
 
 /**
  * The relay dead-letter queue: select rows, Replay (idempotent redelivery) or Discard with a fixed reason. Each write goes through the same-origin BFF with its
@@ -38,7 +39,7 @@ export function DlqQueue({ locale, market, items, now, canManage }: { locale: Lo
     const r = await adminCall(market, `dlq/${action}`, { method: "POST", idempotencyKey: uuidv7(), body: action === "discard" ? { ids, reason_code: reason } : { ids } });
     setBusy(false);
     if (r.ok) {
-      setMsg({ ok: true, key: isResult(r.data) && r.data.changed === 0 ? "admin.dlq.nothingChanged" : "admin.dlq.done" });
+      setMsg({ ok: true, key: isResult(r.data) && hasExpired(r.data) ? "admin.dlq.expired" : isResult(r.data) && r.data.changed === 0 ? "admin.dlq.nothingChanged" : "admin.dlq.done" });
       setPicked(new Set());
       router.refresh();
     } else if (r.status === 409 && r.code === "dual-approval-required") setMsg({ ok: true, key: "admin.dlq.needsApproval" });
@@ -63,7 +64,7 @@ export function DlqQueue({ locale, market, items, now, canManage }: { locale: Lo
         </div>
       ) : null}
       {hasMoney ? <p className="hint" data-testid="dlq-money-hint">{t("admin.dlq.moneyHint")}</p> : null}
-      {msg ? <p className="hint" role={msg.ok ? "status" : "alert"} data-testid="dlq-msg">{t(msg.key)}</p> : null}
+      {msg ? <p className="hint" role={msg.ok ? "status" : "alert"} data-testid="dlq-msg">{t(msg.key, { days: 45 })}</p> : null}
       <div className="tableWrap card">
         <table className="table" data-testid="dlq-table">
           <caption className="srOnly">{t("admin.dlq.title")}</caption>

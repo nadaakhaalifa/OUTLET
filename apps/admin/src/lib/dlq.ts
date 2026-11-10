@@ -19,7 +19,7 @@ export const DlqPage = z.object({ items: z.array(DlqEntry), next_cursor: z.strin
 export const DLQ_MAX_IDS = 50;
 
 /** Money event types: discarding one needs a second approver (the API decides; this only warns before the click). */
-export const isMoneyType = (t: string): boolean => t === "order_group.late_payment_refund" || t.startsWith("refund.") || t.startsWith("promotions.") || t.startsWith("payout.");
+export const isMoneyType = (t: string): boolean => ["order_group.late_payment_refund", "seller_order.cancelled", "seller_order.rejected", "shipment.cancel_required", "inventory.release_required"].includes(t) || t.startsWith("refund.") || t.startsWith("promotions.") || t.startsWith("payout.");
 
 /** Whole-unit relative age ("3 hours ago"), by the largest unit that fits. `now` is passed in so server and client render the same text. */
 export function ageLabel(iso: string, now: Date, locale: Locale): string {

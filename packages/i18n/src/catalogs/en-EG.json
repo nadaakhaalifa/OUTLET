@@ -1574,6 +1574,7 @@
   "admin.dlq.reason.test_data": "Test data",
   "admin.dlq.moneyHint": "A money event is selected: discarding it asks a second approver to confirm first.",
   "admin.dlq.done": "Saved.",
+  "admin.dlq.expired": "Too old to replay: these events failed more than {days} days ago, so replaying them could repeat a step that already ran. They can only be discarded.",
   "admin.dlq.nothingChanged": "Nothing to change: those events are no longer in the queue.",
   "admin.dlq.needsApproval": "Sent for a second approver. Nothing is discarded until they approve.",
   "admin.brand": "Outlex Admin",
