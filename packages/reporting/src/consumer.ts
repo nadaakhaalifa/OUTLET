@@ -4,7 +4,7 @@ import { createLogger } from "@outlet/logger";
 import type { Logger } from "@outlet/logger";
 import type { InboxOutcome } from "@outlet/outbox";
 import { RollupService } from "./rollup.js";
-import { ROLLUP_CONSUMER, ROLLUP_REQUESTED_EVENT, RollupRequest } from "./schemas.js";
+import { ROLLUP_CONSUMER, ROLLUP_REQUESTED_EVENT, ROLLUP_WINDOW_MS, RollupRequest, STALE_WINDOWS, tickWindowStart } from "./schemas.js";
 
 export interface RollupEventIn {
   readonly id: string;
@@ -19,8 +19,10 @@ export interface RollupEventIn {
  */
 export class RollupConsumer {
   private readonly log: Logger;
-  constructor(private readonly client: RoleSqlClient<"outlet_worker">, private readonly marketId: string, private readonly service: RollupService, log?: Logger) {
+  private readonly now: () => Date;
+  constructor(private readonly client: RoleSqlClient<"outlet_worker">, private readonly marketId: string, private readonly service: RollupService, log?: Logger, now?: () => Date) {
     this.log = log ?? createLogger();
+    this.now = now ?? (() => new Date());
   }
 
   async handle(event: RollupEventIn): Promise<InboxOutcome> {
@@ -35,6 +37,13 @@ export class RollupConsumer {
         return "processed";
       }
       const { scope, days } = req.data;
+      // A backlog (worker down, rollup kill switch released) must not replay every missed window: a snapshots / sales tick older than two of its
+      // windows is consumed without work, because the newest tick recomputes the same state. Nightly has no window here and always runs.
+      const start = tickWindowStart(req.data);
+      if (start !== null && scope !== "nightly" && this.now().getTime() - start > STALE_WINDOWS * ROLLUP_WINDOW_MS[scope]) {
+        this.log.info("reporting.rollup: stale tick skipped", { event_id: event.id, scope });
+        return "processed";
+      }
       if (scope === "snapshots") await this.service.snapshotsIn(tx, this.marketId);
       else await this.service.runRecentIn(tx, this.marketId, days ?? (scope === "nightly" ? 90 : 3));
       return "processed";

@@ -9,6 +9,8 @@ export const PG_PROCESS_NAMES = [
   "auth",
   /** Background jobs on the outlet_worker pool (ADR-0011). */
   "worker",
+  /** The worker process's small outlet_app pool (ADR-0016: voucher confirm, store-context inventory release, restock). */
+  "worker.app",
   "migrator",
 ] as const;
 export type PgProcessName = (typeof PG_PROCESS_NAMES)[number];

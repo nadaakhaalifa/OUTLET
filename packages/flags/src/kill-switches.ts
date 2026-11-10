@@ -51,6 +51,7 @@ export const KILL_SWITCHES = {
   "workers.checkout.settle.enabled": money("Worker: voucher settlement after payment (checkout.settle; off = reserved vouchers stay reserved)"),
   "workers.shipping.tracking.enabled": ui("Worker: courier AWB cancellation (shipping.tracking; off = cancellations queue)"),
   "workers.ops.attention.enabled": ui("Worker: ops attention queue (ops.attention; off = parked events queue before reaching ops)"),
+  "workers.inventory.release.enabled": ui("Worker: return committed stock after a rejection or paid cancellation (inventory.release_required; off = stock stays committed)"),
   "workers.reporting.rollup.enabled": ui("Worker: admin dashboard rollups and their scheduler ticks (reporting.rollup; off = tiles go stale)"),
 } as const satisfies Record<string, KillSwitchDef>;
 

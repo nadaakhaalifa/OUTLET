@@ -11,6 +11,8 @@ export interface WorkerMetrics {
   recordTick(attrs: { readonly market_id: string; readonly scope: string; readonly outcome: string }): void;
   /** Consumer lag: age in seconds of the oldest unpublished event of the job, and how many are pending. */
   setLag(job: string, marketId: string, lagSeconds: number, pending: number): void;
+  /** Unpublished events of types no consumer of this process claims (never acked; they wait for a consumer to be composed). */
+  setUnrouted(marketId: string, pending: number, lagSeconds: number): void;
 }
 
 const HANDLER_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
@@ -28,6 +30,13 @@ export const createWorkerMetrics = (meter: Meter = metrics.getMeter("@outlet/obs
   meter.createObservableGauge("worker_consumer_pending", { description: "Unpublished events per worker job" }).addCallback((r) => {
     for (const v of lag.values()) r.observe(v.pending, { job: v.job, market_id: v.market_id });
   });
+  const unrouted = new Map<string, { pending: number; seconds: number }>();
+  meter.createObservableGauge("worker_unrouted_pending", { description: "Unpublished events with no consumer in the worker process" }).addCallback((r) => {
+    for (const [market_id, v] of unrouted) r.observe(v.pending, { market_id });
+  });
+  meter.createObservableGauge("worker_unrouted_lag_seconds", { description: "Age of the oldest unpublished event with no consumer" }).addCallback((r) => {
+    for (const [market_id, v] of unrouted) r.observe(v.seconds, { market_id });
+  });
   return {
     recordHandled: (s, a) => {
       handled.record(s, { ...a });
@@ -43,6 +52,9 @@ export const createWorkerMetrics = (meter: Meter = metrics.getMeter("@outlet/obs
     },
     setLag: (job, marketId, seconds, pending) => {
       lag.set(`${marketId}|${job}`, { job, market_id: marketId, seconds, pending });
+    },
+    setUnrouted: (marketId, pending, seconds) => {
+      unrouted.set(marketId, { pending, seconds });
     },
   };
 };

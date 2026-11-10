@@ -12,6 +12,7 @@ describe("worker metrics", () => {
     m.recordTick({ market_id: "EG", scope: "sales", outcome: "emitted" });
     m.setLag("ops.attention", "EG", 12, 4);
     m.setLag("ops.attention", "EG", 5, 2);
+    m.setUnrouted("EG", 7, 30);
     await reader.forceFlush();
     const all = exporter.getMetrics().flatMap((r) => r.scopeMetrics.flatMap((s) => s.metrics));
     const points = (n: string) => all.find((x) => x.descriptor.name === n)?.dataPoints ?? [];
@@ -23,6 +24,8 @@ describe("worker metrics", () => {
     expect(sum("worker_scheduler_ticks_total")).toBe(1);
     expect(points("worker_consumer_lag_seconds").map((p) => p.value)).toEqual([5]);
     expect(points("worker_consumer_pending").map((p) => p.value)).toEqual([2]);
+    expect(points("worker_unrouted_pending").map((p) => p.value)).toEqual([7]);
+    expect(points("worker_unrouted_lag_seconds").map((p) => p.value)).toEqual([30]);
     expect(createWorkerMetrics()).toBeDefined();
   });
 });

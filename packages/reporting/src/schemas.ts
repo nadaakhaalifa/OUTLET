@@ -40,5 +40,15 @@ export const SNAPSHOT_VERSION = 1;
 export const ROLLUP_REQUESTED_EVENT = "reporting.rollup_requested";
 export const ROLLUP_CONSUMER = "reporting.rollup";
 /** sales: recompute the last `days` market days (default 3); nightly: the last 90; snapshots: the queue-count tiles only. */
-export const RollupRequest = z.object({ scope: z.enum(["sales", "nightly", "snapshots"]), days: z.int().min(1).max(120).optional() }).loose();
+export const RollupRequest = z.object({ scope: z.enum(["sales", "nightly", "snapshots"]), days: z.int().min(1).max(120).optional(), window: z.string().optional() }).loose();
+/** Cadence windows of the scheduler (ADR-0015/0016); a snapshots or sales tick older than STALE_WINDOWS of its own window is skipped (a newer one covers it). */
+export const ROLLUP_WINDOW_MS = { snapshots: 60_000, sales: 300_000 } as const;
+export const STALE_WINDOWS = 2;
+/** Window start of a scheduler tick (`window: "snapshots:<n>"` = n x 60 s since epoch), or null when absent or not a cadence scope. */
+export const tickWindowStart = (req: RollupRequest): number | null => {
+  if (req.scope === "nightly" || req.window === undefined) return null;
+  const m = /^(snapshots|sales):(\d{1,12})$/.exec(req.window);
+  if (m?.[1] !== req.scope || m[2] === undefined) return null;
+  return Number(m[2]) * ROLLUP_WINDOW_MS[req.scope];
+};
 export type RollupRequest = z.infer<typeof RollupRequest>;
