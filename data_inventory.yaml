@@ -5432,6 +5432,7 @@ tables:
       - {name: "is_published", type: "boolean", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
       - {name: "updated_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
       - {name: "seq", type: "bigint", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
+      - {name: "engine_synced_seq", type: "bigint", pii_class: P1, encryption: none, purpose: ["search_discovery"], lawful_basis: not_personal_data, retention: catalog_life, processors: ["cloud_cell"], residency: cell_publishable}
   - name: notification_log
     module: notifications
     phase: "1"

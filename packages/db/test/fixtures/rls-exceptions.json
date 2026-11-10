@@ -492,6 +492,12 @@
     "cmd": "select"
   },
   {
+    "table": "price_claims",
+    "policy": "price_claims__worker_search_sync",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
     "table": "price_findings",
     "policy": "price_findings__worker_pricing_channels",
     "role": "outlet_worker",
@@ -652,6 +658,12 @@
     "policy": "return_requests__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "select"
+  },
+  {
+    "table": "search_documents",
+    "policy": "search_documents__worker_search_sync",
+    "role": "outlet_worker",
+    "cmd": "all"
   },
   {
     "table": "seller_bank_accounts",
