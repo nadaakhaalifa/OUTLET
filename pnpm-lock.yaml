@@ -164,6 +164,9 @@ importers:
       '@outlet/money':
         specifier: workspace:*
         version: link:../../packages/money
+      '@outlet/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@outlet/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -176,12 +179,18 @@ importers:
       '@outlet/outbox':
         specifier: workspace:*
         version: link:../../packages/outbox
+      '@outlet/payouts':
+        specifier: workspace:*
+        version: link:../../packages/payouts
       '@outlet/policy':
         specifier: workspace:*
         version: link:../../packages/policy
       '@outlet/pricing-integrity':
         specifier: workspace:*
         version: link:../../packages/pricing-integrity
+      '@outlet/privacy':
+        specifier: workspace:*
+        version: link:../../packages/privacy
       '@outlet/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting

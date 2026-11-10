@@ -20,6 +20,8 @@ const EXTRA_KEYS: Readonly<Record<string, readonly string[]>> = {
   "apps/api/src/modules/admin/store-moderation.ts": ["reasonCode", "storeIds"],
   // `resolutionCode` is the ops-attention ResolutionCode enum validated by Zod at the route.
   "apps/api/src/modules/admin/attention-admin.ts": ["resolutionCode"],
+  // DLQ replay/discard audit carries integer counts only (ids, count, skipped) and the fixed discard reason code.
+  "apps/api/src/modules/admin/dlq-admin.ts": ["ids", "count", "skipped", "reasonCode"],
 };
 /** Files whose diff is passed through from a typed caller; the producers are covered by this same test. */
 const INDIRECT: readonly string[] = [
