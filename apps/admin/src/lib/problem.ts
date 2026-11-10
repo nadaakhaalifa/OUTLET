@@ -8,6 +8,7 @@ const BY_CODE: Readonly<Record<string, MessageKey>> = {
   "not-found": "admin.error.notFound",
   "validation-failed": "admin.error.validation",
   "validation-rule": "admin.error.validation",
+  "stale-approval": "admin.payouts.stale",
   "rate-limited": "admin.error.rate",
   "reason-code-required": "admin.error.reasonRequired",
   "api-unavailable": "admin.error.apiDown",

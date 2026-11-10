@@ -15457,6 +15457,7 @@ paths:
         tenant: "staff market (staff_role_assignments.market_id)"
         roles:
           - "finance"
+          - "super_admin"
         not_owned: 404
         wrong_role: 403
         negative_tests:
@@ -15517,11 +15518,12 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "payout.hold"
+        policy: "payout.release"
         principal: "staff"
         tenant: "staff market (staff_role_assignments.market_id)"
         roles:
           - "finance"
+          - "super_admin"
         not_owned: 404
         wrong_role: 403
         negative_tests:

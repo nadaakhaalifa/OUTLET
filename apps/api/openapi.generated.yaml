@@ -6465,7 +6465,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
       x-authz:
-        action: payout.hold
+        action: payout.release
         principal: staff
         tenant: admin
       x-rate-limit:

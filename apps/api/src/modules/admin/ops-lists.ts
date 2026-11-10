@@ -202,9 +202,11 @@ export interface PayoutsAdminPort {
   /** Idempotent: holding an already-held payout with the same reason changes nothing and writes no second audit entry. 404 outside the market, 409 `invalid-transition` unless SCHEDULED or APPROVED. */
   hold(p: Principal, payoutId: string, reasonCode: string): Promise<{ readonly changed: boolean }>;
   /** Proof that a payout can be released (ON_HOLD, in the market) before a dual-approval request is filed; 404 / 409 otherwise. */
-  assertReleasable(p: Principal, payoutId: string): Promise<{ readonly storeId: string }>;
-  /** Effect of an APPROVED release request (second key done): ON_HOLD -> SCHEDULED, the earlier approval is void. Idempotent: an already-released payout is a no-op. */
-  release(p: Principal, payoutId: string): Promise<{ readonly changed: boolean }>;
+  assertReleasable(p: Principal, payoutId: string): Promise<{ readonly storeId: string; readonly holdReason: string | null; readonly version: number }>;
+  /** The id of a live PENDING release request that was filed for this exact hold (same reason and version), else null: one request per hold, never a second. */
+  findPendingRelease(p: Principal, payoutId: string, hold: { readonly holdReason: string | null; readonly version: number }): Promise<string | null>;
+  /** Effect of an APPROVED release request (second key done): ON_HOLD -> SCHEDULED, the earlier approval is void. Idempotent: an already-released payout is a no-op. `filed` is the hold the approvers voted on: another reason or version (re-held since) is 409 `stale-approval`, audited as `payout.release_refused`, nothing changes. */
+  release(p: Principal, payoutId: string, filed?: { readonly holdReason: string | null; readonly version: number }): Promise<{ readonly changed: boolean }>;
   /** Audit entry `payout.released`, in the approval's claim transaction. */
   recordRelease(p: Principal, tx: Queryable, input: { readonly payoutId: string; readonly reasonCode: string; readonly approvalRequestId: string; readonly changed: boolean }): Promise<void>;
 }
@@ -231,10 +233,10 @@ export class PayoutsAdmin implements PayoutsAdminPort {
     return p.userId;
   }
 
-  private async load(p: Principal, id: string): Promise<{ status: string; storeId: string; holdReason: string | null }> {
+  private async load(p: Principal, id: string): Promise<{ status: string; storeId: string; holdReason: string | null; version: number }> {
     try {
       const row = await this.service.get(p.marketId, id);
-      return { status: row.status, storeId: row.storeId, holdReason: row.holdReason };
+      return { status: row.status, storeId: row.storeId, holdReason: row.holdReason, version: row.version };
     } catch (e) {
       return stateProblem(e);
     }
@@ -255,6 +257,14 @@ export class PayoutsAdmin implements PayoutsAdminPort {
     try {
       await this.service.hold(p.marketId, payoutId, stored);
     } catch (e) {
+      // The loser of a hold race leaves no orphan intent: the failure and its problem code are audited before the error goes on.
+      const code = e instanceof PayoutsError ? (e.code === "NOT_FOUND" ? "not-found" : e.code === "INVALID_STATE" ? "invalid-transition" : "error") : "error";
+      await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, (tx) =>
+        this.audit.appendIn(tx, {
+          marketId: p.marketId, actorType: "staff", actorId: actor, action: "payout.hold_failed", targetType: "payout", targetId: payoutId,
+          diff: { before: { status: before.status }, after: { reasonCode, problem: code } }, ipHash: null, deviceId: null, requestId: null,
+        }),
+      );
       return stateProblem(e);
     }
     await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, (tx) =>
@@ -266,17 +276,37 @@ export class PayoutsAdmin implements PayoutsAdminPort {
     return { changed: true };
   }
 
-  async assertReleasable(p: Principal, payoutId: string): Promise<{ storeId: string }> {
+  async assertReleasable(p: Principal, payoutId: string): Promise<{ storeId: string; holdReason: string | null; version: number }> {
     const row = await this.load(p, payoutId);
     if (!can(PAYOUT, row.status, "release")) throw new ProblemError(409, "invalid-transition", `The payout is ${row.status}`);
-    return { storeId: row.storeId };
+    return { storeId: row.storeId, holdReason: row.holdReason, version: row.version };
   }
 
-  async release(p: Principal, payoutId: string): Promise<{ changed: boolean }> {
+  async findPendingRelease(p: Principal, payoutId: string, hold: { holdReason: string | null; version: number }): Promise<string | null> {
+    const rows = await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: this.actor(p) }, (tx) =>
+      tx.query<{ id: string; payload: Record<string, unknown> }>(
+        "SELECT id, payload FROM approval_requests WHERE market_id = $1 AND action = 'payout.release' AND target_type = 'payout' AND target_id = $2 AND status = 'PENDING' AND expires_at > now() ORDER BY created_at DESC",
+        [p.marketId, payoutId],
+      ),
+    );
+    return rows.rows.find((r) => r.payload.holdReason === hold.holdReason && r.payload.version === hold.version)?.id ?? null;
+  }
+
+  async release(p: Principal, payoutId: string, filed?: { holdReason: string | null; version: number }): Promise<{ changed: boolean }> {
     const row = await this.load(p, payoutId);
     // Already released by an earlier attempt of the same approved request: converge, change nothing.
     if (row.status === "SCHEDULED" && row.holdReason === null) return { changed: false };
     if (!can(PAYOUT, row.status, "release")) throw new ProblemError(409, "invalid-transition", `The payout is ${row.status}`);
+    if (filed !== undefined && (row.holdReason !== filed.holdReason || row.version !== filed.version)) {
+      const actor = this.actor(p);
+      await withDbContext(this.app, { kind: "user", marketId: p.marketId, userId: actor }, (tx) =>
+        this.audit.appendIn(tx, {
+          marketId: p.marketId, actorType: "staff", actorId: actor, action: "payout.release_refused", targetType: "payout", targetId: payoutId,
+          diff: { before: { status: row.status, holdReason: row.holdReason, version: row.version }, after: { problem: "stale-approval", filedHoldReason: filed.holdReason, filedVersion: filed.version } }, ipHash: null, deviceId: null, requestId: null,
+        }),
+      );
+      throw new ProblemError(409, "stale-approval", "The payout was held again after this release was requested");
+    }
     try {
       await this.service.release(p.marketId, payoutId);
     } catch (e) {

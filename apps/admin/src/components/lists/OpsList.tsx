@@ -98,8 +98,8 @@ export function summaryLines(kind: ListKind, t: Translator, locale: Locale, summ
  * A keyset list: the first page comes from the server render, "Load more" asks the same-origin BFF for the next one (cursor from the API, never an offset) and appends it.
  * Payout rows offer Hold (single key) and Request release (always filed for a second approver by the server: the page says so, it never claims the payout was released).
  */
-export function OpsList({ kind, locale, market, base, initial, summary, filter, canWrite }: {
-  kind: ListKind; locale: Locale; market: string; base: string; initial: Page; summary: unknown; filter: string | undefined; canWrite: boolean;
+export function OpsList({ kind, locale, market, base, initial, summary, filter, canWrite, mayRelease }: {
+  kind: ListKind; locale: Locale; market: string; base: string; initial: Page; summary: unknown; filter: string | undefined; /** payout.hold */ canWrite: boolean; /** payout.release; defaults to canWrite */ mayRelease?: boolean;
 }) {
   const t = createTranslator(locale);
   const router = useRouter();
@@ -115,7 +115,8 @@ export function OpsList({ kind, locale, market, base, initial, summary, filter, 
   const f = FILTERS[kind];
   const path = `/${kind}`;
   const lines = summaryLines(kind, t, locale, summary);
-  const writable = kind === "payouts" && canWrite;
+  const releasable = mayRelease ?? canWrite;
+  const writable = kind === "payouts" && (canWrite || releasable);
 
   const more = async () => {
     if (cursor === null) return;
@@ -141,9 +142,10 @@ export function OpsList({ kind, locale, market, base, initial, summary, filter, 
     if (r.ok) {
       const d = r.data as { status?: unknown; hold_reason?: unknown } | null;
       if (d !== null && typeof d.status === "string") setRows((cur) => cur.map((x) => (x.id === row.id ? { ...x, status: d.status as string, hold_reason: typeof d.hold_reason === "string" ? d.hold_reason : null } : x)));
-      setMsg({ ok: true, text: t("admin.payouts.held") });
+      setMsg({ ok: true, text: t(action === "hold" ? "admin.payouts.held" : "admin.payouts.releaseFiled") });
       router.refresh();
     } else if (r.status === 409 && r.code === "dual-approval-required") setMsg({ ok: true, text: t("admin.payouts.releaseFiled") });
+    else if (r.status === 409 && r.code === "stale-approval") setMsg({ ok: false, text: t("admin.payouts.stale") });
     else if (r.status === 409) setMsg({ ok: false, text: t("admin.payouts.invalid") });
     else setMsg({ ok: false, text: t(problemKey(r.code, r.status)) });
   };
@@ -190,8 +192,8 @@ export function OpsList({ kind, locale, market, base, initial, summary, filter, 
                   {cols.map((c) => <td key={c.key}><bdi>{c.cell(r)}</bdi></td>)}
                   {writable ? (
                     <td>
-                      {canHold(r.status) ? <button type="button" className="btn btnSecondary" disabled={busy} onClick={() => { void act(r, "hold"); }}>{t("admin.payouts.hold")}</button> : null}
-                      {canRelease(r.status) ? <button type="button" className="btn btnSecondary" disabled={busy} onClick={() => { void act(r, "release"); }}>{t("admin.payouts.release")}</button> : null}
+                      {canWrite && canHold(r.status) ? <button type="button" className="btn btnSecondary" disabled={busy} onClick={() => { void act(r, "hold"); }}>{t("admin.payouts.hold")}</button> : null}
+                      {releasable && canRelease(r.status) ? <button type="button" className="btn btnSecondary" disabled={busy} onClick={() => { void act(r, "release"); }}>{t("admin.payouts.release")}</button> : null}
                     </td>
                   ) : null}
                 </tr>

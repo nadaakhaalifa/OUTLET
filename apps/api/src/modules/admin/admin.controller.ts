@@ -52,10 +52,11 @@ const STORE_REINSTATE_ACTION = "store.reinstate";
 const DLQ_DISCARD_MONEY_ACTION = "dlq.discard.money";
 const PAYOUT_RELEASE_ACTION = "payout.release";
 /** The reason the requester filed for a payout release (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
-const releasePayload = (payload: Readonly<Record<string, unknown>>): PayoutReleaseInput => {
+const releasePayload = (payload: Readonly<Record<string, unknown>>): { input: PayoutReleaseInput; holdReason: string | null; version: number } => {
   const r = PayoutReleaseInput.safeParse({ reason_code: payload.reasonCode });
-  if (!r.success) throw Problems.unprocessable("invalid-approval-payload");
-  return r.data;
+  const { holdReason, version } = payload;
+  if (!r.success || (holdReason !== null && typeof holdReason !== "string") || typeof version !== "number" || !Number.isInteger(version)) throw Problems.unprocessable("invalid-approval-payload");
+  return { input: r.data, holdReason, version };
 };
 /** The ids and reason the requester filed (hash-checked payload of the approval request); anything malformed is a 422, never executed. */
 const dlqPayload = (payload: Readonly<Record<string, unknown>>): DlqDiscardInput => {
@@ -244,8 +245,9 @@ export class AdminController {
       const payouts = this.payouts(t);
       // The effect runs as the finance.payouts worker job (another role): prove the request first, apply the idempotent release, then claim + audit in one transaction.
       const req = await t.svc.access.verifyApproved(t.principal, decided.id);
-      const input = releasePayload(req.payload);
-      const applied = await payouts.release(t.principal, req.targetId);
+      const { input, holdReason, version } = releasePayload(req.payload);
+      // The approvers voted on this exact hold: a payout re-held since (other reason or version) is refused, never released by a stale approval.
+      const applied = await payouts.release(t.principal, req.targetId, { holdReason, version });
       await t.svc.access.executeApproval(t.principal, decided.id, async (_req, tx) => {
         await payouts.recordRelease(t.principal, tx, { payoutId: req.targetId, reasonCode: input.reason_code, approvalRequestId: req.id, changed: applied.changed });
       });
@@ -470,7 +472,7 @@ export class AdminController {
 
   @Post("payouts/:payout_id/release")
   @HttpCode(200)
-  @Authorize("payout.hold", market, { tenant: "admin" })
+  @Authorize("payout.release", market, { tenant: "admin" })
   @RateLimit({ budget: RATE_BUDGETS.adminWrite })
   @Contract({
     operationId: "adminReleasePayout",
@@ -486,8 +488,11 @@ export class AdminController {
     const t = this.staff(s);
     const payouts = this.payouts(t);
     // Only a payout that can be released is filed (404 outside the market, 409 invalid-transition otherwise); the approvers vote on this exact payout and reason.
-    const { storeId } = await payouts.assertReleasable(t.principal, p.payout_id);
-    const r = await t.svc.access.requireApproval(t.principal, { action: PAYOUT_RELEASE_ACTION, targetType: "payout", targetId: p.payout_id, payload: { reasonCode: body.reason_code, storeId } });
+    const { storeId, holdReason, version } = await payouts.assertReleasable(t.principal, p.payout_id);
+    // One request per hold: a second click returns the live request instead of filing another.
+    const existing = await payouts.findPendingRelease(t.principal, p.payout_id, { holdReason, version });
+    if (existing !== null) throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: existing });
+    const r = await t.svc.access.requireApproval(t.principal, { action: PAYOUT_RELEASE_ACTION, targetType: "payout", targetId: p.payout_id, payload: { reasonCode: body.reason_code, storeId, holdReason, version } });
     if (!r.required) throw Problems.internal("dual-approval-expected");
     throw new ProblemError(409, "dual-approval-required", "A second approver is required", { detail: r.request.id });
   }

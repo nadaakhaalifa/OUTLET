@@ -202,8 +202,8 @@ describe("admin console actions (matrix)", () => {
     "tax.read": ["finance"],
     "dlq.manage": ["ops", "security", "super_admin"],
     "dlq.discard.money": ["ops", "security", "super_admin"],
-    "payout.hold": ["finance"],
-    "payout.release": ["finance"],
+    "payout.hold": ["finance", "super_admin"],
+    "payout.release": ["finance", "super_admin"],
     // Read actions behind the Money and Orders lists.
     "refund.approve": ["finance", "super_admin"],
     "payout.read": ["finance"],
@@ -265,7 +265,7 @@ describe("dual approval for admin console actions", () => {
 
 describe("policy v5: admin KYC detail and RBAC read", () => {
   it("version is 6", () => {
-    expect(POLICY_VERSION).toBe(9);
+    expect(POLICY_VERSION).toBe(10);
   });
   it("seller_kyc.read (PII reveal, reason code required) is ops and trust_safety only", () => {
     expect(requiresReasonCode("seller_kyc.read")).toBe(true);

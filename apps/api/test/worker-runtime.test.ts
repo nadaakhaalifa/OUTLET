@@ -357,7 +357,7 @@ describe("worker composition pieces", () => {
     );
     const withPsp = marketJobs({ marketId: M, worker, app, kill: killing([]), now: () => new Date(), lateRefunds: { requestRefund: () => Promise.resolve({ accepted: true }) } });
     expect(withPsp.find((j) => j.name === "payments.late_refund")?.handlers.has("order_group.late_payment_refund")).toBe(true);
-    expect(UNSUBSCRIBED_TYPES).toEqual(["ops.attention_opened", "shipment.cancelled", "inventory.committed_released", "ledger.integrity_failed"]);
+    expect(UNSUBSCRIBED_TYPES).toEqual(["ops.attention_opened", "shipment.cancelled", "inventory.committed_released", "ledger.integrity_failed", "payout.on_hold", "payout.cancelled"]);
   });
 
   it("parseWorkerEnv refuses a lease over 15 minutes", () => {

@@ -202,6 +202,47 @@ describe("admin payouts", () => {
   });
 });
 
+describe("admin payout release is bound to the hold it was requested for", () => {
+  it("asking again returns the live request; a stale approval (payout re-held with another reason) never releases and the refusal is audited", async () => {
+    await clean();
+    const p = await seedPayout(t.raw, { status: "ON_HOLD", holdReason: "ops:risk_review" });
+    const one = await t.admin(["finance"]);
+    const first = await post(one.token, `payouts/${p.id}/release`, { reason_code: "issue_resolved" });
+    expect(first).toMatchObject({ status: 409, body: { code: "dual-approval-required" } });
+    // A second click returns the same pending request instead of filing another.
+    expect((await post(one.token, `payouts/${p.id}/release`, { reason_code: "issue_resolved" })).body.detail).toBe(first.body.detail);
+    // The payout is released and held again for another reason while the first request is still pending.
+    await t.payoutService.release("EG", p.id);
+    expect(await post(one.token, `payouts/${p.id}/hold`, { reason_code: "iban_check" })).toMatchObject({ status: 200, body: { status: "ON_HOLD", hold_reason: "ops:iban_check" } });
+    const url = `approval-requests/${String(first.body.detail)}/decision`;
+    const before = t.adminAudit.entries.length;
+    expect((await post((await t.admin(["finance"])).token, url, { decision: "approve", reason: "first look" })).status).toBe(200);
+    const vote = await post((await t.admin(["finance"])).token, url, { decision: "approve", reason: "second look" });
+    expect(vote).toMatchObject({ status: 409, body: { code: "stale-approval" } });
+    expect(await payoutRow(p.id)).toMatchObject({ status: "ON_HOLD", hold_reason: "ops:iban_check" });
+    expect(t.adminAudit.entries.slice(before).map((e) => e.action)).toContain("payout.release_refused");
+    // The current hold gets its own request (not the stale one).
+    const again = await post(one.token, `payouts/${p.id}/release`, { reason_code: "issue_resolved" });
+    expect(again).toMatchObject({ status: 409, body: { code: "dual-approval-required" } });
+    expect(again.body.detail).not.toBe(first.body.detail);
+  });
+
+  it("a hold that loses the race audits payout.hold_failed after its intent", async () => {
+    await clean();
+    const p = await seedPayout(t.raw, { status: "SCHEDULED" });
+    const { PayoutsAdmin } = await import("../src/modules/admin/index.js");
+    const { roleClient } = await import("@outlet/db/testing");
+    const { PayoutsError } = await import("@outlet/payouts");
+    const fin = await t.admin(["finance"]);
+    const staff = { kind: "admin" as const, userId: fin.userId, marketId: "EG", roles: ["finance"], scopes: [] };
+    const seen: string[] = [];
+    const audit = { appendIn: (_tx: unknown, e: { action: string }) => { seen.push(e.action); return Promise.resolve(undefined as never); } };
+    const racing = new PayoutsAdmin({ get: t.payoutService.get.bind(t.payoutService), hold: () => Promise.reject(new PayoutsError("INVALID_STATE", "raced")), release: t.payoutService.release.bind(t.payoutService) }, roleClient(t.raw, "outlet_app"), audit);
+    await expect(racing.hold(staff, p.id, "risk_review")).rejects.toMatchObject({ code: "invalid-transition" });
+    expect(seen).toEqual(["payout.hold_requested", "payout.hold_failed"]);
+  });
+});
+
 describe("admin lists fail closed", () => {
   it("answers 503 when the lists are not composed", async () => {
     const bare = await createTestApp({ adminOps: false });

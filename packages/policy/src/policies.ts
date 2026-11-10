@@ -1,7 +1,7 @@
 import type { Action } from "./types.js";
 
 /** Bump on any change to the tables below; recorded in audit entries. */
-export const POLICY_VERSION = 9;
+export const POLICY_VERSION = 10;
 
 export const SELLER_ROLES = ["owner", "manager", "catalog", "warehouse", "finance", "support"] as const;
 export const ADMIN_ROLES = ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"] as const;
@@ -56,7 +56,7 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
   ],
   super_admin: [
     "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "rbac.read", "pii_access.read", "kill_switch.read", "kill_switch.engage",
-    "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "finance.summary.read", "dlq.manage", "dlq.discard.money",
+    "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "finance.summary.read", "dlq.manage", "dlq.discard.money", "payout.hold", "payout.release",
   ],
 };
 

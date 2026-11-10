@@ -70,8 +70,9 @@ export const NOTIFICATIONS_KILL_SWITCH: KillSwitchName = "workers.notifications.
  * - shipment.cancelled: result of ShipmentCancelConsumer; nothing downstream yet.
  * - inventory.committed_released: result of ReleaseRequiredConsumer; the replenisher reads inventory_levels, not this event.
  * - ledger.integrity_failed: informational; alerting reads the stored reconciliation run status and its exceptions, not this event (a consumer may subscribe later).
+ * - payout.on_hold, payout.cancelled: informational (the payouts row and the admin audit chain are the record); no consumer subscribes yet (then remove them from here).
  */
-export const UNSUBSCRIBED_TYPES: readonly string[] = [ATTENTION_OPENED_EVENT, SHIPMENT_CANCELLED_EVENT, COMMITTED_RELEASED_EVENT, "ledger.integrity_failed"];
+export const UNSUBSCRIBED_TYPES: readonly string[] = [ATTENTION_OPENED_EVENT, SHIPMENT_CANCELLED_EVENT, COMMITTED_RELEASED_EVENT, "ledger.integrity_failed", "payout.on_hold", "payout.cancelled"];
 
 /**
  * No PSP is contracted (ADR-0029): refund execution is never reached from the worker's cancellation consumer (createForCancellation only records

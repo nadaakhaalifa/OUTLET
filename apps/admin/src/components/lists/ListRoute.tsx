@@ -25,7 +25,7 @@ export async function ListRoute({ kind, params, searchParams }: { kind: ListKind
     <ConsoleFrame resolved={resolved} section={SECTION[kind]}>
       <PageHeader title={t(`admin.${kind}.title` as MessageKey)} description={t(`admin.${kind}.lead` as MessageKey)} />
       {res.ok
-        ? <OpsList kind={kind} locale={resolved.locale} market={resolved.marketId} base={`/${localeSegment(resolved.marketId, resolved.locale)}`} initial={res.data} summary={res.data.summary} filter={filter} canWrite={profile !== null && can(profile, "payout.hold")} />
+        ? <OpsList kind={kind} locale={resolved.locale} market={resolved.marketId} base={`/${localeSegment(resolved.marketId, resolved.locale)}`} initial={res.data} summary={res.data.summary} filter={filter} canWrite={profile !== null && can(profile, "payout.hold")} mayRelease={profile !== null && can(profile, "payout.release")} />
         : <ProblemBanner t={t} code={res.code} status={res.status} />}
     </ConsoleFrame>
   );
