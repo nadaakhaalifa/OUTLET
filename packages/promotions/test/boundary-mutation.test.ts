@@ -108,7 +108,7 @@ describe("discount caps are exact at the boundary", () => {
     expect(total(evaluate(bag(), ctx(), [c({ budget: 4_000n, max: 5_000n })], usage("p", { usedMinor: 3_000n })))).toBe(1_000n);
   });
   it("fixed amount is capped by what is left to pay: equal to goods, one above, one below", () => {
-    const f = (n: bigint) => evaluate(bag(), ctx(), [cand({ id: "p", rules: fixed(n) })]);
+    const f = (n: bigint) => evaluate(bag(), ctx(), [cand({ id: "p", rules: fixed(String(n)) })]);
     expect(total(f(GOODS - 1n))).toBe(GOODS - 1n);
     expect(total(f(GOODS))).toBe(GOODS);
     expect(total(f(GOODS + 1n))).toBe(GOODS);
@@ -269,7 +269,7 @@ describe("stacking matrix and auto-best limits", () => {
     expect(r.prunedIds).toEqual(["m0"]); // the smallest saving (100) is dropped
   });
   it("auto-best tie-break: equal totals prefer fewer promotions", () => {
-    const one = cand({ id: "z-one", rules: fixed(GOODS) }); // zeroes the goods alone, so adding any other promotion cannot beat it
+    const one = cand({ id: "z-one", rules: fixed(String(GOODS)) }); // zeroes the goods alone, so adding any other promotion cannot beat it
     const two1 = cand({ id: "a-1", rules: fixed(1_000) });
     const two2 = cand({ id: "a-2", rules: fixed(1_000) });
     expect(autoBest(bag(), ctx(), [two1, two2, one]).selectedIds).toEqual(["z-one"]);
