@@ -1,7 +1,7 @@
 import type { Action } from "./types.js";
 
 /** Bump on any change to the tables below; recorded in audit entries. */
-export const POLICY_VERSION = 7;
+export const POLICY_VERSION = 8;
 
 export const SELLER_ROLES = ["owner", "manager", "catalog", "warehouse", "finance", "support"] as const;
 export const ADMIN_ROLES = ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"] as const;
@@ -37,7 +37,7 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
   ops: [
     "store.read", "store.suspend", "store.reinstate", "store.threshold.write", "listing.read", "order.read", "return.read", "return.decide",
     "seller_kyc.review", "seller_kyc.read", "price_integrity.read", "approval.read", "approval.decide", "elevation.request",
-    "dashboard.read", "attention.read", "attention.write",
+    "dashboard.read", "attention.read", "attention.write", "dlq.manage", "dlq.discard.money",
   ],
   finance: [
     "order.read", "store.threshold.write", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read",
@@ -52,16 +52,16 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
   marketing: ["promotion.write", "catalog.read", "plan.price.change", "approval.read", "approval.decide", "elevation.request", "dashboard.read"],
   dpo: ["user.read", "privacy.export", "privacy.delete", "data.export", "breach.manage", "privacy.breach.open", "pii_access.read", "approval.read", "approval.decide", "elevation.request", "dashboard.read"],
   security: [
-    "audit.read", "rbac.read", "pii_access.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read",
+    "audit.read", "rbac.read", "pii_access.read", "role.grant", "session.revoke", "kill_switch.read", "kill_switch.engage", "privacy.breach.open", "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "dlq.manage", "dlq.discard.money",
   ],
   super_admin: [
     "approval.read", "approval.decide", "role.grant", "plan.price.change", "data.export", "payout.approve", "refund.approve", "audit.read", "rbac.read", "pii_access.read", "kill_switch.read", "kill_switch.engage",
-    "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "finance.summary.read",
+    "approval.read", "approval.decide", "elevation.request", "elevation.approve", "dashboard.read", "finance.summary.read", "dlq.manage", "dlq.discard.money",
   ],
 };
 
 /** Actions that always need a second approver regardless of amount. */
-export const ALWAYS_DUAL_APPROVAL: readonly Action[] = ["role.grant", "plan.price.change", "data.export", "store.suspend", "store.reinstate"];
+export const ALWAYS_DUAL_APPROVAL: readonly Action[] = ["role.grant", "plan.price.change", "data.export", "store.suspend", "store.reinstate", "dlq.discard.money"];
 /** Needs a second approver when the switch guards money movement (payments, BNPL, COD, payouts, gift cards). Unknown counts as money. */
 export const MONEY_SWITCH_DUAL_APPROVAL: readonly Action[] = ["kill_switch.engage"];
 /** Actions that need a second approver at or above the configured amount. */

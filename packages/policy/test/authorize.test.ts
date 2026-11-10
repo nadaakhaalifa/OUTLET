@@ -200,6 +200,8 @@ describe("admin console actions (matrix)", () => {
     "privacy.breach.open": ["dpo", "security"],
     "price_integrity.read": ["ops", "trust_safety", "finance"],
     "tax.read": ["finance"],
+    "dlq.manage": ["ops", "security", "super_admin"],
+    "dlq.discard.money": ["ops", "security", "super_admin"],
   };
   for (const [action, allowed] of Object.entries(matrix)) {
     for (const role of ADMIN_ROLES) {
@@ -240,6 +242,10 @@ describe("dual approval for admin console actions", () => {
   it("store suspend and reinstate always need a second approver", () => {
     for (const a of ["store.suspend", "store.reinstate"]) expect(dualApprovalRequired(a, cfg, 0n)).toBe(true);
   });
+  it("dlq.discard.money always needs a second approver; dlq.manage (replay, non-money discard) does not", () => {
+    expect(dualApprovalRequired("dlq.discard.money", cfg, 0n)).toBe(true);
+    expect(dualApprovalRequired("dlq.manage", cfg, 0n)).toBe(false);
+  });
   it("elevation, breach and read actions are not dual gated", () => {
     for (const a of ["elevation.request", "elevation.approve", "privacy.breach.open", "price_integrity.read", "tax.read", "reconciliation.read"]) {
       expect(dualApprovalRequired(a, cfg, 0n)).toBe(false);
@@ -249,7 +255,7 @@ describe("dual approval for admin console actions", () => {
 
 describe("policy v5: admin KYC detail and RBAC read", () => {
   it("version is 6", () => {
-    expect(POLICY_VERSION).toBe(7);
+    expect(POLICY_VERSION).toBe(8);
   });
   it("seller_kyc.read (PII reveal, reason code required) is ops and trust_safety only", () => {
     expect(requiresReasonCode("seller_kyc.read")).toBe(true);
