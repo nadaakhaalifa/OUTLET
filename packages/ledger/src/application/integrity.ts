@@ -38,9 +38,9 @@ export const snapshotDigest = (marketId: string, day: string, totals: readonly C
 
 /**
  * Read-only integrity scan of one market (master prompt T4): per-currency trial balance, per-entry balance, and the hash chain recomputed from stored rows
- * (verifyChain, I20). Pure reads: the caller (payouts IntegrityJob, job finance.reconcile) persists the outcome. Never run on a request path (full scan).
+ * (verifyChain, I20; or the caller's own incremental `chainResult`, see IntegrityJob). Pure reads: the caller (payouts IntegrityJob, job finance.reconcile) persists the outcome. Never run on a request path (full scan).
  */
-export async function integrityScan(tx: Queryable, marketId: string, day: string): Promise<IntegrityScan & { readonly unbalancedTotal: number }> {
+export async function integrityScan(tx: Queryable, marketId: string, day: string, chainResult?: ChainVerification): Promise<IntegrityScan & { readonly unbalancedTotal: number }> {
   const totalsR = await tx.query<{ currency: string; total: string }>(
     "SELECT currency, SUM(amount_minor)::text AS total FROM postings WHERE market_id = $1 GROUP BY currency ORDER BY currency",
     [marketId],
@@ -56,7 +56,7 @@ export async function integrityScan(tx: Queryable, marketId: string, day: string
   );
   const unbalanced = badR.rows.map((r) => ({ entryId: r.entry_id, currency: r.currency, deltaMinor: BigInt(r.delta) }));
   const unbalancedTotal = Number(badCount.rows[0]?.n ?? "0");
-  const chain = await verifyChain(tx, marketId);
+  const chain = chainResult ?? (await verifyChain(tx, marketId));
   return {
     totals, unbalanced, unbalancedTotal, chain,
     balanced: unbalancedTotal === 0 && totals.every((t) => t.totalMinor === 0n),

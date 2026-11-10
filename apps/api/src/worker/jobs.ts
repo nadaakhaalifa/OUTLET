@@ -113,6 +113,8 @@ export interface MarketJobsInput {
   readonly lateRefunds?: RefundPort;
   readonly now?: () => Date;
   /** privacy.retention: dryRun defaults to true (counts only; WORKER_RETENTION_DRY_RUN=false deletes). */
+  /** finance.integrity: chain verification time budget per tick (WORKER_INTEGRITY_BUDGET_MS, default 8 s). */
+  readonly integrityBudgetMs?: number;
   readonly retention?: { readonly dryRun?: boolean; readonly budgetMs?: number; readonly metrics?: RetentionMetricsPort; readonly log?: Logger; readonly inventoryPath?: string };
 }
 
@@ -158,7 +160,7 @@ export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
     { name: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
     // Deletes only through the `privacy.retention` RLS policies (migration 0040); dry run unless the owner flips WORKER_RETENTION_DRY_RUN.
     { name: "privacy.retention", killSwitch: RETENTION_KILL_SWITCH, handlers: retentionHandlers(i.worker, i.marketId, { ...i.retention, ...opts }) },
-    { name: "finance.integrity", killSwitch: LEDGER_INTEGRITY_KILL_SWITCH, handlers: ledgerIntegrityHandlers(i.worker, i.marketId, i.now) },
+    { name: "finance.integrity", killSwitch: LEDGER_INTEGRITY_KILL_SWITCH, handlers: ledgerIntegrityHandlers(i.worker, i.marketId, i.now, i.integrityBudgetMs === undefined ? {} : { budgetMs: i.integrityBudgetMs }) },
     { name: "search.sync", killSwitch: SEARCH_SYNC_KILL_SWITCH, handlers: searchSyncHandlers(i.worker, i.marketId, { display: searchDisplay(i, opts) }) },
     // Plans notification_log rows only (no channel provider, ADR-0029); per-channel notifications.<channel>.enabled switches still suppress rows (fail open).
     { name: "notifications.dispatch", killSwitch: NOTIFICATIONS_KILL_SWITCH, handlers: notificationHandlers(i.worker, i.marketId, { isChannelKilled: (c) => channelKilled(i, c), ...opts }) },

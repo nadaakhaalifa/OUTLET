@@ -11,7 +11,7 @@ import { LEDGER_INTEGRITY_KILL_SWITCH, RETENTION_KILL_SWITCH, ROLLUP_KILL_SWITCH
 import type { KillRead } from "./jobs.js";
 import { tryLeaderTx } from "./leader.js";
 
-export type TickScope = "snapshots" | "sales" | "nightly" | "retention" | "ledger_integrity";
+export type TickScope = "snapshots" | "sales" | "nightly" | "retention" | "ledger_integrity" | "ledger_integrity_full";
 export type TickOutcome = "emitted" | "exists" | "not_leader" | "killed" | "failed";
 
 export interface SchedulerMarket {
@@ -28,6 +28,8 @@ export const NIGHTLY_LAST_HOUR = 6;
 export const INTEGRITY_FIRST_HOUR = 1;
 /** Retention purge ticks: hourly in the 03:00-06:00 local window (after the nightly rollup and ledger integrity), so a backlog is drained over three runs a night. */
 export const RETENTION_FIRST_HOUR = 3;
+/** Weekly full chain re-verify (cursor reset to 0): Friday (market-local) in the same 01:00-06:00 window. It REPLACES that night's incremental tick (one run per date). */
+export const INTEGRITY_FULL_WEEKDAY = "Fri";
 
 export interface TickWindow {
   readonly scope: TickScope;
@@ -37,11 +39,11 @@ export interface TickWindow {
   readonly startMs: number;
 }
 
-const localParts = (at: Date, tz: string): { date: string; hour: number } => {
+const localParts = (at: Date, tz: string): { date: string; hour: number; weekday: string } => {
   const p = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(at).map((x) => [x.type, x.value]),
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", hourCycle: "h23" }).formatToParts(at).map((x) => [x.type, x.value]),
   );
-  return { date: `${p.year ?? ""}-${p.month ?? ""}-${p.day ?? ""}`, hour: Number(p.hour) };
+  return { date: `${p.year ?? ""}-${p.month ?? ""}-${p.day ?? ""}`, hour: Number(p.hour), weekday: p.weekday ?? "" };
 };
 
 /** The windows open at `at` for one market. Nightly is open only in the first hours of the local day (a restart at 15:00 never starts a 90-day re-run). */
@@ -55,7 +57,10 @@ export const windowsAt = (at: Date, tz: string): readonly TickWindow[] => {
   ];
   const local = localParts(at, tz);
   if (local.hour < NIGHTLY_LAST_HOUR) out.push({ scope: "nightly", key: `nightly:${local.date}`, startMs: Date.parse(`${local.date}T00:00:00Z`) });
-  if (local.hour >= INTEGRITY_FIRST_HOUR && local.hour < NIGHTLY_LAST_HOUR) out.push({ scope: "ledger_integrity", key: `ledger_integrity:${local.date}`, startMs: Date.parse(`${local.date}T00:00:00Z`) });
+  if (local.hour >= INTEGRITY_FIRST_HOUR && local.hour < NIGHTLY_LAST_HOUR) {
+    const scope = local.weekday === INTEGRITY_FULL_WEEKDAY ? "ledger_integrity_full" : "ledger_integrity";
+    out.push({ scope, key: `${scope}:${local.date}`, startMs: Date.parse(`${local.date}T00:00:00Z`) });
+  }
   if (local.hour >= RETENTION_FIRST_HOUR && local.hour < NIGHTLY_LAST_HOUR) {
     out.push({ scope: "retention", key: `retention:${local.date}:${String(local.hour).padStart(2, "0")}`, startMs: Date.parse(`${local.date}T${String(local.hour).padStart(2, "0")}:00:00Z`) });
   }
@@ -136,9 +141,9 @@ export class RollupScheduler {
       for (const w of windowsAt(at, m.timezone)) {
         const memo = `${m.marketId}|${w.scope}`;
         if (this.done.get(memo) === w.key) continue;
-        if (w.scope === "ledger_integrity") integrityKilled ??= await this.o.kill.isKilled(LEDGER_INTEGRITY_KILL_SWITCH, { marketId: m.marketId });
+        if (w.scope === "ledger_integrity" || w.scope === "ledger_integrity_full") integrityKilled ??= await this.o.kill.isKilled(LEDGER_INTEGRITY_KILL_SWITCH, { marketId: m.marketId });
         if (w.scope === "retention") retentionKilled ??= await this.o.kill.isKilled(RETENTION_KILL_SWITCH, { marketId: m.marketId });
-        const outcome = (w.scope === "retention" ? retentionKilled === true : w.scope === "ledger_integrity" ? integrityKilled === true : killed) ? "killed" : await this.emit(m.marketId, w, at);
+        const outcome = (w.scope === "retention" ? retentionKilled === true : w.scope === "ledger_integrity" || w.scope === "ledger_integrity_full" ? integrityKilled === true : killed) ? "killed" : await this.emit(m.marketId, w, at);
         if (outcome === "emitted" || outcome === "exists") this.done.set(memo, w.key);
         this.o.metrics.recordTick({ market_id: m.marketId, scope: w.scope, outcome });
         out.push({ marketId: m.marketId, scope: w.scope, outcome });
@@ -156,7 +161,7 @@ export class RollupScheduler {
         const r = await tx.query(
           `INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, visibility, payload, occurred_at)
            VALUES ($1, $2, $6, $1, $3, 'internal', $4::jsonb, $5::timestamptz) ON CONFLICT (id) DO NOTHING RETURNING id`,
-          [id, marketId, w.scope === "retention" ? RETENTION_REQUESTED_EVENT : w.scope === "ledger_integrity" ? INTEGRITY_REQUESTED_EVENT : ROLLUP_REQUESTED_EVENT, JSON.stringify({ scope: w.scope, window: w.key }), at.toISOString(), w.scope === "retention" ? "privacy_retention" : w.scope === "ledger_integrity" ? "ledger_integrity" : "reporting_rollup"],
+          [id, marketId, w.scope === "retention" ? RETENTION_REQUESTED_EVENT : w.scope === "ledger_integrity" || w.scope === "ledger_integrity_full" ? INTEGRITY_REQUESTED_EVENT : ROLLUP_REQUESTED_EVENT, JSON.stringify({ scope: w.scope, window: w.key }), at.toISOString(), w.scope === "retention" ? "privacy_retention" : w.scope === "ledger_integrity" || w.scope === "ledger_integrity_full" ? "ledger_integrity" : "reporting_rollup"],
         );
         return r.rows.length === 1 ? "emitted" : "exists";
       });

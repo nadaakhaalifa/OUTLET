@@ -28,9 +28,9 @@ export { CodRemittanceImporter, CodRemittanceSchema } from "./application/cod-im
 export type { CodImportSummary, CodRemittanceInput } from "./application/cod-importer.js";
 export { RECONCILIATION_SOURCES, ReconciliationJob } from "./application/reconciliation-job.js";
 export type { ReconciliationOptions, ReconciliationReport, ReconciliationSource, SourceSummary } from "./application/reconciliation-job.js";
-export { IntegrityJob } from "./application/integrity-job.js";
+export { DEFAULT_INTEGRITY_BUDGET_MS, INTEGRITY_PAGE_SIZE, IntegrityJob, MAX_CONTINUATIONS } from "./application/integrity-job.js";
 export { INTEGRITY_CONSUMER, INTEGRITY_REQUESTED_EVENT, IntegrityConsumer, IntegrityRequest } from "./application/integrity-consumer.js";
 export type { IntegrityEventIn } from "./application/integrity-consumer.js";
-export type { IntegrityCheck, IntegrityDetails, IntegrityReport } from "./application/integrity-job.js";
+export type { ChainProgress, IntegrityCheck, IntegrityDeps, IntegrityDetails, IntegrityProgressDetails, IntegrityReport, IntegrityRunOptions } from "./application/integrity-job.js";
 export { MAX_PAYOUT_PAGE, listPayoutsForStore } from "./application/queries.js";
 export type { SellerPayoutView } from "./application/queries.js";

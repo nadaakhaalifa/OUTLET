@@ -119,11 +119,11 @@ export const retentionHandlers = (
 
 /**
  * finance.integrity consumer (runs under the existing `finance.reconcile` worker job, no new policy): a nightly scheduler tick (`ledger.integrity_requested`,
- * scope ledger_integrity) runs the ledger integrity scan of this market and stores the result (reconciliation_runs.details, migration 0039) that the Admin
+ * scope ledger_integrity, or ledger_integrity_full on Fridays) runs the ledger integrity scan of this market (chain verified incrementally from a stored cursor in budgeted pages; an unfinished run emits its own continuation event) and stores the result (reconciliation_runs.details, migration 0039) that the Admin
  * dashboard tile reads. Idempotent per (market, business date), inbox-deduplicated, switch `workers.ledger.integrity.enabled` (money: fails closed).
  */
-export const ledgerIntegrityHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date()): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
-  const job = new IntegrityJob({ client: worker, currency: getMarket(marketId.toLowerCase()).currency, now });
+export const ledgerIntegrityHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date(), integrity: { readonly budgetMs?: number } = {}): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const job = new IntegrityJob({ client: worker, currency: getMarket(marketId.toLowerCase()).currency, now, ...(integrity.budgetMs === undefined ? {} : { budgetMs: integrity.budgetMs }) });
   const c = new IntegrityConsumer(worker, marketId, job, now);
   return new Map([[INTEGRITY_REQUESTED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
 };

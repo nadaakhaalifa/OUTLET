@@ -226,19 +226,37 @@ interface ChainRow {
   currency: string | null;
 }
 
-/** Recomputes the whole chain for a market from stored rows (I20). Returns the first broken entry. */
-export async function verifyChain(tx: Queryable, marketId: string): Promise<ChainVerification> {
+/** Default entries per verification page (one short transaction each; memory and statement time stay bounded). */
+export const CHAIN_PAGE_SIZE = 10_000;
+
+/** Position in a market's hash chain: the last verified entry's `chain_seq` and `hash` (genesis = 0 and GENESIS_HASH). */
+export interface ChainCursor {
+  readonly seq: bigint;
+  readonly hash: string;
+}
+export const GENESIS_CURSOR: ChainCursor = { seq: 0n, hash: GENESIS_HASH };
+
+export type ChainPageResult =
+  /** `cursor` is the last entry of the page; `done` = the page was short, so the chain head was reached. */
+  | { readonly ok: true; readonly entries: number; readonly cursor: ChainCursor; readonly done: boolean }
+  /** `cursor` stays at the last good entry before the break, so the next run re-verifies (and re-reports) the same link. */
+  | { readonly ok: false; readonly entryId: string; readonly chainSeq: bigint; readonly reason: string; readonly cursor: ChainCursor };
+
+/**
+ * Verifies up to `limit` entries after `from` (keyset on chain_seq, unique per market): contiguous seq, prev_hash links to the cursor, content hash and entry
+ * hash recomputed from the stored rows (I20). One bounded statement, so a caller can run each page in its own short transaction and resume from `cursor`.
+ */
+export async function verifyChainPage(tx: Queryable, marketId: string, from: ChainCursor, limit: number = CHAIN_PAGE_SIZE): Promise<ChainPageResult> {
   const r = await tx.query<ChainRow>(
     `SELECT e.id, e.kind, e.idempotency_key, e.ref_type, e.ref_id, e.reverses_entry_id,
             e.chain_seq::text AS chain_seq, e.content_hash, e.prev_hash, e.hash,
             to_char(e.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS occurred_iso,
             p.line_no, a.code, p.amount_minor::text AS amount, p.currency
-       FROM journal_entries e
+       FROM (SELECT * FROM journal_entries WHERE market_id = $1 AND chain_seq > $2::bigint ORDER BY chain_seq LIMIT $3) e
        LEFT JOIN postings p ON p.entry_id = e.id
        LEFT JOIN ledger_accounts a ON a.id = p.account_id
-      WHERE e.market_id = $1
       ORDER BY e.chain_seq, p.line_no`,
-    [marketId],
+    [marketId, from.seq.toString(), limit],
   );
   const grouped = new Map<string, { head: ChainRow; postings: EntryContent["postings"][number][] }>();
   for (const row of r.rows) {
@@ -248,12 +266,12 @@ export async function verifyChain(tx: Queryable, marketId: string): Promise<Chai
     }
     grouped.set(row.id, g);
   }
-  let prev = GENESIS_HASH;
-  let seq = 0n;
+  let prev = from.hash;
+  let seq = from.seq;
   for (const { head, postings } of grouped.values()) {
     seq += 1n;
     const chainSeq = BigInt(head.chain_seq);
-    const broken = (reason: string): ChainVerification => ({ ok: false, entryId: head.id, chainSeq, reason });
+    const broken = (reason: string): ChainPageResult => ({ ok: false, entryId: head.id, chainSeq, reason, cursor: { seq: seq - 1n, hash: prev } });
     if (chainSeq !== seq) return broken("chain_seq is not contiguous");
     if (head.prev_hash !== prev) return broken("prev_hash does not match the previous entry");
     const recomputed = contentHash({
@@ -270,7 +288,18 @@ export async function verifyChain(tx: Queryable, marketId: string): Promise<Chai
     if (expected !== head.hash) return broken("entry hash does not match");
     prev = head.hash;
   }
-  return { ok: true, entries: grouped.size, headHash: prev };
+  return { ok: true, entries: grouped.size, cursor: { seq, hash: prev }, done: grouped.size < limit };
+}
+
+/** Recomputes the whole chain for a market from stored rows (I20), page by page inside the caller's transaction. Returns the first broken entry. */
+export async function verifyChain(tx: Queryable, marketId: string, pageSize: number = CHAIN_PAGE_SIZE): Promise<ChainVerification> {
+  let cursor = GENESIS_CURSOR;
+  for (;;) {
+    const page = await verifyChainPage(tx, marketId, cursor, pageSize);
+    if (!page.ok) return { ok: false, entryId: page.entryId, chainSeq: page.chainSeq, reason: page.reason };
+    cursor = page.cursor;
+    if (page.done) return { ok: true, entries: Number(cursor.seq), headHash: cursor.hash };
+  }
 }
 
 export const MAX_PAGE_SIZE = 50;
