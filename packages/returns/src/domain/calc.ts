@@ -46,6 +46,9 @@ export interface RefundCalc {
   readonly seller: Money;
 }
 
+/** Largest shortfall (piastres) of a differenced refund the platform absorbs as rounding; beyond it the refund is a configuration error. */
+export const MAX_ABSORBED_ROUNDING_MINOR = 2n;
+
 /** Cumulative voucher share for the first k units of a line (floor, so the shares of any partition sum exactly to the discount). */
 export const cumulativeDiscount = (discount: bigint, qty: number, k: number): bigint => (discount * BigInt(k)) / BigInt(qty);
 
@@ -69,10 +72,19 @@ export function computeRefund(i: CalcInput): RefundCalc {
   if (after < 0n) throw new ReturnsError("refund_exceeds_paid");
   const c = (x: bigint): bigint => percentOf(money(x, cur), BigInt(i.commissionBp)).amountMinor;
   const v = (x: bigint): bigint => percentOf(money(x, cur), BigInt(i.commissionVatBp)).amountMinor;
-  const commission = c(before) - c(after);
-  const commissionVat = v(c(before)) - v(c(after));
-  const seller = goods - commission - commissionVat;
-  if (seller < 0n) throw new ReturnsError("seller_net_negative");
+  let commission = c(before) - c(after);
+  let commissionVat = v(c(before)) - v(c(after));
+  let seller = goods - commission - commissionVat;
+  if (seller < 0n) {
+    // Cumulative differencing can overshoot by 1-2 piastres on tiny steps. CPL 181/2018: never refuse a refund for it; the platform
+    // absorbs the rounding piastre (VAT first, then commission) so seller = 0 and the refund CHECKs still hold.
+    let short = -seller;
+    if (short > MAX_ABSORBED_ROUNDING_MINOR) throw new ReturnsError("seller_net_negative"); // a real misconfiguration (commission + VAT above the goods), not rounding
+    const dv = short < commissionVat ? short : commissionVat;
+    commissionVat -= dv; short -= dv;
+    commission -= short;
+    seller = 0n;
+  }
 
   let withShares = lines;
   if (goods > 0n && commission + commissionVat > 0n) {

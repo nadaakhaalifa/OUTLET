@@ -4,6 +4,8 @@ Returns, exchanges, disputes and refunds (master prompt section 22, 15.6). Money
 
 ## Published rules
 
+- **Rounding.** Commission and its VAT are banker's-rounded once, in `@outlet/money`, on the remaining base before and after each refund and differenced (I10: any sequence of refunds sums exactly). Differencing can leave the seller share 1-2 piastres negative on a tiny step; the refund is never refused for that (CPL 181/2018). The platform absorbs the rounding piastre: commission VAT, then commission, is reduced by the shortfall so the seller share is 0 and the refund CHECKs hold. A shortfall above 2 piastres is a configuration error (`seller_net_negative`).
+
 - **Windows.** Counted from the courier-confirmed `delivered_at`. A window of N days ends at the last millisecond of Cairo calendar day N after the delivery date (day 14 for change of mind, day 30 for defects); the first instant of day N+1 is refused. Open question V7.
 - **Serial returners.** An order counts as returned when it has a non-exchange return whose inspection was accepted, or that has a refund. Rejected, cancelled or undisputed-and-closed returns do not count. A shopper with at least 10 delivered orders in the last 6 months and more than 60% returned loses free return shipping; the rule is published, never secret.
 - **Return shipping fee.** For `payer = shopper` the fee is recorded on the return, not charged in Phase 1 (V7).

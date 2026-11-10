@@ -16,6 +16,8 @@ export const DEFAULT_INTEGRITY_BUDGET_MS = 8_000;
 export const INTEGRITY_PAGE_SIZE = 10_000;
 /** Safety cap on self-emitted continuations of one run; a run that still is not done resumes at the next nightly tick. */
 export const MAX_CONTINUATIONS = 500;
+/** The weekly full pass is overdue after this many days (one missed week plus a day of slack). */
+export const FULL_PASS_OVERDUE_DAYS = 8;
 
 /** Deps of the integrity job: the finance deps plus the verification budget (tests inject a tiny one and a fake clock). */
 export interface IntegrityDeps extends FinanceDeps {
@@ -50,6 +52,8 @@ export interface ChainProgress {
   readonly broken: { readonly entryId: string; readonly chainSeq: bigint; readonly reason: string } | null;
   readonly full: boolean;
   readonly pages: number;
+  /** Set when a newer business date already has a run: this tick verified nothing and only marks its own row superseded (no false "verified"). */
+  readonly supersededBy?: string;
 }
 
 export interface IntegrityCheck {
@@ -89,6 +93,8 @@ export interface IntegrityDetails {
   readonly complete: boolean;
   /** This run is a full pass (cursor was reset to 0, or inherited from an unfinished full pass). */
   readonly full: boolean;
+  /** The chain is broken at the cursor: a later run must not inherit this run's full-pass status. */
+  readonly broken: boolean;
 }
 
 /** Details of a run row still in progress (status running): only the cursor; the dashboard reads completed and failed rows only. */
@@ -100,6 +106,11 @@ export interface IntegrityProgressDetails {
   readonly cursor_hash: string;
   readonly complete: false;
   readonly full: boolean;
+  readonly broken: false;
+  /** Set by a night that did not reach the chain head (non-chain checks stored alongside) until the final tick overwrites the row. */
+  readonly chain_pending?: boolean;
+  /** A newer business date took over this run. */
+  readonly superseded_by?: string;
 }
 
 const StoredSnapshot = z.object({
@@ -115,6 +126,7 @@ const CursorDetails = z.object({
   cursor_hash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   complete: z.boolean().optional(),
   full: z.boolean().optional(),
+  broken: z.boolean().optional(),
   // Rows written before the cursor existed: a verified chain stored its head and entry count.
   chain_ok: z.boolean().optional(),
   chain_head: z.string().nullable().optional(),
@@ -126,6 +138,7 @@ interface PriorRun {
   readonly cursor: ChainCursor;
   readonly complete: boolean;
   readonly full: boolean;
+  readonly broken: boolean;
 }
 
 /** Deterministic uuid for a mismatch that has no row of its own (a currency total): the exception key (market, source, kind, ref_type, ref_id) stays stable across reruns. */
@@ -171,25 +184,32 @@ export class IntegrityJob {
     const row = r.rows[0];
     if (row === undefined) return null;
     const p = CursorDetails.safeParse(row.details);
-    if (!p.success) return { businessDate: row.d, cursor: GENESIS_CURSOR, complete: false, full: false };
+    if (!p.success) return { businessDate: row.d, cursor: GENESIS_CURSOR, complete: false, full: false, broken: false };
     const d = p.data;
     if (d.verified_through_seq !== undefined && d.cursor_hash !== undefined) {
-      return { businessDate: row.d, cursor: { seq: BigInt(d.verified_through_seq), hash: d.cursor_hash }, complete: d.complete === true, full: d.full === true };
+      return { businessDate: row.d, cursor: { seq: BigInt(d.verified_through_seq), hash: d.cursor_hash }, complete: d.complete === true, full: d.full === true, broken: d.broken === true || d.chain_ok === false };
     }
     if (d.chain_ok === true && typeof d.chain_head === "string" && typeof d.entries === "number") {
-      return { businessDate: row.d, cursor: { seq: BigInt(d.entries), hash: d.chain_head }, complete: true, full: false };
+      return { businessDate: row.d, cursor: { seq: BigInt(d.entries), hash: d.chain_head }, complete: true, full: false, broken: false };
     }
-    return { businessDate: row.d, cursor: GENESIS_CURSOR, complete: false, full: false };
+    return { businessDate: row.d, cursor: GENESIS_CURSOR, complete: false, full: false, broken: false };
   }
 
-  private saveProgress(tx: Queryable, marketId: string, now: Date, businessDate: string, cursor: ChainCursor, full: boolean): Promise<unknown> {
-    const details: IntegrityProgressDetails = { version: 1, business_date: businessDate, chain_ok: true, verified_through_seq: cursor.seq.toString(), cursor_hash: cursor.hash, complete: false, full };
-    return tx.query(
+  private async saveProgress(tx: Queryable, marketId: string, now: Date, businessDate: string, cursor: ChainCursor, full: boolean): Promise<void> {
+    const details: IntegrityProgressDetails = { version: 1, business_date: businessDate, chain_ok: true, verified_through_seq: cursor.seq.toString(), cursor_hash: cursor.hash, complete: false, full, broken: false };
+    // started_at is kept on conflict (the first page's time); details merge so the pending-checks verdict of the first tick survives later pages.
+    await tx.query(
       `INSERT INTO reconciliation_runs (id, market_id, source, counterparty, business_date, mode, status, matched_count, unmatched_count, started_at, details)
        VALUES ($1, $2, 'ledger_integrity', 'ledger', $3::date, 'nightly', 'running', 0, 0, $4::timestamptz, $5::jsonb)
        ON CONFLICT (market_id, source, counterparty, business_date, mode)
-       DO UPDATE SET status = 'running', finished_at = NULL, details = EXCLUDED.details`,
+       DO UPDATE SET status = 'running', finished_at = NULL, details = reconciliation_runs.details || EXCLUDED.details`,
       [uuidv7(), marketId, businessDate, now.toISOString(), JSON.stringify(details)],
+    );
+    // An older run still "running" was overtaken by this date: mark it so it is never read as an in-flight run.
+    await tx.query(
+      `UPDATE reconciliation_runs SET details = details || jsonb_build_object('superseded_by', $3::text)
+        WHERE market_id = $1 AND source = 'ledger_integrity' AND status = 'running' AND business_date < $2::date AND NOT (details ? 'superseded_by')`,
+      [marketId, businessDate, businessDate],
     );
   }
 
@@ -200,9 +220,12 @@ export class IntegrityJob {
    */
   async advance(marketId: string, now: Date, businessDate: string, opts: IntegrityRunOptions = {}): Promise<ChainProgress> {
     const prior = await inJob(this.deps, marketId, "finance.reconcile", (tx) => this.loadPrior(tx, marketId));
+    if (prior !== null && prior.businessDate > businessDate) {
+      return { cursor: prior.cursor, complete: false, broken: null, full: opts.full === true, pages: 0, supersededBy: prior.businessDate };
+    }
     const alreadyFull = prior !== null && prior.businessDate === businessDate && prior.full;
     const reset = opts.full === true && !alreadyFull;
-    const full = opts.full === true || (prior !== null && prior.full && !prior.complete);
+    const full = opts.full === true || (prior !== null && prior.full && !prior.complete && !prior.broken);
     let cursor = reset ? GENESIS_CURSOR : (prior?.cursor ?? GENESIS_CURSOR);
     const started = this.mono();
     let pages = 0;
@@ -227,7 +250,16 @@ export class IntegrityJob {
    * completed or failed run.
    */
   async finalizeIn(tx: Queryable, marketId: string, now: Date, businessDate: string, progress: ChainProgress, opts: IntegrityRunOptions = {}): Promise<IntegrityReport> {
+    if (progress.supersededBy !== undefined) {
+      await tx.query(
+        `UPDATE reconciliation_runs SET details = details || jsonb_build_object('superseded_by', $3::text)
+          WHERE market_id = $1 AND source = 'ledger_integrity' AND business_date = $2::date AND status = 'running'`,
+        [marketId, businessDate, progress.supersededBy],
+      );
+      return { ok: true, checks: [], snapshotSha256: "", complete: false, verifiedThroughSeq: progress.cursor.seq };
+    }
     if (!progress.complete && progress.broken === null) {
+      if ((opts.continuation ?? 0) === 0) await this.pendingChecksIn(tx, marketId, now, businessDate, progress);
       const next = (opts.continuation ?? 0) + 1;
       if (next <= MAX_CONTINUATIONS) {
         const scope = progress.full ? "ledger_integrity_full" : "ledger_integrity";
@@ -241,7 +273,8 @@ export class IntegrityJob {
     return this.completeIn(tx, marketId, now, businessDate, progress, chainResult);
   }
 
-  private async completeIn(tx: Queryable, marketId: string, now: Date, businessDate: string, progress: ChainProgress, chainResult: ChainVerification): Promise<IntegrityReport> {
+  /** Everything except the (caller-supplied) chain: trial balance, entries balanced, payouts_in_transit projection, seller_pending / store_credit sign checks. */
+  private async nonChainChecks(tx: Queryable, marketId: string, businessDate: string, chainResult: ChainVerification) {
     const cur = this.deps.currency;
     const checks: IntegrityCheck[] = [];
     const scan = await integrityScan(tx, marketId, businessDate, chainResult);
@@ -262,6 +295,55 @@ export class IntegrityJob {
       const n = Number(bad.rows[0]?.n ?? "0");
       checks.push({ name: `${type}_not_negative`, ok: n === 0, detail: `${String(n)} accounts with a debit balance` });
     }
+    return { scan, nonZero, checks, chain };
+  }
+
+  private async upsertExceptions(tx: Queryable, runId: string, marketId: string, now: Date, scan: Awaited<ReturnType<IntegrityJob["nonChainChecks"]>>["scan"], nonZero: readonly { currency: string; totalMinor: bigint }[], chain: ChainVerification): Promise<void> {
+    interface Item { kind: string; refType: string; refId: string; entryId: string | null; expected: bigint | null; actual: bigint | null; currency: string }
+    const items: Item[] = [
+      ...scan.unbalanced.map((u): Item => ({ kind: "entry_unbalanced", refType: "journal_entry", refId: u.entryId, entryId: u.entryId, expected: 0n, actual: u.deltaMinor, currency: u.currency })),
+      ...nonZero.map((t): Item => ({ kind: "currency_total_nonzero", refType: "currency_total", refId: refUuid(`${marketId}|${t.currency}`), entryId: null, expected: 0n, actual: t.totalMinor, currency: t.currency })),
+      ...(chain.ok ? [] : [{ kind: "chain_broken", refType: "journal_entry", refId: chain.entryId, entryId: chain.entryId, expected: null, actual: null, currency: this.deps.currency } satisfies Item]),
+    ];
+    for (const it of items) {
+      await tx.query(
+        `INSERT INTO reconciliation_exceptions (id, run_id, market_id, source, counterparty, kind, ref_type, ref_id, entry_id, expected_minor, actual_minor, currency, status, first_seen_at, last_seen_at)
+         VALUES ($1, $2, $3, 'ledger_integrity', 'ledger', $4, $5, $6, $7, $8, $9, $10, 'OPEN', $11::timestamptz, $11::timestamptz)
+         ON CONFLICT (market_id, source, kind, ref_type, ref_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, actual_minor = EXCLUDED.actual_minor, run_id = EXCLUDED.run_id,
+                     status = CASE WHEN reconciliation_exceptions.status = 'RESOLVED' THEN 'OPEN' ELSE reconciliation_exceptions.status END,
+                     resolved_at = CASE WHEN reconciliation_exceptions.status = 'RESOLVED' THEN NULL ELSE reconciliation_exceptions.resolved_at END`,
+        [uuidv7(), runId, marketId, it.kind, it.refType, it.refId, it.entryId, it.expected?.toString() ?? null, it.actual?.toString() ?? null, it.currency, now.toISOString()],
+      );
+    }
+  }
+
+  /**
+   * A night that does not reach the chain head (scheduler tick, continuation 0) still runs the non-chain checks and stores them on the running row
+   * with `chain_pending: true`, upserts exceptions and emits ledger.integrity_failed on a failure. The final tick overwrites the row with the full
+   * verdict; the dashboard reader keeps excluding running rows.
+   */
+  private async pendingChecksIn(tx: Queryable, marketId: string, now: Date, businessDate: string, progress: ChainProgress): Promise<void> {
+    const partial: ChainVerification = { ok: true, entries: Number(progress.cursor.seq), headHash: progress.cursor.hash };
+    const { scan, nonZero, checks } = await this.nonChainChecks(tx, marketId, businessDate, partial);
+    const pending = checks.filter((c) => c.name !== "hash_chain");
+    const failures = pending.filter((c) => !c.ok);
+    const patch = {
+      chain_pending: true, balanced: nonZero.length === 0 && scan.unbalancedTotal === 0,
+      totals: Object.fromEntries(scan.totals.map((t) => [t.currency, t.totalMinor.toString()])), checks: pending.map((c) => ({ name: c.name, ok: c.ok })),
+    };
+    const run = await tx.query<{ id: string }>(
+      `UPDATE reconciliation_runs SET details = details || $3::jsonb, matched_count = $4, unmatched_count = $5
+        WHERE market_id = $1 AND source = 'ledger_integrity' AND business_date = $2::date AND status = 'running' RETURNING id`,
+      [marketId, businessDate, JSON.stringify(patch), pending.length - failures.length, failures.length],
+    );
+    const runId = run.rows[0]?.id;
+    if (runId === undefined) return;
+    await this.upsertExceptions(tx, runId, marketId, now, scan, nonZero, partial);
+    if (failures.length > 0) await emit(tx, marketId, now, "ledger.integrity_failed", "reconciliation_run", runId, { failed: failures.map((f) => f.name).join(","), market_id: marketId, chain_pending: true });
+  }
+
+  private async completeIn(tx: Queryable, marketId: string, now: Date, businessDate: string, progress: ChainProgress, chainResult: ChainVerification): Promise<IntegrityReport> {
+    const { scan, nonZero, checks, chain } = await this.nonChainChecks(tx, marketId, businessDate, chainResult);
     const failures = checks.filter((c) => !c.ok);
     const prior = await tx.query<{ s: unknown }>(
       `SELECT details->'snapshot' AS s FROM reconciliation_runs WHERE market_id = $1 AND source = 'ledger_integrity' AND business_date < $2::date
@@ -290,37 +372,36 @@ export class IntegrityJob {
       chain_head: chain.ok ? chain.headHash : null, entries: chain.ok ? chain.entries : null,
       totals: Object.fromEntries(scan.totals.map((t) => [t.currency, t.totalMinor.toString()])), snapshot_sha256: scan.snapshotSha256, snapshot, ...(chainCheck ?? {}),
       checks: checks.map((c) => ({ name: c.name, ok: c.ok })),
-      verified_through_seq: progress.cursor.seq.toString(), cursor_hash: progress.cursor.hash, complete: chain.ok, full: progress.full,
+      verified_through_seq: progress.cursor.seq.toString(), cursor_hash: progress.cursor.hash, complete: chain.ok, full: progress.full, broken: !chain.ok,
     };
     const run = await tx.query<{ id: string }>(
       `INSERT INTO reconciliation_runs (id, market_id, source, counterparty, business_date, mode, status, matched_count, unmatched_count, started_at, finished_at, details)
        VALUES ($1, $2, 'ledger_integrity', 'ledger', $3::date, 'nightly', $4, $5, $6, $7::timestamptz, $7::timestamptz, $8::jsonb)
        ON CONFLICT (market_id, source, counterparty, business_date, mode)
-       DO UPDATE SET status = EXCLUDED.status, matched_count = EXCLUDED.matched_count, unmatched_count = EXCLUDED.unmatched_count, started_at = EXCLUDED.started_at,
+       DO UPDATE SET status = EXCLUDED.status, matched_count = EXCLUDED.matched_count, unmatched_count = EXCLUDED.unmatched_count,
                      finished_at = EXCLUDED.finished_at, details = EXCLUDED.details
        RETURNING id`,
       [uuidv7(), marketId, businessDate, failures.length === 0 ? "completed" : "failed", checks.length - failures.length, failures.length, now.toISOString(), JSON.stringify(details)],
     );
     const runId = run.rows[0]?.id ?? uuidv7();
-    interface Item { kind: string; refType: string; refId: string; entryId: string | null; expected: bigint | null; actual: bigint | null; currency: string }
-    const items: Item[] = [
-      ...scan.unbalanced.map((u): Item => ({ kind: "entry_unbalanced", refType: "journal_entry", refId: u.entryId, entryId: u.entryId, expected: 0n, actual: u.deltaMinor, currency: u.currency })),
-      ...nonZero.map((t): Item => ({ kind: "currency_total_nonzero", refType: "currency_total", refId: refUuid(`${marketId}|${t.currency}`), entryId: null, expected: 0n, actual: t.totalMinor, currency: t.currency })),
-      ...(chain.ok ? [] : [{ kind: "chain_broken", refType: "journal_entry", refId: chain.entryId, entryId: chain.entryId, expected: null, actual: null, currency: this.deps.currency } satisfies Item]),
-    ];
-    for (const it of items) {
-      await tx.query(
-        `INSERT INTO reconciliation_exceptions (id, run_id, market_id, source, counterparty, kind, ref_type, ref_id, entry_id, expected_minor, actual_minor, currency, status, first_seen_at, last_seen_at)
-         VALUES ($1, $2, $3, 'ledger_integrity', 'ledger', $4, $5, $6, $7, $8, $9, $10, 'OPEN', $11::timestamptz, $11::timestamptz)
-         ON CONFLICT (market_id, source, kind, ref_type, ref_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at, actual_minor = EXCLUDED.actual_minor, run_id = EXCLUDED.run_id,
-                     status = CASE WHEN reconciliation_exceptions.status = 'RESOLVED' THEN 'OPEN' ELSE reconciliation_exceptions.status END,
-                     resolved_at = CASE WHEN reconciliation_exceptions.status = 'RESOLVED' THEN NULL ELSE reconciliation_exceptions.resolved_at END`,
-        [uuidv7(), runId, marketId, it.kind, it.refType, it.refId, it.entryId, it.expected?.toString() ?? null, it.actual?.toString() ?? null, it.currency, now.toISOString()],
-      );
-    }
+    await this.upsertExceptions(tx, runId, marketId, now, scan, nonZero, chain);
     if (failures.length > 0) {
       await emit(tx, marketId, now, "ledger.integrity_failed", "reconciliation_run", runId, { failed: failures.map((f) => f.name).join(","), market_id: marketId });
     }
+    await this.fullPassWatchdog(tx, marketId, businessDate);
     return { ok: failures.length === 0, checks, snapshotSha256: scan.snapshotSha256, complete: chain.ok, verifiedThroughSeq: progress.cursor.seq };
+  }
+
+  /** Warns `ledger_full_pass_overdue` when the latest full, complete run is older than FULL_PASS_OVERDUE_DAYS (or none exists). Evaluated at the end of each nightly run. */
+  private async fullPassWatchdog(tx: Queryable, marketId: string, businessDate: string): Promise<void> {
+    const r = await tx.query<{ age: string | null }>(
+      `SELECT ($2::date - max(business_date))::text AS age FROM reconciliation_runs
+        WHERE market_id = $1 AND source = 'ledger_integrity' AND status IN ('completed', 'failed') AND details->>'full' = 'true' AND details->>'complete' = 'true'`,
+      [marketId, businessDate],
+    );
+    const age = r.rows[0]?.age ?? null;
+    if (age === null || Number(age) > FULL_PASS_OVERDUE_DAYS) {
+      this.deps.warn?.("ledger_full_pass_overdue", { market_id: marketId, business_date: businessDate, days_since_full_pass: age === null ? -1 : Number(age) });
+    }
   }
 }

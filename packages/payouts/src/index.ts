@@ -30,7 +30,7 @@ export { RECONCILIATION_SOURCES, ReconciliationJob } from "./application/reconci
 export type { ReconciliationOptions, ReconciliationReport, ReconciliationSource, SourceSummary } from "./application/reconciliation-job.js";
 export { snapshotSignerFromEnv } from "@outlet/ledger";
 export type { SnapshotSignerPort } from "@outlet/ledger";
-export { DEFAULT_INTEGRITY_BUDGET_MS, INTEGRITY_PAGE_SIZE, IntegrityJob, MAX_CONTINUATIONS, SNAPSHOT_CHAIN_WINDOW } from "./application/integrity-job.js";
+export { DEFAULT_INTEGRITY_BUDGET_MS, INTEGRITY_PAGE_SIZE, IntegrityJob, FULL_PASS_OVERDUE_DAYS, MAX_CONTINUATIONS, SNAPSHOT_CHAIN_WINDOW } from "./application/integrity-job.js";
 export { INTEGRITY_CONSUMER, INTEGRITY_REQUESTED_EVENT, IntegrityConsumer, IntegrityRequest } from "./application/integrity-consumer.js";
 export type { IntegrityEventIn } from "./application/integrity-consumer.js";
 export type { ChainProgress, IntegrityCheck, IntegrityDeps, IntegrityDetails, IntegrityProgressDetails, IntegrityReport, IntegrityRunOptions } from "./application/integrity-job.js";

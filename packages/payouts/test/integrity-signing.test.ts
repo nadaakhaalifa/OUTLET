@@ -69,7 +69,7 @@ describe("IntegrityJob signed, chained snapshots", () => {
       const snaps = (await w.raw.query<{ details: { snapshot: SignedSnapshot } }>("SELECT details FROM reconciliation_runs ORDER BY business_date")).rows.map((r) => r.details.snapshot);
       expect(snaps.map((s) => [s.signature, s.signed, s.key_id])).toEqual([[null, false, null], [null, false, null]]);
       expect(snaps[1]?.previous_digest).toBe(snaps[0]?.digest);
-      expect(warns.map((x) => x.e)).toEqual(["ledger_snapshot_unsigned", "ledger_snapshot_unsigned"]);
+      expect(warns.map((x) => x.e).filter((e) => e !== "ledger_full_pass_overdue")).toEqual(["ledger_snapshot_unsigned", "ledger_snapshot_unsigned"]);
       expect(warns[0]?.f).toMatchObject({ reason: "unconfigured", market_id: "EG" });
     } finally {
       await w.close();

@@ -101,11 +101,24 @@ describe("computeRefund: exact amounts", () => {
   });
 });
 
-describe("computeRefund: tiny-amount rounding edge (FINDING, pinned)", () => {
-  it("a 1-piastre goods refund can round commission to 1 and its VAT to 1, so seller_net_negative blocks the refund (typed error, no money moved)", () => {
-    // base 503404, commission 18.35%, VAT 11.31%: c(503404)=92375, c(503403)=92374 -> 1 ; v(92375)=10448, v(92374)=10447 -> 1 ; 1 - 1 - 1 < 0
-    const input = I({ lines: [L({ qty: 1, unitPrice: 1n, discount: 0n })], base: 503_404n, commissionBp: 1835, commissionVatBp: 1131 });
-    expect(code(thrown(() => computeRefund(input)))).toBe("seller_net_negative");
+describe("computeRefund: tiny-amount rounding edge (platform absorbs the rounding piastre)", () => {
+  it("a 1-piastre goods refund whose differenced commission and VAT would be 1 + 1 is not refused: seller 0, commission + VAT = 1", () => {
+    // base 503404, commission 18.35%, VAT 11.31%: c diff = 1, v diff = 1 -> 1 - 1 - 1 < 0, clamped
+    const r = computeRefund(I({ lines: [L({ qty: 1, unitPrice: 1n, discount: 0n })], base: 503_404n, commissionBp: 1835, commissionVatBp: 1131 }));
+    expect(r.goods.amountMinor).toBe(1n);
+    expect(r.seller.amountMinor).toBe(0n);
+    expect(r.commission.amountMinor + r.commissionVat.amountMinor).toBe(1n);
+  });
+  it("PROPERTY: single-piastre steps never throw, seller >= 0, and each step stays within 1 piastre of the unclamped split", () => {
+    fc.assert(fc.property(fc.bigInt({ min: 2n, max: 2_000_000n }), fc.integer({ min: 0, max: 3_000 }), fc.integer({ min: 0, max: 2_000 }), (base, cbp, vbp) => {
+      const r = computeRefund(I({ lines: [L({ qty: 1, unitPrice: 1n, discount: 0n })], base, commissionBp: cbp, commissionVatBp: vbp }));
+      const c = (x: bigint): bigint => percentOf(m(x), BigInt(cbp)).amountMinor;
+      const v = (x: bigint): bigint => percentOf(m(x), BigInt(vbp)).amountMinor;
+      const rawC = c(base) - c(base - 1n); const rawV = v(c(base)) - v(c(base - 1n));
+      expect(r.seller.amountMinor >= 0n).toBe(true);
+      expect(r.commission.amountMinor + r.commissionVat.amountMinor).toBe(1n - r.seller.amountMinor);
+      expect(rawC + rawV - (r.commission.amountMinor + r.commissionVat.amountMinor) <= 1n).toBe(true);
+    }), { numRuns: 500 });
   });
 });
 

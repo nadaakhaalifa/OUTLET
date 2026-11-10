@@ -201,4 +201,83 @@ describe("incremental chain verification", () => {
       await w.close();
     }
   }, 60_000);
+
+  it("a night that does not reach the head still runs the non-chain checks and stores them on the running row (chain_pending); the final tick overwrites with the full verdict", async () => {
+    const w = await buildWorld();
+    try {
+      await seedChain(w, 250, "f");
+      const j = job(w, { budgetMs: 0, pageSize: 100 });
+      const t1 = await j.run("EG", DAY1);
+      expect(t1.complete).toBe(false);
+      const row = await runRow(w, "2030-01-10");
+      expect(row).toMatchObject({ status: "running", details: { chain_pending: true, balanced: true, verified_through_seq: "100" } });
+      expect((row?.details.checks as { name: string; ok: boolean }[]).map((c) => c.name)).toEqual(
+        ["trial_balance_zero", "entries_balanced", "payouts_in_transit_projection", "seller_pending_not_negative", "store_credit_not_negative"]);
+      // Continuations do not repeat the pending checks; a page keeps them until the final tick replaces the row.
+      await j.run("EG", DAY1, "2030-01-10", { continuation: 1 });
+      expect((await runRow(w, "2030-01-10"))?.details.chain_pending).toBe(true);
+      let done = false;
+      for (let n = 2; n < 6 && !done; n += 1) done = (await j.run("EG", DAY1, "2030-01-10", { continuation: n })).complete;
+      const fin = await runRow(w, "2030-01-10");
+      expect(fin?.status).toBe("completed");
+      expect(fin?.details.chain_pending).toBeUndefined();
+    } finally {
+      await w.close();
+    }
+  }, 60_000);
+
+  it("a stale-date continuation after a newer run started pages nothing and marks its row superseded; the older running row is marked when the newer date saves its first page", async () => {
+    const w = await buildWorld();
+    try {
+      await seedChain(w, 250, "g");
+      const j = job(w, { budgetMs: 0, pageSize: 100 });
+      await j.run("EG", DAY1);
+      await j.run("EG", DAY2, "2030-01-11");
+      expect(await runRow(w, "2030-01-10")).toMatchObject({ status: "running", details: { superseded_by: "2030-01-11" } });
+      const startedBefore = (await w.raw.query<{ s: string }>("SELECT started_at::text AS s FROM reconciliation_runs WHERE business_date = '2030-01-10'::date")).rows[0]?.s;
+      const stale = await j.advance("EG", DAY1, "2030-01-10");
+      expect(stale).toMatchObject({ pages: 0, complete: false, supersededBy: "2030-01-11" });
+      const r = await j.run("EG", DAY1, "2030-01-10", { continuation: 1 });
+      expect(r.complete).toBe(false);
+      expect(await runRow(w, "2030-01-10")).toMatchObject({ status: "running", details: { superseded_by: "2030-01-11" } });
+      expect((await w.raw.query<{ s: string }>("SELECT started_at::text AS s FROM reconciliation_runs WHERE business_date = '2030-01-10'::date")).rows[0]?.s).toBe(startedBefore);
+      expect(await runRow(w, "2030-01-11")).toMatchObject({ status: "running", details: { verified_through_seq: "200" } }); // inherits 100 from date 10, one more page
+    } finally {
+      await w.close();
+    }
+  }, 60_000);
+
+  it("a broken full run is not inherited as a full pass by the next nightly", async () => {
+    const w = await buildWorld();
+    try {
+      await seedChain(w, 300, "h");
+      await tamper(w, 150, "hash = repeat('b', 64)");
+      const j = job(w, { budgetMs: 60_000, pageSize: 100 });
+      expect((await j.run("EG", DAY1, "2030-01-10", { full: true })).ok).toBe(false);
+      expect(await runRow(w, "2030-01-10")).toMatchObject({ status: "failed", details: { full: true, broken: true, complete: false } });
+      await j.run("EG", DAY2, "2030-01-11");
+      expect(await runRow(w, "2030-01-11")).toMatchObject({ status: "failed", details: { full: false, broken: true } });
+    } finally {
+      await w.close();
+    }
+  }, 60_000);
+
+  it("warns ledger_full_pass_overdue when the latest full complete run is older than 8 days (or missing), not when it is recent", async () => {
+    const w = await buildWorld();
+    try {
+      await seedChain(w, 20, "i");
+      const warns: string[] = [];
+      const j = new IntegrityJob({ client: w.worker, currency: "EGP", now: () => DAY1, warn: (e) => { warns.push(e); } });
+      await j.run("EG", DAY1, "2030-01-10");
+      expect(warns).toContain("ledger_full_pass_overdue"); // never had a full pass
+      warns.length = 0;
+      await j.run("EG", DAY1, "2030-01-11", { full: true });
+      await j.run("EG", DAY1, "2030-01-18");
+      expect(warns).not.toContain("ledger_full_pass_overdue"); // 7 days
+      await j.run("EG", DAY1, "2030-01-20");
+      expect(warns).toContain("ledger_full_pass_overdue"); // 9 days
+    } finally {
+      await w.close();
+    }
+  }, 60_000);
 });

@@ -219,6 +219,8 @@ Commission and VAT are computed on the **remaining** amount and differenced, so 
 | `platform_vat_output` | 630 | |
 | `psp_clearing:paymob` | | 30,000 |
 
+**Rounding.** Differencing can overshoot on a tiny step (a 1-piastre goods refund whose commission and VAT both step by 1 leaves the seller share at -1). The refund is never refused for it (CPL 181/2018): the platform absorbs the rounding piastre (commission VAT first, then commission, is reduced by the shortfall, at most 2 piastres) so the seller share is 0 and the refund CHECKs hold. I10 stays exact whenever no clamp is needed; a clamped step deviates by at most 1 piastre.
+
 If the PSP keeps its fee on a refund, a separate `psp_fee_expense` posting is made from the settlement file. Charging that fee to the rejecting seller is a policy choice (⚠ D1 / Seller Agreement).
 **Model (a):** if B's split already settled to B, the PSP must reverse the split or `seller_pending:B` cannot be debited from money we hold. ⚠ V4. The entry is the same; the cash recovery differs.
 
