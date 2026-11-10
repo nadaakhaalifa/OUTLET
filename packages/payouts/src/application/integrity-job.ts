@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { GENESIS_CURSOR, Ledger, integrityScan, verifyChainPage } from "@outlet/ledger";
-import type { ChainCursor, ChainVerification } from "@outlet/ledger";
+import { GENESIS_CURSOR, Ledger, UnconfiguredSnapshotSigner, buildSnapshot, integrityScan, verifyChainPage, verifySnapshotChain } from "@outlet/ledger";
+import type { ChainCursor, ChainVerification, SignedSnapshot, SnapshotPayload, SnapshotSignerPort } from "@outlet/ledger";
 import { uuidv7 } from "@outlet/ids";
 import { negate } from "@outlet/money";
 import { z } from "zod";
@@ -23,7 +23,16 @@ export interface IntegrityDeps extends FinanceDeps {
   readonly pageSize?: number;
   /** Monotonic millisecond clock for the budget (default performance.now). */
   readonly monotonicMs?: () => number;
+  /** Signs the daily snapshot digest (ADR-0016). Default: UnconfiguredSnapshotSigner (fail closed: the run is stored unsigned and `ledger_snapshot_unsigned` is warned). */
+  readonly signer?: SnapshotSignerPort;
+  /** Extra verify keys (rotation: old key ids keep verifying old runs); `signer` is always included. */
+  readonly verifySigners?: readonly SnapshotSignerPort[];
+  /** Warn sink; fields are non-secret. */
+  readonly warn?: (event: string, fields: Readonly<Record<string, string | number | boolean>>) => void;
 }
+
+/** Runs of the snapshot chain checked by the weekly full pass. */
+export const SNAPSHOT_CHAIN_WINDOW = 30;
 
 export interface IntegrityRunOptions {
   /** Weekly full pass: reset the cursor to 0 unless this business date's run already is a full pass (a continuation or redelivery must not reset again). */
@@ -68,6 +77,11 @@ export interface IntegrityDetails {
   readonly entries: number | null;
   readonly totals: Readonly<Record<string, string>>;
   readonly snapshot_sha256: string;
+  /** Signed, chained daily snapshot (digest, base64 signature or null, key_id, previous_digest, payload). */
+  readonly snapshot: SignedSnapshot;
+  /** Weekly full pass only: the last SNAPSHOT_CHAIN_WINDOW snapshots verified (digests, signatures, links). */
+  readonly snapshot_chain_ok?: boolean;
+  readonly snapshot_chain_break?: string;
   readonly checks: readonly { readonly name: string; readonly ok: boolean }[];
   /** Chain cursor (decimal string): last verified chain_seq and its hash. It stays at the last good entry when the chain is broken, so the next run re-reports the break. */
   readonly verified_through_seq: string;
@@ -87,6 +101,14 @@ export interface IntegrityProgressDetails {
   readonly complete: false;
   readonly full: boolean;
 }
+
+const StoredSnapshot = z.object({
+  payload: z.object({
+    market: z.string(), day: z.string(), totals: z.record(z.string(), z.string()), chain_head: z.string(), verified_through_seq: z.string(),
+    previous_snapshot_digest: z.string().nullable(), previous_signature_key_id: z.string().nullable(),
+  }),
+  digest: z.string(), signature: z.string().nullable(), signed: z.boolean(), key_id: z.string().nullable(), previous_digest: z.string().nullable(),
+});
 
 const CursorDetails = z.object({
   verified_through_seq: z.string().regex(/^\d+$/).optional(),
@@ -241,10 +263,32 @@ export class IntegrityJob {
       checks.push({ name: `${type}_not_negative`, ok: n === 0, detail: `${String(n)} accounts with a debit balance` });
     }
     const failures = checks.filter((c) => !c.ok);
+    const prior = await tx.query<{ s: unknown }>(
+      `SELECT details->'snapshot' AS s FROM reconciliation_runs WHERE market_id = $1 AND source = 'ledger_integrity' AND business_date < $2::date
+         AND status IN ('completed', 'failed') AND details->'snapshot' IS NOT NULL ORDER BY business_date DESC LIMIT $3`,
+      [marketId, businessDate, SNAPSHOT_CHAIN_WINDOW],
+    );
+    const history: SignedSnapshot[] = [];
+    for (const r of prior.rows) { const p = StoredSnapshot.safeParse(r.s); if (p.success) history.push(p.data); }
+    const previous = history[0] ?? null;
+    const payload: SnapshotPayload = {
+      market: marketId, day: businessDate, totals: Object.fromEntries(scan.totals.map((t) => [t.currency, t.totalMinor.toString()])),
+      chain_head: chain.ok ? chain.headHash : `broken:${chain.entryId}`, verified_through_seq: progress.cursor.seq.toString(),
+      previous_snapshot_digest: previous?.digest ?? null, previous_signature_key_id: previous?.key_id ?? null,
+    };
+    const signer = this.deps.signer ?? new UnconfiguredSnapshotSigner();
+    const snapshot = await buildSnapshot(payload, signer, (reason) => { this.deps.warn?.("ledger_snapshot_unsigned", { market_id: marketId, business_date: businessDate, reason }); });
+    let chainCheck: { snapshot_chain_ok: boolean; snapshot_chain_break?: string } | null = null;
+    if (progress.full) {
+      const verifiers = [...(this.deps.verifySigners ?? []), signer];
+      const r = await verifySnapshotChain([...history].reverse().concat(snapshot), verifiers);
+      chainCheck = r.ok ? { snapshot_chain_ok: true } : { snapshot_chain_ok: false, snapshot_chain_break: `${r.firstBreak?.day ?? ""}:${r.firstBreak?.reason ?? ""}` };
+      if (!r.ok) this.deps.warn?.("ledger_snapshot_chain_broken", { market_id: marketId, business_date: businessDate, break: chainCheck.snapshot_chain_break ?? "" });
+    }
     const details: IntegrityDetails = {
       version: 1, business_date: businessDate, balanced: nonZero.length === 0 && scan.unbalancedTotal === 0, chain_ok: chain.ok,
       chain_head: chain.ok ? chain.headHash : null, entries: chain.ok ? chain.entries : null,
-      totals: Object.fromEntries(scan.totals.map((t) => [t.currency, t.totalMinor.toString()])), snapshot_sha256: scan.snapshotSha256,
+      totals: Object.fromEntries(scan.totals.map((t) => [t.currency, t.totalMinor.toString()])), snapshot_sha256: scan.snapshotSha256, snapshot, ...(chainCheck ?? {}),
       checks: checks.map((c) => ({ name: c.name, ok: c.ok })),
       verified_through_seq: progress.cursor.seq.toString(), cursor_hash: progress.cursor.hash, complete: chain.ok, full: progress.full,
     };

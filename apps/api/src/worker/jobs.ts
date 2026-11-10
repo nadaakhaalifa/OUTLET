@@ -1,3 +1,4 @@
+import type { SnapshotSignerPort } from "@outlet/payouts";
 import { createAdminAccess } from "@outlet/admin-access";
 import { LateRefundConsumer, RejectedOrderInventoryRelease, SELLER_ORDER_REJECTED_EVENT } from "@outlet/checkout";
 import type { RefundPort } from "@outlet/checkout";

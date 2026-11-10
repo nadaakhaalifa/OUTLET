@@ -12,3 +12,5 @@ export { Ledger, MAX_PAGE_SIZE, balance, listEntries, post, reverse, trialBalanc
 export type { ChainCursor, ChainPageResult, ChainVerification, EntryPage, ListedEntry, ListedPosting, PostResult, ReverseOptions } from "./application/ledger.js";
 export { MAX_UNBALANCED_LISTED, integrityScan, snapshotDigest } from "./application/integrity.js";
 export type { CurrencyTotal, IntegrityScan, UnbalancedEntry } from "./application/integrity.js";
+export { HmacSnapshotSigner, MIN_HMAC_KEY_BYTES, SnapshotSignerUnconfiguredError, UnconfiguredSnapshotSigner, buildSnapshot, canonicalPayload, decodeBase64Strict, payloadDigest, snapshotSignerFromEnv, verifySnapshotChain } from "./application/signing.js";
+export type { KmsSnapshotSigner, SignedSnapshot, SnapshotChainResult, SnapshotPayload, SnapshotSignerPort } from "./application/signing.js";
