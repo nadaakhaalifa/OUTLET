@@ -11,7 +11,7 @@ import type { WorkerEnv } from "./config.js";
 import { startHealthServer } from "./health.js";
 import type { HealthServer, WorkerHealth } from "./health.js";
 import { boundedClient } from "./bounded.js";
-import { marketJobs } from "./jobs.js";
+import { marketJobs, selectSearchEngine } from "./jobs.js";
 import type { KillRead, WorkerAppClient } from "./jobs.js";
 import { MarketRunner } from "./runner.js";
 import { RollupScheduler } from "./scheduler.js";
@@ -55,7 +55,7 @@ export const startWorker = async (d: WorkerDeps): Promise<RunningWorker> => {
         marketId: m.marketId,
         relayDb: contextClient(d.worker, { kind: "worker", marketId: m.marketId, job: "outbox.relay" }),
         // Consumer transactions carry statement_timeout = handler timeout (F3); the relay's own client is not bounded.
-        jobs: marketJobs({ marketId: m.marketId, integrityBudgetMs: d.env.WORKER_INTEGRITY_BUDGET_MS, retention: { dryRun: d.env.WORKER_RETENTION_DRY_RUN, budgetMs: d.env.WORKER_RETENTION_BUDGET_MS, metrics: retentionMetrics, log: d.log }, worker: boundedClient(d.worker, d.env.WORKER_HANDLER_TIMEOUT_MS), app: boundedClient(d.app, d.env.WORKER_HANDLER_TIMEOUT_MS), kill, now }),
+        jobs: marketJobs({ marketId: m.marketId, integrityBudgetMs: d.env.WORKER_INTEGRITY_BUDGET_MS, snapshotSigner: snapshotSignerFromEnv(d.env), retention: { dryRun: d.env.WORKER_RETENTION_DRY_RUN, budgetMs: d.env.WORKER_RETENTION_BUDGET_MS, metrics: retentionMetrics, log: d.log }, searchEngine: selectSearchEngine(d.env, d.log), worker: boundedClient(d.worker, d.env.WORKER_HANDLER_TIMEOUT_MS), app: boundedClient(d.app, d.env.WORKER_HANDLER_TIMEOUT_MS), kill, now }),
         kill, metrics, log: d.log, now,
         pollMs: d.env.WORKER_POLL_MS, pollMaxMs: d.env.WORKER_POLL_MAX_MS, batchSize: d.env.WORKER_BATCH_SIZE, maxAttempts: d.env.WORKER_MAX_ATTEMPTS,
         leaseMs: leaseMsFor(d.env), handlerTimeoutMs: d.env.WORKER_HANDLER_TIMEOUT_MS, lagMs: d.env.WORKER_LAG_MS,

@@ -1,3 +1,4 @@
+import { snapshotSignerFromEnv } from "@outlet/payouts";
 import { z } from "zod";
 
 const pgUrl = z.url({ protocol: /^postgres(ql)?$/ });
@@ -38,10 +39,19 @@ export const WorkerEnvSchema = z.object({
   WORKER_RETENTION_BUDGET_MS: int(1_000, 110_000, 8_000),
   /** Ledger integrity chain verification time budget per tick (ms); the loop stops between 10,000-entry pages once spent and a continuation event resumes. Must stay below WORKER_HANDLER_TIMEOUT_MS. */
   WORKER_INTEGRITY_BUDGET_MS: int(500, 110_000, 8_000),
+  /** Typesense (ADR-0017). Both set = the search.sync job mirrors to it; either missing = UnconfiguredSearchEngine (fail closed, staleness says search_provider_unconfigured). The key is a secret: never logged. */
+  SEARCH_TYPESENSE_URL: z.url({ protocol: /^https?$/ }).optional(),
+  SEARCH_TYPESENSE_API_KEY: z.string().min(8).optional(),
+  /** Ledger daily snapshot signing (ADR-0016 interim until KMS). Both unset = unsigned snapshots + a `ledger_snapshot_unsigned` warning; one without the other, bad base64 or a key under 32 bytes refuses boot. Secret: never logged. */
+  LEDGER_SNAPSHOT_HMAC_KEY: z.string().min(1).optional(),
+  LEDGER_SNAPSHOT_KEY_ID: z.string().min(1).optional(),
   OTEL_EXPORTER: z.enum(["otlp", "none"]).default("none"),
 }).refine((e) => leaseMsFor(e) <= MAX_LEASE_MS, { message: "WORKER_BATCH_SIZE x WORKER_HANDLER_TIMEOUT_MS + 60 s must not exceed 15 minutes", path: ["WORKER_BATCH_SIZE"] })
   .refine((e) => e.WORKER_RETENTION_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_RETENTION_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_RETENTION_BUDGET_MS"] })
-  .refine((e) => e.WORKER_INTEGRITY_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_INTEGRITY_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_INTEGRITY_BUDGET_MS"] });
+  .refine((e) => e.WORKER_INTEGRITY_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_INTEGRITY_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_INTEGRITY_BUDGET_MS"] })
+  .superRefine((e, ctx) => {
+    try { snapshotSignerFromEnv(e); } catch (err) { ctx.addIssue({ code: "custom", message: err instanceof Error ? err.message : "invalid", path: ["LEDGER_SNAPSHOT_HMAC_KEY"] }); }
+  });
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;
 
 /** Parses env; the error lists variable names and issue codes only (never values: connection strings are secrets). */

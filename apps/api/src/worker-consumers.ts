@@ -4,6 +4,7 @@ import type { RoleSqlClient } from "@outlet/db";
 import { ATTENTION_KINDS, AttentionConsumer } from "@outlet/ops-attention";
 import { getMarket } from "@outlet/markets-config";
 import { INTEGRITY_REQUESTED_EVENT, IntegrityConsumer, IntegrityJob } from "@outlet/payouts";
+import type { SnapshotSignerPort } from "@outlet/payouts";
 import { NOTIFYING_EVENT_TYPES, NotificationDispatchConsumer } from "@outlet/notifications";
 import type { Channel } from "@outlet/notifications";
 import { ConsentService, RETENTION_REQUESTED_EVENT, RetentionConsumer, RetentionRunner } from "@outlet/privacy";
@@ -13,7 +14,7 @@ import type { CourierPort } from "@outlet/shipping";
 import { OutboxWriter, pgTransactionalWriter } from "@outlet/outbox";
 import type { InboxOutcome } from "@outlet/outbox";
 import { SYNC_EVENT_TYPES, SearchSyncConsumer } from "@outlet/search";
-import type { PriceDisplayLookup } from "@outlet/search";
+import type { PriceDisplayLookup, SearchEnginePort } from "@outlet/search";
 import type { Logger } from "@outlet/logger";
 import type { RetentionMetricsPort } from "@outlet/privacy";
 
@@ -71,8 +72,8 @@ export const reportingRollupHandlers = (worker: RoleSqlClient<"outlet_worker">, 
  * context; `display` must be composed on that same context (pricing reads) and fails closed to plain prices. The external engine is not touched here
  * (UnconfiguredSearchEngine by default, ADR-0029): staleness reports `search_provider_unconfigured` instead of fresh.
  */
-export const searchSyncHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, deps: { readonly display: PriceDisplayLookup; readonly log?: Logger }): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
-  const c = new SearchSyncConsumer(worker, marketId, deps.display, deps.log);
+export const searchSyncHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, deps: { readonly display: PriceDisplayLookup; readonly log?: Logger; readonly engine?: SearchEnginePort; readonly engineKilled?: () => Promise<boolean> }): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const c = new SearchSyncConsumer(worker, marketId, deps.display, deps.log, { ...(deps.engine === undefined ? {} : { engine: deps.engine }), ...(deps.engineKilled === undefined ? {} : { engineKilled: deps.engineKilled }) });
   return new Map(SYNC_EVENT_TYPES.map((t) => [t, (e: OutboxEventIn) => c.handle(e)]));
 };
 
@@ -122,8 +123,9 @@ export const retentionHandlers = (
  * scope ledger_integrity, or ledger_integrity_full on Fridays) runs the ledger integrity scan of this market (chain verified incrementally from a stored cursor in budgeted pages; an unfinished run emits its own continuation event) and stores the result (reconciliation_runs.details, migration 0039) that the Admin
  * dashboard tile reads. Idempotent per (market, business date), inbox-deduplicated, switch `workers.ledger.integrity.enabled` (money: fails closed).
  */
-export const ledgerIntegrityHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date(), integrity: { readonly budgetMs?: number } = {}): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
-  const job = new IntegrityJob({ client: worker, currency: getMarket(marketId.toLowerCase()).currency, now, ...(integrity.budgetMs === undefined ? {} : { budgetMs: integrity.budgetMs }) });
+export const ledgerIntegrityHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date(), integrity: { readonly budgetMs?: number; readonly signer?: SnapshotSignerPort; readonly warn?: (event: string, fields: Readonly<Record<string, string | number | boolean>>) => void } = {}): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const job = new IntegrityJob({ client: worker, currency: getMarket(marketId.toLowerCase()).currency, now, ...(integrity.budgetMs === undefined ? {} : { budgetMs: integrity.budgetMs }),
+    ...(integrity.signer === undefined ? {} : { signer: integrity.signer }), ...(integrity.warn === undefined ? {} : { warn: integrity.warn }) });
   const c = new IntegrityConsumer(worker, marketId, job, now);
   return new Map([[INTEGRITY_REQUESTED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
 };

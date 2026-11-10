@@ -12,13 +12,13 @@ import { COMMITTED_RELEASED_EVENT, RELEASE_REQUIRED_EVENT, ReleaseRequiredConsum
 import { ATTENTION_OPENED_EVENT } from "@outlet/ops-attention";
 import type { RetentionMetricsPort } from "@outlet/privacy";
 import { makeEnv } from "@outlet/pricing-integrity";
-import { pricingDisplayLookup } from "@outlet/search";
+import { TypesenseEngine, UnconfiguredSearchEngine, pricingDisplayLookup } from "@outlet/search";
 import type { InboxOutcome } from "@outlet/outbox";
 import { InventoryRestock, REFUNDS_KILL_SWITCH, RefundService } from "@outlet/returns";
 import type { KillSwitchPort, ProviderRefundPort, ProviderRefundResult } from "@outlet/returns";
 import { CourierCancelError, SHIPMENT_CANCELLED_EVENT } from "@outlet/shipping";
 import type { CourierPort } from "@outlet/shipping";
-import type { PriceDisplayLookup } from "@outlet/search";
+import type { PriceDisplayLookup, SearchEnginePort } from "@outlet/search";
 import { productionPromotionsPort } from "../modules/checkout/cancellation-composition.js";
 import type { PromotionsKillRead } from "../modules/checkout/cancellation-composition.js";
 import { NoCategoryReturnPolicy, UnconfiguredEvidence } from "../modules/returns/index.js";
@@ -111,10 +111,14 @@ export interface MarketJobsInput {
    * visible as unrouted lag) instead of retrying a rejecting port into the DLQ.
    */
   readonly lateRefunds?: RefundPort;
+  /** External search engine for search.sync (ADR-0017). Undefined = UnconfiguredSearchEngine. Build it with selectSearchEngine(env). */
+  readonly searchEngine?: SearchEnginePort;
   readonly now?: () => Date;
   /** privacy.retention: dryRun defaults to true (counts only; WORKER_RETENTION_DRY_RUN=false deletes). */
   /** finance.integrity: chain verification time budget per tick (WORKER_INTEGRITY_BUDGET_MS, default 8 s). */
   readonly integrityBudgetMs?: number;
+  /** finance.integrity: daily snapshot signer (LEDGER_SNAPSHOT_HMAC_KEY / _KEY_ID); undefined = unsigned snapshots + warn. */
+  readonly snapshotSigner?: SnapshotSignerPort;
   readonly retention?: { readonly dryRun?: boolean; readonly budgetMs?: number; readonly metrics?: RetentionMetricsPort; readonly log?: Logger; readonly inventoryPath?: string };
 }
 
@@ -127,6 +131,12 @@ const searchDisplay = (i: MarketJobsInput, opts: { readonly now?: () => Date }):
     client: contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "search.sync" }), marketId: i.marketId,
     killSwitch: { isKilled: () => i.kill.isKilled("pricing.price_watch.enabled", { marketId: i.marketId }).catch(() => true) }, ...opts,
   }));
+
+/** Engine selection by env (ADR-0017): both variables set = TypesenseEngine, otherwise the fail-closed Unconfigured engine. */
+export const selectSearchEngine = (env: { readonly SEARCH_TYPESENSE_URL?: string | undefined; readonly SEARCH_TYPESENSE_API_KEY?: string | undefined }, log?: Logger): SearchEnginePort =>
+  env.SEARCH_TYPESENSE_URL !== undefined && env.SEARCH_TYPESENSE_API_KEY !== undefined
+    ? new TypesenseEngine({ url: env.SEARCH_TYPESENSE_URL, apiKey: env.SEARCH_TYPESENSE_API_KEY, ...(log === undefined ? {} : { log }) })
+    : new UnconfiguredSearchEngine();
 
 /** notifications.<channel>.enabled (ui class: an unreadable store means allowed, an unknown name means killed). */
 const channelKilled = (i: MarketJobsInput, channel: Channel): Promise<boolean> => {
@@ -160,8 +170,8 @@ export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
     { name: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
     // Deletes only through the `privacy.retention` RLS policies (migration 0040); dry run unless the owner flips WORKER_RETENTION_DRY_RUN.
     { name: "privacy.retention", killSwitch: RETENTION_KILL_SWITCH, handlers: retentionHandlers(i.worker, i.marketId, { ...i.retention, ...opts }) },
-    { name: "finance.integrity", killSwitch: LEDGER_INTEGRITY_KILL_SWITCH, handlers: ledgerIntegrityHandlers(i.worker, i.marketId, i.now, i.integrityBudgetMs === undefined ? {} : { budgetMs: i.integrityBudgetMs }) },
-    { name: "search.sync", killSwitch: SEARCH_SYNC_KILL_SWITCH, handlers: searchSyncHandlers(i.worker, i.marketId, { display: searchDisplay(i, opts) }) },
+    { name: "finance.integrity", killSwitch: LEDGER_INTEGRITY_KILL_SWITCH, handlers: ledgerIntegrityHandlers(i.worker, i.marketId, i.now, { ...(i.integrityBudgetMs === undefined ? {} : { budgetMs: i.integrityBudgetMs }), ...(i.snapshotSigner === undefined ? {} : { signer: i.snapshotSigner }), ...(i.retention?.log === undefined ? {} : { warn: (event, fields) => { i.retention?.log?.warn(event, fields); } }) }) },
+    { name: "search.sync", killSwitch: SEARCH_SYNC_KILL_SWITCH, handlers: searchSyncHandlers(i.worker, i.marketId, { display: searchDisplay(i, opts), engine: i.searchEngine ?? new UnconfiguredSearchEngine(), engineKilled: () => i.kill.isKilled("search.engine.enabled", { marketId: i.marketId }).catch(() => false) }) },
     // Plans notification_log rows only (no channel provider, ADR-0029); per-channel notifications.<channel>.enabled switches still suppress rows (fail open).
     { name: "notifications.dispatch", killSwitch: NOTIFICATIONS_KILL_SWITCH, handlers: notificationHandlers(i.worker, i.marketId, { isChannelKilled: (c) => channelKilled(i, c), ...opts }) },
   ];

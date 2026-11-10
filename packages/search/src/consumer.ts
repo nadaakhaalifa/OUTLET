@@ -1,9 +1,11 @@
 import { contextClient } from "@outlet/db";
-import type { RoleSqlClient } from "@outlet/db";
+import type { RoleSqlClient, SqlClient } from "@outlet/db";
 import { createLogger } from "@outlet/logger";
 import type { Logger } from "@outlet/logger";
 import { InboxProcessor } from "@outlet/outbox";
 import type { InboxOutcome, OutboxEvent } from "@outlet/outbox";
+import { reconcileEngine } from "./engine.js";
+import type { SearchEnginePort } from "./engine.js";
 import { SEARCH_SYNC_CONSUMER, SYNC_EVENT_TYPES, SearchIndexSync, isValidSyncPayload } from "./index-sync.js";
 import type { SyncOutcome } from "./index-sync.js";
 import type { PriceDisplayLookup } from "./ports.js";
@@ -29,8 +31,14 @@ export class SearchSyncConsumer {
   private readonly sync: SearchIndexSync;
   private readonly inbox: InboxProcessor;
   private readonly log: Logger;
-  constructor(client: RoleSqlClient<"outlet_worker">, private readonly marketId: string, display: PriceDisplayLookup, log?: Logger) {
+  private readonly scoped: SqlClient;
+  private readonly engine: SearchEnginePort | undefined;
+  private readonly engineKilled: () => Promise<boolean>;
+  constructor(client: RoleSqlClient<"outlet_worker">, private readonly marketId: string, display: PriceDisplayLookup, log?: Logger, opts: { readonly engine?: SearchEnginePort; readonly engineKilled?: () => Promise<boolean> } = {}) {
     const scoped = contextClient(client, { kind: "worker", marketId, job: SEARCH_SYNC_JOB });
+    this.scoped = scoped;
+    this.engine = opts.engine;
+    this.engineKilled = opts.engineKilled ?? (() => Promise.resolve(false));
     this.sync = new SearchIndexSync(scoped, display);
     this.inbox = new InboxProcessor(scoped);
     this.log = log ?? createLogger();
@@ -44,7 +52,24 @@ export class SearchSyncConsumer {
     }
     const full: OutboxEvent = { id: event.id, type: event.type, aggregateType: "listing", aggregateId: event.id, marketId: this.marketId, occurredAt: new Date(at).toISOString(), visibility: "internal", payload: event.payload };
     const outcome: SyncOutcome = await this.sync.handle(full);
+    if (outcome !== "duplicate") await this.mirror();
     return outcome === "duplicate" ? "duplicate" : "processed";
+  }
+
+  /**
+   * Best effort, bounded follow-up (25 documents) after an applied sync: mirrors pending rows to the external engine when one is configured and
+   * search.engine.enabled is not killed (ui class, fail open). Any failure is logged and left pending: staleness reports it, the inbox row is never rolled back.
+   * A periodic reconcile tick for backlog (engine outage, breaker open) is a follow-up (scheduler scopes are owned elsewhere).
+   */
+  private async mirror(): Promise<void> {
+    if (this.engine?.configured !== true) return;
+    try {
+      if (await this.engineKilled().catch(() => false)) return;
+      const r = await reconcileEngine(this.scoped, this.marketId, this.engine, 25);
+      if (r.failed > 0) this.log.warn("search.sync: engine mirror left documents pending", { failed: r.failed, pending: r.pending });
+    } catch (e) {
+      this.log.warn("search.sync: engine mirror failed, documents stay pending", { error: e instanceof Error ? e.name : "unknown" });
+    }
   }
 
   private async park(event: SearchEventIn, reason: string): Promise<InboxOutcome> {

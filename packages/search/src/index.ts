@@ -15,3 +15,5 @@ export { STALENESS_SLO_MS, engineSyncSource, measureStaleness, outboxPendingSour
 export type { EngineState, EngineSyncSource, PendingSource, SearchFreshness, StalenessReading } from "./staleness.js";
 export { RELAX_ORDER, SearchService, SearchUnavailableError } from "./service.js";
 export type { RelaxStep, SearchDeps, SearchItem, SearchOptions, SearchPage } from "./service.js";
+export { BREAKER_OPEN_MS, BREAKER_THRESHOLD, SearchEngineCircuitOpenError, SearchEngineError, TYPESENSE_COLLECTION, TYPESENSE_FIELD_ALLOW_LIST, TypesenseEngine, toTypesenseDocument, typesenseSchema } from "./adapters/typesense.js";
+export type { TypesenseOptions, UpsertResult } from "./adapters/typesense.js";
