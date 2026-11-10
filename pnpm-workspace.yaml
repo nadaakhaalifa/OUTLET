@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# Supply chain (BUILD-PROMPT section 2): 7 days = 10080 minutes before a release can be installed.
+minimumReleaseAge: 10080
+# Lifecycle scripts are off by default; only the packages below may run build scripts.
+allowBuilds:
+  esbuild: true
+  protobufjs: false # transitive via OpenTelemetry OTLP; its postinstall is not needed (ADR-lite in docs/adr/dependencies.md)
+
+overrides:
+  # GHSA-g3hv-75wg-m249 (ReDoS, medium) in minimatch 10.2.6 via dev tooling; OSV gate
+  "minimatch@<11.0.1": "11.0.1"
+  # 7 fastify advisories (4 high) in 5.11.3; OSV gate
+  "fastify@<5.12.6": "5.12.6"
+  # 4 qs advisories (medium) in 6.15.1 via dev/transitive deps; OSV gate
+  "qs@<6.16.1": "6.16.1"

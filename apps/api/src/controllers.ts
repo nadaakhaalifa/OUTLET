@@ -1,0 +1,19 @@
+import type { Type } from "@nestjs/common";
+import { AddressesController, GeoAreasController } from "./modules/addresses/index.js";
+import { ReturnsController } from "./modules/returns/index.js";
+import { SellerOnboardingController, SellerTeamController } from "./modules/seller-onboarding/index.js";
+import { TrackingController } from "./modules/tracking/index.js";
+import { AdminController } from "./modules/admin/index.js";
+import { AuthController } from "./modules/auth/index.js";
+import { CartController } from "./modules/cart/index.js";
+import { CatalogPublicController } from "./modules/catalog-public/index.js";
+import { CheckoutController } from "./modules/checkout/index.js";
+import { HealthController } from "./modules/health/index.js";
+import { SellerCatalogController } from "./modules/seller-catalog/index.js";
+import { SellerInventoryController } from "./modules/seller-inventory/index.js";
+import { SellerListingsController } from "./modules/seller-listings/index.js";
+import { SellerOrdersController } from "./modules/seller-orders/index.js";
+import { SellerFinanceController } from "./modules/seller-finance/index.js";
+
+/** The production route table. The route audit, the OpenAPI generator and the negative-authz suite all read this list. */
+export const CONTROLLERS: readonly Type[] = [HealthController, CatalogPublicController, SellerListingsController, SellerCatalogController, AuthController, CartController, CheckoutController, SellerOrdersController, SellerInventoryController, SellerFinanceController, AdminController, AddressesController, GeoAreasController, ReturnsController, TrackingController, SellerOnboardingController, SellerTeamController];

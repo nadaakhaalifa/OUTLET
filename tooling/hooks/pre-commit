@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Git pre-commit: gitleaks on staged changes. Fails closed if gitleaks is missing.
+set -u
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat >&2 <<MSG
+pre-commit: gitleaks is not installed, so the commit is refused (fail closed).
+Install: brew install gitleaks   (or https://github.com/gitleaks/gitleaks#installing)
+MSG
+  exit 1
+fi
+# gitleaks >= 8.19 uses "git --staged"; older versions use "protect --staged".
+if gitleaks protect --help >/dev/null 2>&1; then
+  gitleaks protect --staged --redact -v || { echo "pre-commit: gitleaks found secrets, commit refused." >&2; exit 1; }
+else
+  gitleaks git --staged --redact -v || { echo "pre-commit: gitleaks found secrets, commit refused." >&2; exit 1; }
+fi

@@ -1,0 +1,998 @@
+[
+  {
+    "table": "admin_dashboard_snapshots",
+    "policy": "admin_dashboard_snapshots__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "admin_dashboard_snapshots",
+    "policy": "admin_dashboard_snapshots__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "age_blocks",
+    "policy": "age_blocks__auth_device",
+    "role": "outlet_auth",
+    "cmd": "all"
+  },
+  {
+    "table": "age_blocks",
+    "policy": "age_blocks__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "age_blocks",
+    "policy": "age_blocks__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_ops_attention",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "audit_log",
+    "policy": "audit_log__app_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
+    "table": "channel_connections",
+    "policy": "channel_connections__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "channel_snapshots",
+    "policy": "channel_snapshots__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "cod_remittance_lines",
+    "policy": "cod_remittance_lines__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "cod_remittances",
+    "policy": "cod_remittances__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "consent_records",
+    "policy": "consent_records__auth_visitor",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "courier_events_raw",
+    "policy": "courier_events_raw__worker_shipping_tracking",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "delivery_snapshots",
+    "policy": "delivery_snapshots__worker_shipping_tracking_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "delivery_snapshots",
+    "policy": "delivery_snapshots__worker_shipping_tracking_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "devices",
+    "policy": "devices__auth_bind",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "devices",
+    "policy": "devices__auth_lookup",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "devices",
+    "policy": "devices__auth_register",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "disputes",
+    "policy": "disputes__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "disputes",
+    "policy": "disputes__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "disputes",
+    "policy": "disputes__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_outbox_relay",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "enforcement_actions",
+    "policy": "enforcement_actions__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "enforcement_actions",
+    "policy": "enforcement_actions__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "external_products",
+    "policy": "external_products__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__app_store_inventory_release_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__app_store_inventory_release_select",
+    "role": "outlet_app",
+    "cmd": "select"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_inbox_insert",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_inbox_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc_insert",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "kyc_cases",
+    "policy": "kyc_cases__worker_seller_kyc_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "kyc_decisions",
+    "policy": "kyc_decisions__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "kyc_documents",
+    "policy": "kyc_documents__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "media_assets",
+    "policy": "media_assets__worker_platform",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "order_groups",
+    "policy": "order_groups__worker_checkout_expiry",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "order_groups",
+    "policy": "order_groups__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "otp_challenges",
+    "policy": "otp_challenges__auth_phone",
+    "role": "outlet_auth",
+    "cmd": "all"
+  },
+  {
+    "table": "otp_challenges",
+    "policy": "otp_challenges__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "otp_challenges",
+    "policy": "otp_challenges__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "otp_challenges",
+    "policy": "otp_challenges__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "otp_challenges",
+    "policy": "otp_challenges__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__app_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__auth_emit",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_checkout_expiry",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_checkout_settle",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_emit",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_media_platform",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_ops_attention",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_outbox_relay",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_outbox_relay_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_shipping_tracking",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_issue",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_take",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__auth_take_delete",
+    "role": "outlet_auth",
+    "cmd": "delete"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_challenges",
+    "policy": "passkey_challenges__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "passkey_credentials",
+    "policy": "passkey_credentials__auth_lookup",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "passkey_credentials",
+    "policy": "passkey_credentials__auth_use",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payment_events_raw",
+    "policy": "payment_events_raw__worker_privacy_retention_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "payment_intents",
+    "policy": "payment_intents__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payment_intents",
+    "policy": "payment_intents__worker_payments_webhook",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payout_accruals",
+    "policy": "payout_accruals__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_batches",
+    "policy": "payout_batches__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_holds",
+    "policy": "payout_holds__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payout_holds",
+    "policy": "payout_holds__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payout_lines",
+    "policy": "payout_lines__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "payouts",
+    "policy": "payouts__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "pii_access_log",
+    "policy": "pii_access_log__app_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
+    "table": "price_appeals",
+    "policy": "price_appeals__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "price_claims",
+    "policy": "price_claims__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "price_claims",
+    "policy": "price_claims__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "price_claims",
+    "policy": "price_claims__worker_search_sync",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "price_findings",
+    "policy": "price_findings__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "privacy_requests",
+    "policy": "privacy_requests__worker_privacy_deletion",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "privacy_requests",
+    "policy": "privacy_requests__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "product_matches",
+    "policy": "product_matches__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "products",
+    "policy": "products__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "psp_settlement_files",
+    "policy": "psp_settlement_files__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "psp_settlement_lines",
+    "policy": "psp_settlement_lines__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "rate_limit_hits",
+    "policy": "rate_limit_hits__auth_limiter",
+    "role": "outlet_auth",
+    "cmd": "all"
+  },
+  {
+    "table": "rate_limit_hits",
+    "policy": "rate_limit_hits__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "rate_limit_hits",
+    "policy": "rate_limit_hits__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "rate_limit_hits",
+    "policy": "rate_limit_hits__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "rate_limit_hits",
+    "policy": "rate_limit_hits__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "reconciliation_exceptions",
+    "policy": "reconciliation_exceptions__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "reconciliation_exceptions",
+    "policy": "reconciliation_exceptions__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "reconciliation_matches",
+    "policy": "reconciliation_matches__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "reconciliation_runs",
+    "policy": "reconciliation_runs__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "reconciliation_runs",
+    "policy": "reconciliation_runs__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "refresh_tokens",
+    "policy": "refresh_tokens__auth_issue",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  },
+  {
+    "table": "refresh_tokens",
+    "policy": "refresh_tokens__auth_rotate",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "refresh_tokens",
+    "policy": "refresh_tokens__auth_token",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "refresh_tokens",
+    "policy": "refresh_tokens__worker_auth_purge",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "refresh_tokens",
+    "policy": "refresh_tokens__worker_auth_purge_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "refunds",
+    "policy": "refunds__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "refunds",
+    "policy": "refunds__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "refunds",
+    "policy": "refunds__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_finance_refunds",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_orders_close",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "return_requests",
+    "policy": "return_requests__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "search_documents",
+    "policy": "search_documents__worker_search_sync",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "seller_bank_accounts",
+    "policy": "seller_bank_accounts__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_finance_payouts",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_finance_reconcile",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_orders_close_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_orders_close_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "seller_orders",
+    "policy": "seller_orders__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_plan_assignments",
+    "policy": "seller_plan_assignments__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc_insert",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "seller_signatories",
+    "policy": "seller_signatories__worker_seller_kyc_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "session_families",
+    "policy": "session_families__auth_by_token",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "session_families",
+    "policy": "session_families__auth_device_rebind",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "session_families",
+    "policy": "session_families__auth_device_rebind_select",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "session_families",
+    "policy": "session_families__auth_revoke_by_token",
+    "role": "outlet_auth",
+    "cmd": "update"
+  },
+  {
+    "table": "shipments",
+    "policy": "shipments__worker_shipping_tracking_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "shipments",
+    "policy": "shipments__worker_shipping_tracking_update",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "sku_claimed_reference",
+    "policy": "sku_claimed_reference__worker_pricing_channels",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "skus",
+    "policy": "skus__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__auth_my_memberships",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc_accept",
+    "role": "outlet_worker",
+    "cmd": "update"
+  },
+  {
+    "table": "store_members",
+    "policy": "store_members__worker_seller_kyc_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "all"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_reporting_rollup",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "stores",
+    "policy": "stores__worker_seller_kyc",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "users",
+    "policy": "users__auth_lookup",
+    "role": "outlet_auth",
+    "cmd": "select"
+  },
+  {
+    "table": "users",
+    "policy": "users__auth_register",
+    "role": "outlet_auth",
+    "cmd": "insert"
+  }
+]

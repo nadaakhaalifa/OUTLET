@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"], "experimentalDecorators": true, "lib": ["ES2023"] },
+  "include": ["src", "test", "vitest.config.ts"]
+}

@@ -1,0 +1,62 @@
+import { snapshotSignerFromEnv } from "@outlet/payouts";
+import { z } from "zod";
+
+const pgUrl = z.url({ protocol: /^postgres(ql)?$/ });
+const int = (min: number, max: number, dflt: number) => z.coerce.number().int().min(min).max(max).default(dflt);
+
+/**
+ * Worker process environment (ADR-0016), validated at boot. DATABASE_URL_WORKER is the outlet_worker pool (every job context, including the
+ * kill-switch store since migration 0037). DATABASE_URL_APP is a small outlet_app pool used only by the four jobs.ts uses recorded in ADR-0016
+ * (voucher confirm in the shopper's user context, ReleaseRequiredConsumer, InventoryRestock, the admin-access stub). Both are required: without
+ * them the worker refuses to start (fail closed).
+ */
+/** Upper bound of the claim lease (chief review F5): a crashed worker's batch must come back within 15 minutes. */
+export const MAX_LEASE_MS = 15 * 60_000;
+
+/** Lease must outlive a full batch of handler timeouts, so a slow batch is never claimed twice. */
+export const leaseMsFor = (e: { readonly WORKER_BATCH_SIZE: number; readonly WORKER_HANDLER_TIMEOUT_MS: number }): number => e.WORKER_BATCH_SIZE * e.WORKER_HANDLER_TIMEOUT_MS + 60_000;
+
+export const WorkerEnvSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DATABASE_URL_WORKER: pgUrl,
+  DATABASE_URL_APP: pgUrl,
+  PG_POOL_MAX: int(2, 50, 5),
+  WORKER_HEALTH_HOST: z.string().min(1).default("0.0.0.0"),
+  WORKER_HEALTH_PORT: int(1, 65_535, 9_464),
+  /** Relay poll interval when busy-idle switches back to work; doubles while idle up to WORKER_POLL_MAX_MS. */
+  WORKER_POLL_MS: int(50, 60_000, 500),
+  WORKER_POLL_MAX_MS: int(100, 300_000, 10_000),
+  WORKER_BATCH_SIZE: int(1, 500, 20),
+  WORKER_MAX_ATTEMPTS: int(1, 50, 8),
+  WORKER_HANDLER_TIMEOUT_MS: int(1_000, 120_000, 20_000),
+  /** SIGTERM drain budget; capped at 30 s (ADR-0016). */
+  WORKER_DRAIN_MS: int(0, 30_000, 30_000),
+  WORKER_SCHEDULER_MS: int(1_000, 60_000, 5_000),
+  WORKER_LAG_MS: int(1_000, 300_000, 15_000),
+  /** Retention purge (privacy.retention): true (default) counts rows only; "false" deletes. Deletes are irreversible, so only an explicit "false" turns them on. */
+  WORKER_RETENTION_DRY_RUN: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  /** Retention purge time budget per run (ms); the loop stops between batches once spent and the next hourly window continues. Must stay below WORKER_HANDLER_TIMEOUT_MS. */
+  WORKER_RETENTION_BUDGET_MS: int(1_000, 110_000, 8_000),
+  /** Ledger integrity chain verification time budget per tick (ms); the loop stops between 10,000-entry pages once spent and a continuation event resumes. Must stay below WORKER_HANDLER_TIMEOUT_MS. */
+  WORKER_INTEGRITY_BUDGET_MS: int(500, 110_000, 8_000),
+  /** Typesense (ADR-0017). Both set = the search.sync job mirrors to it; either missing = UnconfiguredSearchEngine (fail closed, staleness says search_provider_unconfigured). The key is a secret: never logged. */
+  SEARCH_TYPESENSE_URL: z.url({ protocol: /^https?$/ }).optional(),
+  SEARCH_TYPESENSE_API_KEY: z.string().min(8).optional(),
+  /** Ledger daily snapshot signing (ADR-0016 interim until KMS). Both unset = unsigned snapshots + a `ledger_snapshot_unsigned` warning; one without the other, bad base64 or a key under 32 bytes refuses boot. Secret: never logged. */
+  LEDGER_SNAPSHOT_HMAC_KEY: z.string().min(1).optional(),
+  LEDGER_SNAPSHOT_KEY_ID: z.string().min(1).optional(),
+  OTEL_EXPORTER: z.enum(["otlp", "none"]).default("none"),
+}).refine((e) => leaseMsFor(e) <= MAX_LEASE_MS, { message: "WORKER_BATCH_SIZE x WORKER_HANDLER_TIMEOUT_MS + 60 s must not exceed 15 minutes", path: ["WORKER_BATCH_SIZE"] })
+  .refine((e) => e.WORKER_RETENTION_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_RETENTION_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_RETENTION_BUDGET_MS"] })
+  .refine((e) => e.WORKER_INTEGRITY_BUDGET_MS < e.WORKER_HANDLER_TIMEOUT_MS, { message: "WORKER_INTEGRITY_BUDGET_MS must be below WORKER_HANDLER_TIMEOUT_MS", path: ["WORKER_INTEGRITY_BUDGET_MS"] })
+  .superRefine((e, ctx) => {
+    try { snapshotSignerFromEnv(e); } catch (err) { ctx.addIssue({ code: "custom", message: err instanceof Error ? err.message : "invalid", path: ["LEDGER_SNAPSHOT_HMAC_KEY"] }); }
+  });
+export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;
+
+/** Parses env; the error lists variable names and issue codes only (never values: connection strings are secrets). */
+export const parseWorkerEnv = (env: Readonly<Record<string, string | undefined>>): WorkerEnv => {
+  const r = WorkerEnvSchema.safeParse(env);
+  if (!r.success) throw new Error(`invalid worker environment: ${r.error.issues.map((i) => `${i.path.join(".")} (${i.code})`).join(", ")}`);
+  return r.data;
+};

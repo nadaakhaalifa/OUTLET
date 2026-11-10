@@ -1,0 +1,18 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@outlet/db": ["../src/index.ts"],
+      "@outlet/ids": ["../../ids/src/index.ts"],
+      "@outlet/outbox": ["../../outbox/src/index.ts"],
+      "@outlet/policy": ["../../policy/src/index.ts"],
+      "@outlet/inventory": ["../../inventory/src/index.ts"],
+      "@outlet/ledger": ["../../ledger/src/index.ts"],
+      "@outlet/idempotency": ["../../idempotency/src/index.ts"],
+      "@outlet/money": ["../../money/src/index.ts"]
+    }
+  },
+  "include": ["./*.ts"]
+}

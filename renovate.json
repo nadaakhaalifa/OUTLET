@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommits", ":dependencyDashboard"],
+  "timezone": "Africa/Cairo",
+  "schedule": ["before 8am on monday"],
+  "prConcurrentLimit": 5,
+  "minimumReleaseAge": "7 days",
+  "rangeStrategy": "bump",
+  "vulnerabilityAlerts": { "labels": ["security"], "schedule": ["at any time"], "minimumReleaseAge": null },
+  "packageRules": [
+    {
+      "description": "Money, validation and toolchain majors need a human.",
+      "matchPackageNames": ["zod", "fast-check", "dependency-cruiser", "typescript", "eslint", "typescript-eslint", "vitest", "turbo"],
+      "automerge": false
+    },
+    { "matchManagers": ["github-actions"], "groupName": "github actions", "pinDigests": true }
+  ],
+  "labels": ["dependencies"]
+}

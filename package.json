@@ -1,0 +1,37 @@
+{
+  "name": "outlex",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.28.6",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "node tooling/ci/lint-sharded.mjs",
+    "lint:all": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --cache --cache-location .cache/eslint",
+    "depcruise": "depcruise packages apps tooling --config .dependency-cruiser.cjs",
+    "privacy:check": "node tooling/privacy/check-data-inventory.mjs",
+    "test": "vitest run --coverage",
+    "sbom:generate": "pnpm sbom --sbom-format cyclonedx --lockfile-only --out sbom.cdx.json",
+    "prepare": "node tooling/git-hooks/install.mjs",
+    "test:pg": "vitest run --project db-pg",
+    "mutation": "stryker run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
+    "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "^5.0.5",
+    "dependency-cruiser": "^18.7.0",
+    "eslint": "^10.14.0",
+    "fast-check": "^4.10.2",
+    "turbo": "^2.11.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
+  }
+}

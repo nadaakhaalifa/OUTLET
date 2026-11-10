@@ -1,0 +1,81 @@
+export class PrivacyError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = new.target.name;
+  }
+}
+
+export class UserNotFoundError extends PrivacyError {
+  constructor(userId: string) {
+    super("user_not_found", `user ${userId} not found`);
+  }
+}
+
+export class InvalidTransitionError extends PrivacyError {
+  constructor(
+    readonly kind: string,
+    readonly from: string,
+    readonly to: string,
+  ) {
+    super("invalid_transition", `${kind} request cannot move ${from} -> ${to}`);
+  }
+}
+
+export class RequestNotFoundError extends PrivacyError {
+  constructor(id: string) {
+    super("request_not_found", `privacy request ${id} not found`);
+  }
+}
+
+export class DuplicateOpenRequestError extends PrivacyError {
+  constructor(kind: string) {
+    super("duplicate_open_request", `an open ${kind} request already exists for this user`);
+  }
+}
+
+export type DeletionBlockerKind = "open_order" | "open_return" | "open_dispute";
+export interface DeletionBlocker {
+  readonly kind: DeletionBlockerKind;
+  readonly count: number;
+}
+
+/** Shown to the user: exactly why deletion is blocked (master prompt section 2). */
+export class DeletionBlockedError extends PrivacyError {
+  constructor(readonly blockers: readonly DeletionBlocker[]) {
+    super("deletion_blocked", `deletion blocked by: ${blockers.map((b) => `${b.kind}(${String(b.count)})`).join(", ")}`);
+  }
+}
+
+export class BreachNotFoundError extends PrivacyError {
+  constructor(id: string) {
+    super("breach_not_found", `breach ${id} not found`);
+  }
+}
+
+export class BreachSummaryPiiError extends PrivacyError {
+  constructor() {
+    super("breach_summary_pii", "breach summary must not contain personal data (email, phone or ID numbers)");
+  }
+}
+
+export class BreachCloseBlockedError extends PrivacyError {
+  constructor(readonly missing: readonly string[]) {
+    super("breach_close_blocked", `breach cannot be closed yet: ${missing.join(", ")}`);
+  }
+}
+
+export class BreachForbiddenError extends PrivacyError {
+  constructor(action: string) {
+    super("forbidden", `not allowed to perform ${action}`);
+  }
+}
+
+/** notifiedAt must satisfy detectedAt <= notifiedAt <= now (a notice can be neither backdated before detection nor postdated). */
+export class BreachTimestampError extends PrivacyError {
+  constructor(message: string) {
+    super("breach_timestamp_invalid", message);
+  }
+}

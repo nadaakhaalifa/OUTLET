@@ -1,0 +1,500 @@
+{"id":"q0001","text":"قبعة جلد فضي","script":"ar","intent":"attribute","expected_normalized":"cap leather silver","tags":["ar"],"source":"synthetic"}
+{"id":"q0002","text":"إسدال جديد","script":"ar","intent":"attribute","expected_normalized":"isdal new","tags":["ar"],"source":"synthetic"}
+{"id":"q0003","text":"عاوز اسكارف صوف","script":"ar","intent":"natural_language","expected_normalized":"scarf wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0004","text":"عايز قفطان بناتي","script":"ar","intent":"natural_language","expected_normalized":"galabeya girls","tags":["ar"],"source":"synthetic"}
+{"id":"q0005","text":"جينز حرير أبيض اطفال","script":"ar","intent":"kids","expected_normalized":"jeans kids silk white","tags":["ar"],"source":"synthetic"}
+{"id":"q0006","text":"هوديز بناتي","script":"ar","intent":"kids","expected_normalized":"girls hoodie","tags":["ar"],"source":"synthetic"}
+{"id":"q0007","text":"معطف كوتون","script":"ar","intent":"brand","expected_normalized":"coat koton","tags":["ar"],"source":"synthetic"}
+{"id":"q0008","text":"فساتين بنات مقاس كبير","script":"ar","intent":"kids","expected_normalized":"dress girls plus_size","tags":["ar"],"source":"synthetic"}
+{"id":"q0009","text":"شنط بني كوتون","script":"ar","intent":"brand","expected_normalized":"bag brown koton","tags":["ar"],"source":"synthetic"}
+{"id":"q0010","text":"جاكيتات عيد","script":"ar","intent":"attribute","expected_normalized":"eid jacket","tags":["ar"],"source":"synthetic"}
+{"id":"q0011","text":"عايز بجامة شيفون","script":"ar","intent":"natural_language","expected_normalized":"chiffon pajamas","tags":["ar"],"source":"synthetic"}
+{"id":"q0012","text":"بدل رجال","script":"ar","intent":"attribute","expected_normalized":"men suit","tags":["ar"],"source":"synthetic"}
+{"id":"q0013","text":"نظارة عيد","script":"ar","intent":"attribute","expected_normalized":"eid sunglasses","tags":["ar"],"source":"synthetic"}
+{"id":"q0014","text":"عايز جيبة مدرسة","script":"ar","intent":"natural_language","expected_normalized":"school skirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0015","text":"ابغي قفطان صفرا","script":"ar","intent":"natural_language","expected_normalized":"galabeya yellow","tags":["ar"],"source":"synthetic"}
+{"id":"q0016","text":"اسدال صوف احمر بناتي","script":"ar","intent":"kids","expected_normalized":"girls isdal red wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0017","text":"اسدال حمرا كونكريت","script":"ar","intent":"brand","expected_normalized":"concrete isdal red","tags":["ar"],"source":"synthetic"}
+{"id":"q0018","text":"ساعة جلد موف حريمي","script":"ar","intent":"attribute","expected_normalized":"leather purple watch women","tags":["ar"],"source":"synthetic"}
+{"id":"q0019","text":"عاوز ايشارب وردي","script":"ar","intent":"natural_language","expected_normalized":"pink scarf","tags":["ar"],"source":"synthetic"}
+{"id":"q0020","text":"جاكت صوف ازرق اطفال","script":"ar","intent":"kids","expected_normalized":"blue jacket kids wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0021","text":"صندل","script":"ar","intent":"product_type","expected_normalized":"sandals","tags":["ar"],"source":"synthetic"}
+{"id":"q0022","text":"بناطيل شتوي","script":"ar","intent":"attribute","expected_normalized":"pants winter","tags":["ar"],"source":"synthetic"}
+{"id":"q0023","text":"قميص شيفون حمرا بنات","script":"ar","intent":"kids","expected_normalized":"chiffon girls red shirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0024","text":"شورت اصفر اديداس","script":"ar","intent":"brand","expected_normalized":"adidas shorts yellow","tags":["ar"],"source":"synthetic"}
+{"id":"q0025","text":"ساعات تاون تيم","script":"ar","intent":"brand","expected_normalized":"town_team watch","tags":["ar"],"source":"synthetic"}
+{"id":"q0026","text":"هودي احمر نسائي","script":"ar","intent":"attribute","expected_normalized":"hoodie red women","tags":["ar"],"source":"synthetic"}
+{"id":"q0027","text":"عايزة بلوزات صفرا ولادي","script":"ar","intent":"natural_language","expected_normalized":"blouse boys yellow","tags":["ar"],"source":"synthetic"}
+{"id":"q0028","text":"بناطيل اخضر كوتون","script":"ar","intent":"brand","expected_normalized":"green koton pants","tags":["ar"],"source":"synthetic"}
+{"id":"q0029","text":"ليجن حرير سودا نساء","script":"ar","intent":"attribute","expected_normalized":"black leggings silk women","tags":["ar"],"source":"synthetic"}
+{"id":"q0030","text":"ابغي كاب","script":"ar","intent":"natural_language","expected_normalized":"cap","tags":["ar"],"source":"synthetic"}
+{"id":"q0031","text":"بوت زفاف","script":"ar","intent":"attribute","expected_normalized":"boots wedding","tags":["ar"],"source":"synthetic"}
+{"id":"q0032","text":"جاكيت جراي بيبي","script":"ar","intent":"kids","expected_normalized":"baby grey jacket","tags":["ar"],"source":"synthetic"}
+{"id":"q0033","text":"بوتس ذهبي","script":"ar","intent":"attribute","expected_normalized":"boots gold","tags":["ar"],"source":"synthetic"}
+{"id":"q0034","text":"عايزة ليجنز مواليد مدرسة","script":"ar","intent":"natural_language","expected_normalized":"baby leggings school","tags":["ar"],"source":"synthetic"}
+{"id":"q0035","text":"اطقم صوف كحلي","script":"ar","intent":"attribute","expected_normalized":"navy set wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0036","text":"هوديز كتان كحلي بناتي","script":"ar","intent":"kids","expected_normalized":"girls hoodie linen navy","tags":["ar"],"source":"synthetic"}
+{"id":"q0037","text":"ساعة كحلي أطفال","script":"ar","intent":"kids","expected_normalized":"kids navy watch","tags":["ar"],"source":"synthetic"}
+{"id":"q0038","text":"هودي لينين سودا","script":"ar","intent":"attribute","expected_normalized":"black hoodie linen","tags":["ar"],"source":"synthetic"}
+{"id":"q0039","text":"عايز جمبسوت شيفون","script":"ar","intent":"natural_language","expected_normalized":"chiffon jumpsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0040","text":"طقم بنفسجي","script":"ar","intent":"attribute","expected_normalized":"purple set","tags":["ar"],"source":"synthetic"}
+{"id":"q0041","text":"ابغي بدلة بني","script":"ar","intent":"natural_language","expected_normalized":"brown suit","tags":["ar"],"source":"synthetic"}
+{"id":"q0042","text":"عايزة صندل كحلي","script":"ar","intent":"natural_language","expected_normalized":"navy sandals","tags":["ar"],"source":"synthetic"}
+{"id":"q0043","text":"بالطو مدرسة","script":"ar","intent":"attribute","expected_normalized":"coat school","tags":["ar"],"source":"synthetic"}
+{"id":"q0044","text":"عباية بني ديجافو","script":"ar","intent":"brand","expected_normalized":"abaya brown dejavu","tags":["ar"],"source":"synthetic"}
+{"id":"q0045","text":"تيشيرت رجالي","script":"ar","intent":"attribute","expected_normalized":"men tshirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0046","text":"جاكيتات صوف","script":"ar","intent":"attribute","expected_normalized":"jacket wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0047","text":"طرح رمادي ولادي","script":"ar","intent":"kids","expected_normalized":"boys grey hijab","tags":["ar"],"source":"synthetic"}
+{"id":"q0048","text":"جمبسوت عيد","script":"ar","intent":"attribute","expected_normalized":"eid jumpsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0049","text":"بوت حرير بنفسجي","script":"ar","intent":"attribute","expected_normalized":"boots purple silk","tags":["ar"],"source":"synthetic"}
+{"id":"q0050","text":"تيشرت صوف","script":"ar","intent":"attribute","expected_normalized":"tshirt wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0051","text":"بوت مدرسة","script":"ar","intent":"attribute","expected_normalized":"boots school","tags":["ar"],"source":"synthetic"}
+{"id":"q0052","text":"قمصان مانجو","script":"ar","intent":"brand","expected_normalized":"mango shirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0053","text":"بوتس","script":"ar","intent":"product_type","expected_normalized":"boots","tags":["ar"],"source":"synthetic"}
+{"id":"q0054","text":"شرابات بمبي رجالي","script":"ar","intent":"attribute","expected_normalized":"men pink socks","tags":["ar"],"source":"synthetic"}
+{"id":"q0055","text":"عاوز قفطان اخضر","script":"ar","intent":"natural_language","expected_normalized":"galabeya green","tags":["ar"],"source":"synthetic"}
+{"id":"q0056","text":"هودي صفرا","script":"ar","intent":"attribute","expected_normalized":"hoodie yellow","tags":["ar"],"source":"synthetic"}
+{"id":"q0057","text":"حذاء عيد","script":"ar","intent":"attribute","expected_normalized":"eid shoes","tags":["ar"],"source":"synthetic"}
+{"id":"q0058","text":"مايو","script":"ar","intent":"product_type","expected_normalized":"swimsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0059","text":"قبعة حريمي","script":"ar","intent":"attribute","expected_normalized":"cap women","tags":["ar"],"source":"synthetic"}
+{"id":"q0060","text":"جينز مواليد ساتر","script":"ar","intent":"kids","expected_normalized":"baby jeans modest","tags":["ar"],"source":"synthetic"}
+{"id":"q0061","text":"كوتشيات أطفال","script":"ar","intent":"kids","expected_normalized":"kids sneakers","tags":["ar"],"source":"synthetic"}
+{"id":"q0062","text":"بوت","script":"ar","intent":"product_type","expected_normalized":"boots","tags":["ar"],"source":"synthetic"}
+{"id":"q0063","text":"ابغي ترنج مدرسة","script":"ar","intent":"natural_language","expected_normalized":"school tracksuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0064","text":"عاوز قمصان عيد","script":"ar","intent":"natural_language","expected_normalized":"eid shirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0065","text":"بدلة ديجافو","script":"ar","intent":"brand","expected_normalized":"dejavu suit","tags":["ar"],"source":"synthetic"}
+{"id":"q0066","text":"شنط","script":"ar","intent":"product_type","expected_normalized":"bag","tags":["ar"],"source":"synthetic"}
+{"id":"q0067","text":"إسدال حرير كحلي نساء","script":"ar","intent":"attribute","expected_normalized":"isdal navy silk women","tags":["ar"],"source":"synthetic"}
+{"id":"q0068","text":"ابغي ايشارب ازرق","script":"ar","intent":"natural_language","expected_normalized":"blue scarf","tags":["ar"],"source":"synthetic"}
+{"id":"q0069","text":"هودي اولاد","script":"ar","intent":"kids","expected_normalized":"boys hoodie","tags":["ar"],"source":"synthetic"}
+{"id":"q0070","text":"بنطلون موف","script":"ar","intent":"attribute","expected_normalized":"pants purple","tags":["ar"],"source":"synthetic"}
+{"id":"q0071","text":"مايوه اولاد تخفيضات","script":"ar","intent":"kids","expected_normalized":"boys sale swimsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0072","text":"بلوزات بناتي","script":"ar","intent":"kids","expected_normalized":"blouse girls","tags":["ar"],"source":"synthetic"}
+{"id":"q0073","text":"تيشيرت صوف ازرق","script":"ar","intent":"attribute","expected_normalized":"blue tshirt wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0074","text":"بنطلون جلد ذهبي نسائي","script":"ar","intent":"attribute","expected_normalized":"gold leather pants women","tags":["ar"],"source":"synthetic"}
+{"id":"q0075","text":"عايز فستان بمبي","script":"ar","intent":"natural_language","expected_normalized":"dress pink","tags":["ar"],"source":"synthetic"}
+{"id":"q0076","text":"بلوزة شيفون بيج","script":"ar","intent":"attribute","expected_normalized":"beige blouse chiffon","tags":["ar"],"source":"synthetic"}
+{"id":"q0077","text":"حجاب ديجافو","script":"ar","intent":"brand","expected_normalized":"dejavu hijab","tags":["ar"],"source":"synthetic"}
+{"id":"q0078","text":"سويتر ساتان سودا رجالي","script":"ar","intent":"attribute","expected_normalized":"black men satin sweater","tags":["ar"],"source":"synthetic"}
+{"id":"q0079","text":"سنيكرز كحلي","script":"ar","intent":"attribute","expected_normalized":"navy sneakers","tags":["ar"],"source":"synthetic"}
+{"id":"q0080","text":"جينس قطيفة","script":"ar","intent":"attribute","expected_normalized":"jeans velvet","tags":["ar"],"source":"synthetic"}
+{"id":"q0081","text":"مايو أطفال","script":"ar","intent":"kids","expected_normalized":"kids swimsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0082","text":"هوديز بنفسجي بناتي","script":"ar","intent":"kids","expected_normalized":"girls hoodie purple","tags":["ar"],"source":"synthetic"}
+{"id":"q0083","text":"بجامة احمر مواليد","script":"ar","intent":"kids","expected_normalized":"baby pajamas red","tags":["ar"],"source":"synthetic"}
+{"id":"q0084","text":"بوتس ساتان","script":"ar","intent":"attribute","expected_normalized":"boots satin","tags":["ar"],"source":"synthetic"}
+{"id":"q0085","text":"كاب جلد كحلي مواليد","script":"ar","intent":"kids","expected_normalized":"baby cap leather navy","tags":["ar"],"source":"synthetic"}
+{"id":"q0086","text":"بدل قطن بيضا اولاد","script":"ar","intent":"kids","expected_normalized":"boys cotton suit white","tags":["ar"],"source":"synthetic"}
+{"id":"q0087","text":"بلوزات ولادي رمضان","script":"ar","intent":"kids","expected_normalized":"blouse boys ramadan","tags":["ar"],"source":"synthetic"}
+{"id":"q0088","text":"اطقم","script":"ar","intent":"product_type","expected_normalized":"set","tags":["ar"],"source":"synthetic"}
+{"id":"q0089","text":"معطف لينين ذهبي","script":"ar","intent":"attribute","expected_normalized":"coat gold linen","tags":["ar"],"source":"synthetic"}
+{"id":"q0090","text":"اسكارف رمادي","script":"ar","intent":"attribute","expected_normalized":"grey scarf","tags":["ar"],"source":"synthetic"}
+{"id":"q0091","text":"قبعة قطن","script":"ar","intent":"attribute","expected_normalized":"cap cotton","tags":["ar"],"source":"synthetic"}
+{"id":"q0092","text":"شورتات حريمي رمضان","script":"ar","intent":"attribute","expected_normalized":"ramadan shorts women","tags":["ar"],"source":"synthetic"}
+{"id":"q0093","text":"عايز شورت","script":"ar","intent":"natural_language","expected_normalized":"shorts","tags":["ar"],"source":"synthetic"}
+{"id":"q0094","text":"جاكت اطفال عيد","script":"ar","intent":"kids","expected_normalized":"eid jacket kids","tags":["ar"],"source":"synthetic"}
+{"id":"q0095","text":"بناطيل بنفسجي ال سي وايكيكي","script":"ar","intent":"brand","expected_normalized":"lc_waikiki pants purple","tags":["ar"],"source":"synthetic"}
+{"id":"q0096","text":"جاكيت لينين حمرا رجالي","script":"ar","intent":"attribute","expected_normalized":"jacket linen men red","tags":["ar"],"source":"synthetic"}
+{"id":"q0097","text":"عايزة جونلة ساتان فضي","script":"ar","intent":"natural_language","expected_normalized":"satin silver skirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0098","text":"ترينج اطفال رمضان","script":"ar","intent":"kids","expected_normalized":"kids ramadan tracksuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0099","text":"بلوزة نساء محتشم","script":"ar","intent":"modest","expected_normalized":"blouse modest women","tags":["ar"],"source":"synthetic"}
+{"id":"q0100","text":"ابغي كاب بيبي محتشم","script":"ar","intent":"natural_language","expected_normalized":"baby cap modest","tags":["ar"],"source":"synthetic"}
+{"id":"q0101","text":"اطقم كتان","script":"ar","intent":"attribute","expected_normalized":"linen set","tags":["ar"],"source":"synthetic"}
+{"id":"q0102","text":"عايزة جلابية حريمي مقاسات كبيرة","script":"ar","intent":"natural_language","expected_normalized":"galabeya plus_size women","tags":["ar"],"source":"synthetic"}
+{"id":"q0103","text":"جاكيت قطن صفرا ولادي","script":"ar","intent":"kids","expected_normalized":"boys cotton jacket yellow","tags":["ar"],"source":"synthetic"}
+{"id":"q0104","text":"قبعة كونكريت","script":"ar","intent":"brand","expected_normalized":"cap concrete","tags":["ar"],"source":"synthetic"}
+{"id":"q0105","text":"بدل برتقالي ديفاكتو","script":"ar","intent":"brand","expected_normalized":"defacto orange suit","tags":["ar"],"source":"synthetic"}
+{"id":"q0106","text":"جيبة عيد","script":"ar","intent":"attribute","expected_normalized":"eid skirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0107","text":"شرابات","script":"ar","intent":"product_type","expected_normalized":"socks","tags":["ar"],"source":"synthetic"}
+{"id":"q0108","text":"عايز بالطو وردي حريمي","script":"ar","intent":"natural_language","expected_normalized":"coat pink women","tags":["ar"],"source":"synthetic"}
+{"id":"q0109","text":"نظارة رافين","script":"ar","intent":"brand","expected_normalized":"ravin sunglasses","tags":["ar"],"source":"synthetic"}
+{"id":"q0110","text":"هوديز ذهبي اولاد","script":"ar","intent":"kids","expected_normalized":"boys gold hoodie","tags":["ar"],"source":"synthetic"}
+{"id":"q0111","text":"عايز كمر بناتي","script":"ar","intent":"natural_language","expected_normalized":"belt girls","tags":["ar"],"source":"synthetic"}
+{"id":"q0112","text":"سويتر رجالي","script":"ar","intent":"attribute","expected_normalized":"men sweater","tags":["ar"],"source":"synthetic"}
+{"id":"q0113","text":"كوتشي قطيفة","script":"ar","intent":"attribute","expected_normalized":"sneakers velvet","tags":["ar"],"source":"synthetic"}
+{"id":"q0114","text":"ساعات اخضر نسائي","script":"ar","intent":"attribute","expected_normalized":"green watch women","tags":["ar"],"source":"synthetic"}
+{"id":"q0115","text":"جمبسوت ريبوك","script":"ar","intent":"brand","expected_normalized":"jumpsuit reebok","tags":["ar"],"source":"synthetic"}
+{"id":"q0116","text":"قمصان نسائي زفاف","script":"ar","intent":"attribute","expected_normalized":"shirt wedding women","tags":["ar"],"source":"synthetic"}
+{"id":"q0117","text":"عايز معطف","script":"ar","intent":"natural_language","expected_normalized":"coat","tags":["ar"],"source":"synthetic"}
+{"id":"q0118","text":"بلوزات مقاسات كبيرة","script":"ar","intent":"attribute","expected_normalized":"blouse plus_size","tags":["ar"],"source":"synthetic"}
+{"id":"q0119","text":"جينز صوف سودا ولادي","script":"ar","intent":"kids","expected_normalized":"black boys jeans wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0120","text":"جينس نساء تخفيضات","script":"ar","intent":"deal","expected_normalized":"jeans sale women","tags":["ar"],"source":"synthetic"}
+{"id":"q0121","text":"شرابات بناتي","script":"ar","intent":"kids","expected_normalized":"girls socks","tags":["ar"],"source":"synthetic"}
+{"id":"q0122","text":"هوديز بيج ديفاكتو","script":"ar","intent":"brand","expected_normalized":"beige defacto hoodie","tags":["ar"],"source":"synthetic"}
+{"id":"q0123","text":"ابغي هوديز أطفال عيد","script":"ar","intent":"natural_language","expected_normalized":"eid hoodie kids","tags":["ar"],"source":"synthetic"}
+{"id":"q0124","text":"عاوز جمبسوت بول اند بير","script":"ar","intent":"natural_language","expected_normalized":"jumpsuit pull_bear","tags":["ar"],"source":"synthetic"}
+{"id":"q0125","text":"فستان ولادي محتشم","script":"ar","intent":"kids","expected_normalized":"boys dress modest","tags":["ar"],"source":"synthetic"}
+{"id":"q0126","text":"جاكت مقاسات كبيرة","script":"ar","intent":"attribute","expected_normalized":"jacket plus_size","tags":["ar"],"source":"synthetic"}
+{"id":"q0127","text":"بنطلون كونكريت","script":"ar","intent":"brand","expected_normalized":"concrete pants","tags":["ar"],"source":"synthetic"}
+{"id":"q0128","text":"شبشب صيفي","script":"ar","intent":"attribute","expected_normalized":"sandals summer","tags":["ar"],"source":"synthetic"}
+{"id":"q0129","text":"جينس","script":"ar","intent":"product_type","expected_normalized":"jeans","tags":["ar"],"source":"synthetic"}
+{"id":"q0130","text":"قفطان اطفال عيد","script":"ar","intent":"kids","expected_normalized":"eid galabeya kids","tags":["ar"],"source":"synthetic"}
+{"id":"q0131","text":"قفطان","script":"ar","intent":"product_type","expected_normalized":"galabeya","tags":["ar"],"source":"synthetic"}
+{"id":"q0132","text":"اسدال بني","script":"ar","intent":"attribute","expected_normalized":"brown isdal","tags":["ar"],"source":"synthetic"}
+{"id":"q0133","text":"جلابية مدرسة","script":"ar","intent":"attribute","expected_normalized":"galabeya school","tags":["ar"],"source":"synthetic"}
+{"id":"q0134","text":"حجاب مخمل","script":"ar","intent":"attribute","expected_normalized":"hijab velvet","tags":["ar"],"source":"synthetic"}
+{"id":"q0135","text":"جيبة","script":"ar","intent":"product_type","expected_normalized":"skirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0136","text":"شراب مانجو","script":"ar","intent":"brand","expected_normalized":"mango socks","tags":["ar"],"source":"synthetic"}
+{"id":"q0137","text":"طرحة صوف حمرا بنات","script":"ar","intent":"kids","expected_normalized":"girls hijab red wool","tags":["ar"],"source":"synthetic"}
+{"id":"q0138","text":"جمبسوت مواليد عيد","script":"ar","intent":"kids","expected_normalized":"baby eid jumpsuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0139","text":"طرحة لينين","script":"ar","intent":"attribute","expected_normalized":"hijab linen","tags":["ar"],"source":"synthetic"}
+{"id":"q0140","text":"اطقم ولادي","script":"ar","intent":"kids","expected_normalized":"boys set","tags":["ar"],"source":"synthetic"}
+{"id":"q0141","text":"هودي رافين","script":"ar","intent":"brand","expected_normalized":"hoodie ravin","tags":["ar"],"source":"synthetic"}
+{"id":"q0142","text":"عاوز ليجن احمر رجالي","script":"ar","intent":"natural_language","expected_normalized":"leggings men red","tags":["ar"],"source":"synthetic"}
+{"id":"q0143","text":"بلوزات","script":"ar","intent":"product_type","expected_normalized":"blouse","tags":["ar"],"source":"synthetic"}
+{"id":"q0144","text":"إسدال","script":"ar","intent":"product_type","expected_normalized":"isdal","tags":["ar"],"source":"synthetic"}
+{"id":"q0145","text":"وشاح مانجو","script":"ar","intent":"brand","expected_normalized":"mango scarf","tags":["ar"],"source":"synthetic"}
+{"id":"q0146","text":"جونلة زرقا ريبوك","script":"ar","intent":"brand","expected_normalized":"blue reebok skirt","tags":["ar"],"source":"synthetic"}
+{"id":"q0147","text":"قبعة وردي","script":"ar","intent":"attribute","expected_normalized":"cap pink","tags":["ar"],"source":"synthetic"}
+{"id":"q0148","text":"طرحة","script":"ar","intent":"product_type","expected_normalized":"hijab","tags":["ar"],"source":"synthetic"}
+{"id":"q0149","text":"ترينج","script":"ar","intent":"product_type","expected_normalized":"tracksuit","tags":["ar"],"source":"synthetic"}
+{"id":"q0150","text":"جلابية زرقا ال سي وايكيكي","script":"ar","intent":"brand","expected_normalized":"blue galabeya lc_waikiki","tags":["ar"],"source":"synthetic"}
+{"id":"q0151","text":"for girls summer coat","script":"en","intent":"kids","expected_normalized":"coat girls summer","tags":["en"],"source":"synthetic"}
+{"id":"q0152","text":"find me linen cap","script":"en","intent":"natural_language","expected_normalized":"cap linen","tags":["en"],"source":"synthetic"}
+{"id":"q0153","text":"beige shoes","script":"en","intent":"attribute","expected_normalized":"beige shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0154","text":"rose jeans","script":"en","intent":"attribute","expected_normalized":"jeans pink","tags":["en"],"source":"synthetic"}
+{"id":"q0155","text":"yellow satin sandal","script":"en","intent":"attribute","expected_normalized":"sandals satin yellow","tags":["en"],"source":"synthetic"}
+{"id":"q0156","text":"for girl beige silk glasses","script":"en","intent":"kids","expected_normalized":"beige girls silk sunglasses","tags":["en"],"source":"synthetic"}
+{"id":"q0157","text":"for girl mauve pajamas","script":"en","intent":"kids","expected_normalized":"girls pajamas purple","tags":["en"],"source":"synthetic"}
+{"id":"q0158","text":"school blouses","script":"en","intent":"attribute","expected_normalized":"blouse school","tags":["en"],"source":"synthetic"}
+{"id":"q0159","text":"for kid ramadan denim","script":"en","intent":"kids","expected_normalized":"jeans kids ramadan","tags":["en"],"source":"synthetic"}
+{"id":"q0160","text":"orange flax shorts","script":"en","intent":"attribute","expected_normalized":"linen orange shorts","tags":["en"],"source":"synthetic"}
+{"id":"q0161","text":"for womens yellow suit","script":"en","intent":"attribute","expected_normalized":"suit women yellow","tags":["en"],"source":"synthetic"}
+{"id":"q0162","text":"looking for for girl hijab","script":"en","intent":"natural_language","expected_normalized":"girls hijab","tags":["en"],"source":"synthetic"}
+{"id":"q0163","text":"for newborn summer abayas","script":"en","intent":"kids","expected_normalized":"abaya baby summer","tags":["en"],"source":"synthetic"}
+{"id":"q0164","text":"for girls blue chiffon pyjamas","script":"en","intent":"kids","expected_normalized":"blue chiffon girls pajamas","tags":["en"],"source":"synthetic"}
+{"id":"q0165","text":"i want adidas green dresses","script":"en","intent":"natural_language","expected_normalized":"adidas dress green","tags":["en"],"source":"synthetic"}
+{"id":"q0166","text":"show me jalabiya","script":"en","intent":"natural_language","expected_normalized":"galabeya","tags":["en"],"source":"synthetic"}
+{"id":"q0167","text":"for mens blue bag","script":"en","intent":"attribute","expected_normalized":"bag blue men","tags":["en"],"source":"synthetic"}
+{"id":"q0168","text":"for girl plus size bags","script":"en","intent":"kids","expected_normalized":"bag girls plus_size","tags":["en"],"source":"synthetic"}
+{"id":"q0169","text":"for boy summer tracksuit","script":"en","intent":"kids","expected_normalized":"boys summer tracksuit","tags":["en"],"source":"synthetic"}
+{"id":"q0170","text":"for boy summer salah wear","script":"en","intent":"kids","expected_normalized":"boys isdal summer","tags":["en"],"source":"synthetic"}
+{"id":"q0171","text":"for girl black velvet belt","script":"en","intent":"kids","expected_normalized":"belt black girls velvet","tags":["en"],"source":"synthetic"}
+{"id":"q0172","text":"ravin black denim","script":"en","intent":"brand","expected_normalized":"black jeans ravin","tags":["en"],"source":"synthetic"}
+{"id":"q0173","text":"green tracksuit","script":"en","intent":"attribute","expected_normalized":"green tracksuit","tags":["en"],"source":"synthetic"}
+{"id":"q0174","text":"black woolen handbag","script":"en","intent":"attribute","expected_normalized":"bag black wool","tags":["en"],"source":"synthetic"}
+{"id":"q0175","text":"cotton leggings","script":"en","intent":"attribute","expected_normalized":"cotton leggings","tags":["en"],"source":"synthetic"}
+{"id":"q0176","text":"for newborn blouses","script":"en","intent":"kids","expected_normalized":"baby blouse","tags":["en"],"source":"synthetic"}
+{"id":"q0177","text":"for newborn plus size shoe","script":"en","intent":"kids","expected_normalized":"baby plus_size shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0178","text":"i want school set","script":"en","intent":"natural_language","expected_normalized":"school set","tags":["en"],"source":"synthetic"}
+{"id":"q0179","text":"for kids beige chiffon cap","script":"en","intent":"kids","expected_normalized":"beige cap chiffon kids","tags":["en"],"source":"synthetic"}
+{"id":"q0180","text":"summer belts","script":"en","intent":"attribute","expected_normalized":"belt summer","tags":["en"],"source":"synthetic"}
+{"id":"q0181","text":"cotton jeans","script":"en","intent":"attribute","expected_normalized":"cotton jeans","tags":["en"],"source":"synthetic"}
+{"id":"q0182","text":"gray jumper","script":"en","intent":"attribute","expected_normalized":"grey sweater","tags":["en"],"source":"synthetic"}
+{"id":"q0183","text":"for girl plus size coat","script":"en","intent":"kids","expected_normalized":"coat girls plus_size","tags":["en"],"source":"synthetic"}
+{"id":"q0184","text":"silk swimwear","script":"en","intent":"attribute","expected_normalized":"silk swimsuit","tags":["en"],"source":"synthetic"}
+{"id":"q0185","text":"white flax tracksuit","script":"en","intent":"attribute","expected_normalized":"linen tracksuit white","tags":["en"],"source":"synthetic"}
+{"id":"q0186","text":"black shoes","script":"en","intent":"attribute","expected_normalized":"black shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0187","text":"i want purple shoes","script":"en","intent":"natural_language","expected_normalized":"purple shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0188","text":"dresses","script":"en","intent":"product_type","expected_normalized":"dress","tags":["en"],"source":"synthetic"}
+{"id":"q0189","text":"mauve chiffon belt","script":"en","intent":"attribute","expected_normalized":"belt chiffon purple","tags":["en"],"source":"synthetic"}
+{"id":"q0190","text":"find me white cotton pyjamas","script":"en","intent":"natural_language","expected_normalized":"cotton pajamas white","tags":["en"],"source":"synthetic"}
+{"id":"q0191","text":"for kid new boot","script":"en","intent":"kids","expected_normalized":"boots kids new","tags":["en"],"source":"synthetic"}
+{"id":"q0192","text":"nike red galabeya","script":"en","intent":"brand","expected_normalized":"galabeya nike red","tags":["en"],"source":"synthetic"}
+{"id":"q0193","text":"skechers sock","script":"en","intent":"brand","expected_normalized":"skechers socks","tags":["en"],"source":"synthetic"}
+{"id":"q0194","text":"silk hat","script":"en","intent":"attribute","expected_normalized":"cap silk","tags":["en"],"source":"synthetic"}
+{"id":"q0195","text":"puma blue swimwear","script":"en","intent":"brand","expected_normalized":"blue puma swimsuit","tags":["en"],"source":"synthetic"}
+{"id":"q0196","text":"set","script":"en","intent":"product_type","expected_normalized":"set","tags":["en"],"source":"synthetic"}
+{"id":"q0197","text":"for girl yellow wool trainers","script":"en","intent":"kids","expected_normalized":"girls sneakers wool yellow","tags":["en"],"source":"synthetic"}
+{"id":"q0198","text":"for boy orange wool prayer clothes","script":"en","intent":"kids","expected_normalized":"boys isdal orange wool","tags":["en"],"source":"synthetic"}
+{"id":"q0199","text":"looking for belts","script":"en","intent":"natural_language","expected_normalized":"belt","tags":["en"],"source":"synthetic"}
+{"id":"q0200","text":"concrete grey jeans","script":"en","intent":"brand","expected_normalized":"concrete grey jeans","tags":["en"],"source":"synthetic"}
+{"id":"q0201","text":"for girls jacket","script":"en","intent":"kids","expected_normalized":"girls jacket","tags":["en"],"source":"synthetic"}
+{"id":"q0202","text":"navy chiffon denim","script":"en","intent":"attribute","expected_normalized":"chiffon jeans navy","tags":["en"],"source":"synthetic"}
+{"id":"q0203","text":"yellow sandal","script":"en","intent":"attribute","expected_normalized":"sandals yellow","tags":["en"],"source":"synthetic"}
+{"id":"q0204","text":"navy tee","script":"en","intent":"attribute","expected_normalized":"navy tshirt","tags":["en"],"source":"synthetic"}
+{"id":"q0205","text":"socks","script":"en","intent":"product_type","expected_normalized":"socks","tags":["en"],"source":"synthetic"}
+{"id":"q0206","text":"black chiffon hoodies","script":"en","intent":"attribute","expected_normalized":"black chiffon hoodie","tags":["en"],"source":"synthetic"}
+{"id":"q0207","text":"h and m jackets","script":"en","intent":"brand","expected_normalized":"hm jacket","tags":["en"],"source":"synthetic"}
+{"id":"q0208","text":"find me velvet sunglasses","script":"en","intent":"natural_language","expected_normalized":"sunglasses velvet","tags":["en"],"source":"synthetic"}
+{"id":"q0209","text":"white chiffon hoodie","script":"en","intent":"attribute","expected_normalized":"chiffon hoodie white","tags":["en"],"source":"synthetic"}
+{"id":"q0210","text":"show me for boy bridal pants","script":"en","intent":"natural_language","expected_normalized":"boys pants wedding","tags":["en"],"source":"synthetic"}
+{"id":"q0211","text":"find me black scarves","script":"en","intent":"natural_language","expected_normalized":"black scarf","tags":["en"],"source":"synthetic"}
+{"id":"q0212","text":"reebok trainers","script":"en","intent":"brand","expected_normalized":"reebok sneakers","tags":["en"],"source":"synthetic"}
+{"id":"q0213","text":"for newborn rose satin slippers","script":"en","intent":"kids","expected_normalized":"baby pink sandals satin","tags":["en"],"source":"synthetic"}
+{"id":"q0214","text":"clearance sneakers","script":"en","intent":"deal","expected_normalized":"sale sneakers","tags":["en"],"source":"synthetic"}
+{"id":"q0215","text":"for mens silver handbag","script":"en","intent":"attribute","expected_normalized":"bag men silver","tags":["en"],"source":"synthetic"}
+{"id":"q0216","text":"for womens yellow sneakers","script":"en","intent":"attribute","expected_normalized":"sneakers women yellow","tags":["en"],"source":"synthetic"}
+{"id":"q0217","text":"navy blouse","script":"en","intent":"attribute","expected_normalized":"blouse navy","tags":["en"],"source":"synthetic"}
+{"id":"q0218","text":"flax glasses","script":"en","intent":"attribute","expected_normalized":"linen sunglasses","tags":["en"],"source":"synthetic"}
+{"id":"q0219","text":"red pullover","script":"en","intent":"attribute","expected_normalized":"red sweater","tags":["en"],"source":"synthetic"}
+{"id":"q0220","text":"new shoes","script":"en","intent":"attribute","expected_normalized":"new shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0221","text":"looking for for girl shoes","script":"en","intent":"natural_language","expected_normalized":"girls shoes","tags":["en"],"source":"synthetic"}
+{"id":"q0222","text":"for children cap","script":"en","intent":"kids","expected_normalized":"cap kids","tags":["en"],"source":"synthetic"}
+{"id":"q0223","text":"ramadan handbag","script":"en","intent":"attribute","expected_normalized":"bag ramadan","tags":["en"],"source":"synthetic"}
+{"id":"q0224","text":"lacoste pants","script":"en","intent":"brand","expected_normalized":"lacoste pants","tags":["en"],"source":"synthetic"}
+{"id":"q0225","text":"scarf","script":"en","intent":"product_type","expected_normalized":"scarf","tags":["en"],"source":"synthetic"}
+{"id":"q0226","text":"i want zara suit","script":"en","intent":"natural_language","expected_normalized":"suit zara","tags":["en"],"source":"synthetic"}
+{"id":"q0227","text":"satin jumpsuit","script":"en","intent":"attribute","expected_normalized":"jumpsuit satin","tags":["en"],"source":"synthetic"}
+{"id":"q0228","text":"satin shirts","script":"en","intent":"attribute","expected_normalized":"satin shirt","tags":["en"],"source":"synthetic"}
+{"id":"q0229","text":"jalabiya","script":"en","intent":"product_type","expected_normalized":"galabeya","tags":["en"],"source":"synthetic"}
+{"id":"q0230","text":"leather suits","script":"en","intent":"attribute","expected_normalized":"leather suit","tags":["en"],"source":"synthetic"}
+{"id":"q0231","text":"cotton slippers","script":"en","intent":"attribute","expected_normalized":"cotton sandals","tags":["en"],"source":"synthetic"}
+{"id":"q0232","text":"for boys green denim","script":"en","intent":"kids","expected_normalized":"boys green jeans","tags":["en"],"source":"synthetic"}
+{"id":"q0233","text":"orange scarf","script":"en","intent":"attribute","expected_normalized":"orange scarf","tags":["en"],"source":"synthetic"}
+{"id":"q0234","text":"show me for mens rose leather scarf","script":"en","intent":"natural_language","expected_normalized":"leather men pink scarf","tags":["en"],"source":"synthetic"}
+{"id":"q0235","text":"for ladies sock","script":"en","intent":"attribute","expected_normalized":"socks women","tags":["en"],"source":"synthetic"}
+{"id":"q0236","text":"lc waikiki scarves","script":"en","intent":"brand","expected_normalized":"lc_waikiki scarf","tags":["en"],"source":"synthetic"}
+{"id":"q0237","text":"for men sale kaftan","script":"en","intent":"deal","expected_normalized":"galabeya men sale","tags":["en"],"source":"synthetic"}
+{"id":"q0238","text":"for boy black pajamas","script":"en","intent":"kids","expected_normalized":"black boys pajamas","tags":["en"],"source":"synthetic"}
+{"id":"q0239","text":"pink chiffon jumpsuit","script":"en","intent":"attribute","expected_normalized":"chiffon jumpsuit pink","tags":["en"],"source":"synthetic"}
+{"id":"q0240","text":"show me for men summer socks","script":"en","intent":"natural_language","expected_normalized":"men socks summer","tags":["en"],"source":"synthetic"}
+{"id":"q0241","text":"show me for girl denim","script":"en","intent":"natural_language","expected_normalized":"girls jeans","tags":["en"],"source":"synthetic"}
+{"id":"q0242","text":"pull and bear silver tracksuit","script":"en","intent":"brand","expected_normalized":"pull_bear silver tracksuit","tags":["en"],"source":"synthetic"}
+{"id":"q0243","text":"i want zara yellow outfit","script":"en","intent":"natural_language","expected_normalized":"set yellow zara","tags":["en"],"source":"synthetic"}
+{"id":"q0244","text":"purple slippers","script":"en","intent":"attribute","expected_normalized":"purple sandals","tags":["en"],"source":"synthetic"}
+{"id":"q0245","text":"silk sweater","script":"en","intent":"attribute","expected_normalized":"silk sweater","tags":["en"],"source":"synthetic"}
+{"id":"q0246","text":"for infant eid skirt","script":"en","intent":"kids","expected_normalized":"baby eid skirt","tags":["en"],"source":"synthetic"}
+{"id":"q0247","text":"suits","script":"en","intent":"product_type","expected_normalized":"suit","tags":["en"],"source":"synthetic"}
+{"id":"q0248","text":"show me white woolen hat","script":"en","intent":"natural_language","expected_normalized":"cap white wool","tags":["en"],"source":"synthetic"}
+{"id":"q0249","text":"for newborn rose satin pajamas","script":"en","intent":"kids","expected_normalized":"baby pajamas pink satin","tags":["en"],"source":"synthetic"}
+{"id":"q0250","text":"red denim","script":"en","intent":"attribute","expected_normalized":"jeans red","tags":["en"],"source":"synthetic"}
+{"id":"q0251","text":"kotshi shifon eswid","script":"franco","intent":"attribute","expected_normalized":"black chiffon sneakers","tags":["franco"],"source":"synthetic"}
+{"id":"q0252","text":"3ayez isdal banaty zafaf","script":"franco","intent":"natural_language","expected_normalized":"girls isdal wedding","tags":["franco"],"source":"synthetic"}
+{"id":"q0253","text":"short h m","script":"franco","intent":"brand","expected_normalized":"hm shorts","tags":["franco"],"source":"synthetic"}
+{"id":"q0254","text":"short sayfy","script":"franco","intent":"attribute","expected_normalized":"shorts summer","tags":["franco"],"source":"synthetic"}
+{"id":"q0255","text":"3ayza geba sof dahabi","script":"franco","intent":"natural_language","expected_normalized":"gold skirt wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0256","text":"saa3a akhdar","script":"franco","intent":"attribute","expected_normalized":"green watch","tags":["franco"],"source":"synthetic"}
+{"id":"q0257","text":"7ezam atfal","script":"franco","intent":"kids","expected_normalized":"belt kids","tags":["franco"],"source":"synthetic"}
+{"id":"q0258","text":"3awez 2ames bony a6fal","script":"franco","intent":"natural_language","expected_normalized":"brown kids shirt","tags":["franco"],"source":"synthetic"}
+{"id":"q0259","text":"hodi","script":"franco","intent":"product_type","expected_normalized":"hoodie","tags":["franco"],"source":"synthetic"}
+{"id":"q0260","text":"jumpsoot 7areer akhdar","script":"franco","intent":"attribute","expected_normalized":"green jumpsuit silk","tags":["franco"],"source":"synthetic"}
+{"id":"q0261","text":"traning town tim","script":"franco","intent":"brand","expected_normalized":"town_team tracksuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0262","text":"short asfar banaty","script":"franco","intent":"kids","expected_normalized":"girls shorts yellow","tags":["franco"],"source":"synthetic"}
+{"id":"q0263","text":"3abaya soof","script":"franco","intent":"attribute","expected_normalized":"abaya wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0264","text":"gakitat eswed a6fal","script":"franco","intent":"kids","expected_normalized":"black jacket kids","tags":["franco"],"source":"synthetic"}
+{"id":"q0265","text":"3awez bot atfal shatwy","script":"franco","intent":"natural_language","expected_normalized":"boots kids winter","tags":["franco"],"source":"synthetic"}
+{"id":"q0266","text":"bloza kettan ka7ly mawaleed","script":"franco","intent":"kids","expected_normalized":"baby blouse linen navy","tags":["franco"],"source":"synthetic"}
+{"id":"q0267","text":"3ayez shebsheb skecherz","script":"franco","intent":"natural_language","expected_normalized":"sandals skechers","tags":["franco"],"source":"synthetic"}
+{"id":"q0268","text":"gens 2otn","script":"franco","intent":"attribute","expected_normalized":"cotton jeans","tags":["franco"],"source":"synthetic"}
+{"id":"q0269","text":"trenj welady","script":"franco","intent":"kids","expected_normalized":"boys tracksuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0270","text":"bot bonny rigaly","script":"franco","intent":"attribute","expected_normalized":"boots brown men","tags":["franco"],"source":"synthetic"}
+{"id":"q0271","text":"badlah banaty shatwy","script":"franco","intent":"kids","expected_normalized":"girls suit winter","tags":["franco"],"source":"synthetic"}
+{"id":"q0272","text":"gakit qotn banafsagy","script":"franco","intent":"attribute","expected_normalized":"cotton jacket purple","tags":["franco"],"source":"synthetic"}
+{"id":"q0273","text":"gallabeya gild bony","script":"franco","intent":"attribute","expected_normalized":"brown galabeya leather","tags":["franco"],"source":"synthetic"}
+{"id":"q0274","text":"nazara satan","script":"franco","intent":"attribute","expected_normalized":"satin sunglasses","tags":["franco"],"source":"synthetic"}
+{"id":"q0275","text":"gazam bege atfal","script":"franco","intent":"kids","expected_normalized":"beige kids shoes","tags":["franco"],"source":"synthetic"}
+{"id":"q0276","text":"nazara ka7ly lakost","script":"franco","intent":"brand","expected_normalized":"lacoste navy sunglasses","tags":["franco"],"source":"synthetic"}
+{"id":"q0277","text":"esdal","script":"franco","intent":"product_type","expected_normalized":"isdal","tags":["franco"],"source":"synthetic"}
+{"id":"q0278","text":"kab harimy","script":"franco","intent":"attribute","expected_normalized":"cap women","tags":["franco"],"source":"synthetic"}
+{"id":"q0279","text":"tishert","script":"franco","intent":"product_type","expected_normalized":"tshirt","tags":["franco"],"source":"synthetic"}
+{"id":"q0280","text":"blover qotn","script":"franco","intent":"attribute","expected_normalized":"cotton sweater","tags":["franco"],"source":"synthetic"}
+{"id":"q0281","text":"3awez short shifon ahmar welady","script":"franco","intent":"natural_language","expected_normalized":"boys chiffon red shorts","tags":["franco"],"source":"synthetic"}
+{"id":"q0282","text":"2obba3a akhdar","script":"franco","intent":"attribute","expected_normalized":"cap green","tags":["franco"],"source":"synthetic"}
+{"id":"q0283","text":"sneakerz awlad","script":"franco","intent":"kids","expected_normalized":"boys sneakers","tags":["franco"],"source":"synthetic"}
+{"id":"q0284","text":"3ayza short 7arimy shetwy","script":"franco","intent":"natural_language","expected_normalized":"shorts winter women","tags":["franco"],"source":"synthetic"}
+{"id":"q0285","text":"3awez bantalon shifon banafsagy","script":"franco","intent":"natural_language","expected_normalized":"chiffon pants purple","tags":["franco"],"source":"synthetic"}
+{"id":"q0286","text":"shebshb","script":"franco","intent":"product_type","expected_normalized":"sandals","tags":["franco"],"source":"synthetic"}
+{"id":"q0287","text":"3ayez 2amis satan abiad","script":"franco","intent":"natural_language","expected_normalized":"satin shirt white","tags":["franco"],"source":"synthetic"}
+{"id":"q0288","text":"legin shifon bege atfal","script":"franco","intent":"kids","expected_normalized":"beige chiffon kids leggings","tags":["franco"],"source":"synthetic"}
+{"id":"q0289","text":"traning sof bortoaly mawaleed","script":"franco","intent":"kids","expected_normalized":"baby orange tracksuit wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0290","text":"3ayez naddara banafsagy h and m","script":"franco","intent":"natural_language","expected_normalized":"hm purple sunglasses","tags":["franco"],"source":"synthetic"}
+{"id":"q0291","text":"3abaya beij harimy","script":"franco","intent":"attribute","expected_normalized":"abaya beige women","tags":["franco"],"source":"synthetic"}
+{"id":"q0292","text":"3ayza isdal 7areer bege mawaleed","script":"franco","intent":"natural_language","expected_normalized":"baby beige isdal silk","tags":["franco"],"source":"synthetic"}
+{"id":"q0293","text":"isdal asfar","script":"franco","intent":"attribute","expected_normalized":"isdal yellow","tags":["franco"],"source":"synthetic"}
+{"id":"q0294","text":"sharabat rigaly maqas kbeer","script":"franco","intent":"attribute","expected_normalized":"men plus_size socks","tags":["franco"],"source":"synthetic"}
+{"id":"q0295","text":"mayo akhdar nayk","script":"franco","intent":"brand","expected_normalized":"green nike swimsuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0296","text":"3ayez badla birshka","script":"franco","intent":"natural_language","expected_normalized":"bershka suit","tags":["franco"],"source":"synthetic"}
+{"id":"q0297","text":"7ezam a6fal","script":"franco","intent":"kids","expected_normalized":"belt kids","tags":["franco"],"source":"synthetic"}
+{"id":"q0298","text":"ma3taf satan bortokaly","script":"franco","intent":"attribute","expected_normalized":"coat orange satin","tags":["franco"],"source":"synthetic"}
+{"id":"q0299","text":"3ayez ma3taf atfal","script":"franco","intent":"natural_language","expected_normalized":"coat kids","tags":["franco"],"source":"synthetic"}
+{"id":"q0300","text":"7ezam 3eed","script":"franco","intent":"attribute","expected_normalized":"belt eid","tags":["franco"],"source":"synthetic"}
+{"id":"q0301","text":"ishaarb bege","script":"franco","intent":"attribute","expected_normalized":"beige scarf","tags":["franco"],"source":"synthetic"}
+{"id":"q0302","text":"bantaloon satan akhdar a6fal","script":"franco","intent":"kids","expected_normalized":"green kids pants satin","tags":["franco"],"source":"synthetic"}
+{"id":"q0303","text":"3awez ta2m bebi ramadhan","script":"franco","intent":"natural_language","expected_normalized":"baby ramadan set","tags":["franco"],"source":"synthetic"}
+{"id":"q0304","text":"2ames","script":"franco","intent":"product_type","expected_normalized":"shirt","tags":["franco"],"source":"synthetic"}
+{"id":"q0305","text":"sneakerz dahabi wlady","script":"franco","intent":"kids","expected_normalized":"boys gold sneakers","tags":["franco"],"source":"synthetic"}
+{"id":"q0306","text":"ta2em 7areer","script":"franco","intent":"attribute","expected_normalized":"set silk","tags":["franco"],"source":"synthetic"}
+{"id":"q0307","text":"traning eswid birshka","script":"franco","intent":"brand","expected_normalized":"bershka black tracksuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0308","text":"trenj sof ramadi regaly","script":"franco","intent":"attribute","expected_normalized":"grey men tracksuit wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0309","text":"naddara abiad","script":"franco","intent":"attribute","expected_normalized":"sunglasses white","tags":["franco"],"source":"synthetic"}
+{"id":"q0310","text":"3abayat qotn kohly","script":"franco","intent":"attribute","expected_normalized":"abaya cotton navy","tags":["franco"],"source":"synthetic"}
+{"id":"q0311","text":"gaket soof fiddy mawaleed","script":"franco","intent":"kids","expected_normalized":"baby jacket silver wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0312","text":"3awez 3abaya bonny","script":"franco","intent":"natural_language","expected_normalized":"abaya brown","tags":["franco"],"source":"synthetic"}
+{"id":"q0313","text":"shebsheb welady","script":"franco","intent":"kids","expected_normalized":"boys sandals","tags":["franco"],"source":"synthetic"}
+{"id":"q0314","text":"sa3a banat seify","script":"franco","intent":"kids","expected_normalized":"girls summer watch","tags":["franco"],"source":"synthetic"}
+{"id":"q0315","text":"ishaarb banat zafaf","script":"franco","intent":"kids","expected_normalized":"girls scarf wedding","tags":["franco"],"source":"synthetic"}
+{"id":"q0316","text":"saa3a zara","script":"franco","intent":"brand","expected_normalized":"watch zara","tags":["franco"],"source":"synthetic"}
+{"id":"q0317","text":"trenj soof kohly bebi","script":"franco","intent":"kids","expected_normalized":"baby navy tracksuit wool","tags":["franco"],"source":"synthetic"}
+{"id":"q0318","text":"traning a6fal madrasah","script":"franco","intent":"kids","expected_normalized":"kids school tracksuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0319","text":"3ayez 2obba3a fara7","script":"franco","intent":"natural_language","expected_normalized":"cap wedding","tags":["franco"],"source":"synthetic"}
+{"id":"q0320","text":"esdal mov nayk","script":"franco","intent":"brand","expected_normalized":"isdal nike purple","tags":["franco"],"source":"synthetic"}
+{"id":"q0321","text":"3abaya","script":"franco","intent":"product_type","expected_normalized":"abaya","tags":["franco"],"source":"synthetic"}
+{"id":"q0322","text":"tishirt shifon fiddy banati","script":"franco","intent":"kids","expected_normalized":"chiffon girls silver tshirt","tags":["franco"],"source":"synthetic"}
+{"id":"q0323","text":"3ayza kanza","script":"franco","intent":"natural_language","expected_normalized":"sweater","tags":["franco"],"source":"synthetic"}
+{"id":"q0324","text":"botat","script":"franco","intent":"product_type","expected_normalized":"boots","tags":["franco"],"source":"synthetic"}
+{"id":"q0325","text":"gaket birshka","script":"franco","intent":"brand","expected_normalized":"bershka jacket","tags":["franco"],"source":"synthetic"}
+{"id":"q0326","text":"2ames bamby atfal","script":"franco","intent":"kids","expected_normalized":"kids pink shirt","tags":["franco"],"source":"synthetic"}
+{"id":"q0327","text":"gezma","script":"franco","intent":"product_type","expected_normalized":"shoes","tags":["franco"],"source":"synthetic"}
+{"id":"q0328","text":"gezma ragaly shatwy","script":"franco","intent":"attribute","expected_normalized":"men shoes winter","tags":["franco"],"source":"synthetic"}
+{"id":"q0329","text":"shebshb maqas kbeer","script":"franco","intent":"attribute","expected_normalized":"plus_size sandals","tags":["franco"],"source":"synthetic"}
+{"id":"q0330","text":"hezam 2otn bonny","script":"franco","intent":"attribute","expected_normalized":"belt brown cotton","tags":["franco"],"source":"synthetic"}
+{"id":"q0331","text":"gens 2otifa a5dar","script":"franco","intent":"attribute","expected_normalized":"green jeans velvet","tags":["franco"],"source":"synthetic"}
+{"id":"q0332","text":"3awez fasateen ahmar bebe","script":"franco","intent":"natural_language","expected_normalized":"baby dress red","tags":["franco"],"source":"synthetic"}
+{"id":"q0333","text":"bluza fiddy","script":"franco","intent":"attribute","expected_normalized":"blouse silver","tags":["franco"],"source":"synthetic"}
+{"id":"q0334","text":"galabia sayfy","script":"franco","intent":"attribute","expected_normalized":"galabeya summer","tags":["franco"],"source":"synthetic"}
+{"id":"q0335","text":"bluza eswed","script":"franco","intent":"attribute","expected_normalized":"black blouse","tags":["franco"],"source":"synthetic"}
+{"id":"q0336","text":"3ayez 2obba3a nisa2y tar5isat","script":"franco","intent":"natural_language","expected_normalized":"cap sale women","tags":["franco"],"source":"synthetic"}
+{"id":"q0337","text":"sharab bebi zafaf","script":"franco","intent":"kids","expected_normalized":"baby socks wedding","tags":["franco"],"source":"synthetic"}
+{"id":"q0338","text":"3awez shorty nisa2y","script":"franco","intent":"natural_language","expected_normalized":"shorts women","tags":["franco"],"source":"synthetic"}
+{"id":"q0339","text":"bijama","script":"franco","intent":"product_type","expected_normalized":"pajamas","tags":["franco"],"source":"synthetic"}
+{"id":"q0340","text":"gens shifon","script":"franco","intent":"attribute","expected_normalized":"chiffon jeans","tags":["franco"],"source":"synthetic"}
+{"id":"q0341","text":"3ayez bloza eswid bebe","script":"franco","intent":"natural_language","expected_normalized":"baby black blouse","tags":["franco"],"source":"synthetic"}
+{"id":"q0342","text":"esdal bortokaly","script":"franco","intent":"attribute","expected_normalized":"isdal orange","tags":["franco"],"source":"synthetic"}
+{"id":"q0343","text":"gonela azrag zara","script":"franco","intent":"brand","expected_normalized":"blue skirt zara","tags":["franco"],"source":"synthetic"}
+{"id":"q0344","text":"trenj satan","script":"franco","intent":"attribute","expected_normalized":"satin tracksuit","tags":["franco"],"source":"synthetic"}
+{"id":"q0345","text":"3ayez sharabat ragaly shatwy","script":"franco","intent":"natural_language","expected_normalized":"men socks winter","tags":["franco"],"source":"synthetic"}
+{"id":"q0346","text":"galabia banaty fara7","script":"franco","intent":"kids","expected_normalized":"galabeya girls wedding","tags":["franco"],"source":"synthetic"}
+{"id":"q0347","text":"gazma satan akhdar","script":"franco","intent":"attribute","expected_normalized":"green satin shoes","tags":["franco"],"source":"synthetic"}
+{"id":"q0348","text":"gakit rigaly","script":"franco","intent":"attribute","expected_normalized":"jacket men","tags":["franco"],"source":"synthetic"}
+{"id":"q0349","text":"hoody bonny zara","script":"franco","intent":"brand","expected_normalized":"brown hoodie zara","tags":["franco"],"source":"synthetic"}
+{"id":"q0350","text":"3ayza 2obba3a ramadhan","script":"franco","intent":"natural_language","expected_normalized":"cap ramadan","tags":["franco"],"source":"synthetic"}
+{"id":"q0351","text":"trousers اتش اند ام","script":"mixed","intent":"brand","expected_normalized":"hm pants","tags":["mixed"],"source":"synthetic"}
+{"id":"q0352","text":"headscarf banat صيفي","script":"mixed","intent":"kids","expected_normalized":"girls hijab summer","tags":["mixed"],"source":"synthetic"}
+{"id":"q0353","text":"مايوه 7areer","script":"mixed","intent":"attribute","expected_normalized":"silk swimsuit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0354","text":"نضارة grey adidas","script":"mixed","intent":"brand","expected_normalized":"adidas grey sunglasses","tags":["mixed"],"source":"synthetic"}
+{"id":"q0355","text":"شبشب ساتان navy رجال","script":"mixed","intent":"attribute","expected_normalized":"men navy sandals satin","tags":["mixed"],"source":"synthetic"}
+{"id":"q0356","text":"jumpsuit sof بيج rigaly","script":"mixed","intent":"attribute","expected_normalized":"beige jumpsuit men wool","tags":["mixed"],"source":"synthetic"}
+{"id":"q0357","text":"معطف winter","script":"mixed","intent":"attribute","expected_normalized":"coat winter","tags":["mixed"],"source":"synthetic"}
+{"id":"q0358","text":"teshert مخمل كحلي نساء","script":"mixed","intent":"attribute","expected_normalized":"navy tshirt velvet women","tags":["mixed"],"source":"synthetic"}
+{"id":"q0359","text":"salah wear flax اصفر","script":"mixed","intent":"attribute","expected_normalized":"isdal linen yellow","tags":["mixed"],"source":"synthetic"}
+{"id":"q0360","text":"3abayat عيد","script":"mixed","intent":"attribute","expected_normalized":"abaya eid","tags":["mixed"],"source":"synthetic"}
+{"id":"q0361","text":"ishaarb صوف","script":"mixed","intent":"attribute","expected_normalized":"scarf wool","tags":["mixed"],"source":"synthetic"}
+{"id":"q0362","text":"tishert velvet dahabi رجال","script":"mixed","intent":"attribute","expected_normalized":"gold men tshirt velvet","tags":["mixed"],"source":"synthetic"}
+{"id":"q0363","text":"بجامة ramadhan","script":"mixed","intent":"attribute","expected_normalized":"pajamas ramadan","tags":["mixed"],"source":"synthetic"}
+{"id":"q0364","text":"jeans قطن","script":"mixed","intent":"attribute","expected_normalized":"cotton jeans","tags":["mixed"],"source":"synthetic"}
+{"id":"q0365","text":"مايو brown mango","script":"mixed","intent":"brand","expected_normalized":"brown mango swimsuit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0366","text":"قمصان green بول اند بير","script":"mixed","intent":"brand","expected_normalized":"green pull_bear shirt","tags":["mixed"],"source":"synthetic"}
+{"id":"q0367","text":"sharabat ma5mal موف","script":"mixed","intent":"attribute","expected_normalized":"purple socks velvet","tags":["mixed"],"source":"synthetic"}
+{"id":"q0368","text":"طرح tar5isat","script":"mixed","intent":"deal","expected_normalized":"hijab sale","tags":["mixed"],"source":"synthetic"}
+{"id":"q0369","text":"جاكيت leather pink men","script":"mixed","intent":"attribute","expected_normalized":"jacket leather men pink","tags":["mixed"],"source":"synthetic"}
+{"id":"q0370","text":"hodi ولادي رمضان","script":"mixed","intent":"kids","expected_normalized":"boys hoodie ramadan","tags":["mixed"],"source":"synthetic"}
+{"id":"q0371","text":"3abayat رمادي تاون تيم","script":"mixed","intent":"brand","expected_normalized":"abaya grey town_team","tags":["mixed"],"source":"synthetic"}
+{"id":"q0372","text":"outfit ديجافو","script":"mixed","intent":"brand","expected_normalized":"dejavu set","tags":["mixed"],"source":"synthetic"}
+{"id":"q0373","text":"كنزة newborn okazyon","script":"mixed","intent":"kids","expected_normalized":"baby sale sweater","tags":["mixed"],"source":"synthetic"}
+{"id":"q0374","text":"sweter تاون تيم","script":"mixed","intent":"brand","expected_normalized":"sweater town_team","tags":["mixed"],"source":"synthetic"}
+{"id":"q0375","text":"hezam بناتي","script":"mixed","intent":"kids","expected_normalized":"belt girls","tags":["mixed"],"source":"synthetic"}
+{"id":"q0376","text":"fostan أبيض","script":"mixed","intent":"attribute","expected_normalized":"dress white","tags":["mixed"],"source":"synthetic"}
+{"id":"q0377","text":"esdal ramadi حريمي","script":"mixed","intent":"attribute","expected_normalized":"grey isdal women","tags":["mixed"],"source":"synthetic"}
+{"id":"q0378","text":"إسدال woolen جراي","script":"mixed","intent":"attribute","expected_normalized":"grey isdal wool","tags":["mixed"],"source":"synthetic"}
+{"id":"q0379","text":"ساعة boy جديد","script":"mixed","intent":"kids","expected_normalized":"boys new watch","tags":["mixed"],"source":"synthetic"}
+{"id":"q0380","text":"jumpsuit ساتان asfer banat","script":"mixed","intent":"kids","expected_normalized":"girls jumpsuit satin yellow","tags":["mixed"],"source":"synthetic"}
+{"id":"q0381","text":"مايو بني banaty","script":"mixed","intent":"kids","expected_normalized":"brown girls swimsuit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0382","text":"شنطة kitan","script":"mixed","intent":"attribute","expected_normalized":"bag linen","tags":["mixed"],"source":"synthetic"}
+{"id":"q0383","text":"تيشرت dahaby rafen","script":"mixed","intent":"brand","expected_normalized":"gold ravin tshirt","tags":["mixed"],"source":"synthetic"}
+{"id":"q0384","text":"set linen wardy نساء","script":"mixed","intent":"attribute","expected_normalized":"linen pink set women","tags":["mixed"],"source":"synthetic"}
+{"id":"q0385","text":"بوتس newborn seify","script":"mixed","intent":"kids","expected_normalized":"baby boots summer","tags":["mixed"],"source":"synthetic"}
+{"id":"q0386","text":"badlah ولادي","script":"mixed","intent":"kids","expected_normalized":"boys suit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0387","text":"كاب newborn clearance","script":"mixed","intent":"kids","expected_normalized":"baby cap sale","tags":["mixed"],"source":"synthetic"}
+{"id":"q0388","text":"قبعة beige newborn","script":"mixed","intent":"kids","expected_normalized":"baby beige cap","tags":["mixed"],"source":"synthetic"}
+{"id":"q0389","text":"جمبسوت new","script":"mixed","intent":"attribute","expected_normalized":"jumpsuit new","tags":["mixed"],"source":"synthetic"}
+{"id":"q0390","text":"sharabat بيج 7arimy","script":"mixed","intent":"attribute","expected_normalized":"beige socks women","tags":["mixed"],"source":"synthetic"}
+{"id":"q0391","text":"هودي red بيرشكا","script":"mixed","intent":"brand","expected_normalized":"bershka hoodie red","tags":["mixed"],"source":"synthetic"}
+{"id":"q0392","text":"ليجن navy womens","script":"mixed","intent":"attribute","expected_normalized":"leggings navy women","tags":["mixed"],"source":"synthetic"}
+{"id":"q0393","text":"gonela abyadh ديفاكتو","script":"mixed","intent":"brand","expected_normalized":"defacto skirt white","tags":["mixed"],"source":"synthetic"}
+{"id":"q0394","text":"بدلة orange pull and bear","script":"mixed","intent":"brand","expected_normalized":"orange pull_bear suit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0395","text":"مايو soof bege","script":"mixed","intent":"attribute","expected_normalized":"beige swimsuit wool","tags":["mixed"],"source":"synthetic"}
+{"id":"q0396","text":"ترينج akhdar","script":"mixed","intent":"attribute","expected_normalized":"green tracksuit","tags":["mixed"],"source":"synthetic"}
+{"id":"q0397","text":"نظارات 2otn","script":"mixed","intent":"attribute","expected_normalized":"cotton sunglasses","tags":["mixed"],"source":"synthetic"}
+{"id":"q0398","text":"صندل infant okazyon","script":"mixed","intent":"kids","expected_normalized":"baby sale sandals","tags":["mixed"],"source":"synthetic"}
+{"id":"q0399","text":"كوتشيات h m","script":"mixed","intent":"brand","expected_normalized":"hm sneakers","tags":["mixed"],"source":"synthetic"}
+{"id":"q0400","text":"ليجن blue","script":"mixed","intent":"attribute","expected_normalized":"blue leggings","tags":["mixed"],"source":"synthetic"}
+{"id":"q0401","text":"نظارة بنفسجي بنات لحد ٣٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"girls purple sunglasses","expected_filters":{"maxPriceMinor":30000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0402","text":"for ladies silver overcoat below 500","script":"en","intent":"price_constrained","expected_normalized":"coat silver women","expected_filters":{"maxPriceMinor":50000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0403","text":"for boys beige tracksuit under 5k egp","script":"en","intent":"price_constrained","expected_normalized":"beige boys tracksuit","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0404","text":"hoody koton ta7t 2500 gneh","script":"franco","intent":"price_constrained","expected_normalized":"hoodie koton","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0405","text":"قفطان صفرا في حدود ٨٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"galabeya yellow","expected_filters":{"maxPriceMinor":80000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0406","text":"فساتين اصفر بناتي في حدود ٣٠٠٠","script":"ar","intent":"price_constrained","expected_normalized":"dress girls yellow","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0407","text":"for men abaya max 800 egp","script":"en","intent":"price_constrained","expected_normalized":"abaya men","expected_filters":{"maxPriceMinor":80000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0408","text":"yellow glasses under 300","script":"en","intent":"price_constrained","expected_normalized":"sunglasses yellow","expected_filters":{"maxPriceMinor":30000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0409","text":"حقيبة رافين تحت ٢٥٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"bag ravin","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0410","text":"عبايات بني اقل من ١٠٠٠","script":"ar","intent":"price_constrained","expected_normalized":"abaya brown","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0411","text":"for men shirts less than 800","script":"en","intent":"price_constrained","expected_normalized":"men shirt","expected_filters":{"maxPriceMinor":80000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0412","text":"puma bag up to 500","script":"en","intent":"price_constrained","expected_normalized":"bag puma","expected_filters":{"maxPriceMinor":50000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0413","text":"bantalon awlad le7ad 3000 gneh","script":"franco","intent":"price_constrained","expected_normalized":"boys pants","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0414","text":"نظارات لحد ١٢٠٠","script":"ar","intent":"price_constrained","expected_normalized":"sunglasses","expected_filters":{"maxPriceMinor":120000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0415","text":"طقم مانجو لحد ٣٠٠٠","script":"ar","intent":"price_constrained","expected_normalized":"mango set","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0416","text":"for kid black overcoat up to 2k egp","script":"en","intent":"price_constrained","expected_normalized":"black coat kids","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0417","text":"for mens white swimsuit under 1k","script":"en","intent":"price_constrained","expected_normalized":"men swimsuit white","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0418","text":"بيجامة bershka تحت ٥٠٠","script":"mixed","intent":"price_constrained","expected_normalized":"bershka pajamas","expected_filters":{"maxPriceMinor":50000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0419","text":"طقم نايكي تحت ١٥٠٠","script":"ar","intent":"price_constrained","expected_normalized":"nike set","expected_filters":{"maxPriceMinor":150000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0420","text":"سنيكرز ذهبي نساء لحد ٢٥٠٠","script":"ar","intent":"price_constrained","expected_normalized":"gold sneakers women","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0421","text":"skirt max 3k egp","script":"en","intent":"price_constrained","expected_normalized":"skirt","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0422","text":"for infant coat under 800 egp","script":"en","intent":"price_constrained","expected_normalized":"baby coat","expected_filters":{"maxPriceMinor":80000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0423","text":"short sof kohly ta7t 5000 gneh","script":"franco","intent":"price_constrained","expected_normalized":"navy shorts wool","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0424","text":"جيبة تاون تيم في حدود ٢٠٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"skirt town_team","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0425","text":"نضارة موف ولادي اقل من ١٥٠٠","script":"ar","intent":"price_constrained","expected_normalized":"boys purple sunglasses","expected_filters":{"maxPriceMinor":150000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0426","text":"brown cotton watches up to 1200","script":"en","intent":"price_constrained","expected_normalized":"brown cotton watch","expected_filters":{"maxPriceMinor":120000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0427","text":"socks less than 1200","script":"en","intent":"price_constrained","expected_normalized":"socks","expected_filters":{"maxPriceMinor":120000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0428","text":"معطف بول اند بير تحت ۵۰۰۰","script":"ar","intent":"price_constrained","expected_normalized":"coat pull_bear","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0429","text":"كنزة ساتان أبيض تحت ۳۰۰۰","script":"ar","intent":"price_constrained","expected_normalized":"satin sweater white","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0430","text":"dejavu abayas below 1200 egp","script":"en","intent":"price_constrained","expected_normalized":"abaya dejavu","expected_filters":{"maxPriceMinor":120000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0431","text":"for women green denim up to 5000","script":"en","intent":"price_constrained","expected_normalized":"green jeans women","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0432","text":"esdal boma ta7t 2000","script":"franco","intent":"price_constrained","expected_normalized":"isdal puma","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0433","text":"بلوزة اقل من ٢٠٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"blouse","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0434","text":"ايشارب تحت ١٠٠٠","script":"ar","intent":"price_constrained","expected_normalized":"scarf","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0435","text":"for baby pyjamas under 3000","script":"en","intent":"price_constrained","expected_normalized":"baby pajamas","expected_filters":{"maxPriceMinor":300000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0436","text":"defacto sneakers less than 300 egp","script":"en","intent":"price_constrained","expected_normalized":"defacto sneakers","expected_filters":{"maxPriceMinor":30000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0437","text":"مايوه ساتان زرقا لحد ٢٥٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"blue satin swimsuit","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0438","text":"إسدال ذهبي اقل من ۲۰۰۰","script":"ar","intent":"price_constrained","expected_normalized":"gold isdal","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0439","text":"blouse up to 2500","script":"en","intent":"price_constrained","expected_normalized":"blouse","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0440","text":"mauve flax glasses under 800 egp","script":"en","intent":"price_constrained","expected_normalized":"linen purple sunglasses","expected_filters":{"maxPriceMinor":80000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0441","text":"short asfar a6fal ta7t 500","script":"franco","intent":"price_constrained","expected_normalized":"kids shorts yellow","expected_filters":{"maxPriceMinor":50000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0442","text":"حزام حمرا لحد ١٠٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"belt red","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0443","text":"ليجنز ولادي في حدود ١٠٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"boys leggings","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0444","text":"for men prayer clothes less than 1500","script":"en","intent":"price_constrained","expected_normalized":"isdal men","expected_filters":{"maxPriceMinor":150000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0445","text":"for girl brown shirts below 5000 egp","script":"en","intent":"price_constrained","expected_normalized":"brown girls shirt","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0446","text":"حجاب كحلي infant في حدود ٢٥٠٠ جنيه","script":"mixed","intent":"price_constrained","expected_normalized":"baby hijab navy","expected_filters":{"maxPriceMinor":250000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0447","text":"شرابات زرقا بيبي في حدود ١٠٠٠ جنيه","script":"ar","intent":"price_constrained","expected_normalized":"baby blue socks","expected_filters":{"maxPriceMinor":100000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0448","text":"شرابات بيبي في حدود ٥٠٠٠","script":"ar","intent":"price_constrained","expected_normalized":"baby socks","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0449","text":"for boys black jackets max 5000 egp","script":"en","intent":"price_constrained","expected_normalized":"black boys jacket","expected_filters":{"maxPriceMinor":500000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0450","text":"white sock under 2000","script":"en","intent":"price_constrained","expected_normalized":"socks white","expected_filters":{"maxPriceMinor":200000},"tags":["digits","price"],"source":"synthetic"}
+{"id":"q0451","text":"gazzma bege","script":"franco","intent":"attribute","expected_normalized":"beige shoes","tags":["typo"],"source":"synthetic"}
+{"id":"q0452","text":"orannge belts","script":"en","intent":"attribute","expected_normalized":"belt orange","tags":["typo"],"source":"synthetic"}
+{"id":"q0453","text":"eskkarf bony","script":"franco","intent":"attribute","expected_normalized":"brown scarf","tags":["typo"],"source":"synthetic"}
+{"id":"q0454","text":"jins sof kahhly","script":"franco","intent":"attribute","expected_normalized":"jeans navy wool","tags":["typo"],"source":"synthetic"}
+{"id":"q0455","text":"yellow velvet tshitr","script":"en","intent":"attribute","expected_normalized":"tshirt velvet yellow","tags":["typo"],"source":"synthetic"}
+{"id":"q0456","text":"idsal abyad a6fal","script":"franco","intent":"kids","expected_normalized":"isdal kids white","tags":["typo"],"source":"synthetic"}
+{"id":"q0457","text":"3aaya welady","script":"franco","intent":"kids","expected_normalized":"abaya boys","tags":["typo"],"source":"synthetic"}
+{"id":"q0458","text":"galabiia","script":"franco","intent":"product_type","expected_normalized":"galabeya","tags":["typo"],"source":"synthetic"}
+{"id":"q0459","text":"for ladies slver set","script":"en","intent":"attribute","expected_normalized":"set silver women","tags":["typo"],"source":"synthetic"}
+{"id":"q0460","text":"for mens beige oevrcoat","script":"en","intent":"attribute","expected_normalized":"beige coat men","tags":["typo"],"source":"synthetic"}
+{"id":"q0461","text":"nadraa h and m","script":"franco","intent":"brand","expected_normalized":"hm sunglasses","tags":["typo"],"source":"synthetic"}
+{"id":"q0462","text":"trej ramadi","script":"franco","intent":"attribute","expected_normalized":"grey tracksuit","tags":["typo"],"source":"synthetic"}
+{"id":"q0463","text":"bottat","script":"franco","intent":"product_type","expected_normalized":"boots","tags":["typo"],"source":"synthetic"}
+{"id":"q0464","text":"gaabia regaly","script":"franco","intent":"attribute","expected_normalized":"galabeya men","tags":["typo"],"source":"synthetic"}
+{"id":"q0465","text":"traniing atfal","script":"franco","intent":"kids","expected_normalized":"kids tracksuit","tags":["typo"],"source":"synthetic"}
+{"id":"q0466","text":"shanat bannafsagy bebi","script":"franco","intent":"kids","expected_normalized":"baby bag purple","tags":["typo"],"source":"synthetic"}
+{"id":"q0467","text":"for boys silver traines","script":"en","intent":"kids","expected_normalized":"boys silver sneakers","tags":["typo"],"source":"synthetic"}
+{"id":"q0468","text":"red bets","script":"en","intent":"attribute","expected_normalized":"belt red","tags":["typo"],"source":"synthetic"}
+{"id":"q0469","text":"hezaam shifon ramady","script":"franco","intent":"attribute","expected_normalized":"belt chiffon grey","tags":["typo"],"source":"synthetic"}
+{"id":"q0470","text":"dejavu shrits","script":"en","intent":"brand","expected_normalized":"dejavu shirt","tags":["typo"],"source":"synthetic"}
+{"id":"q0471","text":"navy jalbaiya","script":"en","intent":"attribute","expected_normalized":"galabeya navy","tags":["typo"],"source":"synthetic"}
+{"id":"q0472","text":"for children bron outfit","script":"en","intent":"kids","expected_normalized":"brown kids set","tags":["typo"],"source":"synthetic"}
+{"id":"q0473","text":"bantaloon bammbi","script":"franco","intent":"attribute","expected_normalized":"pants pink","tags":["typo"],"source":"synthetic"}
+{"id":"q0474","text":"gonelal regaly","script":"franco","intent":"attribute","expected_normalized":"men skirt","tags":["typo"],"source":"synthetic"}
+{"id":"q0475","text":"tishit birshka","script":"franco","intent":"brand","expected_normalized":"bershka tshirt","tags":["typo"],"source":"synthetic"}
+{"id":"q0476","text":"oraange chiffon leggings","script":"en","intent":"attribute","expected_normalized":"chiffon leggings orange","tags":["typo"],"source":"synthetic"}
+{"id":"q0477","text":"ta2em baanafsagy","script":"franco","intent":"attribute","expected_normalized":"purple set","tags":["typo"],"source":"synthetic"}
+{"id":"q0478","text":"for kids mauve wach","script":"en","intent":"kids","expected_normalized":"kids purple watch","tags":["typo"],"source":"synthetic"}
+{"id":"q0479","text":"for men wite suit","script":"en","intent":"attribute","expected_normalized":"men suit white","tags":["typo"],"source":"synthetic"}
+{"id":"q0480","text":"jmpsut manjo","script":"franco","intent":"brand","expected_normalized":"jumpsuit mango","tags":["typo"],"source":"synthetic"}
+{"id":"q0481","text":"eskrf bonny","script":"franco","intent":"attribute","expected_normalized":"brown scarf","tags":["typo"],"source":"synthetic"}
+{"id":"q0482","text":"pigama sof daahabi","script":"franco","intent":"attribute","expected_normalized":"gold pajamas wool","tags":["typo"],"source":"synthetic"}
+{"id":"q0483","text":"for mens silppers","script":"en","intent":"attribute","expected_normalized":"men sandals","tags":["typo"],"source":"synthetic"}
+{"id":"q0484","text":"naara","script":"franco","intent":"product_type","expected_normalized":"sunglasses","tags":["typo"],"source":"synthetic"}
+{"id":"q0485","text":"for newborn headscraf","script":"en","intent":"kids","expected_normalized":"baby hijab","tags":["typo"],"source":"synthetic"}
+{"id":"q0486","text":"saa3a soof fidyd","script":"franco","intent":"attribute","expected_normalized":"silver watch wool","tags":["typo"],"source":"synthetic"}
+{"id":"q0487","text":"jaampsut a6fal","script":"franco","intent":"kids","expected_normalized":"jumpsuit kids","tags":["typo"],"source":"synthetic"}
+{"id":"q0488","text":"teshetr 7areer asfer","script":"franco","intent":"attribute","expected_normalized":"silk tshirt yellow","tags":["typo"],"source":"synthetic"}
+{"id":"q0489","text":"for boys navy bloouse","script":"en","intent":"kids","expected_normalized":"blouse boys navy","tags":["typo"],"source":"synthetic"}
+{"id":"q0490","text":"for mens wite shoe","script":"en","intent":"attribute","expected_normalized":"men shoes white","tags":["typo"],"source":"synthetic"}
+{"id":"q0491","text":"blzua satan bonny","script":"franco","intent":"attribute","expected_normalized":"blouse brown satin","tags":["typo"],"source":"synthetic"}
+{"id":"q0492","text":"jampsut a7mr","script":"franco","intent":"attribute","expected_normalized":"jumpsuit red","tags":["typo"],"source":"synthetic"}
+{"id":"q0493","text":"for men shrots","script":"en","intent":"attribute","expected_normalized":"men shorts","tags":["typo"],"source":"synthetic"}
+{"id":"q0494","text":"for womens white scraf","script":"en","intent":"attribute","expected_normalized":"scarf white women","tags":["typo"],"source":"synthetic"}
+{"id":"q0495","text":"black aaya","script":"en","intent":"attribute","expected_normalized":"abaya black","tags":["typo"],"source":"synthetic"}
+{"id":"q0496","text":"red aabya","script":"en","intent":"attribute","expected_normalized":"abaya red","tags":["typo"],"source":"synthetic"}
+{"id":"q0497","text":"pull and bear abaysa","script":"en","intent":"brand","expected_normalized":"abaya pull_bear","tags":["typo"],"source":"synthetic"}
+{"id":"q0498","text":"sharab dahayb wlady","script":"franco","intent":"kids","expected_normalized":"boys gold socks","tags":["typo"],"source":"synthetic"}
+{"id":"q0499","text":"eshaarb fddy","script":"franco","intent":"attribute","expected_normalized":"scarf silver","tags":["typo"],"source":"synthetic"}
+{"id":"q0500","text":"purple chiffon outfiit","script":"en","intent":"attribute","expected_normalized":"chiffon purple set","tags":["typo"],"source":"synthetic"}

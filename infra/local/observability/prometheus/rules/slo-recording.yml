@@ -1,0 +1,40 @@
+# Recording rules for SLO ratios. Error-budget ratios are "bad / total" over each window.
+groups:
+  - name: slo-recording
+    rules:
+      # Checkout: SLO 99.5 percent success (budget 0.005).
+      - record: slo:checkout_error_ratio:rate5m
+        expr: 1 - (sum(rate(checkout_success_total[5m])) / sum(rate(checkout_attempts_total[5m])))
+      - record: slo:checkout_error_ratio:rate30m
+        expr: 1 - (sum(rate(checkout_success_total[30m])) / sum(rate(checkout_attempts_total[30m])))
+      - record: slo:checkout_error_ratio:rate1h
+        expr: 1 - (sum(rate(checkout_success_total[1h])) / sum(rate(checkout_attempts_total[1h])))
+      - record: slo:checkout_error_ratio:rate6h
+        expr: 1 - (sum(rate(checkout_success_total[6h])) / sum(rate(checkout_attempts_total[6h])))
+      # Webhook to PAID: SLO 95 percent under 5 s (budget 0.05).
+      - record: slo:webhook_slow_ratio:rate5m
+        expr: 1 - (sum(rate(webhook_to_paid_seconds_bucket{le="5"}[5m])) / sum(rate(webhook_to_paid_seconds_count[5m])))
+      - record: slo:webhook_slow_ratio:rate30m
+        expr: 1 - (sum(rate(webhook_to_paid_seconds_bucket{le="5"}[30m])) / sum(rate(webhook_to_paid_seconds_count[30m])))
+      - record: slo:webhook_slow_ratio:rate1h
+        expr: 1 - (sum(rate(webhook_to_paid_seconds_bucket{le="5"}[1h])) / sum(rate(webhook_to_paid_seconds_count[1h])))
+      - record: slo:webhook_slow_ratio:rate6h
+        expr: 1 - (sum(rate(webhook_to_paid_seconds_bucket{le="5"}[6h])) / sum(rate(webhook_to_paid_seconds_count[6h])))
+      # API reads: SLO 95 percent under 300 ms (budget 0.05).
+      - record: slo:api_read_slow_ratio:rate5m
+        expr: 1 - (sum(rate(api_read_latency_seconds_bucket{le="0.3"}[5m])) / sum(rate(api_read_latency_seconds_count[5m])))
+      - record: slo:api_read_slow_ratio:rate30m
+        expr: 1 - (sum(rate(api_read_latency_seconds_bucket{le="0.3"}[30m])) / sum(rate(api_read_latency_seconds_count[30m])))
+      - record: slo:api_read_slow_ratio:rate1h
+        expr: 1 - (sum(rate(api_read_latency_seconds_bucket{le="0.3"}[1h])) / sum(rate(api_read_latency_seconds_count[1h])))
+      - record: slo:api_read_slow_ratio:rate6h
+        expr: 1 - (sum(rate(api_read_latency_seconds_bucket{le="0.3"}[6h])) / sum(rate(api_read_latency_seconds_count[6h])))
+      # Reserve: SLO 95 percent under 150 ms (budget 0.05).
+      - record: slo:reserve_slow_ratio:rate5m
+        expr: 1 - (sum(rate(reserve_latency_seconds_bucket{le="0.15"}[5m])) / sum(rate(reserve_latency_seconds_count[5m])))
+      - record: slo:reserve_slow_ratio:rate30m
+        expr: 1 - (sum(rate(reserve_latency_seconds_bucket{le="0.15"}[30m])) / sum(rate(reserve_latency_seconds_count[30m])))
+      - record: slo:reserve_slow_ratio:rate1h
+        expr: 1 - (sum(rate(reserve_latency_seconds_bucket{le="0.15"}[1h])) / sum(rate(reserve_latency_seconds_count[1h])))
+      - record: slo:reserve_slow_ratio:rate6h
+        expr: 1 - (sum(rate(reserve_latency_seconds_bucket{le="0.15"}[6h])) / sum(rate(reserve_latency_seconds_count[6h])))

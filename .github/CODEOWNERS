@@ -1,0 +1,23 @@
+# Two-key rule (BUILD-PROMPT section 2): owner review is required on money, auth and privacy code.
+# Replace @nadaakhaalifa with the real GitHub login or team if different.
+/packages/money/                     @nadaakhaalifa
+/packages/ledger/                    @nadaakhaalifa
+/packages/payments/                  @nadaakhaalifa
+/packages/checkout/                  @nadaakhaalifa
+/packages/inventory/                 @nadaakhaalifa
+/packages/auth/                      @nadaakhaalifa
+/packages/policy/                    @nadaakhaalifa
+/packages/privacy/                   @nadaakhaalifa
+/packages/pricing-integrity/         @nadaakhaalifa
+/packages/payouts/                   @nadaakhaalifa
+/apps/*/src/modules/ledger/          @nadaakhaalifa
+/apps/*/src/modules/payments/        @nadaakhaalifa
+/apps/*/src/modules/checkout/        @nadaakhaalifa
+/apps/*/src/modules/inventory/       @nadaakhaalifa
+/apps/*/src/modules/auth/            @nadaakhaalifa
+/apps/*/src/modules/policy/          @nadaakhaalifa
+/apps/*/src/modules/privacy/         @nadaakhaalifa
+/apps/*/src/modules/pricing-integrity/ @nadaakhaalifa
+/apps/*/src/modules/payouts/         @nadaakhaalifa
+/.github/workflows/                  @nadaakhaalifa
+/.github/CODEOWNERS                  @nadaakhaalifa
