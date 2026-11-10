@@ -9,3 +9,5 @@ export type { JournalEntryDraft, PostingDraft, ValidatedDraft, ValidatedPosting 
 export { GENESIS_HASH } from "./application/hash.js";
 export { Ledger, MAX_PAGE_SIZE, balance, listEntries, post, reverse, trialBalance, verifyChain } from "./application/ledger.js";
 export type { ChainVerification, EntryPage, ListedEntry, ListedPosting, PostResult, ReverseOptions } from "./application/ledger.js";
+export { MAX_UNBALANCED_LISTED, integrityScan, snapshotDigest } from "./application/integrity.js";
+export type { CurrencyTotal, IntegrityScan, UnbalancedEntry } from "./application/integrity.js";

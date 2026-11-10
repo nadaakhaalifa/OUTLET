@@ -260,7 +260,7 @@ describe("store credit projection and ledger integrity", () => {
     try {
       const r = await fresh.integrity.run("EG", NOW);
       expect(r.ok).toBe(true);
-      expect(r.checks.map((c) => c.name)).toEqual(["trial_balance_zero", "hash_chain", "payouts_in_transit_projection", "seller_pending_not_negative", "store_credit_not_negative"]);
+      expect(r.checks.map((c) => c.name)).toEqual(["trial_balance_zero", "entries_balanced", "hash_chain", "payouts_in_transit_projection", "seller_pending_not_negative", "store_credit_not_negative"]);
     } finally {
       await fresh.close();
     }
