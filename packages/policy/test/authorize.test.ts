@@ -202,6 +202,12 @@ describe("admin console actions (matrix)", () => {
     "tax.read": ["finance"],
     "dlq.manage": ["ops", "security", "super_admin"],
     "dlq.discard.money": ["ops", "security", "super_admin"],
+    "payout.hold": ["finance"],
+    "payout.release": ["finance"],
+    // Read actions behind the Money and Orders lists.
+    "refund.approve": ["finance", "super_admin"],
+    "payout.read": ["finance"],
+    "dispute.decide": ["trust_safety"],
   };
   for (const [action, allowed] of Object.entries(matrix)) {
     for (const role of ADMIN_ROLES) {
@@ -242,6 +248,10 @@ describe("dual approval for admin console actions", () => {
   it("store suspend and reinstate always need a second approver", () => {
     for (const a of ["store.suspend", "store.reinstate"]) expect(dualApprovalRequired(a, cfg, 0n)).toBe(true);
   });
+  it("releasing a held payout always needs a second approver; holding does not", () => {
+    expect(dualApprovalRequired("payout.release", cfg, 0n)).toBe(true);
+    expect(dualApprovalRequired("payout.hold", cfg, 0n)).toBe(false);
+  });
   it("dlq.discard.money always needs a second approver; dlq.manage (replay, non-money discard) does not", () => {
     expect(dualApprovalRequired("dlq.discard.money", cfg, 0n)).toBe(true);
     expect(dualApprovalRequired("dlq.manage", cfg, 0n)).toBe(false);
@@ -255,7 +265,7 @@ describe("dual approval for admin console actions", () => {
 
 describe("policy v5: admin KYC detail and RBAC read", () => {
   it("version is 6", () => {
-    expect(POLICY_VERSION).toBe(8);
+    expect(POLICY_VERSION).toBe(9);
   });
   it("seller_kyc.read (PII reveal, reason code required) is ops and trust_safety only", () => {
     expect(requiresReasonCode("seller_kyc.read")).toBe(true);

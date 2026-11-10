@@ -1,7 +1,7 @@
 import type { Action } from "./types.js";
 
 /** Bump on any change to the tables below; recorded in audit entries. */
-export const POLICY_VERSION = 8;
+export const POLICY_VERSION = 9;
 
 export const SELLER_ROLES = ["owner", "manager", "catalog", "warehouse", "finance", "support"] as const;
 export const ADMIN_ROLES = ["ops", "finance", "trust_safety", "support", "marketing", "dpo", "security", "super_admin"] as const;
@@ -42,7 +42,7 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
   finance: [
     "order.read", "store.threshold.write", "payout.read", "payout.approve", "refund.approve", "statement.read", "ledger.read",
     "kill_switch.read", "kill_switch.engage", "reconciliation.read", "reconciliation.resolve", "price_integrity.read", "tax.read", "approval.read", "approval.decide", "elevation.request",
-    "dashboard.read", "finance.summary.read", "attention.read", "attention.write",
+    "dashboard.read", "finance.summary.read", "attention.read", "attention.write", "payout.hold", "payout.release",
   ],
   trust_safety: [
     "store.read", "store.suspend", "store.reinstate", "listing.read", "listing.takedown", "return.read", "dispute.decide", "seller_kyc.review", "seller_kyc.read",
@@ -61,7 +61,7 @@ export const ADMIN_POLICY: Readonly<Record<(typeof ADMIN_ROLES)[number], readonl
 };
 
 /** Actions that always need a second approver regardless of amount. */
-export const ALWAYS_DUAL_APPROVAL: readonly Action[] = ["role.grant", "plan.price.change", "data.export", "store.suspend", "store.reinstate", "dlq.discard.money"];
+export const ALWAYS_DUAL_APPROVAL: readonly Action[] = ["role.grant", "plan.price.change", "data.export", "store.suspend", "store.reinstate", "dlq.discard.money", "payout.release"];
 /** Needs a second approver when the switch guards money movement (payments, BNPL, COD, payouts, gift cards). Unknown counts as money. */
 export const MONEY_SWITCH_DUAL_APPROVAL: readonly Action[] = ["kill_switch.engage"];
 /** Actions that need a second approver at or above the configured amount. */
