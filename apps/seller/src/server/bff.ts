@@ -6,6 +6,8 @@ import { STORE_COOKIE, SESSION_COOKIE } from "./env";
 const MARKET = /^[a-z]{2}$/;
 const UUID = z.uuid();
 const ALLOWED_PATH = /^(products(\/[0-9a-f-]{36}(\/(readiness|media|defect-cards|publish))?)?|categories|attribute-sets\/[0-9a-f-]{36}|orders(\/[0-9a-f-]{36}(\/(accept|reject|pack|cancel))?)?|shipments|inventory(\/adjustments)?)$/;
+/** Finance reads (balance, payouts, statements): GET only, no write surface. */
+const FINANCE_PATH = /^finance\/(balance|statements|payouts(\/[0-9a-f-]{36})?)$/;
 /** The applicant's own KYC application (user tenant: the store does not exist before approval, so no X-Store-Id). */
 const ONBOARDING_PATH = /^onboarding(\/(bank-account|documents|submit))?$/;
 const FORWARD_REQUEST = ["content-type", "idempotency-key", "if-match", "accept-language", "accept"] as const;
@@ -44,9 +46,10 @@ export function planProxy(i: BffInput): BffPlan {
   if (market === undefined || !MARKET.test(market)) return reject(404, "unknown-market");
   const path = rest.join("/");
   const onboarding = ONBOARDING_PATH.test(path);
-  if (!onboarding && !ALLOWED_PATH.test(path)) return reject(404, "not-found");
+  const finance = FINANCE_PATH.test(path);
+  if (!onboarding && !finance && !ALLOWED_PATH.test(path)) return reject(404, "not-found");
   const isWrite = i.method !== "GET";
-  if (!(onboarding ? ["GET", "POST", "PUT"] : ["GET", "POST", "PATCH"]).includes(i.method)) return reject(405, "method-not-allowed");
+  if (!(onboarding ? ["GET", "POST", "PUT"] : finance ? ["GET"] : ["GET", "POST", "PATCH"]).includes(i.method)) return reject(405, "method-not-allowed");
   if (isWrite && !sameOrigin(i.headers)) return reject(403, "cross-origin");
   if (i.apiUrl === undefined) return reject(503, "api-unconfigured");
   const token = i.cookies.get(SESSION_COOKIE)?.value;

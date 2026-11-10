@@ -17157,6 +17157,824 @@ paths:
           source: default
       x-max-queries: 1
       x-paginated: keyset
+  /v1/{market}/seller/finance/balance:
+    get:
+      operationId: getSellerBalance
+      summary: My store balance (pending, available) and payout totals by state
+      tags:
+        - Seller Finance
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  pending:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  available:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  total:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payouts:
+                    type: object
+                    properties:
+                      scheduled:
+                        type: object
+                        properties:
+                          amount_minor:
+                            type: string
+                            pattern: ^-?[0-9]{1,19}$
+                          currency:
+                            type: string
+                            pattern: ^[A-Z]{3}$
+                        required:
+                          - amount_minor
+                          - currency
+                        additionalProperties: false
+                      held:
+                        type: object
+                        properties:
+                          amount_minor:
+                            type: string
+                            pattern: ^-?[0-9]{1,19}$
+                          currency:
+                            type: string
+                            pattern: ^[A-Z]{3}$
+                        required:
+                          - amount_minor
+                          - currency
+                        additionalProperties: false
+                      in_transit:
+                        type: object
+                        properties:
+                          amount_minor:
+                            type: string
+                            pattern: ^-?[0-9]{1,19}$
+                          currency:
+                            type: string
+                            pattern: ^[A-Z]{3}$
+                        required:
+                          - amount_minor
+                          - currency
+                        additionalProperties: false
+                      paid_to_date:
+                        type: object
+                        properties:
+                          amount_minor:
+                            type: string
+                            pattern: ^-?[0-9]{1,19}$
+                          currency:
+                            type: string
+                            pattern: ^[A-Z]{3}$
+                        required:
+                          - amount_minor
+                          - currency
+                        additionalProperties: false
+                    required:
+                      - scheduled
+                      - held
+                      - in_transit
+                      - paid_to_date
+                    additionalProperties: false
+                  server_time:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                required:
+                  - currency
+                  - pending
+                  - available
+                  - total
+                  - payouts
+                  - server_time
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+  /v1/{market}/seller/finance/payouts:
+    get:
+      operationId: listSellerPayouts
+      summary: My store payouts, newest first (status filter)
+      tags:
+        - Seller Finance
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - SCHEDULED
+              - ON_HOLD
+              - APPROVED
+              - SENT
+              - SETTLED
+              - FAILED
+              - CANCELLED
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 50
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        status:
+                          type: string
+                          enum:
+                            - SCHEDULED
+                            - ON_HOLD
+                            - APPROVED
+                            - SENT
+                            - SETTLED
+                            - FAILED
+                            - CANCELLED
+                        cycle_start:
+                          type: string
+                          pattern: ^\d{4}-\d{2}-\d{2}$
+                        cycle_end:
+                          type: string
+                          pattern: ^\d{4}-\d{2}-\d{2}$
+                        gross:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        adjustments:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        net:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                        created_at:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        sent_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                        settled_at:
+                          anyOf:
+                            - type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            - type: "null"
+                      required:
+                        - id
+                        - status
+                        - cycle_start
+                        - cycle_end
+                        - gross
+                        - adjustments
+                        - net
+                        - created_at
+                        - sent_at
+                        - settled_at
+                      additionalProperties: false
+                  next_cursor:
+                    anyOf:
+                      - type: string
+                        maxLength: 512
+                      - type: "null"
+                required:
+                  - items
+                  - next_cursor
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 2
+      x-paginated: keyset
+  /v1/{market}/seller/finance/payouts/{payout_id}:
+    get:
+      operationId: getSellerPayout
+      summary: One payout with its lines (another store's payout is 404)
+      tags:
+        - Seller Finance
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: payout_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  status:
+                    type: string
+                    enum:
+                      - SCHEDULED
+                      - ON_HOLD
+                      - APPROVED
+                      - SENT
+                      - SETTLED
+                      - FAILED
+                      - CANCELLED
+                  cycle_start:
+                    type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                  cycle_end:
+                    type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                  gross:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  adjustments:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  net:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  created_at:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  sent_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  settled_at:
+                    anyOf:
+                      - type: string
+                        format: date-time
+                        pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      - type: "null"
+                  lines:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kind:
+                          type: string
+                          enum:
+                            - order
+                            - adjustment
+                        seller_order_id:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        amount:
+                          type: object
+                          properties:
+                            amount_minor:
+                              type: string
+                              pattern: ^-?[0-9]{1,19}$
+                            currency:
+                              type: string
+                              pattern: ^[A-Z]{3}$
+                          required:
+                            - amount_minor
+                            - currency
+                          additionalProperties: false
+                      required:
+                        - kind
+                        - seller_order_id
+                        - amount
+                      additionalProperties: false
+                  lines_truncated:
+                    type: boolean
+                required:
+                  - id
+                  - status
+                  - cycle_start
+                  - cycle_end
+                  - gross
+                  - adjustments
+                  - net
+                  - created_at
+                  - sent_at
+                  - settled_at
+                  - lines
+                  - lines_truncated
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: payout.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 3
+  /v1/{market}/seller/finance/statements:
+    get:
+      operationId: getSellerStatement
+      summary: Monthly statement (read model over the ledger, Cairo calendar month)
+      tags:
+        - Seller Finance
+      security:
+        - sellerJwt: []
+      parameters:
+        - $ref: "#/components/parameters/Market"
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        - $ref: "#/components/parameters/StoreScope"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  month:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                  currency:
+                    type: string
+                    pattern: ^[A-Z]{3}$
+                  period_start:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  period_end:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  opening_balance:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  closing_balance:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  orders_count:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  orders_gross:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  commission_vat:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  orders_net:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  refunds:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  adjustments:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  payouts:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  net_change:
+                    type: object
+                    properties:
+                      amount_minor:
+                        type: string
+                        pattern: ^-?[0-9]{1,19}$
+                      currency:
+                        type: string
+                        pattern: ^[A-Z]{3}$
+                    required:
+                      - amount_minor
+                      - currency
+                    additionalProperties: false
+                  eta_invoice:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        const: not_connected
+                      url:
+                        type: "null"
+                    required:
+                      - status
+                      - url
+                    additionalProperties: false
+                required:
+                  - month
+                  - currency
+                  - period_start
+                  - period_end
+                  - opening_balance
+                  - closing_balance
+                  - orders_count
+                  - orders_gross
+                  - commission
+                  - commission_vat
+                  - orders_net
+                  - refunds
+                  - adjustments
+                  - payouts
+                  - net_change
+                  - eta_invoice
+                additionalProperties: false
+        "400":
+          description: Malformed request or unknown field (strict DTO).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing, invalid, expired or other-market token.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Wrong role, missing passkey or reason code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Not found or not owned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Rate limited; Retry-After is set.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Timeout, dependency down or kill switch.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+      x-authz:
+        action: statement.read
+        principal: seller_staff
+        tenant: store
+      x-rate-limit:
+        - budget: seller_read
+          key: store
+          limit: 300
+          window_s: 60
+          layer: app
+          source: default
+      x-max-queries: 4
   /v1/{market}/seller/inventory:
     get:
       operationId: listInventoryLevels

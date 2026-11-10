@@ -18,6 +18,7 @@ import type { SellerOnboardingServices } from "../modules/seller-onboarding/serv
 import type { TrackingServices } from "../modules/tracking/services.js";
 import type { SellerInventoryServices } from "../modules/seller-inventory/services.js";
 import type { SellerOrdersServices } from "../modules/seller-orders/services.js";
+import type { SellerFinanceServices } from "../modules/seller-finance/services.js";
 import type { Clock } from "./http.js";
 import type { RateLimiterPort } from "./rate-limit/port.js";
 
@@ -54,7 +55,7 @@ export const DEFAULT_HTTP_CONFIG: HttpConfig = Object.freeze({
   rateLimitKeySecret: "",
 });
 
-export type { SellerInventoryServices, SellerOrdersServices };
+export type { SellerFinanceServices, SellerInventoryServices, SellerOrdersServices };
 
 export interface CatalogServices {
   readonly publicCatalog: Pick<PublicCatalogService, "getStoreBySlug" | "getListing">;
@@ -92,6 +93,8 @@ export interface ApiDeps {
   readonly sellerOrders: (marketId: string) => SellerOrdersServices;
   /** Seller Center stock levels and adjustments for one market. */
   readonly sellerInventory: (marketId: string) => SellerInventoryServices;
+  /** Seller Center finance reads (balance, payouts, monthly statements) for one market. Read only. */
+  readonly sellerFinance: (marketId: string) => SellerFinanceServices;
   /** The shopper's address book (encrypted P3 fields) and the geo picker for one market. */
   readonly addresses: (marketId: string) => AddressesServices;
   /** Returns, disputes, seller inspection and order cancellation for one market. */

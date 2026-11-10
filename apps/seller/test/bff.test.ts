@@ -47,6 +47,19 @@ describe("planProxy", () => {
     expect(planProxy(input({ segments: ["EG", "products"] }))).toMatchObject({ status: 404 });
   });
 
+  it("finance reads are GET only: balance, statements, payouts and one payout; no writes, no other finance paths", () => {
+    for (const path of [["finance", "balance"], ["finance", "statements"], ["finance", "payouts"], ["finance", "payouts", PRODUCT]]) {
+      const plan = planProxy(input({ segments: ["eg", ...path], search: "?month=2025-03" }));
+      expect(plan.kind, path.join("/")).toBe("forward");
+      if (plan.kind === "forward") expect(plan.url).toBe(`http://api.test/v1/eg/seller/${path.join("/")}?month=2025-03`);
+      expect(planProxy(input({ segments: ["eg", ...path], method: "POST", headers: new Headers({ host: "seller.test", origin: "http://seller.test", "sec-fetch-site": "same-origin" }) })), `POST ${path.join("/")}`).toMatchObject({ kind: "reject", status: 405 });
+    }
+    for (const path of [["finance"], ["finance", "payouts", "not-a-uuid"], ["finance", "payouts", PRODUCT, "items"], ["finance", "payouts", PRODUCT, "send"], ["finance", "ledger"], ["finance", "balance", "x"], ["finance", "payouts", "../../me"]]) {
+      expect(planProxy(input({ segments: ["eg", ...path] })), path.join("/")).toMatchObject({ kind: "reject", status: 404 });
+    }
+    expect(planProxy(input({ segments: ["eg", "finance", "balance"], cookies: jar({ seller_session: "tok" }) }))).toMatchObject({ kind: "reject", status: 400, code: "store-scope-required" });
+  });
+
   it("rejects missing session (401), missing or malformed store (400), unconfigured API (503), unsupported methods (405)", () => {
     expect(planProxy(input({ cookies: jar({ seller_store: STORE }) }))).toMatchObject({ kind: "reject", status: 401, code: "unauthenticated" });
     expect(planProxy(input({ cookies: jar({ seller_session: "tok" }) }))).toMatchObject({ status: 400, code: "store-scope-required" });

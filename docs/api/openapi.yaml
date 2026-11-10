@@ -11385,12 +11385,12 @@ paths:
       x-outbox-events:
         - "price_appeal.resolved"
       x-phase: 1
-  "/v1/{market}/seller/balance":
+  "/v1/{market}/seller/finance/balance":
     get:
       operationId: "getSellerBalance"
       tags:
         - "Seller Finance"
-      summary: "Balance (read-only)"
+      summary: "My store balance (pending, available) and payout totals by state"
       security:
         - sellerJwt: []
       parameters:
@@ -11408,7 +11408,7 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/SellerBalance"
+                "$ref": "#/components/schemas/SellerFinanceBalance"
         "400":
           "$ref": "#/components/responses/BadRequest"
         "401":
@@ -11422,7 +11422,7 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "finance.read"
+        policy: "payout.read"
         principal: "seller_staff"
         tenant: "store_id from X-Store-Id (RLS app.current_store_id, SET LOCAL per transaction)"
         roles:
@@ -11445,39 +11445,31 @@ paths:
         binding: "token market must equal path market"
       x-kill-switch: "payouts"
       x-phase: 1
-  "/v1/{market}/seller/statements":
+  "/v1/{market}/seller/finance/statements":
     get:
-      operationId: "listSellerStatements"
+      operationId: "getSellerStatement"
       tags:
         - "Seller Finance"
-      summary: "Statement lines"
+      summary: "Monthly statement (read model over the ledger, Cairo calendar month)"
       security:
         - sellerJwt: []
       parameters:
         - "$ref": "#/components/parameters/Market"
         - "$ref": "#/components/parameters/AcceptLanguage"
         - "$ref": "#/components/parameters/StoreScope"
-        - "$ref": "#/components/parameters/Cursor"
-        - "$ref": "#/components/parameters/Limit"
-        - name: "from"
+        - name: "month"
           in: "query"
-          required: false
+          required: true
           schema:
             type: "string"
-            format: "date"
-        - name: "to"
-          in: "query"
-          required: false
-          schema:
-            type: "string"
-            format: "date"
+            pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
       responses:
         "200":
           description: "OK"
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/StatementLinePage"
+                "$ref": "#/components/schemas/SellerFinanceStatement"
         "400":
           "$ref": "#/components/responses/BadRequest"
         "401":
@@ -11491,7 +11483,7 @@ paths:
         "429":
           "$ref": "#/components/responses/TooManyRequests"
       x-authz:
-        policy: "finance.read"
+        policy: "statement.read"
         principal: "seller_staff"
         tenant: "store_id from X-Store-Id (RLS app.current_store_id, SET LOCAL per transaction)"
         roles:
@@ -11513,9 +11505,9 @@ paths:
         param: "market"
         binding: "token market must equal path market"
       x-phase: 1
-  "/v1/{market}/seller/payouts":
+  "/v1/{market}/seller/finance/payouts":
     get:
-      operationId: "listPayouts"
+      operationId: "listSellerPayouts"
       tags:
         - "Seller Finance"
       summary: "Payouts"
@@ -11532,14 +11524,14 @@ paths:
           required: false
           schema:
             type: "string"
-            maxLength: 200
+            enum: ["SCHEDULED", "ON_HOLD", "APPROVED", "SENT", "SETTLED", "FAILED", "CANCELLED"]
       responses:
         "200":
           description: "OK"
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/PayoutPage"
+                "$ref": "#/components/schemas/SellerFinancePayoutPage"
         "400":
           "$ref": "#/components/responses/BadRequest"
         "401":
@@ -11575,12 +11567,12 @@ paths:
         param: "market"
         binding: "token market must equal path market"
       x-phase: 1
-  "/v1/{market}/seller/payouts/{payout_id}":
+  "/v1/{market}/seller/finance/payouts/{payout_id}":
     get:
-      operationId: "getPayout"
+      operationId: "getSellerPayout"
       tags:
         - "Seller Finance"
-      summary: "One payout"
+      summary: "One payout with its lines"
       security:
         - sellerJwt: []
       parameters:
@@ -11604,7 +11596,7 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "#/components/schemas/Payout"
+                "$ref": "#/components/schemas/SellerFinancePayout"
         "400":
           "$ref": "#/components/responses/BadRequest"
         "401":
@@ -11640,7 +11632,7 @@ paths:
         param: "market"
         binding: "token market must equal path market"
       x-phase: 1
-  "/v1/{market}/seller/payouts/{payout_id}/items":
+  "/v1/{market}/seller/finance/payouts/{payout_id}/items":
     get:
       operationId: "listPayoutItems"
       tags:
@@ -23016,6 +23008,225 @@ components:
         - "on_hold"
         - "negative_carry"
         - "as_of"
+    SellerFinanceBalance:
+      type: "object"
+      additionalProperties: false
+      properties:
+        currency:
+          "$ref": "#/components/schemas/CurrencyCode"
+        pending:
+          "$ref": "#/components/schemas/Money"
+        available:
+          "$ref": "#/components/schemas/Money"
+        total:
+          "$ref": "#/components/schemas/Money"
+        payouts:
+          type: "object"
+          additionalProperties: false
+          description: "Payout totals by state (not extra money): scheduled = SCHEDULED + APPROVED, held = ON_HOLD, in_transit = SENT, paid_to_date = SETTLED."
+          properties:
+            scheduled:
+              "$ref": "#/components/schemas/Money"
+            held:
+              "$ref": "#/components/schemas/Money"
+            in_transit:
+              "$ref": "#/components/schemas/Money"
+            paid_to_date:
+              "$ref": "#/components/schemas/Money"
+          required: ["scheduled", "held", "in_transit", "paid_to_date"]
+        server_time:
+          type: "string"
+          format: "date-time"
+      required:
+        - "currency"
+        - "pending"
+        - "available"
+        - "total"
+        - "payouts"
+        - "server_time"
+    SellerFinancePayoutSummary:
+      type: "object"
+      additionalProperties: false
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum: ["SCHEDULED", "ON_HOLD", "APPROVED", "SENT", "SETTLED", "FAILED", "CANCELLED"]
+        cycle_start:
+          type: "string"
+          format: "date"
+        cycle_end:
+          type: "string"
+          format: "date"
+        gross:
+          "$ref": "#/components/schemas/Money"
+        adjustments:
+          "$ref": "#/components/schemas/Money"
+        net:
+          "$ref": "#/components/schemas/Money"
+        created_at:
+          type: "string"
+          format: "date-time"
+        sent_at:
+          type: ["string", "null"]
+          format: "date-time"
+        settled_at:
+          type: ["string", "null"]
+          format: "date-time"
+      required:
+        - "id"
+        - "status"
+        - "cycle_start"
+        - "cycle_end"
+        - "gross"
+        - "adjustments"
+        - "net"
+        - "created_at"
+        - "sent_at"
+        - "settled_at"
+    SellerFinancePayoutPage:
+      type: "object"
+      additionalProperties: false
+      properties:
+        items:
+          type: "array"
+          maxItems: 50
+          items:
+            "$ref": "#/components/schemas/SellerFinancePayoutSummary"
+        next_cursor:
+          type: ["string", "null"]
+      required:
+        - "items"
+        - "next_cursor"
+    SellerFinancePayout:
+      type: "object"
+      additionalProperties: false
+      properties:
+        id:
+          type: "string"
+          format: "uuid"
+        status:
+          type: "string"
+          enum: ["SCHEDULED", "ON_HOLD", "APPROVED", "SENT", "SETTLED", "FAILED", "CANCELLED"]
+        cycle_start:
+          type: "string"
+          format: "date"
+        cycle_end:
+          type: "string"
+          format: "date"
+        gross:
+          "$ref": "#/components/schemas/Money"
+        adjustments:
+          "$ref": "#/components/schemas/Money"
+        net:
+          "$ref": "#/components/schemas/Money"
+        created_at:
+          type: "string"
+          format: "date-time"
+        sent_at:
+          type: ["string", "null"]
+          format: "date-time"
+        settled_at:
+          type: ["string", "null"]
+          format: "date-time"
+        lines:
+          type: "array"
+          maxItems: 500
+          items:
+            type: "object"
+            additionalProperties: false
+            properties:
+              kind:
+                type: "string"
+                enum: ["order", "adjustment"]
+              seller_order_id:
+                type: ["string", "null"]
+                format: "uuid"
+              amount:
+                "$ref": "#/components/schemas/Money"
+            required: ["kind", "seller_order_id", "amount"]
+        lines_truncated:
+          type: "boolean"
+      required:
+        - "id"
+        - "status"
+        - "cycle_start"
+        - "cycle_end"
+        - "gross"
+        - "adjustments"
+        - "net"
+        - "created_at"
+        - "sent_at"
+        - "settled_at"
+        - "lines"
+        - "lines_truncated"
+    SellerFinanceStatement:
+      description: "Read model over the ledger postings of the store accounts (not a stored document). Signs follow the seller balance: credits positive."
+      type: "object"
+      additionalProperties: false
+      properties:
+        month:
+          type: "string"
+        currency:
+          "$ref": "#/components/schemas/CurrencyCode"
+        period_start:
+          type: "string"
+          format: "date-time"
+        period_end:
+          type: "string"
+          format: "date-time"
+        opening_balance:
+          "$ref": "#/components/schemas/Money"
+        closing_balance:
+          "$ref": "#/components/schemas/Money"
+        orders_count:
+          type: "integer"
+          minimum: 0
+        orders_gross:
+          "$ref": "#/components/schemas/Money"
+        commission:
+          "$ref": "#/components/schemas/Money"
+        commission_vat:
+          "$ref": "#/components/schemas/Money"
+        orders_net:
+          "$ref": "#/components/schemas/Money"
+        refunds:
+          "$ref": "#/components/schemas/Money"
+        adjustments:
+          "$ref": "#/components/schemas/Money"
+        payouts:
+          "$ref": "#/components/schemas/Money"
+        net_change:
+          "$ref": "#/components/schemas/Money"
+        eta_invoice:
+          type: "object"
+          additionalProperties: false
+          description: "ETA e-invoice link placeholder: not connected yet."
+          properties:
+            status:
+              const: "not_connected"
+            url:
+              type: "null"
+          required: ["status", "url"]
+      required:
+        - "month"
+        - "currency"
+        - "period_start"
+        - "period_end"
+        - "opening_balance"
+        - "closing_balance"
+        - "orders_count"
+        - "orders_gross"
+        - "commission"
+        - "commission_vat"
+        - "orders_net"
+        - "refunds"
+        - "adjustments"
+        - "payouts"
+        - "net_change"
+        - "eta_invoice"
     SellerLegalIdentity:
       type: "object"
       additionalProperties: false

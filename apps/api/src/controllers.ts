@@ -13,6 +13,7 @@ import { SellerCatalogController } from "./modules/seller-catalog/index.js";
 import { SellerInventoryController } from "./modules/seller-inventory/index.js";
 import { SellerListingsController } from "./modules/seller-listings/index.js";
 import { SellerOrdersController } from "./modules/seller-orders/index.js";
+import { SellerFinanceController } from "./modules/seller-finance/index.js";
 
 /** The production route table. The route audit, the OpenAPI generator and the negative-authz suite all read this list. */
-export const CONTROLLERS: readonly Type[] = [HealthController, CatalogPublicController, SellerListingsController, SellerCatalogController, AuthController, CartController, CheckoutController, SellerOrdersController, SellerInventoryController, AdminController, AddressesController, GeoAreasController, ReturnsController, TrackingController, SellerOnboardingController, SellerTeamController];
+export const CONTROLLERS: readonly Type[] = [HealthController, CatalogPublicController, SellerListingsController, SellerCatalogController, AuthController, CartController, CheckoutController, SellerOrdersController, SellerInventoryController, SellerFinanceController, AdminController, AddressesController, GeoAreasController, ReturnsController, TrackingController, SellerOnboardingController, SellerTeamController];

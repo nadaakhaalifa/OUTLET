@@ -36,7 +36,7 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: ar("seller.nav.overview") }).getAttribute("href")).toBe("/ar");
     expect(screen.getByRole("link", { name: ar("seller.nav.orders") }).getAttribute("href")).toBe("/ar/orders");
     expect(screen.getByRole("link", { name: ar("seller.nav.inventory") }).getAttribute("href")).toBe("/ar/inventory");
-    expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(screen.getAllByRole("link")).toHaveLength(8);
     const soon = screen.getByText(ar("seller.nav.offers"), { exact: false });
     expect(soon.getAttribute("aria-disabled")).toBe("true");
     expect(soon.textContent).toContain(ar("seller.nav.soon"));

@@ -37,6 +37,7 @@ import { OrderGroupReader, staticWebhookIps } from "../src/modules/checkout/inde
 import { noSuggestions } from "../src/modules/cart/index.js";
 import { AttributeSetReader } from "../src/modules/seller-catalog/index.js";
 import { SellerInventoryService } from "../src/modules/seller-inventory/index.js";
+import { SellerFinanceService } from "../src/modules/seller-finance/index.js";
 import { AttentionAdmin, DlqAdmin, FlagAdmin, PgApprovalReader, PgAuditReader, PgDashboardReader, PgElevationReader, PgKycAdmin, PgOpsLists, PgPiiAccessReader, PgReconciliationReader, PayoutsAdmin, StoreModeration } from "../src/modules/admin/index.js";
 import { PayoutService, UnconfiguredPayoutDestinations, UnconfiguredPayoutRail } from "@outlet/payouts";
 import { PgPaymentKind, SellerOrderService } from "../src/modules/seller-orders/index.js";
@@ -339,6 +340,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
   const sellerInventoryServices = {
     inventory: new SellerInventoryService({ client: appClient, marketId: DB_MARKET, inventory: new InventoryService({ client: appClient, marketId: DB_MARKET, now }), newId: () => randomUUID(), now }),
   };
+  const sellerFinanceServices = { finance: new SellerFinanceService({ client: appClient, marketId: DB_MARKET, currency: "EGP", now }) };
   const post = buildPostOrder({
     marketId: DB_MARKET, now, app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: roleClient(raw, "outlet_worker"), cipher: authDeps.cipher, hasher: authDeps.hasher,
     closer: new OrderCloseJob({ ...common, client: roleClient(raw, "outlet_worker"), cipher: new FakeCipher() }), courier: fakes.courier,
@@ -365,6 +367,7 @@ export const createTestApp = async (opts: TestAppOptions = {}): Promise<TestApp>
     auth: () => auth,
     sellerOrders: () => sellerOrderServices,
     sellerInventory: () => sellerInventoryServices,
+    sellerFinance: () => sellerFinanceServices,
     addresses: () => post.services.addresses,
     returns: () => post.services.returns,
     tracking: () => post.services.tracking,

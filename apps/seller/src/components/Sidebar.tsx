@@ -14,6 +14,9 @@ const ITEMS: readonly Item[] = [
   { id: "offers", key: "seller.nav.offers", href: null },
   { id: "orders", key: "seller.nav.orders", href: "/orders" },
   { id: "inventory", key: "seller.nav.inventory", href: "/inventory" },
+  { id: "finance", key: "seller.nav.finance", href: "/finance" },
+  { id: "payouts", key: "seller.nav.payouts", href: "/finance/payouts" },
+  { id: "statements", key: "seller.nav.statements", href: "/finance/statements" },
   { id: "design", key: "seller.nav.storeDesign", href: null },
   { id: "settings", key: "seller.nav.settings", href: null },
 ];

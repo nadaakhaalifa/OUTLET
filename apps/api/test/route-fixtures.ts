@@ -6,6 +6,7 @@ import { makePng, multipartBody } from "./png.js";
 import { ADMIN_FIXTURES } from "./admin-fixtures.js";
 import { POST_ORDER_FIXTURES } from "./post-order-fixtures.js";
 import { seedSellerOrder } from "./seller-orders-fakes.js";
+import { seedPayout } from "./seller-finance-fakes.js";
 import { VirtualAuthenticator } from "./webauthn.js";
 import type { TestApp } from "./harness.js";
 
@@ -459,7 +460,32 @@ export const SELLER_ORDER_FIXTURES: Readonly<Record<string, RouteFixture>> = {
   },
 };
 
-export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = { ...BASE_FIXTURES, ...SELLER_ORDER_FIXTURES, ...ADMIN_FIXTURES, ...POST_ORDER_FIXTURES };
+const financeGet = (url: string): RouteFixture => ({
+  happy: async (t) => {
+    const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+    return { req: { method: "GET", url, headers: { ...bearer(token), "x-store-id": t.seed.storeA } }, status: 200 };
+  },
+});
+
+export const SELLER_FINANCE_FIXTURES: Readonly<Record<string, RouteFixture>> = {
+  "GET /v1/{market}/seller/finance/balance": financeGet("/v1/eg/seller/finance/balance"),
+  "GET /v1/{market}/seller/finance/payouts": financeGet("/v1/eg/seller/finance/payouts?limit=10"),
+  "GET /v1/{market}/seller/finance/statements": financeGet("/v1/eg/seller/finance/statements?month=2025-03"),
+  "GET /v1/{market}/seller/finance/payouts/{payout_id}": {
+    happy: async (t) => {
+      const p = await seedPayout(t.raw, t.seed, { storeId: t.seed.storeA });
+      const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+      return { req: { method: "GET", url: `/v1/eg/seller/finance/payouts/${p.id}`, headers: { ...bearer(token), "x-store-id": t.seed.storeA } }, status: 200 };
+    },
+    otherTenant: async (t) => {
+      const p = await seedPayout(t.raw, t.seed, { storeId: t.seed.storeB });
+      const { token } = await t.seller(t.seed.storeA, READ_ROLES);
+      return { method: "GET", url: `/v1/eg/seller/finance/payouts/${p.id}`, headers: { ...bearer(token), "x-store-id": t.seed.storeA } };
+    },
+  },
+};
+
+export const ROUTE_FIXTURES: Readonly<Record<string, RouteFixture>> = { ...BASE_FIXTURES, ...SELLER_ORDER_FIXTURES, ...SELLER_FINANCE_FIXTURES, ...ADMIN_FIXTURES, ...POST_ORDER_FIXTURES };
 
 export function DEFECT_CARD() {
   return {

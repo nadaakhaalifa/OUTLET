@@ -46,6 +46,8 @@ import { SellerInventoryService } from "./modules/seller-inventory/index.js";
 import type { SellerInventoryServices } from "./modules/seller-inventory/index.js";
 import { PgPaymentKind, SellerOrderService, UnconfiguredBuyerDelivery, UnconfiguredCourier } from "./modules/seller-orders/index.js";
 import type { SellerOrdersServices } from "./modules/seller-orders/index.js";
+import { SellerFinanceService } from "./modules/seller-finance/index.js";
+import type { SellerFinanceServices } from "./modules/seller-finance/index.js";
 import { SessionTokenVerifier, UnconfiguredStoreMemberships } from "./platform/auth-ports.js";
 import type { MarketTokenService } from "./platform/auth-ports.js";
 import { pgPoolOptions, pgSqlClient } from "./platform/db.js";
@@ -92,6 +94,7 @@ const carts = new Map<string, CartServices>();
 const checkouts = new Map<string, CheckoutServices>();
 const sellerOrders = new Map<string, SellerOrdersServices>();
 const sellerInventories = new Map<string, SellerInventoryServices>();
+const sellerFinances = new Map<string, SellerFinanceServices>();
 const admins = new Map<string, AdminServices>();
 const postOrder = new Map<string, PostOrderServices>();
 const killSwitches = new FlagService({ store: new PostgresFlagStore(appClient), audit: { record: () => Promise.resolve() } });
@@ -163,6 +166,7 @@ for (const m of listMarkets()) {
     }),
   });
   sellerInventories.set(marketId, { inventory: new SellerInventoryService({ client: appClient, marketId, inventory: new InventoryService({ client: appClient, marketId }), newId: uuidv7, now: () => new Date() }) });
+  sellerFinances.set(marketId, { finance: new SellerFinanceService({ client: appClient, marketId, currency: "EGP", now: () => new Date() }) });
   // Admin Console. Approvals use the app pool; KYC and reconciliation reads run as named worker jobs, so without DATABASE_URL_WORKER they stay 503. Audited staff writes append to the Postgres hash chain (outlet_app, same transaction); dual approval is required at every amount (threshold 0) until finance sets one.
   const auditPort = new PgAuditStore(appClient);
   const kycOnboarding = workerClient === undefined ? undefined : new SellerOnboardingService({ app: appClient, auth: brandClient<"outlet_auth">(authClient), worker: workerClient, marketId, cipher: authDeps.cipher, hasher: authDeps.hasher }, new UnconfiguredKycCheck());
@@ -260,6 +264,11 @@ const deps: ApiDeps = {
   sellerOnboarding: (marketId) => postOrderOf(marketId).sellerOnboarding,
   sellerInventory: (marketId) => {
     const c = sellerInventories.get(marketId);
+    if (c === undefined) throw new Error("market not configured");
+    return c;
+  },
+  sellerFinance: (marketId) => {
+    const c = sellerFinances.get(marketId);
     if (c === undefined) throw new Error("market not configured");
     return c;
   },
