@@ -5,7 +5,8 @@
  *   closed = treat as killed (money paths must never run on unknown state)
  *   open   = treat as allowed (non-money UI features keep working)
  */
-export type KillClass = "money" | "ui";
+/** money and destructive (irreversible deletes) fail closed; ui fails open. */
+export type KillClass = "money" | "destructive" | "ui";
 export interface KillSwitchDef {
   readonly class: KillClass;
   readonly failMode: "closed" | "open";
@@ -14,6 +15,8 @@ export interface KillSwitchDef {
 
 const money = (description: string): KillSwitchDef => ({ class: "money", failMode: "closed", description });
 const ui = (description: string): KillSwitchDef => ({ class: "ui", failMode: "open", description });
+/** Not money, but destructive (deletes rows, irreversible): unreadable flag store = killed, so a flag outage never starts a purge. */
+const destructive = (description: string): KillSwitchDef => ({ class: "destructive", failMode: "closed", description });
 
 export const KILL_SWITCHES = {
   "payments.card.enabled": money("Card / 3-DS payments"),
@@ -53,7 +56,10 @@ export const KILL_SWITCHES = {
   "workers.ops.attention.enabled": ui("Worker: ops attention queue (ops.attention; off = parked events queue before reaching ops)"),
   "workers.inventory.release.enabled": ui("Worker: return committed stock after a rejection or paid cancellation (inventory.release_required; off = stock stays committed)"),
   "workers.reporting.rollup.enabled": ui("Worker: admin dashboard rollups and their scheduler ticks (reporting.rollup; off = tiles go stale)"),
+  "workers.ledger.integrity.enabled": money("Worker: nightly ledger integrity run (finance.reconcile via ledger.integrity_requested; off = no new run, the dashboard tile goes stale after 26 h and the scheduler stops ticking)"),
   "workers.search.sync.enabled": ui("Worker: search index sync (search.sync; off = search_documents stop following catalog, price and stock events; they queue and staleness grows)"),
+  "workers.notifications.dispatch.enabled": ui("Worker: notification planning (notifications.dispatch; off = order, refund and return events queue before any notification_log row is planned)"),
+  "workers.privacy.retention.enabled": destructive("Worker: nightly retention purge (privacy.retention; off = no row is deleted; the flag store being unreadable also stops it, fail closed because deletes are irreversible)"),
 } as const satisfies Record<string, KillSwitchDef>;
 
 export type KillSwitchName = keyof typeof KILL_SWITCHES;

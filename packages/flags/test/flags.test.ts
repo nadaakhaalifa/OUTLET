@@ -139,7 +139,9 @@ describe("FlagService", () => {
   });
 
   it("registry: money classes fail closed, ui classes fail open, covers the spec list", () => {
-    for (const d of Object.values(KILL_SWITCHES)) expect(d.failMode).toBe(d.class === "money" ? "closed" : "open");
+    // Three classes: money and destructive (irreversible deletes, e.g. the retention purge) fail closed, ui fails open.
+    for (const d of Object.values(KILL_SWITCHES)) expect(d.failMode).toBe(d.class === "ui" ? "open" : "closed");
+    expect(KILL_SWITCHES["workers.privacy.retention.enabled"].class).toBe("destructive");
     expect(isKillSwitchName("nope")).toBe(false);
     for (const n of ["payments.cod", "payments.bnpl", "drops", "games", "stylist.llm", "ranking.ml", "crawlers", "referrals.payouts", "gift_cards.sales"]) {
       expect(Object.keys(KILL_SWITCHES)).toContain(`${n}.enabled`);
@@ -198,6 +200,6 @@ describe("kill-switch registry", () => {
     }
   });
   it("every switch declares a class (a missing class would skip dual approval downstream)", () => {
-    for (const [n, def] of Object.entries(KILL_SWITCHES)) expect(["money", "ui"], n).toContain(def.class);
+    for (const [n, def] of Object.entries(KILL_SWITCHES)) expect(["money", "destructive", "ui"], n).toContain(def.class);
   });
 });

@@ -13,6 +13,8 @@ export interface WorkerMetrics {
   setLag(job: string, marketId: string, lagSeconds: number, pending: number): void;
   /** Unpublished events of types no consumer of this process claims (never acked; they wait for a consumer to be composed). */
   setUnrouted(marketId: string, pending: number, lagSeconds: number): void;
+  /** Search index staleness (SLO 60 s): worst lag in ms and an honest status label (fresh | stale | search_provider_unconfigured). */
+  setSearchStaleness(marketId: string, stalenessMs: number, status: string): void;
 }
 
 const HANDLER_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
@@ -37,6 +39,10 @@ export const createWorkerMetrics = (meter: Meter = metrics.getMeter("@outlet/obs
   meter.createObservableGauge("worker_unrouted_lag_seconds", { description: "Age of the oldest unpublished event with no consumer" }).addCallback((r) => {
     for (const [market_id, v] of unrouted) r.observe(v.seconds, { market_id });
   });
+  const staleness = new Map<string, { ms: number; status: string }>();
+  meter.createObservableGauge("search_index_staleness_ms", { description: "Search index lag behind the source in ms; status label tells fresh, stale or search_provider_unconfigured", unit: "ms" }).addCallback((r) => {
+    for (const [market_id, v] of staleness) r.observe(v.ms, { market_id, status: v.status });
+  });
   return {
     recordHandled: (s, a) => {
       handled.record(s, { ...a });
@@ -55,6 +61,9 @@ export const createWorkerMetrics = (meter: Meter = metrics.getMeter("@outlet/obs
     },
     setUnrouted: (marketId, pending, seconds) => {
       unrouted.set(marketId, { pending, seconds });
+    },
+    setSearchStaleness: (marketId, ms, status) => {
+      staleness.set(marketId, { ms, status });
     },
   };
 };

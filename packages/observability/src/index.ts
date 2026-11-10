@@ -8,3 +8,5 @@ export { pgConnectionTag, PG_PROCESS_NAMES } from "./pg.js";
 export type { PgProcessName } from "./pg.js";
 export { createWorkerMetrics } from "./worker.js";
 export type { WorkerMetrics } from "./worker.js";
+export { createRetentionMetrics } from "./retention.js";
+export type { RetentionMetrics } from "./retention.js";
