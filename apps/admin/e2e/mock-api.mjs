@@ -32,6 +32,10 @@ const attention = [
   { id: ATTN, kind: "refund.attention", ref_type: "refund", ref_id: "r-e2e-1", status: "OPEN", created_at: hoursFromNow(-3) },
   { id: "a7700000-0000-4000-8000-000000000002", kind: "shipment.cancel_attention", ref_type: "shipment", ref_id: "s-e2e-2", status: "ACKED", created_at: hoursFromNow(-30), acked_at: hoursFromNow(-29) },
 ];
+const dlq = [
+  { id: "d1900000-0000-4000-8000-000000000001", event_id: "e1900000-0000-4000-8000-000000000001", event_type: "order.placed", attempts: 8, last_error: "Error:E_DOWN", dead_lettered_at: hoursFromNow(-5), status: "open" },
+  { id: "d1900000-0000-4000-8000-000000000002", event_id: "e1900000-0000-4000-8000-000000000002", event_type: "refund.attention", attempts: 8, last_error: "TimeoutError", dead_lettered_at: hoursFromNow(-50), status: "open" },
+];
 // E2E-only dashboard numbers: invented for Playwright, never real. The `/__control` roles decide which tiles are forbidden (finance tiles need the finance role).
 const FINANCE_ONLY = new Set(["gmv_today", "refunds_waiting", "refunds_overdue", "payouts", "recon_unmatched", "cod_unremitted", "ledger_integrity", "top_stores"]);
 const dashboard = (range) => {
@@ -123,7 +127,7 @@ createServer(async (req, res) => {
   if (path === "/health") return send(res, 200, { ok: true });
   if (path === "/__control") {
     const body = JSON.parse((await readBody(req)).toString() || "{}");
-    if (body.resetAttention) { state.kycStatus = "SUBMITTED"; attention[0].status = "OPEN"; delete attention[0].acked_at; attention[1].status = "ACKED"; delete body.resetAttention; log.length = 0; }
+    if (body.resetAttention) { for (const d of dlq) d.status = "open"; state.kycStatus = "SUBMITTED"; attention[0].status = "OPEN"; delete attention[0].acked_at; attention[1].status = "ACKED"; delete body.resetAttention; log.length = 0; }
     Object.assign(control, body);
     return send(res, 200, control);
   }
@@ -147,6 +151,18 @@ createServer(async (req, res) => {
     const range = url.searchParams.get("range") ?? "30d";
     if (!["7d", "30d", "90d"].includes(range)) return problem(res, 400, "validation-failed");
     return send(res, 200, dashboard(range));
+  }
+  if (req.method === "GET" && rest === "dlq") return send(res, 200, page(dlq.filter((d) => d.status === "open").map((d) => ({ id: d.id, event_id: d.event_id, event_type: d.event_type, attempts: d.attempts, last_error: d.last_error, dead_lettered_at: d.dead_lettered_at }))));
+  if (req.method === "POST" && (rest === "dlq/replay" || rest === "dlq/discard")) {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (!req.headers["idempotency-key"]) return problem(res, 400, "idempotency-key-required");
+    const action = rest.slice(4);
+    log.push({ method: "POST", path: `/dlq-${action}`, body, key: req.headers["idempotency-key"] });
+    const hit = dlq.filter((d) => body.ids.includes(d.id));
+    // Same rule as the API: a discard batch with a money event type is only filed for a second approver.
+    if (action === "discard" && hit.some((d) => d.event_type.startsWith("refund.") || d.event_type.startsWith("promotions.") || d.event_type.startsWith("payout."))) return problem(res, 409, "dual-approval-required");
+    const results = body.ids.map((id) => { const d = dlq.find((x) => x.id === id && x.status === "open"); if (!d) return { id, outcome: "not_in_dlq" }; d.status = action === "replay" ? "replayed" : "discarded"; return { id, outcome: action === "replay" ? "replayed" : "discarded" }; });
+    return send(res, 200, { results, changed: results.filter((r) => r.outcome !== "not_in_dlq").length });
   }
   if (req.method === "GET" && rest === "attention") return send(res, 200, page(attention.filter((a) => a.status !== "RESOLVED")));
   const am = /^attention\/([0-9a-f-]{36})\/(ack|resolve)$/.exec(rest);

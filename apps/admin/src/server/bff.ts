@@ -19,6 +19,8 @@ const routes: readonly Route[] = [
   { pattern: /^dashboard$/, methods: ["GET"] },
   { pattern: /^attention$/, methods: ["GET"] },
   { pattern: new RegExp(`^attention/${ID}/(ack|resolve)$`), methods: ["POST"] },
+  { pattern: /^dlq$/, methods: ["GET"] },
+  { pattern: /^dlq\/(replay|discard)$/, methods: ["POST"] },
   { pattern: /^kyc-cases$/, methods: ["GET"] },
   { pattern: new RegExp(`^kyc-cases/${ID}$`), methods: ["GET"] },
   { pattern: new RegExp(`^kyc-cases/${ID}/decision$`), methods: ["POST"] },

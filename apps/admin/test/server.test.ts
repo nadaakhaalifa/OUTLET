@@ -23,6 +23,15 @@ describe("BFF plan", () => {
       expect(p.init.headers.get("authorization")).toBe("Bearer tok");
     }
   });
+  it("serves the DLQ list (GET) and replay / discard (POST) only", () => {
+    expect(planProxy({ ...base, segments: ["eg", "dlq"], search: "?limit=50" })).toMatchObject({ kind: "forward", url: "http://api.test/v1/eg/admin/dlq?limit=50" });
+    for (const a of ["replay", "discard"]) {
+      expect(planProxy({ ...base, method: "POST", segments: ["eg", "dlq", a] })).toMatchObject({ kind: "forward", url: `http://api.test/v1/eg/admin/dlq/${a}` });
+      expect(planProxy({ ...base, segments: ["eg", "dlq", a] })).toMatchObject({ status: 405 });
+    }
+    expect(planProxy({ ...base, method: "POST", segments: ["eg", "dlq"] })).toMatchObject({ status: 405 });
+    expect(planProxy({ ...base, method: "POST", segments: ["eg", "dlq", "purge"] })).toMatchObject({ status: 404 });
+  });
   it("rejects unknown markets, unknown paths, wrong methods and cross-origin writes", () => {
     expect(planProxy({ ...base, segments: ["EGYPT", "kyc-cases"] })).toMatchObject({ status: 404 });
     expect(planProxy({ ...base, segments: ["eg", "staff"] })).toMatchObject({ status: 404 });
@@ -79,10 +88,10 @@ describe("session and roles", () => {
   });
   it("shows sections by role (ADMIN_POLICY), and super_admin counts only in break-glass", () => {
     const mk = (roles: string[], breakGlass = false) => ({ ...profileFromSession({ ...body, roles }), breakGlass });
-    expect(visibleSections(mk(["ops"]))).toEqual(["kyc", "price", "attention", "access"]);
+    expect(visibleSections(mk(["ops"]))).toEqual(["kyc", "price", "attention", "dlq", "access"]);
     expect(visibleSections(mk(["finance"]))).toEqual(["recon", "attention", "access"]);
     expect(visibleSections(mk(["dpo"]))).toEqual(["dpo", "access"]);
-    expect(visibleSections(mk(["security"]))).toEqual(["audit", "access"]);
+    expect(visibleSections(mk(["security"]))).toEqual(["audit", "dlq", "access"]);
     expect(visibleSections(mk(["marketing"]))).toEqual(["access"]);
     expect(can(mk(["super_admin"], false), "audit.read")).toBe(false);
     expect(can(mk(["super_admin"], true), "audit.read")).toBe(true);

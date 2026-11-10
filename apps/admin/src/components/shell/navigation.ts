@@ -38,7 +38,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { id: "audit", key: "admin.nav.audit", path: "/audit", icon: "trust" },
     ],
   },
-  { id: "platform", key: "admin.nav.group.platform", icon: "overview", items: [{ id: "attention", key: "admin.nav.attention", path: "/attention", icon: "alert" }] },
+  { id: "platform", key: "admin.nav.group.platform", icon: "overview", items: [
+      { id: "attention", key: "admin.nav.attention", path: "/attention", icon: "alert" },
+      { id: "dlq", key: "admin.nav.dlq", path: "/dlq", icon: "alert" },
+    ],
+  },
   { id: "access", key: "admin.nav.group.access", icon: "access", items: [{ id: "access", key: "admin.nav.access", path: "/access", icon: "access" }] },
 ];
 
