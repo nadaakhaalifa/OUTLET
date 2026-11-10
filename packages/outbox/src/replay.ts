@@ -19,7 +19,7 @@ export interface DlqPage {
   readonly nextCursor: string | null;
 }
 
-export type DlqOutcome = "replayed" | "discarded" | "not_in_dlq";
+export type DlqOutcome = "replayed" | "discarded" | "not_in_dlq" | "expired";
 export interface DlqResult {
   readonly id: string;
   readonly outcome: DlqOutcome;
@@ -31,7 +31,14 @@ export type DiscardReasonCode = (typeof DISCARD_REASON_CODES)[number];
 
 /** Event types whose loss moves money: discarding one needs a second approver (policy `dlq.discard.money`). */
 export const MONEY_EVENT_PREFIXES: readonly string[] = ["refund.", "promotions.", "payout."];
-export const MONEY_EVENT_TYPES: readonly string[] = ["order_group.late_payment_refund"];
+export const MONEY_EVENT_TYPES: readonly string[] = ["order_group.late_payment_refund", "seller_order.cancelled", "seller_order.rejected", "shipment.cancel_required", "inventory.release_required"];
+
+/**
+ * A dead-lettered event older than this can no longer be replayed: its owners' inbox rows are purged after 60 days (retention), and an event with several
+ * owners where one committed and another dead-lettered stays unpublished, so a late replay would re-run the owner that already committed (a second money effect).
+ * Kept below the inbox window with margin; such a row can only be discarded.
+ */
+export const DLQ_REPLAY_MAX_AGE_DAYS = 45;
 export const isMoneyEventType = (t: string): boolean => MONEY_EVENT_TYPES.includes(t) || MONEY_EVENT_PREFIXES.some((p) => t.startsWith(p));
 
 interface Row { id: string; message_id: string; event_type: string; attempts: number; last_error: string | null; dead_lettered_at: Date | string }
@@ -81,7 +88,8 @@ export class DlqReplay {
    * handler that had in fact completed, so a replay never applies an effect twice.
    */
   replay(marketId: string, ids: readonly string[]): Promise<readonly DlqResult[]> {
-    return this.settle(marketId, ids, "replayed", async (tx, eventIds) => {
+    const cutoff = new Date(this.now().getTime() - DLQ_REPLAY_MAX_AGE_DAYS * 86_400_000);
+    return this.settle(marketId, ids, "replayed", cutoff, async (tx, eventIds) => {
       await tx.query(
         `UPDATE outbox_events SET attempts = 0, last_error = NULL, lease_until = NULL, dead_lettered_at = NULL, published_at = NULL
           WHERE id = ANY($1::uuid[]) AND market_id = $2`,
@@ -94,7 +102,7 @@ export class DlqReplay {
   discard(marketId: string, ids: readonly string[], reasonCode: DiscardReasonCode): Promise<readonly DlqResult[]> {
     if (!DISCARD_REASON_CODES.includes(reasonCode)) throw new RangeError("unknown discard reason code");
     const at = this.now().toISOString();
-    return this.settle(marketId, ids, "discarded", async (tx, eventIds) => {
+    return this.settle(marketId, ids, "discarded", null, async (tx, eventIds) => {
       await tx.query(
         `UPDATE outbox_events SET published_at = $3::timestamptz, last_error = $4, lease_until = NULL WHERE id = ANY($1::uuid[]) AND market_id = $2`,
         [eventIds, marketId, at, `discarded:${reasonCode}`],
@@ -106,6 +114,8 @@ export class DlqReplay {
     marketId: string,
     ids: readonly string[],
     outcome: "replayed" | "discarded",
+    /** Rows dead-lettered before this stay open and are reported `expired` (replay only). */
+    expireBefore: Date | null,
     apply: (tx: { query: SqlClient["query"] }, eventIds: string[]) => Promise<void>,
   ): Promise<readonly DlqResult[]> {
     const wanted = uniq(ids);
@@ -113,12 +123,15 @@ export class DlqReplay {
     if (wanted.length > MAX_IDS) throw new RangeError(`at most ${String(MAX_IDS)} ids per call`);
     return this.db.transaction(async (tx) => {
       // Row locks in id order (consistent with other writers); a concurrent replay of the same id waits, then finds the row gone.
-      const { rows } = await tx.query<{ id: string; message_id: string }>(
-        `SELECT d.id, d.message_id FROM dlq_messages d JOIN outbox_events o ON o.id = d.message_id
+      const { rows: all } = await tx.query<{ id: string; message_id: string; dead_lettered_at: Date | string | null }>(
+        `SELECT d.id, d.message_id, o.dead_lettered_at FROM dlq_messages d JOIN outbox_events o ON o.id = d.message_id
           WHERE d.id = ANY($1::uuid[]) AND d.consumer = 'outbox-dispatch' AND d.status = 'open' AND o.market_id = $2
           ORDER BY d.id FOR UPDATE OF d, o`,
         [wanted, marketId],
       );
+      const isExpired = (r: { dead_lettered_at: Date | string | null }): boolean => expireBefore !== null && r.dead_lettered_at !== null && new Date(r.dead_lettered_at) < expireBefore;
+      const expired = new Set(all.filter(isExpired).map((r) => r.id));
+      const rows = all.filter((r) => !expired.has(r.id));
       if (rows.length > 0) {
         await apply(tx, rows.map((r) => r.message_id));
         const dlqIds = rows.map((r) => r.id);
@@ -126,7 +139,7 @@ export class DlqReplay {
         await tx.query("UPDATE dlq_messages SET status = $3, resolved_at = $2::timestamptz WHERE id = ANY($1::uuid[])", [dlqIds, this.now().toISOString(), outcome]);
       }
       const done = new Set(rows.map((r) => r.id));
-      return wanted.map((id): DlqResult => ({ id, outcome: done.has(id) ? outcome : "not_in_dlq" }));
+      return wanted.map((id): DlqResult => ({ id, outcome: done.has(id) ? outcome : expired.has(id) ? "expired" : "not_in_dlq" }));
     });
   }
 }

@@ -8,5 +8,5 @@ export { InboxProcessor } from "./inbox.js";
 export type { InboxOutcome } from "./inbox.js";
 export { OutboxDispatchRelay, defaultBackoffMs, errorCode } from "./dispatch.js";
 export type { DispatchRelayOptions, DispatchResult, DispatchRunOptions, PendingByType } from "./dispatch.js";
-export { DISCARD_REASON_CODES, DlqReplay, isMoneyEventType } from "./replay.js";
+export { DISCARD_REASON_CODES, DLQ_REPLAY_MAX_AGE_DAYS, DlqReplay, isMoneyEventType } from "./replay.js";
 export type { DiscardReasonCode, DlqEntry, DlqOutcome, DlqPage, DlqResult } from "./replay.js";

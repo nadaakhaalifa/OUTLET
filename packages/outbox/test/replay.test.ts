@@ -110,8 +110,42 @@ describe("DlqReplay", () => {
     });
   });
 
+  it("refuses to replay a row dead-lettered over 45 days ago (expired): owner A, which committed, does not run again; discard still works", async () => {
+    await withTestDb(async (db) => {
+      const e = await db.transaction((tx) => writer.append(tx, input("seller_order.cancelled")));
+      const ran: string[] = [];
+      // Two owners: A commits its effect (and its inbox row), B fails until the event is dead-lettered.
+      const dispatch = (ev: { id: string }): Promise<void> => {
+        ran.push(`A:${ev.id}`);
+        return Promise.reject(new Error("owner B down"));
+      };
+      await new OutboxDispatchRelay({ db, maxAttempts: 1, dispatch }).runOnce({ includeTypes: ["seller_order.cancelled"] });
+      expect(ran).toEqual([`A:${e.id}`]);
+      const id = await dlqIdOf(db, e.id);
+      await db.query("UPDATE outbox_events SET dead_lettered_at = now() - interval '46 days' WHERE id = $1", [e.id]);
+      const q = new DlqReplay(db);
+      expect(await q.replay("EG", [id])).toEqual([{ id, outcome: "expired" }]);
+      const s = await db.query<{ dead_lettered_at: Date | null; attempts: number }>("SELECT dead_lettered_at, attempts FROM outbox_events WHERE id = $1", [e.id]);
+      expect(s.rows[0]?.dead_lettered_at).not.toBeNull();
+      expect(s.rows[0]?.attempts).toBe(1);
+      expect((await db.query<{ status: string }>("SELECT status FROM dlq_messages WHERE id = $1", [id])).rows[0]?.status).toBe("open");
+      expect(await new OutboxDispatchRelay({ db, dispatch }).runOnce({ includeTypes: ["seller_order.cancelled"] })).toMatchObject({ claimed: 0 });
+      expect(ran).toHaveLength(1);
+      expect(await q.discard("EG", [id], "handled_manually")).toEqual([{ id, outcome: "discarded" }]);
+    });
+  });
+
+  it("a row dead-lettered 44 days ago is still replayable", async () => {
+    await withTestDb(async (db) => {
+      const ev = await deadLetter(db, "order.placed");
+      const id = await dlqIdOf(db, ev);
+      await db.query("UPDATE outbox_events SET dead_lettered_at = now() - interval '44 days' WHERE id = $1", [ev]);
+      expect(await new DlqReplay(db).replay("EG", [id])).toEqual([{ id, outcome: "replayed" }]);
+    });
+  });
+
   it("classifies money event types", () => {
-    for (const t of ["refund.attention", "promotions.settle_requested", "payout.hold_requested", "order_group.late_payment_refund"]) expect(isMoneyEventType(t)).toBe(true);
-    for (const t of ["order.placed", "shipment.cancel_required", "reporting.rollup_requested"]) expect(isMoneyEventType(t)).toBe(false);
+    for (const t of ["refund.attention", "promotions.settle_requested", "payout.hold_requested", "order_group.late_payment_refund", "seller_order.cancelled", "seller_order.rejected", "shipment.cancel_required", "inventory.release_required"]) expect(isMoneyEventType(t)).toBe(true);
+    for (const t of ["order.placed", "reporting.rollup_requested"]) expect(isMoneyEventType(t)).toBe(false);
   });
 });
