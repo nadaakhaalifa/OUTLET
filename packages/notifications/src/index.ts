@@ -16,3 +16,5 @@ export { NOTIFYING_EVENT_TYPES, mapEvent } from "./application/event-map.js";
 export { MarketingChannelUnsupportedError, PreferencesService } from "./application/preferences.js";
 export type { PreferenceRow } from "./application/preferences.js";
 export { loadTemplates } from "./application/template-store.js";
+export { NotificationDispatchConsumer } from "./application/consumer.js";
+export type { NotificationEventIn } from "./application/consumer.js";
