@@ -160,6 +160,12 @@ const exceptionProblems = async (db: Queryable): Promise<string[]> => {
     const where = `${p.table}.${p.policy}`;
     const role = p.roles.length === 1 ? p.roles[0] : undefined;
     const appInsert = role === "outlet_app" && p.policy === `${p.table}__app_insert` && p.cmd === "a";
+    // Reviewed exception (ADR-0011, 2026-11-10): consumers that run on the outlet_app pool record their inbox row under a ctx-pinned policy of this one table.
+    const appInbox = role === "outlet_app" && p.table === "inbox_processed" && new RegExp(`^inbox_processed__app_${SLUG}$`).test(p.policy) && p.qual.includes("app.ctx()") && (p.cmd === "r" || p.cmd === "a");
+    if (appInbox) {
+      if (isConstantTrueQual(p.qual.trim())) out.push(`exception policy ${where} has a constant-true predicate`);
+      continue;
+    }
     if (!appInsert && !(role !== undefined && (EXCEPTION_ROLES as readonly string[]).includes(role))) {
       out.push(`exception policy ${where} must be TO exactly one of ${EXCEPTION_ROLES.join(", ")} (got ${p.roles.join(",") || "none"})`);
       continue;

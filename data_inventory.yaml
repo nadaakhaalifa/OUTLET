@@ -87,9 +87,11 @@ retention_rules:
   notification_12m: {rule: "12 months", verify: []}
   in_app_90d: {rule: "90 days", verify: []}
   dedup_30d: {rule: "30 days (technical dedup window)", verify: []}
+  dedup_60d: {rule: "60 days (inbox dedup window: not shorter than the 60-day outbox retention, so a replay of a published event is still deduplicated)", verify: []}
   dedup_90d: {rule: "90 days (webhook dedup window)", verify: []}
+  dlq_60d: {rule: "60 days after the dead letter was replayed or discarded (open rows are never purged; nightly purge job privacy.retention)", verify: []}
   idempotency_24h: {rule: "24 hours (partition dropped after 48 hours)", verify: []}
-  outbox_60d: {rule: "60 days after publish (partition drop)", verify: []}
+  outbox_60d: {rule: "60 days after publish (nightly purge job privacy.retention; partition drop later)", verify: []}
   quotes_30d: {rule: "30 days; quotes used by an order are copied onto the order", verify: []}
   checkout_90d: {rule: "90 days", verify: []}
   cart_active: {rule: "While the account is active; abandoned lines purged after 180 days", verify: []}
@@ -101,9 +103,9 @@ retention_rules:
   price_evidence_7y: {rule: "7 years (evidence for consumer-protection inquiries; proposed)", verify: ["V20", "V71"]}
   catalog_life: {rule: "Life of the listing plus 24 months after archive (proposed)", verify: []}
   config_versions: {rule: "Life of the platform; versions kept while referenced", verify: []}
-  sales_rollup_25m: {rule: "25 months after the day (daily sales aggregates; proposed, no purge job yet)", verify: []}
+  sales_rollup_25m: {rule: "25 months after the day (daily sales aggregates; proposed; nightly purge job privacy.retention)", verify: []}
   dashboard_snapshot_overwrite: {rule: "Overwritten on every rollup; only the latest snapshot per tile is kept", verify: []}
-  ops_attention_24m: {rule: "24 months after creation (ops attention items about money and cancellations; proposed)", verify: []}
+  ops_attention_24m: {rule: "24 months after creation (ops attention items about money and cancellations; proposed; only RESOLVED items are purged, nightly by privacy.retention)", verify: []}
   llm_meter_13m: {rule: "13 months", verify: []}
 processors:
   cloud_cell:
@@ -437,9 +439,9 @@ tables:
     data_subjects: []
     verify: []
     columns:
-      - {name: "consumer", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_30d, processors: ["cloud_cell"], residency: cell}
-      - {name: "message_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_30d, processors: ["cloud_cell"], residency: cell}
-      - {name: "processed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_30d, processors: ["cloud_cell"], residency: cell}
+      - {name: "consumer", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "message_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "processed_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: not_personal_data, retention: dedup_60d, processors: ["cloud_cell"], residency: cell}
   - name: idempotency_keys
     module: kernel
     phase: "0"
@@ -507,15 +509,15 @@ tables:
     data_subjects: ["shopper"]
     verify: []
     columns:
-      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "consumer", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "message_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "payload", type: "jsonb", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "error", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "attempts", type: "smallint", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
-      - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dedup_90d, processors: ["cloud_cell"], residency: cell}
+      - {name: "id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "consumer", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "message_id", type: "uuid", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "payload", type: "jsonb", pii_class: P2, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "error", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "attempts", type: "smallint", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "status", type: "text", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "created_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
+      - {name: "resolved_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["platform_reliability"], lawful_basis: contract, retention: dlq_60d, processors: ["cloud_cell"], residency: cell}
   - name: audit_log
     module: kernel
     phase: "0"
@@ -3379,6 +3381,7 @@ tables:
       - {name: "unmatched_count", type: "int", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "started_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "finished_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "details", type: "jsonb", pii_class: P1, encryption: none, purpose: ["wallet_ledger"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: reconciliation_items
     module: ledger
     phase: "1"
@@ -5354,6 +5357,7 @@ tables:
       - {name: "unmatched_count", type: "int", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "started_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
       - {name: "finished_at", type: "timestamptz", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
+      - {name: "details", type: "jsonb", pii_class: P1, encryption: none, purpose: ["payment_processing"], lawful_basis: not_personal_data, retention: tax_records, processors: ["cloud_cell"], residency: cell}
   - name: reconciliation_matches
     module: ledger
     phase: "1"

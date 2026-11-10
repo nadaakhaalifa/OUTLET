@@ -31,9 +31,27 @@
   },
   {
     "table": "attention_items",
+    "policy": "attention_items__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
     "policy": "attention_items__worker_ops_attention",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "attention_items",
+    "policy": "attention_items__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "audit_log",
@@ -127,9 +145,27 @@
   },
   {
     "table": "dlq_messages",
+    "policy": "dlq_messages__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "dlq_messages",
     "policy": "dlq_messages__worker_outbox_relay",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "dlq_messages",
+    "policy": "dlq_messages__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "enforcement_actions",
@@ -148,6 +184,42 @@
     "policy": "external_products__worker_pricing_channels",
     "role": "outlet_worker",
     "cmd": "all"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__app_store_inventory_release_insert",
+    "role": "outlet_app",
+    "cmd": "insert"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__app_store_inventory_release_select",
+    "role": "outlet_app",
+    "cmd": "select"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_inbox_insert",
+    "role": "outlet_worker",
+    "cmd": "insert"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_inbox_read",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "inbox_processed",
+    "policy": "inbox_processed__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
   },
   {
     "table": "kyc_cases",
@@ -187,6 +259,24 @@
   },
   {
     "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "market_sales_daily",
+    "policy": "market_sales_daily__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "market_sales_daily",
     "policy": "market_sales_daily__worker_reporting_rollup",
     "role": "outlet_worker",
     "cmd": "all"
@@ -199,7 +289,25 @@
   },
   {
     "table": "notification_log",
+    "policy": "notification_log__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "notification_log",
     "policy": "notification_log__worker_notifications_dispatch",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "notification_log",
+    "policy": "notification_log__worker_privacy_retention_select",
     "role": "outlet_worker",
     "cmd": "select"
   },
@@ -268,6 +376,12 @@
     "policy": "outbox_events__worker_checkout_settle",
     "role": "outlet_worker",
     "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
   },
   {
     "table": "outbox_events",
@@ -340,6 +454,18 @@
     "policy": "outbox_events__worker_pricing_channels",
     "role": "outlet_worker",
     "cmd": "insert"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "outbox_events",
+    "policy": "outbox_events__worker_privacy_retention_select",
+    "role": "outlet_worker",
+    "cmd": "select"
   },
   {
     "table": "outbox_events",
@@ -589,6 +715,12 @@
   },
   {
     "table": "reconciliation_runs",
+    "policy": "reconciliation_runs__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "reconciliation_runs",
     "policy": "reconciliation_runs__worker_finance_reconcile",
     "role": "outlet_worker",
     "cmd": "all"
@@ -806,6 +938,24 @@
   {
     "table": "store_sales_daily",
     "policy": "store_sales_daily__worker_admin_dashboard",
+    "role": "outlet_worker",
+    "cmd": "select"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_delete_guard",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_privacy_retention_delete",
+    "role": "outlet_worker",
+    "cmd": "delete"
+  },
+  {
+    "table": "store_sales_daily",
+    "policy": "store_sales_daily__worker_privacy_retention_select",
     "role": "outlet_worker",
     "cmd": "select"
   },

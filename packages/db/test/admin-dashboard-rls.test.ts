@@ -73,10 +73,14 @@ describe("admin dashboard rollup tables (migration 0035)", () => {
         const r = await tx.query(`${upd} RETURNING market_id`);
         expect(r.rows).toEqual([{ market_id: "EG" }]);
       });
-      await expect(asRole(c, "outlet_worker", async (tx) => {
+      // reporting.rollup cannot delete: snapshots have no DELETE grant; the sales tables got one in 0040 for `privacy.retention` only, and the
+      // RESTRICTIVE `__worker_delete_guard` policy leaves the rollup job with zero deletable rows (retention-rls.test.ts covers the allowed side).
+      const del = asRole(c, "outlet_worker", async (tx) => {
         await applyDbContext(tx, worker("reporting.rollup"));
-        await tx.query(`DELETE FROM ${t}`);
-      })).rejects.toThrow(/permission denied/);
+        return (await tx.query(`DELETE FROM ${t} RETURNING 1`)).rows.length;
+      });
+      if (t === "admin_dashboard_snapshots") await expect(del).rejects.toThrow(/permission denied/);
+      else expect(await del).toBe(0);
     });
   }
 
