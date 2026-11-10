@@ -55,7 +55,7 @@ export function can(profile: Profile, action: string): boolean {
   return profile.roles.some((role) => (role !== "super_admin" || profile.breakGlass) && ADMIN_POLICY[role].includes(action));
 }
 
-export type SectionId = "kyc" | "price" | "recon" | "dpo" | "audit" | "access" | "attention" | "dlq";
+export type SectionId = "kyc" | "price" | "recon" | "dpo" | "audit" | "access" | "attention" | "dlq" | "refunds" | "payouts" | "returns" | "disputes";
 
 /** Which console sections a role set may open (display only; the API enforces the same rules). */
 export function visibleSections(profile: Profile): readonly SectionId[] {
@@ -67,6 +67,10 @@ export function visibleSections(profile: Profile): readonly SectionId[] {
   if (can(profile, "audit.read")) out.push("audit");
   if (can(profile, "attention.read")) out.push("attention");
   if (can(profile, "dlq.manage")) out.push("dlq");
+  if (can(profile, "refund.approve")) out.push("refunds");
+  if (can(profile, "payout.read")) out.push("payouts");
+  if (can(profile, "return.read")) out.push("returns");
+  if (can(profile, "dispute.decide")) out.push("disputes");
   out.push("access");
   return out;
 }

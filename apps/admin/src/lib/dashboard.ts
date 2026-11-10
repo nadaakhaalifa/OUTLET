@@ -138,7 +138,7 @@ export const CARDS: readonly CardDef[] = [
   { slug: "attention", tile: "attention_open", fullList: "/attention" },
   { slug: "approvals", tile: "approvals_pending", fullList: "/access" },
   { slug: "kyc-queue", tile: "kyc_queue", fullList: "/kyc" },
-  { slug: "refunds-waiting", tile: "refunds_waiting", fullList: null },
+  { slug: "refunds-waiting", tile: "refunds_waiting", fullList: "/refunds" },
   { slug: "cod-awaiting-confirmation", tile: "cod_awaiting_confirmation", fullList: null },
   { slug: "seller-sla-breaches", tile: "seller_sla_breaches", fullList: null },
 ];

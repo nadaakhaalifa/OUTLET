@@ -63,11 +63,11 @@ export function buildNeeds(resp: DashboardResponse, now: Date): Needs {
   const dsar = read("dsar_queue");
   if (dsar !== null) push("dsar", dsar.overdue, true, "/privacy");
   const overdue = read("refunds_overdue");
-  if (overdue !== null) push("refundsOverdue", overdue.count, true, "/today/refunds-waiting");
+  if (overdue !== null) push("refundsOverdue", overdue.count, true, "/refunds");
   const recon = read("recon_unmatched");
   if (recon !== null) push("recon", recon.aged_over_3d, true, "/reconciliation");
   const disputes = read("disputes_open");
-  if (disputes !== null) push("disputes", disputes.past_sla, true, null);
+  if (disputes !== null) push("disputes", disputes.past_sla, true, "/disputes");
   const attention = read("attention_open");
   if (attention !== null) push("attention", attention.open, false, "/attention");
   const approvals = read("approvals_pending");
@@ -81,7 +81,7 @@ export function buildNeeds(resp: DashboardResponse, now: Date): Needs {
   const cod = read("cod_awaiting_confirmation");
   if (cod !== null) push("cod", cod.count, false, "/today/cod-awaiting-confirmation");
   const payouts = read("payouts");
-  if (payouts !== null) push("payouts", payouts.on_hold_count, false, null);
+  if (payouts !== null) push("payouts", payouts.on_hold_count, false, "/payouts?status=ON_HOLD");
   const ks = read("kill_switches");
   if (ks !== null) push("killSwitches", ks.engaged_money.length + ks.engaged_ui.length, false, null);
   return { rows: [...rows.filter((r) => r.urgent), ...rows.filter((r) => !r.urgent)], incomplete };

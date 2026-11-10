@@ -96,7 +96,9 @@ describe.each<Locale>(["ar-EG", "en-EG"])("Home (%s)", (locale) => {
     expect(within(panel).queryByTestId("attention-clear")).toBeNull();
     expect(within(panel).getByTestId("attention-incomplete").textContent).toContain(t("admin.home.needs.incomplete"));
     // a row without a destination page has no link
-    expect(panel.querySelector("li[data-need=disputes] a")).toBeNull();
+    expect(panel.querySelector("li[data-need=killSwitches] a")).toBeNull();
+    // the dispute row opens the real list now
+    expect(panel.querySelector("li[data-need=disputes] a")?.getAttribute("href")).toBe(`/${seg}/disputes`);
     expect(panel.querySelector("li[data-need=kyc] a")?.getAttribute("href")).toBe(`/${seg}/kyc`);
   });
 
@@ -194,6 +196,30 @@ describe("pop pages", () => {
     expect(screen.getByRole("link", { name: "Open the full list" }).getAttribute("href")).toBe("/eg-en/kyc");
     expect(screen.getAllByRole("link", { name: "View" })[0]?.getAttribute("href")).toMatch(/^\/eg-en\/kyc\//);
     expect(screen.getByRole("link", { name: "Back to Home" })).toBeTruthy();
+  });
+  it("refunds-waiting merges the three waiting statuses newest first from the refunds list, shows the market-wide total, and links the full list", async () => {
+    setProfile(["finance"]);
+    const row = (n: number, status: string, at: string) => ({ id: `fa000000-0000-4000-8000-${String(n).padStart(12, "0")}`, order_group_id: `0a000000-0000-4000-8000-${String(n).padStart(12, "0")}`, seller_order_id: ID, return_request_id: null, store_id: ID, status, reason: "return", route: "psp_original", amount: { amount_minor: "12500", currency: "EGP" }, attempts: 0, overdue: false, due_at: null, created_at: at, completed_at: null });
+    const summary = [{ status: "REQUESTED", count: 4, amount: { amount_minor: "1", currency: "EGP" } }, { status: "FAILED", count: 2, amount: { amount_minor: "1", currency: "EGP" } }, { status: "PROCESSING", count: 9, amount: { amount_minor: "1", currency: "EGP" } }];
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/dashboard")) return Promise.resolve(json(200, dashboardFixture()));
+      const st = /status=([A-Z_]+)/.exec(url)?.[1] ?? "";
+      return Promise.resolve(json(200, { items: st === "REQUESTED" ? [row(1, "REQUESTED", "2026-11-09T10:00:00Z")] : st === "FAILED" ? [row(2, "FAILED", "2026-11-09T12:00:00Z")] : [], next_cursor: null, summary, overdue_count: 0 }));
+    });
+    await renderServer(await open("refunds-waiting"));
+    const rows = [...document.querySelectorAll("[data-testid=pop-list] tbody tr")];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("Failed");
+    expect(rows[1]?.textContent).toContain("Requested");
+    expect(screen.queryByTestId("list-missing")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open the full list" }).getAttribute("href")).toBe("/eg-en/refunds");
+  });
+  it("refunds-waiting shows the problem banner when one of the reads fails", async () => {
+    setProfile(["finance"]);
+    fetchMock.mockImplementation((url: string) => Promise.resolve(url.includes("/dashboard") ? json(200, dashboardFixture()) : json(503, { code: "admin-unavailable" })));
+    await renderServer(await open("refunds-waiting"));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(document.querySelector("[data-testid=pop-list]")).toBeNull();
   });
   it("a card without a list endpoint renders the count tile and an honest not-connected note, no fake rows", async () => {
     setProfile(["ops"]);

@@ -25,9 +25,19 @@ const OVERVIEW: NavEntry = { id: "overview", key: "admin.nav.overview", path: ""
 export const NAV_GROUPS: readonly NavGroup[] = [
   { id: "overview", key: "admin.nav.group.overview", icon: "overview", items: [OVERVIEW] },
   { id: "sellers", key: "admin.nav.group.sellers", icon: "sellers", items: [{ id: "kyc", key: "admin.nav.kyc", path: "/kyc", icon: "sellers" }] },
-  // Orders and returns: no console page exists yet, so no item (the group stays hidden until one is added).
-  { id: "orders", key: "admin.nav.group.orders", icon: "orders", items: [] },
-  { id: "money", key: "admin.nav.group.money", icon: "money", items: [{ id: "recon", key: "admin.nav.recon", path: "/reconciliation", icon: "money" }] },
+  {
+    id: "orders", key: "admin.nav.group.orders", icon: "orders", items: [
+      { id: "returns", key: "admin.nav.returns", path: "/returns", icon: "orders" },
+      { id: "disputes", key: "admin.nav.disputes", path: "/disputes", icon: "orders" },
+    ],
+  },
+  {
+    id: "money", key: "admin.nav.group.money", icon: "money", items: [
+      { id: "refunds", key: "admin.nav.refunds", path: "/refunds", icon: "money" },
+      { id: "payouts", key: "admin.nav.payouts", path: "/payouts", icon: "money" },
+      { id: "recon", key: "admin.nav.recon", path: "/reconciliation", icon: "money" },
+    ],
+  },
   { id: "catalog", key: "admin.nav.group.catalog", icon: "catalog", items: [{ id: "price", key: "admin.nav.price", path: "/price-integrity", icon: "catalog" }] },
   {
     id: "trust",

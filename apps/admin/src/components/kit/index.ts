@@ -13,4 +13,5 @@ export { Info } from "./Info";
 export { KpiCard } from "./KpiCard";
 export { PageHeader } from "./PageHeader";
 export { Sparkline } from "./Sparkline";
+export { StatusChip } from "./StatusChip";
 export { Tile, TileSection } from "./Tile";

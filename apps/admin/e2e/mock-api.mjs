@@ -104,6 +104,32 @@ const send = (res, status, body, headers = {}) => {
 const problem = (res, status, code) => send(res, status, { type: `urn:outlex:problem:${code}`, title: code, status, code, request_id: "e2e" });
 const readBody = (req) => new Promise((resolve) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => resolve(Buffer.concat(c))); });
 const page = (items) => ({ items, next_cursor: null });
+// ---- Money / Orders lists (refunds, payouts, returns, disputes): enough rows for two keyset pages so "Load more" is exercised. Cursor = offset (opaque to the UI).
+const uid = (prefix, i) => `${prefix}0000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
+const egpAmt = (minor) => ({ amount_minor: String(minor), currency: "EGP" });
+const REFUND_STATUSES = ["REQUESTED", "MANUAL_REVIEW", "FAILED", "PROCESSING", "COMPLETED"];
+const refunds = Array.from({ length: 25 }, (_, i) => ({
+  id: uid("fa", i), order_group_id: uid("0a", i), seller_order_id: uid("0b", i), return_request_id: null, store_id: uid("5e", i % 3), status: REFUND_STATUSES[i % 5], reason: "return", route: i % 2 ? "psp_original" : "store_credit",
+  amount: egpAmt(10_000 + i * 500), attempts: i % 5 === 2 ? 3 : 0, overdue: i % 7 === 0 && i % 5 !== 4, due_at: hoursFromNow(i % 7 === 0 ? -20 : 48), created_at: hoursFromNow(-i - 1), completed_at: i % 5 === 4 ? hoursFromNow(-i) : null,
+}));
+const payouts = [
+  { id: uid("9a", 0), store_id: uid("5e", 0), status: "SCHEDULED", mode: "transfer", cycle_start: "2026-11-02", cycle_end: "2026-11-08", net: egpAmt(240000), hold_reason: null, failure_code: null, created_at: hoursFromNow(-5) },
+  { id: uid("9a", 1), store_id: uid("5e", 1), status: "ON_HOLD", mode: "transfer", cycle_start: "2026-11-02", cycle_end: "2026-11-08", net: egpAmt(180000), hold_reason: "iban_name_mismatch", failure_code: null, created_at: hoursFromNow(-6) },
+  { id: uid("9a", 2), store_id: uid("5e", 2), status: "SETTLED", mode: "transfer", cycle_start: "2026-10-26", cycle_end: "2026-11-01", net: egpAmt(95000), hold_reason: null, failure_code: null, created_at: hoursFromNow(-200) },
+];
+const returnsRows = Array.from({ length: 22 }, (_, i) => {
+  const stage = ["requested", "in_transit", "awaiting_inspection", "inspection_overdue"][i % 4];
+  return { id: uid("7e", i), order_group_id: uid("0a", i), seller_order_id: uid("0b", i), store_id: uid("5e", i % 3), status: stage === "requested" ? "REQUESTED" : stage === "in_transit" ? "IN_TRANSIT" : "RECEIVED", stage, reason_code: i % 2 ? "too_small" : "changed_mind", resolution: "refund", created_at: hoursFromNow(-i - 2), received_at: stage.startsWith("in") && stage !== "in_transit" || stage === "awaiting_inspection" ? hoursFromNow(-i) : null, inspection_due_at: stage === "awaiting_inspection" ? hoursFromNow(20) : stage === "inspection_overdue" ? hoursFromNow(-10) : null };
+});
+const disputes = Array.from({ length: 4 }, (_, i) => ({ id: uid("d5", i), return_request_id: uid("7e", i), store_id: uid("5e", i), status: i === 3 ? "UNDER_REVIEW" : "OPEN", reason_code: "item_not_as_described", assigned: i === 3, sla_due_at: hoursFromNow(i === 0 ? -30 : 60), past_sla: i === 0, created_at: hoursFromNow(-i - 4), resolved_at: null }));
+const keyset = (rows, url) => {
+  const limit = Math.min(50, Number(url.searchParams.get("limit") ?? 20));
+  const from = url.searchParams.get("cursor") ? Number(Buffer.from(url.searchParams.get("cursor"), "base64url").toString()) : 0;
+  const slice = rows.slice(from, from + limit);
+  return { items: slice, next_cursor: from + limit < rows.length ? Buffer.from(String(from + limit)).toString("base64url") : null };
+};
+const countBy = (rows, key) => Object.entries(rows.reduce((a, r) => ({ ...a, [r[key]]: (a[r[key]] ?? 0) + 1 }), {})).map(([status, count]) => ({ status, count }));
+
 const note = (req, action, target, reason) => {
   log.push({ method: req.method, path: new URL(req.url, "http://x").pathname, reason: req.headers["x-reason-code"] ?? null });
   audit.unshift({ id: randomUUID(), actor_type: "staff", actor_id: STAFF, action, target_type: target, target_id: CASE, reason_code: reason ?? null, request_id: "e2e", occurred_at: new Date().toISOString() });
@@ -164,6 +190,33 @@ createServer(async (req, res) => {
     const results = body.ids.map((id) => { const d = dlq.find((x) => x.id === id && x.status === "open"); if (!d) return { id, outcome: "not_in_dlq" }; d.status = action === "replay" ? "replayed" : "discarded"; return { id, outcome: action === "replay" ? "replayed" : "discarded" }; });
     return send(res, 200, { results, changed: results.filter((r) => r.outcome !== "not_in_dlq").length });
   }
+  if (req.method === "GET" && rest === "refunds") {
+    const st = url.searchParams.get("status");
+    if (st && !REFUND_STATUSES.includes(st)) return problem(res, 400, "validation-failed");
+    const open = refunds.filter((r) => r.status !== "COMPLETED");
+    return send(res, 200, { ...keyset(refunds.filter((r) => !st || r.status === st), url), summary: countBy(open, "status").map((x) => ({ status: x.status, count: x.count, amount: egpAmt(x.count * 12_000) })), overdue_count: open.filter((r) => r.overdue).length });
+  }
+  if (req.method === "GET" && rest === "payouts") {
+    const st = url.searchParams.get("status");
+    return send(res, 200, { ...keyset(payouts.filter((p) => !st || p.status === st), url), summary: countBy(payouts.filter((p) => p.status !== "SETTLED"), "status").map((x) => ({ status: x.status, count: x.count, net: egpAmt(x.count * 200_000) })) });
+  }
+  const pm = /^payouts\/([0-9a-f-]{36})\/(hold|release)$/.exec(rest);
+  if (req.method === "POST" && pm) {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (!req.headers["idempotency-key"]) return problem(res, 400, "idempotency-key-required");
+    const p = payouts.find((x) => x.id === pm[1]);
+    if (!p) return problem(res, 404, "not-found");
+    log.push({ method: "POST", path: `/payout-${pm[2]}`, body, key: req.headers["idempotency-key"] });
+    if (pm[2] === "release") return p.status === "ON_HOLD" ? problem(res, 409, "dual-approval-required") : problem(res, 409, "invalid-transition");
+    if (p.status !== "SCHEDULED" && p.status !== "APPROVED") return problem(res, 409, "invalid-transition");
+    p.status = "ON_HOLD"; p.hold_reason = `ops:${body.reason_code}`;
+    return send(res, 200, p);
+  }
+  if (req.method === "GET" && rest === "returns") {
+    const st = url.searchParams.get("stage");
+    return send(res, 200, { ...keyset(returnsRows.filter((r) => !st || r.stage === st), url), summary: { requested: returnsRows.filter((r) => r.stage === "requested").length, in_transit: returnsRows.filter((r) => r.stage === "in_transit").length, awaiting_inspection: returnsRows.filter((r) => r.stage.endsWith("inspection") || r.stage === "inspection_overdue").length, inspection_overdue: returnsRows.filter((r) => r.stage === "inspection_overdue").length } });
+  }
+  if (req.method === "GET" && rest === "disputes") return send(res, 200, { ...keyset(disputes, url), summary: { open: disputes.length, past_sla: disputes.filter((d) => d.past_sla).length } });
   if (req.method === "GET" && rest === "attention") return send(res, 200, page(attention.filter((a) => a.status !== "RESOLVED")));
   const am = /^attention\/([0-9a-f-]{36})\/(ack|resolve)$/.exec(rest);
   if (req.method === "POST" && am) {

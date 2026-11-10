@@ -88,8 +88,8 @@ describe("session and roles", () => {
   });
   it("shows sections by role (ADMIN_POLICY), and super_admin counts only in break-glass", () => {
     const mk = (roles: string[], breakGlass = false) => ({ ...profileFromSession({ ...body, roles }), breakGlass });
-    expect(visibleSections(mk(["ops"]))).toEqual(["kyc", "price", "attention", "dlq", "access"]);
-    expect(visibleSections(mk(["finance"]))).toEqual(["recon", "attention", "access"]);
+    expect(visibleSections(mk(["ops"]))).toEqual(["kyc", "price", "attention", "dlq", "returns", "access"]);
+    expect(visibleSections(mk(["finance"]))).toEqual(["recon", "attention", "refunds", "payouts", "access"]);
     expect(visibleSections(mk(["dpo"]))).toEqual(["dpo", "access"]);
     expect(visibleSections(mk(["security"]))).toEqual(["audit", "dlq", "access"]);
     expect(visibleSections(mk(["marketing"]))).toEqual(["access"]);

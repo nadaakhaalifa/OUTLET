@@ -10,9 +10,10 @@ import { PageHeader } from "../../../../../components/kit/PageHeader";
 import { ProblemBanner } from "../../../../../components/ProblemBanner";
 import { AttentionPage } from "../../../../../lib/attention";
 import { cardBySlug, DashboardResponse, DEFAULT_RANGE, flattenTiles, MAX_POP_ROWS, type CardDef } from "../../../../../lib/dashboard";
-import { fmtDateTime, fmtNumber } from "../../../../../lib/fmt";
+import { fmtDateTime, fmtMoney, fmtNumber } from "../../../../../lib/fmt";
 import { label } from "../../../../../lib/labels";
 import { load } from "../../../../../lib/load";
+import { RefundList } from "../../../../../lib/lists";
 import { ApprovalPage, KycSummaryPage } from "../../../../../lib/schemas";
 import { requireLocale } from "../../../../../lib/segment-page";
 
@@ -40,6 +41,24 @@ async function listFor(card: CardDef, market: string, base: string, t: Translato
     if (!r.ok) return { kind: "problem", code: r.code, status: r.status };
     const pending = r.data.items.filter((i) => i.status === "PENDING");
     return { kind: "list", list: { total: pending.length, head: [t("admin.home.pop.colAction"), t("admin.home.pop.colExpires")], rows: pending.slice(0, MAX_POP_ROWS).map((i) => ({ id: i.id, cells: [i.action, fmtDateTime(i.expires_at, locale)] })) } };
+  }
+  if (card.slug === "refunds-waiting") {
+    // The tile counts REQUESTED, MANUAL_REVIEW and FAILED; the list endpoint filters one status at a time, so the three are read together and merged newest first.
+    const waiting = ["REQUESTED", "MANUAL_REVIEW", "FAILED"] as const;
+    const reads = await Promise.all(waiting.map((status) => load(RefundList, market, "refunds", { status, limit: String(MAX_POP_ROWS) })));
+    for (const r of reads) if (!r.ok) return { kind: "problem", code: r.code, status: r.status };
+    const items = reads.flatMap((r) => (r.ok ? r.data.items : [])).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    // Every response carries the same market-wide summary, so the first one gives the total waiting.
+    const first = reads[0];
+    const total = first?.ok === true ? first.data.summary.filter((x) => (waiting as readonly string[]).includes(x.status)).reduce((m, x) => m + x.count, 0) : 0;
+    return {
+      kind: "list",
+      list: {
+        total: Math.max(total, items.length),
+        head: [t("admin.refunds.colOrder"), t("admin.list.colStatus"), t("admin.refunds.colAmount"), t("admin.refunds.colDue")],
+        rows: items.slice(0, MAX_POP_ROWS).map((i) => ({ id: i.id, cells: [i.order_group_id.slice(0, 8), label(t, "admin.refunds.status", i.status), fmtMoney(i.amount, locale), fmtDateTime(i.due_at, locale)] })),
+      },
+    };
   }
   return { kind: "none" };
 }
