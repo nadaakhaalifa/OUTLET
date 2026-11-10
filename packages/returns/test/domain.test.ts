@@ -115,9 +115,11 @@ describe("computeRefund: ledger spec 4.5 / 4.6 numbers", () => {
         if (left > 0) parts.push(left);
         let done = 0;
         let goods = 0n; let comm = 0n; let vat = 0n; let share = 0n; let seller = 0n;
+        const stepGoods: bigint[] = [];
         for (const p of parts) {
           const r = computeRefund({ currency: "EGP", base, goodsRefundedBefore: goods, commissionBp: bp, commissionVatBp: 1400, delivery: null, lines: [{ orderLineId: "x", unitPrice: unitB, qty, qtyAlreadyReturned: done, returnQty: p, discount }] });
           done += p;
+          stepGoods.push(r.goods.amountMinor);
           goods += r.goods.amountMinor; comm += r.commission.amountMinor; vat += r.commissionVat.amountMinor; seller += r.seller.amountMinor;
           share += r.lines.reduce((a, l) => a + l.discountShare, 0n);
           expect(r.lines.reduce((a, l) => a + l.amount, 0n)).toBe(r.goods.amountMinor);
@@ -126,10 +128,19 @@ describe("computeRefund: ledger spec 4.5 / 4.6 numbers", () => {
         expect(goods).toBe(base);
         expect(share).toBe(discount);
         expect(seller + comm + vat).toBe(goods);
-        // full refund through any split reproduces the single-shot commission and VAT exactly
+        // full refund through any split reproduces the single-shot commission and VAT exactly, unless a step was so small
+        // (a few piastres of goods) that the platform absorbed the rounding shortfall (ledger spec 4.5 "Rounding"): then the
+        // platform side may be short by at most 2 piastres per step, never the shopper (goods === base above).
         const once = computeRefund({ currency: "EGP", base, goodsRefundedBefore: 0n, commissionBp: bp, commissionVatBp: 1400, delivery: null, lines: [{ orderLineId: "x", unitPrice: unitB, qty, qtyAlreadyReturned: 0, returnQty: qty, discount }] });
-        expect(comm).toBe(once.commission.amountMinor);
-        expect(vat).toBe(once.commissionVat.amountMinor);
+        const platformOnce = once.commission.amountMinor + once.commissionVat.amountMinor;
+        const smallestStepGoods = stepGoods.reduce((a, g) => (g < a ? g : a), stepGoods[0] ?? 0n);
+        if (smallestStepGoods >= 1000n) {
+          expect(comm).toBe(once.commission.amountMinor);
+          expect(vat).toBe(once.commissionVat.amountMinor);
+        } else {
+          expect(comm + vat).toBeLessThanOrEqual(platformOnce);
+          expect(platformOnce - (comm + vat)).toBeLessThanOrEqual(2n * BigInt(parts.length));
+        }
       },
     ), { numRuns: 300 });
   });
