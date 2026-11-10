@@ -37,6 +37,15 @@ export default tseslint.config(
     rules: { "district/no-float-money": "off" },
   },
   {
+    // ADR-0016 / chief review F4d: the worker process may hold an outlet_app client only where it is composed and listed (apps/api/src/worker/jobs.ts).
+    // Everything else in the worker receives the WorkerAppClient alias from jobs.ts, so a new outlet_app use is a reviewed diff of that one file.
+    files: ["apps/api/src/worker.ts", "apps/api/src/worker/**/*.ts"],
+    ignores: ["apps/api/src/worker/jobs.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", { selector: "Literal[value='outlet_app']", message: "outlet_app in the worker is composed only in apps/api/src/worker/jobs.ts (ADR-0016); use WorkerAppClient / workerAppClient." }],
+    },
+  },
+  {
     files: ["**/*.mjs"],
     languageOptions: { globals: { console: "readonly", process: "readonly" } },
   },

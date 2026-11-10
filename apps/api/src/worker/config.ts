@@ -4,10 +4,17 @@ const pgUrl = z.url({ protocol: /^postgres(ql)?$/ });
 const int = (min: number, max: number, dflt: number) => z.coerce.number().int().min(min).max(max).default(dflt);
 
 /**
- * Worker process environment (ADR-0016), validated at boot. DATABASE_URL_WORKER is the outlet_worker pool (every job context). DATABASE_URL_APP is
- * the outlet_app pool, needed for two reads the worker role has no grant for by design: the kill-switch store (feature_flags) and the voucher confirm,
- * which runs in the shopper's user context (finding 11). Both are required: without them the worker refuses to start (fail closed).
+ * Worker process environment (ADR-0016), validated at boot. DATABASE_URL_WORKER is the outlet_worker pool (every job context, including the
+ * kill-switch store since migration 0037). DATABASE_URL_APP is a small outlet_app pool used only by the four jobs.ts uses recorded in ADR-0016
+ * (voucher confirm in the shopper's user context, ReleaseRequiredConsumer, InventoryRestock, the admin-access stub). Both are required: without
+ * them the worker refuses to start (fail closed).
  */
+/** Upper bound of the claim lease (chief review F5): a crashed worker's batch must come back within 15 minutes. */
+export const MAX_LEASE_MS = 15 * 60_000;
+
+/** Lease must outlive a full batch of handler timeouts, so a slow batch is never claimed twice. */
+export const leaseMsFor = (e: { readonly WORKER_BATCH_SIZE: number; readonly WORKER_HANDLER_TIMEOUT_MS: number }): number => e.WORKER_BATCH_SIZE * e.WORKER_HANDLER_TIMEOUT_MS + 60_000;
+
 export const WorkerEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL_WORKER: pgUrl,
@@ -26,7 +33,7 @@ export const WorkerEnvSchema = z.object({
   WORKER_SCHEDULER_MS: int(1_000, 60_000, 5_000),
   WORKER_LAG_MS: int(1_000, 300_000, 15_000),
   OTEL_EXPORTER: z.enum(["otlp", "none"]).default("none"),
-});
+}).refine((e) => leaseMsFor(e) <= MAX_LEASE_MS, { message: "WORKER_BATCH_SIZE x WORKER_HANDLER_TIMEOUT_MS + 60 s must not exceed 15 minutes", path: ["WORKER_BATCH_SIZE"] });
 export type WorkerEnv = z.infer<typeof WorkerEnvSchema>;
 
 /** Parses env; the error lists variable names and issue codes only (never values: connection strings are secrets). */
@@ -35,6 +42,3 @@ export const parseWorkerEnv = (env: Readonly<Record<string, string | undefined>>
   if (!r.success) throw new Error(`invalid worker environment: ${r.error.issues.map((i) => `${i.path.join(".")} (${i.code})`).join(", ")}`);
   return r.data;
 };
-
-/** Lease must outlive a full batch of handler timeouts, so a slow batch is never claimed twice. */
-export const leaseMsFor = (e: Pick<WorkerEnv, "WORKER_BATCH_SIZE" | "WORKER_HANDLER_TIMEOUT_MS">): number => e.WORKER_BATCH_SIZE * e.WORKER_HANDLER_TIMEOUT_MS + 60_000;

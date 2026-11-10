@@ -49,6 +49,6 @@ export const attentionHandlers = (worker: RoleSqlClient<"outlet_worker">, market
  * (migration 0035): sales every 5 minutes (last 3 days), snapshots every 60 seconds, nightly 90 days. Idempotent and inbox-deduplicated; the tick source (cron) is composed with the worker process.
  */
 export const reportingRollupHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date()): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
-  const c = new RollupConsumer(worker, marketId, new RollupService({ client: worker, now }));
+  const c = new RollupConsumer(worker, marketId, new RollupService({ client: worker, now }), undefined, now);
   return new Map([[ROLLUP_REQUESTED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
 };

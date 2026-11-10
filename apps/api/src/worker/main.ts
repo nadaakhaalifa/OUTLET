@@ -10,19 +10,21 @@ import { leaseMsFor } from "./config.js";
 import type { WorkerEnv } from "./config.js";
 import { startHealthServer } from "./health.js";
 import type { HealthServer, WorkerHealth } from "./health.js";
+import { boundedClient } from "./bounded.js";
 import { marketJobs } from "./jobs.js";
-import type { KillRead } from "./jobs.js";
+import type { KillRead, WorkerAppClient } from "./jobs.js";
 import { MarketRunner } from "./runner.js";
 import { RollupScheduler } from "./scheduler.js";
 
 export interface WorkerDeps {
   readonly env: WorkerEnv;
   readonly worker: RoleSqlClient<"outlet_worker">;
-  readonly app: RoleSqlClient<"outlet_app">;
+  /** Separate small outlet_app pool; every use is composed in jobs.ts and listed in ADR-0016. Never used for kill switches. */
+  readonly app: WorkerAppClient;
   readonly log: Logger;
   /** Defaults to every configured market (markets-config), ids upper-cased as in cli.ts. */
   readonly markets?: readonly { readonly marketId: string; readonly timezone: string }[];
-  /** Defaults to FlagService over feature_flags on the app pool (5 s cache; money switches fail closed when unreadable). */
+  /** Defaults to FlagService over feature_flags on the WORKER pool (migration 0037; 5 s cache; money switches fail closed when unreadable). */
   readonly kill?: KillRead;
   readonly metrics?: WorkerMetrics;
   readonly now?: () => Date;
@@ -44,14 +46,15 @@ export const startWorker = async (d: WorkerDeps): Promise<RunningWorker> => {
   const now = d.now ?? (() => new Date());
   const metrics = d.metrics ?? createWorkerMetrics();
   const kill: KillRead =
-    d.kill ?? new FlagService({ store: new PostgresFlagStore(d.app), audit: { record: () => Promise.resolve() }, onError: (e) => { d.log.warn("worker: flag store read failed", { error: errorCode(e) }); } });
+    d.kill ?? new FlagService({ store: new PostgresFlagStore(d.worker), audit: { record: () => Promise.resolve() }, onError: (e) => { d.log.warn("worker: flag store read failed", { error: errorCode(e) }); } });
   const markets = d.markets ?? listMarkets().map((m) => ({ marketId: m.id.toUpperCase(), timezone: m.timezone }));
   const runners = markets.map(
     (m) =>
       new MarketRunner({
         marketId: m.marketId,
         relayDb: contextClient(d.worker, { kind: "worker", marketId: m.marketId, job: "outbox.relay" }),
-        jobs: marketJobs({ marketId: m.marketId, worker: d.worker, app: d.app, kill, now }),
+        // Consumer transactions carry statement_timeout = handler timeout (F3); the relay's own client is not bounded.
+        jobs: marketJobs({ marketId: m.marketId, worker: boundedClient(d.worker, d.env.WORKER_HANDLER_TIMEOUT_MS), app: boundedClient(d.app, d.env.WORKER_HANDLER_TIMEOUT_MS), kill, now }),
         kill, metrics, log: d.log, now,
         pollMs: d.env.WORKER_POLL_MS, pollMaxMs: d.env.WORKER_POLL_MAX_MS, batchSize: d.env.WORKER_BATCH_SIZE, maxAttempts: d.env.WORKER_MAX_ATTEMPTS,
         leaseMs: leaseMsFor(d.env), handlerTimeoutMs: d.env.WORKER_HANDLER_TIMEOUT_MS, lagMs: d.env.WORKER_LAG_MS,

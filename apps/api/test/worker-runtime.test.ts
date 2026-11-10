@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { brandClient, contextClient } from "@outlet/db";
 import type { RoleSqlClient, SqlClient } from "@outlet/db";
 import { createTestClient, roleClient } from "@outlet/db/testing";
+import { FlagService, PostgresFlagStore } from "@outlet/flags";
 import type { KillSwitchName } from "@outlet/flags";
 import { uuidv7 } from "@outlet/ids";
 import { createLogger } from "@outlet/logger";
@@ -11,7 +12,8 @@ import { CourierCancelError } from "@outlet/shipping";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { leaseMsFor, parseWorkerEnv } from "../src/worker/config.js";
 import type { WorkerEnv } from "../src/worker/config.js";
-import { RELAY_KILL_SWITCH, UnconfiguredProviderRefunds, UnconfiguredWorkerCourier, assertDisjoint, marketJobs, refundsKill } from "../src/worker/jobs.js";
+import { boundedClient } from "../src/worker/bounded.js";
+import { RELAY_KILL_SWITCH, UNSUBSCRIBED_TYPES, UnconfiguredProviderRefunds, UnconfiguredWorkerCourier, marketJobs, refundsKill } from "../src/worker/jobs.js";
 import type { KillRead, WorkerJobDef } from "../src/worker/jobs.js";
 import { startWorker } from "../src/worker/main.js";
 import { MarketRunner } from "../src/worker/runner.js";
@@ -63,7 +65,7 @@ const runner = (o: { jobs?: readonly WorkerJobDef[]; kill?: KillRead; relayDb?: 
 };
 
 /** One-job table with a controllable handler for refund.attention. */
-const customJob = (handler: () => Promise<InboxOutcome>): WorkerJobDef[] => [{ job: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: new Map([["refund.attention", handler]]) }];
+const customJob = (handler: () => Promise<InboxOutcome>): WorkerJobDef[] => [{ name: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: new Map([["refund.attention", handler]]) }];
 
 describe("relay + inbox round trip (ops.attention consumer)", () => {
   it("one event: claimed, handled through the attention consumer (item + inbox row), acked; the follow-up event has no consumer and is acked", async () => {
@@ -82,7 +84,7 @@ describe("relay + inbox round trip (ops.attention consumer)", () => {
     expect(await r.turn(0)).toBe(10); // idle: back off from pollMs ...
     expect(await r.turn(10)).toBe(20); // ... doubling ...
     expect(await r.turn(40)).toBe(40); // ... up to pollMaxMs
-    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "ops.attention", "reporting.rollup"]);
+    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "inventory.rejected_release", "inventory.release", "ops.attention", "reporting.rollup"]);
   });
 
   it("a disabled kill switch parks the consumer: nothing claimed, no inbox row; health reports it killed with lag; release resumes it", async () => {
@@ -121,6 +123,14 @@ describe("relay + inbox round trip (ops.attention consumer)", () => {
     expect(await slow.turn(0)).toBe(10);
     expect((await outbox())[0]).toMatchObject({ id, attempts: 1, last_error: "HandlerTimeout" });
     expect((await db.query("SELECT 1 FROM dlq_messages WHERE message_id = $1", [id])).rows).toHaveLength(1);
+    // F3: a timed-out (not dead-lettered) event is not claimable again before the handler timeout has passed.
+    await db.query("DELETE FROM outbox_events");
+    const retry = runner({ jobs: customJob(() => new Promise<InboxOutcome>(() => undefined)), handlerTimeoutMs: 5_000 });
+    const tid = await seedAttention();
+    const before = Date.now();
+    await retry.turn(0);
+    const lease = (await db.query<{ lease_until: Date }>("SELECT lease_until FROM outbox_events WHERE id = $1", [tid])).rows[0]?.lease_until;
+    expect(new Date(lease ?? 0).getTime()).toBeGreaterThanOrEqual(before + 5_000);
     expect(lines.join("\n")).toContain("dead-lettered");
     expect(lines.join("\n")).not.toContain("order_group_id");
   });
@@ -132,6 +142,70 @@ describe("relay + inbox round trip (ops.attention consumer)", () => {
     expect(await r.turn(0)).toBe(40);
     expect(r.status()).toMatchObject({ lastError: "Error:ECONNRESET" });
     expect(r.lastBeat()).not.toBeNull();
+  });
+});
+
+describe("routing (chief review F1, F2, F6)", () => {
+  const seed = async (type: string, payload: Record<string, unknown> = {}): Promise<string> => {
+    const id = uuidv7();
+    await db.query("INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, payload, occurred_at) VALUES ($1, $2, 'x', $3, $4, $5::jsonb, $6)", [id, M, randomUUID(), type, JSON.stringify(payload), new Date(Date.now() - 10_000).toISOString()]);
+    return id;
+  };
+
+  it("a type with no consumer is never claimed or acked: it stays pending and shows as unrouted; an allow-listed type is acked", async () => {
+    const lost = await seed("order_group.placed");
+    const info = await seed("inventory.committed_released");
+    const r = runner();
+    await r.turn(0);
+    const rows = await outbox();
+    expect(rows.find((e) => e.id === lost)).toMatchObject({ published_at: null, attempts: 0 });
+    expect(rows.find((e) => e.id === info)?.published_at).not.toBeNull();
+    expect(r.status().unrouted).toMatchObject({ pending: 1, types: ["order_group.placed"] });
+    expect(r.status().unrouted?.lagSeconds).toBeGreaterThanOrEqual(9);
+  });
+
+  it("every owner of a type runs in order; one failure fails the event, the retry re-runs both (the first dedupes in its inbox)", async () => {
+    const id = await seed("seller_order.rejected");
+    const calls: string[] = [];
+    let failB = true;
+    const jobs: WorkerJobDef[] = [
+      { name: "a", killSwitch: "workers.finance.refunds.enabled", handlers: new Map([["seller_order.rejected", () => (calls.push("a"), Promise.resolve<InboxOutcome>("processed"))]]) },
+      { name: "b", killSwitch: "workers.inventory.release.enabled", handlers: new Map([["seller_order.rejected", () => (calls.push("b"), failB ? Promise.reject(new Error("b down")) : Promise.resolve<InboxOutcome>("processed"))]]) },
+    ];
+    const clock = { t: Date.now() };
+    const r = new MarketRunner({ marketId: M, relayDb: contextClient(worker, { kind: "worker", marketId: M, job: "outbox.relay" }), jobs, kill: killing([]), metrics, log: quiet, pollMs: 10, pollMaxMs: 40, batchSize: 20, maxAttempts: 8, leaseMs: 60_000, handlerTimeoutMs: 1_000, lagMs: 1_000, now: () => new Date(clock.t) });
+    await r.turn(0);
+    expect(calls).toEqual(["a", "b"]);
+    expect((await outbox())[0]).toMatchObject({ id, published_at: null, attempts: 1 });
+    failB = false;
+    clock.t += 5_000;
+    await r.turn(0);
+    expect(calls).toEqual(["a", "b", "a", "b"]);
+    expect((await outbox())[0]?.published_at).not.toBeNull();
+    // one killed owner holds the type back for everyone
+    expect(r.routableTypes(new Set(["b"]))).not.toContain("seller_order.rejected");
+    expect(r.routableTypes(new Set())).toContain("seller_order.rejected");
+  });
+
+  it("a money switch flipped mid-batch releases the remaining events with no attempt (shouldSkip)", async () => {
+    const first = await seedAttention();
+    const second = await seedAttention();
+    let killed: KillSwitchName[] = [];
+    const r = runner({ kill: { isKilled: (n) => Promise.resolve(killed.includes(n)) }, jobs: customJob(() => { killed = ["workers.ops.attention.enabled"]; return Promise.resolve("processed"); }) });
+    await r.turn(0);
+    const rows = await outbox();
+    expect(rows.find((e) => e.id === first)?.published_at).not.toBeNull();
+    expect(rows.find((e) => e.id === second)).toMatchObject({ published_at: null, attempts: 0 });
+    killed = [RELAY_KILL_SWITCH];
+    await r.turn(0);
+    expect((await outbox()).find((e) => e.id === second)?.published_at).toBeNull();
+  });
+
+  it("a claimed type with no owner outside the allow-list fails instead of being acked (defence in depth)", async () => {
+    const r = runner({ jobs: [] });
+    const dispatch = (r as unknown as { dispatch: (e: { id: string; type: string; payload: object }) => Promise<void> }).dispatch.bind(r);
+    await expect(dispatch({ id: uuidv7(), type: "order_group.placed", payload: {} })).rejects.toThrow("unrouted event type claimed");
+    await expect(dispatch({ id: uuidv7(), type: "shipment.cancelled", payload: {} })).resolves.toBeUndefined();
   });
 });
 
@@ -207,8 +281,12 @@ describe("startWorker (composition, health endpoint, drain)", () => {
   it("liveness fails when a loop stops beating; an unreadable flag store kills the money jobs (fail closed) and leaves the others running", async () => {
     let t = Date.now();
     const lines: string[] = [];
-    const brokenApp = brandClient<"outlet_app">({ query: () => Promise.reject(new Error("flags down")), transaction: () => Promise.reject(new Error("flags down")) });
-    const w = await startWorker({ env: env(), worker, app: brokenApp, log: createLogger({ write: (l) => lines.push(l) }), markets: [{ marketId: M, timezone: "Africa/Cairo" }], now: () => new Date(t), livenessMs: 1_000 });
+    // Kill switches are read on the WORKER pool (migration 0037): only the feature_flags read fails here, the relay keeps working.
+    const flagsDown = brandClient<"outlet_worker">({
+      query: (sql: string, params?: readonly unknown[]) => (sql.includes("feature_flags") ? Promise.reject(new Error("flags down")) : worker.query(sql, params)),
+      transaction: (fn: Parameters<typeof worker.transaction>[0]) => worker.transaction(fn),
+    } as never);
+    const w = await startWorker({ env: env(), worker: flagsDown, app, log: createLogger({ write: (l) => lines.push(l) }), markets: [{ marketId: M, timezone: "Africa/Cairo" }], now: () => new Date(t), livenessMs: 1_000 });
     try {
       await until(() => w.health().markets[0]?.lastPollAt != null);
       const consumers = w.health().markets[0]?.consumers ?? [];
@@ -233,6 +311,19 @@ describe("startWorker (composition, health endpoint, drain)", () => {
   });
 });
 
+describe("kill-switch store on the worker role (migration 0037, chief re-review finding 1)", () => {
+  it("outlet_worker reads feature_flags without onError and holds no write privilege on it", async () => {
+    let errors = 0;
+    const svc = new FlagService({ store: new PostgresFlagStore(worker), audit: { record: () => Promise.resolve() }, onError: () => { errors += 1; } });
+    await expect(svc.isKilled("workers.finance.refunds.enabled", { marketId: M })).resolves.toBe(false);
+    expect(errors).toBe(0);
+    const priv = await db.query<{ ins: boolean; upd: boolean; del: boolean }>(
+      "SELECT has_table_privilege('outlet_worker','feature_flags','INSERT') AS ins, has_table_privilege('outlet_worker','feature_flags','UPDATE') AS upd, has_table_privilege('outlet_worker','feature_flags','DELETE') AS del",
+    );
+    expect(priv.rows[0]).toEqual({ ins: false, upd: false, del: false });
+  });
+});
+
 describe("worker composition pieces", () => {
   it("parseWorkerEnv requires both pools and never echoes values; lease covers a full batch", () => {
     expect(() => parseWorkerEnv({ DATABASE_URL_APP: "postgres://secret@h/x" })).toThrow(/DATABASE_URL_WORKER/);
@@ -241,13 +332,24 @@ describe("worker composition pieces", () => {
     expect(leaseMsFor({ WORKER_BATCH_SIZE: 20, WORKER_HANDLER_TIMEOUT_MS: 20_000 })).toBe(460_000);
   });
 
-  it("registers every dispatch table once and refuses a type claimed by two jobs", () => {
+  it("registers every consumer; seller_order.rejected has two owners; the late refund is routed only with a PSP port", () => {
     const jobs = marketJobs({ marketId: M, worker, app, kill: killing([]) });
     expect(jobs.flatMap((j) => [...j.handlers.keys()]).sort()).toEqual(
-      ["promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"],
+      ["inventory.release_required", "promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"],
     );
-    const h = new Map([["a.b", () => Promise.resolve<InboxOutcome>("processed")]]);
-    expect(() => { assertDisjoint([{ job: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: h }, { job: "reporting.rollup", killSwitch: "workers.reporting.rollup.enabled", handlers: h }]); }).toThrow(/a\.b/);
+    const withPsp = marketJobs({ marketId: M, worker, app, kill: killing([]), now: () => new Date(), lateRefunds: { requestRefund: () => Promise.resolve({ accepted: true }) } });
+    expect(withPsp.find((j) => j.name === "payments.late_refund")?.handlers.has("order_group.late_payment_refund")).toBe(true);
+    expect(UNSUBSCRIBED_TYPES).toEqual(["ops.attention_opened", "shipment.cancelled", "inventory.committed_released"]);
+  });
+
+  it("parseWorkerEnv refuses a lease over 15 minutes", () => {
+    expect(() => parseWorkerEnv({ DATABASE_URL_WORKER: "postgres://h/x", DATABASE_URL_APP: "postgres://h/x", WORKER_BATCH_SIZE: "100", WORKER_HANDLER_TIMEOUT_MS: "20000" })).toThrow(/WORKER_BATCH_SIZE/);
+  });
+
+  it("boundedClient sets statement_timeout on every consumer transaction", async () => {
+    const b = boundedClient(worker, 1_234);
+    expect((await b.transaction((tx) => tx.query<{ statement_timeout: string }>("SHOW statement_timeout"))).rows[0]?.statement_timeout).toBe("1234ms");
+    expect((await b.query<{ statement_timeout: string }>("SHOW statement_timeout")).rows[0]?.statement_timeout).toBe("1234ms");
   });
 
   it("unconfigured providers fail closed: refunds rejected, courier cancellation parked as not_cancellable", async () => {

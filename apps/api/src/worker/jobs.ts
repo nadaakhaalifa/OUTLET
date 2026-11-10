@@ -1,29 +1,45 @@
 import { createAdminAccess } from "@outlet/admin-access";
-import type { WorkerJob } from "@outlet/db";
+import { LateRefundConsumer, RejectedOrderInventoryRelease, SELLER_ORDER_REJECTED_EVENT } from "@outlet/checkout";
+import type { RefundPort } from "@outlet/checkout";
+import { contextClient } from "@outlet/db";
 import type { RoleSqlClient } from "@outlet/db";
 import type { KillSwitchName } from "@outlet/flags";
+import { COMMITTED_RELEASED_EVENT, RELEASE_REQUIRED_EVENT, ReleaseRequiredConsumer } from "@outlet/inventory";
+import { ATTENTION_OPENED_EVENT } from "@outlet/ops-attention";
 import type { InboxOutcome } from "@outlet/outbox";
 import { InventoryRestock, REFUNDS_KILL_SWITCH, RefundService } from "@outlet/returns";
 import type { KillSwitchPort, ProviderRefundPort, ProviderRefundResult } from "@outlet/returns";
-import { CourierCancelError } from "@outlet/shipping";
+import { CourierCancelError, SHIPMENT_CANCELLED_EVENT } from "@outlet/shipping";
 import type { CourierPort } from "@outlet/shipping";
 import { productionPromotionsPort } from "../modules/checkout/cancellation-composition.js";
 import type { PromotionsKillRead } from "../modules/checkout/cancellation-composition.js";
 import { NoCategoryReturnPolicy, UnconfiguredEvidence } from "../modules/returns/index.js";
+import { pgSqlClient } from "../platform/db.js";
+import type { PoolLike } from "../platform/db.js";
 import { Problems } from "../platform/problem.js";
 import { attentionHandlers, financeRefundHandlers, promotionsSettleHandlers, reportingRollupHandlers, shipmentCancelHandlers } from "../worker-consumers.js";
 import type { OutboxEventIn } from "../worker-consumers.js";
 
 export type Handler = (e: OutboxEventIn) => Promise<InboxOutcome>;
 
-/** One inbox consumer group of the worker: its DB job, its kill switch and its dispatch table (event type -> handler). */
+/**
+ * The ONLY place the worker names the outlet_app role (eslint rule in eslint.config.mjs, ADR-0016 section "outlet_app uses"). Every use is listed in
+ * marketJobs below and in the ADR; the pool is separate and small (worker.ts, application_name worker.app).
+ */
+export type WorkerAppClient = RoleSqlClient<"outlet_app">;
+export const workerAppClient = (pool: PoolLike): WorkerAppClient => pgSqlClient<"outlet_app">(pool);
+
+/**
+ * One inbox consumer of the worker: a status / metrics label, its kill switch and its dispatch table (event type -> handler). Several consumers may
+ * own the same event type (seller_order.rejected: refund and inventory release); the runner runs all of them, each in its own inbox transaction.
+ */
 export interface WorkerJobDef {
-  readonly job: WorkerJob;
+  readonly name: string;
   readonly killSwitch: KillSwitchName;
   readonly handlers: ReadonlyMap<string, Handler>;
 }
 
-/** The kill switch read the worker needs (FlagService.isKilled: money switches fail closed, the others open). */
+/** The kill switch read the worker needs (FlagService.isKilled over feature_flags on the worker pool: money switches fail closed, the others open). */
 export interface KillRead {
   isKilled(name: KillSwitchName, ctx: { readonly marketId: string }): Promise<boolean>;
 }
@@ -31,6 +47,15 @@ export interface KillRead {
 /** Relay switch: off = nothing is claimed at all. */
 export const RELAY_KILL_SWITCH: KillSwitchName = "workers.outbox.relay.enabled";
 export const ROLLUP_KILL_SWITCH: KillSwitchName = "workers.reporting.rollup.enabled";
+
+/**
+ * Event types that have no in-process consumer BY DESIGN and may be acked as published without a handler (chief review F1). Everything else with
+ * no consumer is never claimed: it stays pending and shows as `unrouted` in /healthz and the worker_unrouted_pending gauge.
+ * - ops.attention_opened: informational (the item row is the record); a notification consumer may subscribe later (then remove it from here).
+ * - shipment.cancelled: result of ShipmentCancelConsumer; nothing downstream yet.
+ * - inventory.committed_released: result of ReleaseRequiredConsumer; the replenisher reads inventory_levels, not this event.
+ */
+export const UNSUBSCRIBED_TYPES: readonly string[] = [ATTENTION_OPENED_EVENT, SHIPMENT_CANCELLED_EVENT, COMMITTED_RELEASED_EVENT];
 
 /**
  * No PSP is contracted (ADR-0029): refund execution is never reached from the worker's cancellation consumer (createForCancellation only records
@@ -63,44 +88,45 @@ export const refundsKill = (kill: KillRead, marketId: string): KillSwitchPort =>
 export interface MarketJobsInput {
   readonly marketId: string;
   readonly worker: RoleSqlClient<"outlet_worker">;
-  /** outlet_app: voucher confirm in the shopper's user context (finding 11) and the inventory restock port of the refund service. */
-  readonly app: RoleSqlClient<"outlet_app">;
+  /** outlet_app, separate small pool. Uses (all listed in ADR-0016): voucher confirm, inventory release, restock port, admin-access stub. */
+  readonly app: WorkerAppClient;
   readonly kill: KillRead;
+  /**
+   * PSP refund port for `order_group.late_payment_refund`. Undefined while no PSP is contracted: the type is then NOT routed (it stays pending and
+   * visible as unrouted lag) instead of retrying a rejecting port into the DLQ.
+   */
+  readonly lateRefunds?: RefundPort;
   readonly now?: () => Date;
 }
 
-/**
- * Every dispatch table of worker-consumers.ts for one market, each with its job and kill switch. Throws when two jobs claim the same event type
- * (one event type has exactly one in-process consumer, so a kill switch maps cleanly to the types it holds back).
- */
+/** Every inbox consumer of the worker for one market, with its kill switch. */
 export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
   const promotionsKill: PromotionsKillRead = { isKilled: (name, ctx) => i.kill.isKilled(name, ctx) };
   const refunds = new RefundService({
+    // outlet_app uses 3 (restock port: return restock only; createForCancellation does not call it) and 4 (admin-access stub below).
     app: i.app, worker: i.worker, marketId: i.marketId, policy: new NoCategoryReturnPolicy(), evidence: new UnconfiguredEvidence(), restock: new InventoryRestock(i.app, i.marketId),
     provider: new UnconfiguredProviderRefunds(),
-    // Refund execution fails closed on an unreadable switch (money); createForCancellation itself does not read it.
     kill: refundsKill(i.kill, i.marketId),
     // Approvals belong to the Admin Console: an audit sink that always fails keeps them unusable from the worker.
     admin: createAdminAccess({ db: i.app, audit: { appendIn: () => Promise.reject(Problems.unavailable("audit-unconfigured")) }, clock: () => new Date(), thresholdMinor: 0n }),
   });
+  const opts = i.now === undefined ? {} : { now: i.now };
+  const rejectedRelease = new RejectedOrderInventoryRelease(i.worker, i.marketId, opts);
+  // outlet_app use 2: the release runs in the event's store context, like ReservationService (ADR-0005); no worker policy exists for it.
+  const release = new ReleaseRequiredConsumer({ client: i.app, marketId: i.marketId, ...opts });
   const jobs: WorkerJobDef[] = [
-    { job: "finance.refunds", killSwitch: "workers.finance.refunds.enabled", handlers: financeRefundHandlers(i.worker, i.marketId, refunds) },
-    { job: "checkout.settle", killSwitch: "workers.checkout.settle.enabled", handlers: promotionsSettleHandlers(i.worker, i.marketId, productionPromotionsPort(i.app, i.marketId, promotionsKill)) },
-    { job: "shipping.tracking", killSwitch: "workers.shipping.tracking.enabled", handlers: shipmentCancelHandlers(i.worker, i.marketId, new UnconfiguredWorkerCourier()) },
-    { job: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: attentionHandlers(i.worker, i.marketId) },
-    { job: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
+    { name: "finance.refunds", killSwitch: "workers.finance.refunds.enabled", handlers: financeRefundHandlers(i.worker, i.marketId, refunds) },
+    // outlet_app use 1: voucher confirm in the shopper's user context (finding 11).
+    { name: "checkout.settle", killSwitch: "workers.checkout.settle.enabled", handlers: promotionsSettleHandlers(i.worker, i.marketId, productionPromotionsPort(i.app, i.marketId, promotionsKill)) },
+    { name: "shipping.tracking", killSwitch: "workers.shipping.tracking.enabled", handlers: shipmentCancelHandlers(i.worker, i.marketId, new UnconfiguredWorkerCourier()) },
+    { name: "inventory.rejected_release", killSwitch: "workers.inventory.release.enabled", handlers: new Map<string, Handler>([[SELLER_ORDER_REJECTED_EVENT, (e) => rejectedRelease.handle(e)]]) },
+    { name: "inventory.release", killSwitch: "workers.inventory.release.enabled", handlers: new Map<string, Handler>([[RELEASE_REQUIRED_EVENT, (e) => release.handle(e)]]) },
+    { name: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: attentionHandlers(i.worker, i.marketId) },
+    { name: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
   ];
-  assertDisjoint(jobs);
-  return jobs;
-};
-
-export const assertDisjoint = (jobs: readonly WorkerJobDef[]): void => {
-  const owner = new Map<string, string>();
-  for (const j of jobs) {
-    for (const t of j.handlers.keys()) {
-      const prev = owner.get(t);
-      if (prev !== undefined) throw new Error(`event type ${t} is registered by ${prev} and ${j.job}`);
-      owner.set(t, j.job);
-    }
+  if (i.lateRefunds !== undefined) {
+    const late = new LateRefundConsumer(contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "payments.webhook" }), i.lateRefunds);
+    jobs.push({ name: "payments.late_refund", killSwitch: "workers.finance.refunds.enabled", handlers: new Map<string, Handler>([["order_group.late_payment_refund", (e) => late.handle(e)]]) });
   }
+  return jobs;
 };

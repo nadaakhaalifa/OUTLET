@@ -38,6 +38,8 @@ export const startHealthServer = (opts: { readonly host: string; readonly port: 
           market_id: m.marketId,
           relay: { killed: m.relayKilled, last_poll_at: m.lastPollAt, last_error: m.lastError },
           consumers: m.consumers.map((c) => ({ job: c.job, killed: c.killed, pending: c.pending, lag_seconds: c.lagSeconds })),
+          // Pending types no consumer of this process claims (never acked): a consumer still has to be composed for them.
+          unrouted: m.unrouted === null ? null : { pending: m.unrouted.pending, lag_seconds: m.unrouted.lagSeconds, types: m.unrouted.types },
         })),
       },
     ];
