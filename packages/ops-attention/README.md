@@ -38,4 +38,4 @@ Served admin routes (`/v1/{market}/admin/...`, policy `attention.read` / `attent
 - `POST attention/{id}/ack` -> 200 item, 404, 409 `attention-conflict` when already resolved
 - `POST attention/{id}/resolve {resolution_code}` -> 200 item, 404, 409 on a different code
 
-Retention: 24 months (`ops_attention_24m` in `data_inventory.yaml`); no purge job yet.
+Retention: 24 months after creation (`ops_attention_24m` in `data_inventory.yaml`). The nightly `privacy.retention` worker job (ADR-0016) deletes only RESOLVED items past that age (dry run until `WORKER_RETENTION_DRY_RUN=false`); open and acknowledged items are never purged.
