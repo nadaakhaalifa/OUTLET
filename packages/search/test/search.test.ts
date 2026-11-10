@@ -203,9 +203,11 @@ describe("kill switches and staleness", () => {
   });
   it("staleness = now - oldest pending event; breach at the 60 s SLO", async () => {
     const now = new Date(T(1000));
-    expect(await measureStaleness({ oldestPendingOccurredAt: () => Promise.resolve(null) }, now)).toEqual({ stalenessMs: 0, breached: false });
-    const r = await measureStaleness({ oldestPendingOccurredAt: () => Promise.resolve(new Date(now.getTime() - STALENESS_SLO_MS)) }, now);
-    expect(r).toEqual({ stalenessMs: STALENESS_SLO_MS, breached: true });
+    const eng = { state: () => Promise.resolve({ configured: true, unsyncedDocuments: 0, oldestUnsyncedAt: null }) };
+    const src = (d: Date | null) => ({ oldestPendingOccurredAt: () => Promise.resolve(d), deadLetteredCount: () => Promise.resolve(0) });
+    expect(await measureStaleness(src(null), now, eng)).toMatchObject({ stalenessMs: 0, breached: false, status: "fresh" });
+    const r = await measureStaleness(src(new Date(now.getTime() - STALENESS_SLO_MS)), now, eng);
+    expect(r).toMatchObject({ stalenessMs: STALENESS_SLO_MS, breached: true, status: "stale" });
   });
 });
 
@@ -213,7 +215,7 @@ describe("index shape and plan", () => {
   it("holds only published-catalog P0 columns (no PII, no tenant key)", async () => {
     const r = await pg.query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_name = 'search_documents'");
     const cols = r.rows.map((c) => c.column_name).sort();
-    expect(cols).toEqual(["attributes", "category_id", "condition_grade", "currency", "in_stock", "is_published", "lowest_30d", "market_id", "price_minor", "product_id", "search_text", "seq", "sizes", "store_ref", "title_ar", "title_en", "tsv", "updated_at", "verified_discount", "world"]);
+    expect(cols).toEqual(["attributes", "category_id", "condition_grade", "currency", "engine_synced_seq", "in_stock", "is_published", "lowest_30d", "market_id", "price_minor", "product_id", "search_text", "seq", "sizes", "store_ref", "title_ar", "title_en", "tsv", "updated_at", "verified_discount", "world"]);
     expect(cols.filter((c) => /user|phone|email|address|dob|name$|iban|token/.test(c))).toEqual([]);
     const data = await pg.query<{ n: string }>("SELECT count(*)::text AS n FROM search_documents WHERE is_published AND product_id NOT IN (SELECT id FROM catalog_public_listings WHERE status <> 'PAUSED')");
     expect(data.rows[0]?.n).toBe("0");

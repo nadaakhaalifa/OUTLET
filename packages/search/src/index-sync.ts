@@ -13,6 +13,14 @@ const listingPayload = z.object({ listing_id: z.uuid() });
 const pricePayload = z.object({ sku_id: z.uuid(), new_price_minor: z.string().regex(/^[1-9][0-9]{0,18}$/) });
 const stockPayload = z.object({ listing_id: z.uuid() });
 
+/** True when the payload of a sync event type has the shape the index sync reads (used to park malformed events instead of retrying them). */
+export const isValidSyncPayload = (type: string, payload: unknown): boolean => {
+  if (type === "price.changed") return pricePayload.safeParse(payload).success;
+  if (type === "inventory.sold_out" || type === "inventory.restocked") return stockPayload.safeParse(payload).success;
+  if (type === "listing.activated" || type === "listing.updated") return listingPayload.safeParse(payload).success;
+  return false;
+};
+
 interface ListingRow {
   id: string;
   store_ref: string;

@@ -16,6 +16,7 @@
   "dependencies": {
     "@outlet/db": "workspace:*",
     "@outlet/ids": "workspace:*",
+    "@outlet/logger": "workspace:*",
     "@outlet/outbox": "workspace:*",
     "@outlet/pricing-integrity": "workspace:*",
     "@outlet/search-bakeoff": "workspace:*",
