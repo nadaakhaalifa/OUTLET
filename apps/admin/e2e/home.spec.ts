@@ -288,7 +288,7 @@ test("attention page: ack sends an Idempotency-Key; a 409 shows the 'changed by 
   expect(problems).toEqual([]);
 
   const ackRow = page.locator('[data-attention-id="a7700000-0000-4000-8000-000000000001"]');
-  await ackRow.getByRole("button", { name: CATALOG["eg-ar"]["admin.attention.ack"] as string }).click();
+  await ackRow.getByRole("button", { name: msg("eg-ar", "admin.attention.ack") }).click();
   await expect(ackRow.getByRole("status")).toContainText(msg("eg-ar", "admin.attention.done"));
   const sent = (await apiLog()).filter((l) => l.path === "/attention-ack");
   expect(sent).toHaveLength(1);
@@ -298,7 +298,7 @@ test("attention page: ack sends an Idempotency-Key; a 409 shows the 'changed by 
   await page.goto("/eg-en/attention");
   await page.waitForLoadState("networkidle");
   const row = page.locator('[data-attention-id="a7700000-0000-4000-8000-000000000001"]');
-  await row.getByRole("button", { name: CATALOG["eg-en"]["admin.attention.ack"] as string }).click();
+  await row.getByRole("button", { name: msg("eg-en", "admin.attention.ack") }).click();
   await expect(row.getByRole("alert")).toContainText(msg("eg-en", "admin.attention.conflict"));
   await ctx.close();
 });
