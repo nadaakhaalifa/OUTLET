@@ -38,6 +38,7 @@
     "@outlet/policy": "workspace:*",
     "@outlet/pricing-integrity": "workspace:*",
     "@outlet/reporting": "workspace:*",
+    "@outlet/search": "workspace:*",
     "@outlet/returns": "workspace:*",
     "@outlet/seller-accounts": "workspace:*",
     "@outlet/shipping": "workspace:*",

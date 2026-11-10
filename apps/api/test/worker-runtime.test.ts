@@ -84,7 +84,7 @@ describe("relay + inbox round trip (ops.attention consumer)", () => {
     expect(await r.turn(0)).toBe(10); // idle: back off from pollMs ...
     expect(await r.turn(10)).toBe(20); // ... doubling ...
     expect(await r.turn(40)).toBe(40); // ... up to pollMaxMs
-    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "inventory.rejected_release", "inventory.release", "ops.attention", "reporting.rollup"]);
+    expect(r.status().consumers.map((c) => c.job)).toEqual(["finance.refunds", "checkout.settle", "shipping.tracking", "inventory.rejected_release", "inventory.release", "ops.attention", "reporting.rollup", "search.sync"]);
   });
 
   it("a disabled kill switch parks the consumer: nothing claimed, no inbox row; health reports it killed with lag; release resumes it", async () => {
@@ -335,7 +335,7 @@ describe("worker composition pieces", () => {
   it("registers every consumer; seller_order.rejected has two owners; the late refund is routed only with a PSP port", () => {
     const jobs = marketJobs({ marketId: M, worker, app, kill: killing([]) });
     expect(jobs.flatMap((j) => [...j.handlers.keys()]).sort()).toEqual(
-      ["inventory.release_required", "promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"],
+      ["inventory.release_required", "inventory.restocked", "inventory.sold_out", "listing.activated", "listing.updated", "price.changed", "promotions.settle_attention", "promotions.settle_requested", "refund.attention", "reporting.rollup_requested", "seller_order.cancelled", "seller_order.rejected", "seller_order.rejected", "shipment.cancel_attention", "shipment.cancel_required"],
     );
     const withPsp = marketJobs({ marketId: M, worker, app, kill: killing([]), now: () => new Date(), lateRefunds: { requestRefund: () => Promise.resolve({ accepted: true }) } });
     expect(withPsp.find((j) => j.name === "payments.late_refund")?.handlers.has("order_group.late_payment_refund")).toBe(true);

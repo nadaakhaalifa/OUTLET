@@ -188,6 +188,9 @@ importers:
       '@outlet/returns':
         specifier: workspace:*
         version: link:../../packages/returns
+      '@outlet/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@outlet/seller-accounts':
         specifier: workspace:*
         version: link:../../packages/seller-accounts
@@ -898,6 +901,9 @@ importers:
       '@outlet/ids':
         specifier: workspace:*
         version: link:../ids
+      '@outlet/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@outlet/outbox':
         specifier: workspace:*
         version: link:../outbox

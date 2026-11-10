@@ -6,18 +6,21 @@ import type { RoleSqlClient } from "@outlet/db";
 import type { KillSwitchName } from "@outlet/flags";
 import { COMMITTED_RELEASED_EVENT, RELEASE_REQUIRED_EVENT, ReleaseRequiredConsumer } from "@outlet/inventory";
 import { ATTENTION_OPENED_EVENT } from "@outlet/ops-attention";
+import { makeEnv } from "@outlet/pricing-integrity";
+import { pricingDisplayLookup } from "@outlet/search";
 import type { InboxOutcome } from "@outlet/outbox";
 import { InventoryRestock, REFUNDS_KILL_SWITCH, RefundService } from "@outlet/returns";
 import type { KillSwitchPort, ProviderRefundPort, ProviderRefundResult } from "@outlet/returns";
 import { CourierCancelError, SHIPMENT_CANCELLED_EVENT } from "@outlet/shipping";
 import type { CourierPort } from "@outlet/shipping";
+import type { PriceDisplayLookup } from "@outlet/search";
 import { productionPromotionsPort } from "../modules/checkout/cancellation-composition.js";
 import type { PromotionsKillRead } from "../modules/checkout/cancellation-composition.js";
 import { NoCategoryReturnPolicy, UnconfiguredEvidence } from "../modules/returns/index.js";
 import { pgSqlClient } from "../platform/db.js";
 import type { PoolLike } from "../platform/db.js";
 import { Problems } from "../platform/problem.js";
-import { attentionHandlers, financeRefundHandlers, promotionsSettleHandlers, reportingRollupHandlers, shipmentCancelHandlers } from "../worker-consumers.js";
+import { attentionHandlers, financeRefundHandlers, promotionsSettleHandlers, reportingRollupHandlers, searchSyncHandlers, shipmentCancelHandlers } from "../worker-consumers.js";
 import type { OutboxEventIn } from "../worker-consumers.js";
 
 export type Handler = (e: OutboxEventIn) => Promise<InboxOutcome>;
@@ -47,6 +50,7 @@ export interface KillRead {
 /** Relay switch: off = nothing is claimed at all. */
 export const RELAY_KILL_SWITCH: KillSwitchName = "workers.outbox.relay.enabled";
 export const ROLLUP_KILL_SWITCH: KillSwitchName = "workers.reporting.rollup.enabled";
+export const SEARCH_SYNC_KILL_SWITCH: KillSwitchName = "workers.search.sync.enabled";
 
 /**
  * Event types that have no in-process consumer BY DESIGN and may be acked as published without a handler (chief review F1). Everything else with
@@ -99,6 +103,16 @@ export interface MarketJobsInput {
   readonly now?: () => Date;
 }
 
+/**
+ * Display decisions (verified discount / lowest in 30 days) for the search index, read under the `search.sync` worker context (price_events, sku_price_windows
+ * and the price_claims policy of migration 0038) with the Price Watch switch as the kill: killed or unreadable = plain (fail closed, same as the PDP).
+ */
+const searchDisplay = (i: MarketJobsInput, opts: { readonly now?: () => Date }): PriceDisplayLookup =>
+  pricingDisplayLookup(makeEnv({
+    client: contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "search.sync" }), marketId: i.marketId,
+    killSwitch: { isKilled: () => i.kill.isKilled("pricing.price_watch.enabled", { marketId: i.marketId }).catch(() => true) }, ...opts,
+  }));
+
 /** Every inbox consumer of the worker for one market, with its kill switch. */
 export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
   const promotionsKill: PromotionsKillRead = { isKilled: (name, ctx) => i.kill.isKilled(name, ctx) };
@@ -123,6 +137,7 @@ export const marketJobs = (i: MarketJobsInput): readonly WorkerJobDef[] => {
     { name: "inventory.release", killSwitch: "workers.inventory.release.enabled", handlers: new Map<string, Handler>([[RELEASE_REQUIRED_EVENT, (e) => release.handle(e)]]) },
     { name: "ops.attention", killSwitch: "workers.ops.attention.enabled", handlers: attentionHandlers(i.worker, i.marketId) },
     { name: "reporting.rollup", killSwitch: ROLLUP_KILL_SWITCH, handlers: reportingRollupHandlers(i.worker, i.marketId, i.now) },
+    { name: "search.sync", killSwitch: SEARCH_SYNC_KILL_SWITCH, handlers: searchSyncHandlers(i.worker, i.marketId, { display: searchDisplay(i, opts) }) },
   ];
   if (i.lateRefunds !== undefined) {
     const late = new LateRefundConsumer(contextClient(i.worker, { kind: "worker", marketId: i.marketId, job: "payments.webhook" }), i.lateRefunds);

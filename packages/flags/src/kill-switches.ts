@@ -53,6 +53,7 @@ export const KILL_SWITCHES = {
   "workers.ops.attention.enabled": ui("Worker: ops attention queue (ops.attention; off = parked events queue before reaching ops)"),
   "workers.inventory.release.enabled": ui("Worker: return committed stock after a rejection or paid cancellation (inventory.release_required; off = stock stays committed)"),
   "workers.reporting.rollup.enabled": ui("Worker: admin dashboard rollups and their scheduler ticks (reporting.rollup; off = tiles go stale)"),
+  "workers.search.sync.enabled": ui("Worker: search index sync (search.sync; off = search_documents stop following catalog, price and stock events; they queue and staleness grows)"),
 } as const satisfies Record<string, KillSwitchDef>;
 
 export type KillSwitchName = keyof typeof KILL_SWITCHES;

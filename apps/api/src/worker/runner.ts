@@ -233,7 +233,7 @@ export class MarketRunner {
     let outcome = "failed";
     try {
       outcome = await withSpan("worker.handle", { "worker.job": job, "event.type": e.type, "event.id": e.id, market_id: this.o.marketId }, () =>
-        this.withTimeout(x.handler({ id: e.id, type: e.type, payload: e.payload })),
+        this.withTimeout(x.handler({ id: e.id, type: e.type, payload: e.payload, occurredAt: e.occurredAt })),
       );
     } catch (err) {
       this.o.log.warn("worker: handler failed, will retry", { market: this.o.marketId, job, event_id: e.id, event_type: e.type, error: errorCode(err) });

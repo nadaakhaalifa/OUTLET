@@ -6,11 +6,16 @@ import { RollupConsumer, RollupService, ROLLUP_REQUESTED_EVENT } from "@outlet/r
 import { SHIPMENT_CANCEL_REQUIRED_EVENT, ShipmentCancelConsumer } from "@outlet/shipping";
 import type { CourierPort } from "@outlet/shipping";
 import type { InboxOutcome } from "@outlet/outbox";
+import { SYNC_EVENT_TYPES, SearchSyncConsumer } from "@outlet/search";
+import type { PriceDisplayLookup } from "@outlet/search";
+import type { Logger } from "@outlet/logger";
 
 export interface OutboxEventIn {
   readonly id: string;
   readonly type: string;
   readonly payload: Readonly<Record<string, unknown>>;
+  /** Source event time. Handlers that version their writes by it (search.sync) park an event that arrives without it. */
+  readonly occurredAt?: string;
 }
 
 /** finance.refunds job: event types handled by CancellationRefundConsumer (cancel and seller rejection both end in a refund). */
@@ -51,4 +56,15 @@ export const attentionHandlers = (worker: RoleSqlClient<"outlet_worker">, market
 export const reportingRollupHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, now: () => Date = () => new Date()): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
   const c = new RollupConsumer(worker, marketId, new RollupService({ client: worker, now }), undefined, now);
   return new Map([[ROLLUP_REQUESTED_EVENT, (e: OutboxEventIn) => c.handle(e)]]);
+};
+
+/**
+ * search.sync job (migration 0038): keeps search_documents in step with listing.activated / listing.updated / price.changed / inventory.sold_out /
+ * inventory.restocked, inbox-deduplicated and version-guarded (older events never overwrite newer ones). Runs entirely under the `search.sync` worker
+ * context; `display` must be composed on that same context (pricing reads) and fails closed to plain prices. The external engine is not touched here
+ * (UnconfiguredSearchEngine by default, ADR-0029): staleness reports `search_provider_unconfigured` instead of fresh.
+ */
+export const searchSyncHandlers = (worker: RoleSqlClient<"outlet_worker">, marketId: string, deps: { readonly display: PriceDisplayLookup; readonly log?: Logger }): ReadonlyMap<string, (e: OutboxEventIn) => Promise<InboxOutcome>> => {
+  const c = new SearchSyncConsumer(worker, marketId, deps.display, deps.log);
+  return new Map(SYNC_EVENT_TYPES.map((t) => [t, (e: OutboxEventIn) => c.handle(e)]));
 };
