@@ -15,6 +15,7 @@ const input = (over: Partial<OutboxEventInput> = {}): OutboxEventInput => ({
   ...over,
 });
 const writer = new OutboxWriter(pgTransactionalWriter);
+const ALL = { includeTypes: ["order.placed", "refund.attention", "a.b"] };
 const append = (db: SqlClient, e: OutboxEventInput): Promise<OutboxEvent> => db.transaction((tx) => writer.append(tx, e));
 interface State { published_at: Date | null; attempts: number; last_error: string | null; lease_until: Date | null; dead_lettered_at: Date | null }
 const state = async (db: SqlClient, id: string): Promise<State | undefined> =>
@@ -35,11 +36,11 @@ describe("OutboxDispatchRelay", () => {
       const b = await append(db, input());
       const seen: string[] = [];
       const relay = new OutboxDispatchRelay({ db, dispatch: (e) => (seen.push(e.id), Promise.resolve()) });
-      expect(await relay.runOnce()).toEqual({ claimed: 2, dispatched: 2, failed: 0, deadLettered: 0, released: 0 });
+      expect(await relay.runOnce(ALL)).toEqual({ claimed: 2, dispatched: 2, failed: 0, deadLettered: 0, released: 0 });
       expect(seen).toEqual([a.id, b.id]);
       expect(await state(db, a.id)).toMatchObject({ attempts: 1, lease_until: null, last_error: null });
       expect((await state(db, a.id))?.published_at).not.toBeNull();
-      expect(await relay.runOnce()).toMatchObject({ claimed: 0 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 0 });
     });
   });
 
@@ -52,15 +53,15 @@ describe("OutboxDispatchRelay", () => {
         db, now: clock.now,
         dispatch: () => (fail ? Promise.reject(Object.assign(new Error("shopper +201000000000 failed"), { code: "E_DOWN" })) : Promise.resolve()),
       });
-      expect(await relay.runOnce()).toMatchObject({ claimed: 1, failed: 1 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 1, failed: 1 });
       const s = await state(db, e.id);
       expect(s).toMatchObject({ attempts: 1, last_error: "Error:E_DOWN", published_at: null });
       expect(new Date(s?.lease_until ?? 0).getTime()).toBe(clock.t + 2_000);
       clock.advance(1_000);
-      expect(await relay.runOnce()).toMatchObject({ claimed: 0 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 0 });
       clock.advance(1_000);
       fail = false;
-      expect(await relay.runOnce()).toMatchObject({ claimed: 1, dispatched: 1 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 1, dispatched: 1 });
       expect(await state(db, e.id)).toMatchObject({ attempts: 2, last_error: null });
     });
   });
@@ -70,26 +71,63 @@ describe("OutboxDispatchRelay", () => {
       const clock = new Clock();
       const e = await append(db, input({ type: "refund.attention", payload: { phone: "secret" } }));
       const relay = new OutboxDispatchRelay({ db, now: clock.now, maxAttempts: 2, backoffMs: () => 0, dispatch: () => Promise.reject(new Error("boom")) });
-      expect(await relay.runOnce()).toMatchObject({ failed: 1, deadLettered: 0 });
-      expect(await relay.runOnce()).toMatchObject({ failed: 0, deadLettered: 1 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ failed: 1, deadLettered: 0 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ failed: 0, deadLettered: 1 });
       expect((await state(db, e.id))?.dead_lettered_at).not.toBeNull();
       const dlq = await db.query<{ consumer: string; payload: unknown; error: string; attempts: number }>("SELECT consumer, payload, error, attempts FROM dlq_messages WHERE message_id = $1", [e.id]);
       expect(dlq.rows).toEqual([{ consumer: "outbox-dispatch", payload: { event_type: "refund.attention" }, error: "Error", attempts: 2 }]);
-      expect(await relay.runOnce()).toMatchObject({ claimed: 0 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 0 });
     });
   });
 
-  it("excluded types are not claimed and keep no lease; other types pass", async () => {
+  it("only included types are claimed: a type with no consumer stays pending (never acked) and shows as unrouted", async () => {
     await withTestDb(async (db) => {
-      const killed = await append(db, input({ type: "refund.attention" }));
+      const unknown = await append(db, input({ type: "inventory.release_required" }));
       const ok = await append(db, input());
       const seen: string[] = [];
       const relay = new OutboxDispatchRelay({ db, dispatch: (e) => (seen.push(e.id), Promise.resolve()) });
-      expect(await relay.runOnce({ excludeTypes: ["refund.attention"] })).toMatchObject({ claimed: 1, dispatched: 1 });
+      expect(await relay.runOnce({ includeTypes: ["order.placed"] })).toMatchObject({ claimed: 1, dispatched: 1 });
       expect(seen).toEqual([ok.id]);
-      expect(await state(db, killed.id)).toMatchObject({ attempts: 0, lease_until: null, published_at: null });
-      expect(await relay.pending(["refund.attention", "order.placed"])).toEqual([{ type: "refund.attention", pending: 1, oldestOccurredAt: new Date("2026-11-08T10:00:00.000Z") }]);
+      expect(await state(db, unknown.id)).toMatchObject({ attempts: 0, lease_until: null, published_at: null });
+      expect(await relay.pending(["inventory.release_required", "order.placed"])).toEqual([{ type: "inventory.release_required", pending: 1, oldestOccurredAt: new Date("2026-11-08T10:00:00.000Z") }]);
       expect(await relay.pending([])).toEqual([]);
+      expect((await relay.unrouted(["order.placed"])).map((u) => [u.type, u.pending])).toEqual([["inventory.release_required", 1]]);
+      expect(await relay.unrouted(["order.placed", "inventory.release_required"])).toEqual([]);
+      expect(await relay.runOnce({ includeTypes: [] })).toEqual({ claimed: 0, dispatched: 0, failed: 0, deadLettered: 0, released: 0 });
+    });
+  });
+
+  it("shouldSkip releases the row with no attempt spent; minRetryMs floors the backoff", async () => {
+    await withTestDb(async (db) => {
+      const clock = new Clock();
+      const a = await append(db, input());
+      const b = await append(db, input({ type: "refund.attention" }));
+      const relay = new OutboxDispatchRelay({ db, now: clock.now, minRetryMs: 20_000, dispatch: () => Promise.reject(new Error("x")) });
+      expect(await relay.runOnce({ ...ALL, shouldSkip: (e) => Promise.resolve(e.type === "refund.attention") })).toEqual({ claimed: 2, dispatched: 0, failed: 1, deadLettered: 0, released: 1 });
+      expect(await state(db, b.id)).toMatchObject({ attempts: 0, lease_until: null });
+      expect(new Date((await state(db, a.id))?.lease_until ?? 0).getTime()).toBe(clock.t + 20_000);
+      clock.advance(19_999);
+      expect((await relay.runOnce({ includeTypes: ["order.placed"] })).claimed).toBe(0);
+      clock.advance(1);
+      expect((await relay.runOnce({ includeTypes: ["order.placed"] })).claimed).toBe(1);
+    });
+  });
+
+  it("a throwing ack releases the unsettled rows (finally) and rethrows", async () => {
+    await withTestDb(async (db) => {
+      const a = await append(db, input());
+      const b = await append(db, input());
+      let acks = 0;
+      const flaky: SqlClient = {
+        query: (sql, params) => (sql.startsWith("UPDATE outbox_events SET published_at") && ++acks === 1 ? Promise.reject(new Error("ack lost")) : db.query(sql, params)),
+        transaction: (fn) => db.transaction(fn),
+      };
+      const relay = new OutboxDispatchRelay({ db: flaky, dispatch: () => Promise.resolve() });
+      await expect(relay.runOnce(ALL)).rejects.toThrow("ack lost");
+      for (const id of [a.id, b.id]) expect(await state(db, id)).toMatchObject({ lease_until: null, published_at: null });
+      // a failing release is swallowed: the lease then just expires
+      const dead: SqlClient = { query: (sql, params) => (sql.startsWith("UPDATE outbox_events SET lease_until = NULL") || sql.startsWith("UPDATE outbox_events SET published_at") ? Promise.reject(new Error("db gone")) : db.query(sql, params)), transaction: (fn) => db.transaction(fn) };
+      await expect(new OutboxDispatchRelay({ db: dead, dispatch: () => Promise.resolve() }).runOnce(ALL)).rejects.toThrow("db gone");
     });
   });
 
@@ -99,13 +137,13 @@ describe("OutboxDispatchRelay", () => {
       const e = await append(db, input());
       // relay A claims, then "crashes" before acking: simulated by a dispatch that never settles within the test.
       const relayA = new OutboxDispatchRelay({ db, now: clock.now, leaseMs: 60_000, dispatch: () => new Promise<void>(() => undefined) });
-      void relayA.runOnce();
+      void relayA.runOnce(ALL);
       await new Promise((r) => setTimeout(r, 50));
       const seen: string[] = [];
       const relayB = new OutboxDispatchRelay({ db, now: clock.now, leaseMs: 60_000, dispatch: (x) => (seen.push(x.id), Promise.resolve()) });
-      expect(await relayB.runOnce()).toMatchObject({ claimed: 0 });
+      expect(await relayB.runOnce(ALL)).toMatchObject({ claimed: 0 });
       clock.advance(60_000);
-      expect(await relayB.runOnce()).toMatchObject({ claimed: 1, dispatched: 1 });
+      expect(await relayB.runOnce(ALL)).toMatchObject({ claimed: 1, dispatched: 1 });
       expect(seen).toEqual([e.id]);
     });
   });
@@ -116,7 +154,7 @@ describe("OutboxDispatchRelay", () => {
       const b = await append(db, input());
       let stop = false;
       const relay = new OutboxDispatchRelay({ db, dispatch: () => ((stop = true), Promise.resolve()) });
-      expect(await relay.runOnce({ shouldStop: () => stop })).toEqual({ claimed: 2, dispatched: 1, failed: 0, deadLettered: 0, released: 1 });
+      expect(await relay.runOnce({ ...ALL, shouldStop: () => stop })).toEqual({ claimed: 2, dispatched: 1, failed: 0, deadLettered: 0, released: 1 });
       expect((await state(db, a.id))?.published_at).not.toBeNull();
       expect(await state(db, b.id)).toMatchObject({ lease_until: null, published_at: null, attempts: 0 });
     });
@@ -128,7 +166,7 @@ describe("OutboxDispatchRelay", () => {
         "INSERT INTO outbox_events (id, market_id, aggregate_type, aggregate_id, event_type, payload, occurred_at) VALUES ('0197c0de-0000-4000-8000-000000000009', 'EG', 'x', '0197c0de-0000-7000-8000-000000000001', 'a.b', '{}', now())",
       );
       const relay = new OutboxDispatchRelay({ db, dispatch: () => Promise.resolve() });
-      expect(await relay.runOnce()).toMatchObject({ claimed: 1, failed: 1 });
+      expect(await relay.runOnce(ALL)).toMatchObject({ claimed: 1, failed: 1 });
       expect((await state(db, "0197c0de-0000-4000-8000-000000000009"))?.last_error).toBe("ZodError");
     });
   });

@@ -1,4 +1,5 @@
 import { uuidv7 } from "@outlet/ids";
+import { errorCode } from "./dispatch.js";
 import { toEvent } from "./row.js";
 import type { OutboxRow } from "./row.js";
 import type { Publisher, SqlClient } from "./ports.js";
@@ -20,8 +21,6 @@ export interface RelayResult {
 }
 
 type Row = OutboxRow;
-
-const message = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 
 /**
  * Polls unpublished events in id (UUIDv7, so commit-ish) order. Rows are claimed with
@@ -66,7 +65,7 @@ export class OutboxRelay {
           published += 1;
         } catch (err) {
           const attempts = row.attempts + 1;
-          const error = message(err);
+          const error = errorCode(err); // never the message: it may echo payload fields (P2)
           if (attempts >= this.maxAttempts) {
             await tx.query("UPDATE outbox_events SET attempts = $2, last_error = $3, dead_lettered_at = $4 WHERE id = $1", [
               row.id,
@@ -76,7 +75,7 @@ export class OutboxRelay {
             ]);
             await tx.query(
               "INSERT INTO dlq_messages (id, consumer, message_id, payload, error, attempts) VALUES ($1, 'outbox-relay', $2, $3::jsonb, $4, $5)",
-              [uuidv7(), row.id, JSON.stringify(row.payload), error, attempts],
+              [uuidv7(), row.id, JSON.stringify({ event_type: row.event_type }), error, attempts],
             );
             deadLettered += 1;
           } else {

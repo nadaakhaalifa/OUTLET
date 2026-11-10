@@ -17,12 +17,22 @@ export interface DispatchRelayOptions {
   readonly leaseMs?: number;
   /** Delay before a failed event is claimable again, by attempt number (1-based). Default 2^attempt seconds, capped at 5 minutes. */
   readonly backoffMs?: (attempt: number) => number;
+  /**
+   * Floor of every retry delay. Set it to the per-handler timeout: a handler abandoned after a timeout may still be running, so its event must not be
+   * claimable again before that work has had the same budget to finish or be cancelled (statement_timeout). Default 0.
+   */
+  readonly minRetryMs?: number;
   readonly now?: () => Date;
 }
 
 export interface DispatchRunOptions {
-  /** Event types not to claim this poll (their consumer is kill-switched): they stay unpublished, untouched and keep their place. */
-  readonly excludeTypes?: readonly string[];
+  /**
+   * Positive list: only these event types are claimed. A type outside it (no consumer known to this process, or every consumer kill-switched) stays
+   * unpublished, untouched, and keeps its place; it is never acked by accident.
+   */
+  readonly includeTypes: readonly string[];
+  /** Asked before each dispatch (e.g. a money kill switch flipped mid-batch): true releases the row with no attempt spent. */
+  readonly shouldSkip?: (event: { readonly id: string; readonly type: string }) => boolean | Promise<boolean>;
   /** Checked before each dispatch; once true the rest of the batch is released (lease cleared) for the next poll or replica. */
   readonly shouldStop?: () => boolean;
 }
@@ -32,6 +42,7 @@ export interface DispatchResult {
   readonly dispatched: number;
   readonly failed: number;
   readonly deadLettered: number;
+  /** Claimed but not dispatched (stop requested, skipped, or an ack/fail write threw): lease cleared for the next poll. */
   readonly released: number;
 }
 
@@ -54,9 +65,10 @@ export const errorCode = (e: unknown): string => {
 
 /**
  * Outbox relay for in-process consumers (ADR-0016). Three short transactions per event instead of one long one:
- *   1. claim: lease_until = now + leaseMs on up to batchSize unpublished, unleased rows (FOR UPDATE SKIP LOCKED, id order), so replicas claim disjoint rows;
+ *   1. claim: lease_until = now + leaseMs on up to batchSize unpublished, unleased rows of the included types only (FOR UPDATE SKIP LOCKED, id order),
+ *      so replicas claim disjoint rows and a type with no consumer is never claimed (and so never acked);
  *   2. dispatch: the consumer runs its own inbox transaction (no claim lock is held, so it may use any connection);
- *   3. ack: published_at set and lease cleared; or, on failure, attempts + 1, last_error = errorCode, lease pushed by backoffMs; at maxAttempts the row is
+ *   3. ack: published_at set and lease cleared; or, on failure, attempts + 1, last_error = errorCode, lease pushed by max(backoffMs, minRetryMs); at maxAttempts the row is
  *      dead-lettered (dead_lettered_at + dlq_messages, consumer 'outbox-dispatch').
  * A crash between 2 and 3 leaves the lease to expire: the event is redelivered and the consumer's inbox row makes the replay a no-op.
  */
@@ -65,6 +77,7 @@ export class OutboxDispatchRelay {
   private readonly maxAttempts: number;
   private readonly leaseMs: number;
   private readonly backoffMs: (attempt: number) => number;
+  private readonly minRetryMs: number;
   private readonly now: () => Date;
 
   constructor(private readonly opts: DispatchRelayOptions) {
@@ -72,35 +85,56 @@ export class OutboxDispatchRelay {
     this.maxAttempts = opts.maxAttempts ?? 8;
     this.leaseMs = opts.leaseMs ?? 300_000;
     this.backoffMs = opts.backoffMs ?? defaultBackoffMs;
+    this.minRetryMs = opts.minRetryMs ?? 0;
     this.now = opts.now ?? ((): Date => new Date());
     if (!Number.isInteger(this.batchSize) || this.batchSize < 1) throw new RangeError("batchSize must be >= 1");
     if (!Number.isInteger(this.maxAttempts) || this.maxAttempts < 1) throw new RangeError("maxAttempts must be >= 1");
     if (!Number.isInteger(this.leaseMs) || this.leaseMs < 1_000) throw new RangeError("leaseMs must be >= 1000");
   }
 
-  async runOnce(run: DispatchRunOptions = {}): Promise<DispatchResult> {
-    const rows = await this.claim(run.excludeTypes ?? []);
+  async runOnce(run: DispatchRunOptions): Promise<DispatchResult> {
+    if (run.includeTypes.length === 0) return { claimed: 0, dispatched: 0, failed: 0, deadLettered: 0, released: 0 };
+    const rows = await this.claim(run.includeTypes);
     let dispatched = 0;
     let failed = 0;
     let deadLettered = 0;
-    const left: string[] = [];
-    for (const row of rows) {
-      if (left.length > 0 || run.shouldStop?.() === true) {
-        left.push(row.id);
-        continue;
+    const done = new Set<string>();
+    try {
+      for (const row of rows) {
+        if (run.shouldStop?.() === true) break;
+        if ((await run.shouldSkip?.({ id: row.id, type: row.event_type })) === true) continue;
+        try {
+          await this.opts.dispatch(toEvent(row));
+        } catch (err) {
+          const dead = await this.fail(row, errorCode(err));
+          done.add(row.id);
+          if (dead) deadLettered += 1;
+          else failed += 1;
+          continue;
+        }
+        await this.ack(row.id);
+        done.add(row.id);
+        dispatched += 1;
       }
-      try {
-        await this.opts.dispatch(toEvent(row));
-      } catch (err) {
-        if (await this.fail(row, errorCode(err))) deadLettered += 1;
-        else failed += 1;
-        continue;
-      }
-      await this.ack(row.id);
-      dispatched += 1;
+    } finally {
+      // Best effort: whatever was claimed and not settled (stop, skip, or a throwing ack/fail write) goes back to the pool now instead of
+      // waiting out the lease. If this write fails too, the lease simply expires.
+      const left = rows.filter((r) => !done.has(r.id)).map((r) => r.id);
+      if (left.length > 0) await this.release(left).catch(() => undefined);
     }
-    if (left.length > 0) await this.release(left);
-    return { claimed: rows.length, dispatched, failed, deadLettered, released: left.length };
+    return { claimed: rows.length, dispatched, failed, deadLettered, released: rows.length - done.size };
+  }
+
+  /** Unpublished, not dead-lettered events whose type is NOT in `known`: what no consumer of this process will ever claim. */
+  async unrouted(known: readonly string[]): Promise<readonly PendingByType[]> {
+    const { rows } = await this.opts.db.query<{ event_type: string; pending: number; oldest: Date | string }>(
+      `SELECT event_type, count(*)::int AS pending, min(occurred_at) AS oldest
+         FROM outbox_events
+        WHERE published_at IS NULL AND dead_lettered_at IS NULL AND NOT (event_type = ANY($1::text[]))
+        GROUP BY event_type`,
+      [[...known]],
+    );
+    return rows.map((r) => ({ type: r.event_type, pending: r.pending, oldestOccurredAt: new Date(r.oldest) }));
   }
 
   /** Unpublished, not dead-lettered events of the given types: count and oldest occurred_at per type (consumer lag). */
@@ -116,20 +150,20 @@ export class OutboxDispatchRelay {
     return rows.map((r) => ({ type: r.event_type, pending: r.pending, oldestOccurredAt: new Date(r.oldest) }));
   }
 
-  private async claim(exclude: readonly string[]): Promise<OutboxRow[]> {
+  private async claim(include: readonly string[]): Promise<OutboxRow[]> {
     const now = this.now();
     const { rows } = await this.opts.db.query<OutboxRow>(
       `UPDATE outbox_events o SET lease_until = $2::timestamptz
          FROM (SELECT id FROM outbox_events
                 WHERE published_at IS NULL AND dead_lettered_at IS NULL
                   AND (lease_until IS NULL OR lease_until <= $3::timestamptz)
-                  AND NOT (event_type = ANY($4::text[]))
+                  AND event_type = ANY($4::text[])
                 ORDER BY id
                 LIMIT $1
                 FOR UPDATE SKIP LOCKED) c
         WHERE o.id = c.id
         RETURNING ${OUTBOX_ROW_COLUMNS.split(", ").map((c) => `o.${c}`).join(", ")}`,
-      [this.batchSize, new Date(now.getTime() + this.leaseMs).toISOString(), now.toISOString(), [...exclude]],
+      [this.batchSize, new Date(now.getTime() + this.leaseMs).toISOString(), now.toISOString(), [...include]],
     );
     return rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
@@ -151,7 +185,7 @@ export class OutboxDispatchRelay {
           row.id,
           attempts,
           code,
-          new Date(now.getTime() + this.backoffMs(attempts)).toISOString(),
+          new Date(now.getTime() + Math.max(this.backoffMs(attempts), this.minRetryMs)).toISOString(),
         ])
         .then(() => false);
     }

@@ -98,7 +98,9 @@ describe("OutboxRelay", () => {
       expect(await relay.runOnce()).toEqual({ published: 0, failed: 0, deadLettered: 0 });
       expect(pub.seen).toEqual([good.id]);
       const dlq = await db.query<{ message_id: string; attempts: number; error: string; status: string }>("SELECT message_id, attempts, error, status FROM dlq_messages");
-      expect(dlq.rows).toEqual([{ message_id: bad.id, attempts: 3, error: "bus down", status: "open" }]);
+      // F9: the error is a code (name + code), never the message; the dlq payload is {event_type} only (no P2).
+      expect(dlq.rows).toEqual([{ message_id: bad.id, attempts: 3, error: "Error", status: "open" }]);
+      expect((await db.query<{ payload: unknown }>("SELECT payload FROM dlq_messages")).rows).toEqual([{ payload: { event_type: "order.placed" } }]);
     });
   });
 
