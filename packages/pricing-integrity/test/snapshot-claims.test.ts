@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { contextClient } from "@outlet/db";
 import type { SqlClient } from "@outlet/db";
 import { createTestClient, roleClient } from "@outlet/db/testing";
 import { uuidv7 } from "@outlet/ids";
@@ -11,9 +12,11 @@ let raw: SqlClient;
 let close: () => Promise<void>;
 let clock = T0;
 let storeId = "";
-const env = () => makeEnv({ client: roleClient(raw, "outlet_app"), marketId: "EG", now: () => clock, killSwitch: { isKilled: () => Promise.resolve(false) } });
 /** Superuser client: price_claims is store-RLS-isolated for outlet_app, so the shopper read path needs a context-free reader (see report). */
 const privileged = () => makeEnv({ client: raw, marketId: "EG", now: () => clock, killSwitch: { isKilled: () => Promise.resolve(false) } });
+/** The ingestor is worker-side code: its inbox row needs a worker job context (inbox_processed RLS, migration 0040), so it gets a worker context client. */
+const ingestEnv = () => makeEnv({ client: contextClient(roleClient(raw, "outlet_worker"), { kind: "worker", marketId: "EG", job: "pricing.channels" }), marketId: "EG", now: () => clock, killSwitch: { isKilled: () => Promise.resolve(false) } });
+
 const day = (n: number): Date => new Date(T0.getTime() + n * DAY_MS);
 
 const change = async (sku: string, price: number, d: number): Promise<void> => {
@@ -22,7 +25,7 @@ const change = async (sku: string, price: number, d: number): Promise<void> => {
     id: uuidv7(), type: "price.changed", aggregateType: "sku", aggregateId: sku, marketId: "EG", occurredAt: clock.toISOString(), visibility: "internal",
     payload: { sku_id: sku, product_id: randomUUID(), store_id: storeId, old_price_minor: null, new_price_minor: String(price), currency: "EGP", source: "seller", changed_at: clock.toISOString() },
   };
-  await new PriceEventIngestor(env()).ingest(e);
+  await new PriceEventIngestor(ingestEnv()).ingest(e);
 };
 /** 1000 -> 700 on day 31: the internal history alone justifies a verified discount against 1000. */
 const discounted = async (): Promise<string> => {

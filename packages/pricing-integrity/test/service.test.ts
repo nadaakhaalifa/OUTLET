@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { contextClient } from "@outlet/db";
 import type { SqlClient } from "@outlet/db";
 import { FlagService, InMemoryFlagStore } from "@outlet/flags";
 import { createTestClient, roleClient } from "@outlet/db/testing";
@@ -21,6 +22,9 @@ const env = () =>
     now: () => clock,
     killSwitch: { isKilled: () => (killed === "throw" ? Promise.reject(new Error("flag store down")) : Promise.resolve(killed)) },
   });
+
+/** The ingestor is worker-side code: its inbox row needs a worker job context (inbox_processed RLS, migration 0040), so it gets a worker context client. */
+const ingestEnv = () => makeEnv({ client: contextClient(roleClient(raw, "outlet_worker"), { kind: "worker", marketId: "EG", job: "pricing.channels" }), marketId: "EG", now: () => clock, killSwitch: { isKilled: () => Promise.resolve(false) } });
 
 const day = (n: number): Date => new Date(T0.getTime() + n * DAY_MS);
 
@@ -47,7 +51,7 @@ const priceChanged = (skuId: string, priceMinor: number, changedAt: Date, id = u
 /** Ingests a change as of `daysFromT0` and advances the injected clock to it. */
 const change = async (skuId: string, priceMinor: number, daysFromT0: number) => {
   clock = day(daysFromT0);
-  return new PriceEventIngestor(env()).ingest(priceChanged(skuId, priceMinor, clock));
+  return new PriceEventIngestor(ingestEnv()).ingest(priceChanged(skuId, priceMinor, clock));
 };
 
 beforeAll(async () => {
@@ -62,7 +66,7 @@ describe("PriceEventIngestor", () => {
     const sku = randomUUID();
     const e = priceChanged(sku, 1000, T0);
     clock = T0;
-    const ing = new PriceEventIngestor(env());
+    const ing = new PriceEventIngestor(ingestEnv());
     expect(await ing.ingest(e)).toBe("applied");
     expect(await ing.ingest(e)).toBe("duplicate");
     const n = await raw.query<{ n: string }>("SELECT count(*)::text AS n FROM price_events WHERE sku_id = $1", [sku]);
@@ -75,8 +79,8 @@ describe("PriceEventIngestor", () => {
     expect(await change(sku, 1000, 1)).toBe("unchanged");
     expect(await change(sku, 800, 2)).toBe("applied");
     clock = day(3);
-    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 700, day(2)))).toBe("stale"); // a different price at the same instant
-    expect(await new PriceEventIngestor(env()).ingest({ ...priceChanged(sku, 1, day(3)), type: "listing.updated" })).toBe("ignored");
+    expect(await new PriceEventIngestor(ingestEnv()).ingest(priceChanged(sku, 700, day(2)))).toBe("stale"); // a different price at the same instant
+    expect(await new PriceEventIngestor(ingestEnv()).ingest({ ...priceChanged(sku, 1, day(3)), type: "listing.updated" })).toBe("ignored");
     const rows = await raw.query<{ price_minor: string; valid_to: Date | null }>("SELECT price_minor::text, valid_to FROM price_events WHERE sku_id = $1 ORDER BY valid_from", [sku]);
     expect(rows.rows.map((r) => r.price_minor)).toEqual(["1000", "800"]);
     expect(rows.rows[0]?.valid_to).toEqual(day(2));
@@ -89,7 +93,7 @@ describe("PriceEventIngestor", () => {
     await change(sku, 900, 40);
     clock = day(41);
     // the day-20 event (a 600 low) arrives after the day-40 one
-    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 600, day(20)))).toBe("applied");
+    expect(await new PriceEventIngestor(ingestEnv()).ingest(priceChanged(sku, 600, day(20)))).toBe("applied");
     const rows = await raw.query<{ price_minor: string; valid_from: Date; valid_to: Date | null }>("SELECT price_minor::text, valid_from, valid_to FROM price_events WHERE sku_id = $1 ORDER BY valid_from", [sku]);
     expect(rows.rows.map((r) => r.price_minor)).toEqual(["1000", "600", "900"]);
     expect(rows.rows[1]?.valid_to).toEqual(day(40));
@@ -100,21 +104,21 @@ describe("PriceEventIngestor", () => {
     // effective history is not overlapping: each row ends where the next begins
     expect(ev?.history.map((h) => h.validTo)).toEqual([day(20).toISOString(), day(40).toISOString(), null]);
     // a late event before the very first row, and an equal-to-prior late event
-    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 600, day(30)))).toBe("unchanged");
-    expect(await new PriceEventIngestor(env()).ingest(priceChanged(sku, 1200, day(-5)))).toBe("applied");
+    expect(await new PriceEventIngestor(ingestEnv()).ingest(priceChanged(sku, 600, day(30)))).toBe("unchanged");
+    expect(await new PriceEventIngestor(ingestEnv()).ingest(priceChanged(sku, 1200, day(-5)))).toBe("applied");
   });
 
   it("rejects a malformed payload and a currency change on the open row", async () => {
     const sku = randomUUID();
     clock = T0;
     const bad = priceChanged(sku, 100, T0);
-    await expect(new PriceEventIngestor(env()).ingest({ ...bad, payload: { ...bad.payload, new_price_minor: "-5" } })).rejects.toThrow();
+    await expect(new PriceEventIngestor(ingestEnv()).ingest({ ...bad, payload: { ...bad.payload, new_price_minor: "-5" } })).rejects.toThrow();
     await change(sku, 100, 0);
     clock = day(1);
     const other = priceChanged(sku, 90, day(1));
-    await expect(new PriceEventIngestor(env()).ingest({ ...other, payload: { ...other.payload, currency: "USD" } })).rejects.toThrow(/currency/);
+    await expect(new PriceEventIngestor(ingestEnv()).ingest({ ...other, payload: { ...other.payload, currency: "USD" } })).rejects.toThrow(/currency/);
     // the failed attempt rolled back with its inbox row: the same event id can be retried once corrected
-    expect(await new PriceEventIngestor(env()).ingest(other)).toBe("applied");
+    expect(await new PriceEventIngestor(ingestEnv()).ingest(other)).toBe("applied");
   });
 
   it("maintains the window across 40 days with an injected clock", async () => {
