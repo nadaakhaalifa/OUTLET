@@ -10,6 +10,10 @@ export { DEFAULT_INVENTORY_PATH, groupByTable, loadExportFields } from "./invent
 export type { ExportField } from "./inventory.js";
 export { purgePlan } from "./retention.js";
 export type { PurgePlanItem, RetentionAction } from "./retention.js";
+export {
+  NOT_PURGED, PURGE_SPECS, RETENTION_BATCH_ROWS, RETENTION_CONSUMER, RETENTION_DEFAULT_BUDGET_MS, RETENTION_REQUESTED_EVENT, RetentionConsumer, RetentionRunner, cutoffSql, loadRetentionRules,
+} from "./retention-runner.js";
+export type { InventoryRules, PurgeSpec, RetentionEventIn, RetentionMetricsPort, RetentionRunnerOptions, SkipReason, TableOutcome } from "./retention-runner.js";
 export { TRANSITIONS, assertTransition, canTransition } from "./machine.js";
 export type { MachineKind, RequestStatus } from "./machine.js";
 export {
