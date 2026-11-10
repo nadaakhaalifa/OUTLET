@@ -603,3 +603,48 @@ describe("ShipmentCancelConsumer (M4)", () => {
   it("exposes the trigger event name", () => { expect(SHIPMENT_CANCEL_REQUIRED_EVENT).toBe("shipment.cancel_required"); });
 });
 
+
+describe("ShipmentCancelConsumer races between the courier call and the finishing transaction", () => {
+  const evt = (shipmentId: string, so: string, id = randomUUID()) => ({ id, payload: { shipment_id: shipmentId, seller_order_id: so } });
+  /** `during` runs inside the courier call, i.e. after the consumer read the shipment and before its finishing transaction. */
+  const raced = async (during: (x: Awaited<ReturnType<typeof setup>>, shipmentId: string, eventId: string) => Promise<void>) => {
+    const s = await setup();
+    const so = await s.seedOrder(s.x.storeA, s.x.user);
+    const shipment = await s.ship(so);
+    const e = evt(shipment.id, so);
+    const courier = { cancelShipment: async (): Promise<void> => { await during(s, shipment.id, e.id); } };
+    const consumer = new ShipmentCancelConsumer({ client: s.worker, marketId: "EG", courier });
+    const count = async (type: string): Promise<number> => (await q(s.x, "SELECT 1 FROM outbox_events WHERE event_type = $1", [type])).length;
+    return { s, shipment, e, consumer, count, status: async (): Promise<string | undefined> => (await q(s.x, "SELECT status FROM shipments WHERE id = $1", [shipment.id]))[0]?.status as string | undefined };
+  };
+
+  it("a concurrent delivery that already wrote the inbox row makes this one a duplicate with no second effect", async () => {
+    const r = await raced(async (s, _sid, eventId) => { await s.x.raw.query("INSERT INTO inbox_processed (consumer, message_id) VALUES ($1, $2)", ["shipping.shipment_cancel", eventId]); });
+    expect(await r.consumer.handle(r.e)).toBe("duplicate");
+    expect(await r.count(SHIPMENT_CANCELLED_EVENT)).toBe(0);
+    expect(await r.status()).toBe("LABEL_READY");
+  });
+
+  it("a parcel picked up while the AWB was being cancelled is parked as already_with_courier and not cancelled", async () => {
+    const r = await raced(async (s, sid) => { await s.x.raw.query("UPDATE shipments SET status = 'IN_TRANSIT' WHERE id = $1", [sid]); });
+    expect(await r.consumer.handle(r.e)).toBe("processed");
+    expect(await r.status()).toBe("IN_TRANSIT");
+    expect(await r.count(SHIPMENT_CANCELLED_EVENT)).toBe(0);
+    expect((await q(r.s.x, "SELECT payload->>'reason' AS r FROM outbox_events WHERE event_type = $1", [SHIPMENT_CANCEL_ATTENTION_EVENT]))[0]?.r).toBe("already_with_courier");
+  });
+
+  it("a shipment cancelled by someone else in the meantime emits nothing more", async () => {
+    const r = await raced(async (s, sid) => { await s.x.raw.query("UPDATE shipments SET status = 'CANCELLED' WHERE id = $1", [sid]); });
+    expect(await r.consumer.handle(r.e)).toBe("processed");
+    expect(await r.status()).toBe("CANCELLED");
+    expect(await r.count(SHIPMENT_CANCELLED_EVENT)).toBe(0);
+    expect(await r.count(SHIPMENT_CANCEL_ATTENTION_EVENT)).toBe(0);
+  });
+
+  it("a shipment that vanished in the meantime is processed without an event", async () => {
+    const r = await raced(async (s, sid) => { await s.x.raw.query("DELETE FROM shipments WHERE id = $1", [sid]); });
+    expect(await r.consumer.handle(r.e)).toBe("processed");
+    expect(await r.count(SHIPMENT_CANCELLED_EVENT)).toBe(0);
+    expect(await r.count(SHIPMENT_CANCEL_ATTENTION_EVENT)).toBe(0);
+  });
+});
